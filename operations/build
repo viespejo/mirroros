@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
+
+# shellcheck disable=SC1090 # The helper path is resolved from BASH_SOURCE to support arbitrary working directories and paths with spaces.
+if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
+  printf '%s\n' \
+    'MirrorOS: incomplete or damaged checkout; the lifecycle discovery helper could not be loaded.' \
+    'Restore the helper from Git or re-clone the repository.' >&2
+  exit 6
+fi
+
+if lifecycle_discovery_main \
+  'build' \
+  'Build a traceable MirrorOS installation artifact from the version-controlled Archiso profile.' \
+  'An Arch Linux build environment and Archiso tooling are anticipated; exact supported requirements are Pending.' \
+  'The image/archiso profile is the known source input; additional input details are Pending.' \
+  'A future build is expected to create generated build work and an installation artifact; exact effects are Pending. The current command makes no changes.' \
+  'Run-associated output belongs under evidence/; the exact path and format are Pending, and this command creates none.' \
+  "$@"; then
+  exit 0
+else
+  exit "$?"
+fi

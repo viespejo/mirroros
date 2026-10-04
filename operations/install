@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
+
+# shellcheck disable=SC1090 # The helper path is resolved from BASH_SOURCE to support arbitrary working directories and paths with spaces.
+if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
+  printf '%s\n' \
+    'MirrorOS: incomplete or damaged checkout; the lifecycle discovery helper could not be loaded.' \
+    'Restore the helper from Git or re-clone the repository.' >&2
+  exit 6
+fi
+
+if lifecycle_discovery_main \
+  'install' \
+  'Coordinate target discovery, reviewable planning, confirmation, and application of the selected installation engine.' \
+  'Reference-VM qualification must precede physical installation; external backup, rescue media, and a known-good ISO are required before physical migration. Exact requirements are Pending.' \
+  'A selected target, discovered target state, and reviewable plan are expected; exact formats and selection details are Pending.' \
+  'A future installation modifies the selected target and may perform destructive storage operations; exact implementation and effects are Pending. The current command makes no changes.' \
+  'Run-associated output belongs under evidence/; the exact path and format are Pending, and this command creates none.' \
+  "$@"; then
+  exit 0
+else
+  exit "$?"
+fi

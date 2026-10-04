@@ -8,3 +8,4 @@
 - Do not resolve prototype-gated decisions prematurely; route them through an ADR.
 - Update attribution, tests, and documentation together with the change they govern.
 - Never add MirrorOS license headers to unmodified vendor files.
+- Treat `.agents/` as local workflow tooling outside the product runtime and authoritative source control; see [README.md — Workflow tooling](README.md#workflow-tooling).
