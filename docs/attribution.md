@@ -21,3 +21,9 @@ Add one entry per externally incorporated project:
 ```
 
 Keep this index stable and concise. Record changing tags, commits, package versions, digests, dates, acquisition methods, and integrity evidence only in the linked provenance record.
+
+### Archiso
+
+- **License (SPDX):** `GPL-3.0-or-later`
+- **Incorporated material:** Official `releng` profile at `image/archiso/`
+- **Detailed provenance:** [Archiso upstream record](../image/archiso/UPSTREAM.md)
