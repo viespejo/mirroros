@@ -1,7 +1,5 @@
 # Updating the Archiso releng vendor profile
 
-> **Status:** Pending first execution (plan 01-02)
-
 This procedure is the maintainer-run path for evaluating and importing the Archiso `releng` profile. It is intentionally separate from the build: a build may report a preflight mismatch, but it never imports upstream material automatically. The maintainer completes this procedure, reviews and merges the result, and retries the build explicitly.
 
 ## 1. Purpose and triggers
@@ -102,16 +100,16 @@ docker image inspect docker.io/archlinux/archlinux:latest \
 
 Extract and validate the returned `sha256:` digest. If the tag does not resolve to exactly one usable manifest digest, stop and report the ambiguity. Do not invent a digest and do not turn the result into a permanent pin.
 
-Obtain the Arch GitLab CI certificate identity and OIDC issuer from the current official Arch documentation or CI verification instructions. Do not hard-code an identity string here or guess one. Verify the digest reference, not the mutable tag:
+Obtain the certificate identity regexp and OIDC issuer from the current official [Arch Linux OCI image project documentation](https://gitlab.archlinux.org/archlinux/archlinux-docker/-/blob/master/README.md). Do not hard-code an identity string here or guess one. Verify the digest reference, not the mutable tag:
 
 ```sh
 IMAGE_DIGEST='<sha256:digest returned for this pull>'
-ARCH_CI_IDENTITY='<identity documented by Arch>'
+ARCH_CI_IDENTITY_REGEXP='<identity regexp documented by Arch>'
 ARCH_CI_ISSUER='<issuer documented by Arch>'
 IMAGE="docker.io/archlinux/archlinux@${IMAGE_DIGEST}"
 
 cosign verify \
-  --certificate-identity "$ARCH_CI_IDENTITY" \
+  --certificate-identity-regexp "$ARCH_CI_IDENTITY_REGEXP" \
   --certificate-oidc-issuer "$ARCH_CI_ISSUER" \
   "$IMAGE"
 ```
@@ -150,7 +148,20 @@ docker create \
 docker start "$CONTAINER"
 ```
 
-Inside the running container, use the distribution keyring and the configured package signature policy. Do not add an insecure repository, use an unsigned package, or weaken `SigLevel`:
+Inside the running container, use the distribution keyring and the configured package signature policy. Do not add an insecure repository, use an unsigned package, or weaken `SigLevel`.
+
+The official image may set `NoExtract` rules that exclude package-owned documentation and manual paths, causing `pacman -Qkk archiso` to report missing files. In the disposable container only, remove the `usr/share/doc/*` and `usr/share/man/*` patterns before installation. Capture the `SigLevel` output before and after and confirm it is identical; do not edit the host's Pacman configuration:
+
+```sh
+docker exec "$CONTAINER" sh -c \
+  'grep -E "^[[:space:]]*SigLevel[[:space:]]*=" /etc/pacman.conf'
+docker exec "$CONTAINER" sh -c \
+  "sed -i 's#usr/share/doc/\\*##; s#usr/share/man/\\*##' /etc/pacman.conf"
+docker exec "$CONTAINER" sh -c \
+  'grep -E "^[[:space:]]*SigLevel[[:space:]]*=" /etc/pacman.conf'
+```
+
+Then install using the container's normal keyring and signature policy:
 
 ```sh
 docker exec "$CONTAINER" pacman -Syu --noconfirm
@@ -181,9 +192,9 @@ Resolve all identities from the exact acquisition, and stop on any ambiguity. Re
 
 ```sh
 docker exec "$CONTAINER" pacman -Qi archiso
-docker exec "$CONTAINER" pacman -Q --qf '%n %v\n' archiso
+docker exec "$CONTAINER" pacman -Q archiso
 docker exec "$CONTAINER" sh -c \
-  'find /var/cache/pacman/pkg -maxdepth 1 -type f -name "archiso-*.pkg.tar.*" -printf "%f\n" | sort'
+  'find /var/cache/pacman/pkg -maxdepth 1 -type f -name "archiso-*.pkg.tar.*" ! -name "*.sig" -printf "%f\n" | sort'
 ```
 
 There must be one package filename corresponding to the installed package. Copy that exact file for hashing and record its SHA-256 without altering it:
