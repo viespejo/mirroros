@@ -1,0 +1,295 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+BUILDER_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REPOSITORY_ROOT="$(cd -- "${BUILDER_DIR}/../.." && pwd -P)"
+if [[ "$#" -eq 0 ]]; then
+  :
+elif [[ "$#" -eq 1 && "$1" == '--no-cache' ]]; then
+  :
+else
+  printf 'MirrorOS build: unsupported argument(s):' >&2
+  printf ' %q' "$@" >&2
+  printf '\nAccepted forms: operations/build, operations/build --no-cache, operations/build --help.\n' >&2
+  exit 2
+fi
+
+for BUILDER_LIBRARY in preconditions.sh run-resources.sh source-capture.sh outcome.sh container.sh publication.sh; do
+  BUILDER_LIBRARY_PATH="${BUILDER_DIR}/lib/${BUILDER_LIBRARY}"
+  if [[ ! -f "$BUILDER_LIBRARY_PATH" || ! -r "$BUILDER_LIBRARY_PATH" ]] || \
+    ! /usr/bin/bash -n "$BUILDER_LIBRARY_PATH" >/dev/null 2>&1; then
+    printf 'MirrorOS: incomplete or damaged checkout; builder library could not be loaded: %s\n' \
+      "$BUILDER_LIBRARY_PATH" >&2
+    exit 6
+  fi
+  # shellcheck disable=SC1090 # Builder libraries are resolved relative to this script.
+  if ! source "$BUILDER_LIBRARY_PATH"; then
+    printf 'MirrorOS: incomplete or damaged checkout; builder library could not be loaded: %s\n' \
+      "$BUILDER_LIBRARY_PATH" >&2
+    exit 6
+  fi
+done
+
+BUILD_SIGNAL_ACTIVE=0
+BUILD_SIGNAL_STATUS=0
+BUILD_CONTAINER_CLEANUP_ATTEMPTED=0
+BUILD_CONTAINER_CLEANUP_STATUS=0
+
+build_artifact_cleanup_container() {
+  if [[ "$BUILD_CONTAINER_CLEANUP_ATTEMPTED" -eq 2 ]]; then
+    return "$BUILD_CONTAINER_CLEANUP_STATUS"
+  fi
+  if [[ "$BUILD_CONTAINER_CLEANUP_ATTEMPTED" -eq 1 && "$BUILD_SIGNAL_ACTIVE" -ne 1 ]]; then
+    return 1
+  fi
+  BUILD_CONTAINER_CLEANUP_ATTEMPTED=1
+  if container_cleanup_current; then
+    BUILD_CONTAINER_CLEANUP_STATUS=0
+  else
+    BUILD_CONTAINER_CLEANUP_STATUS=$?
+  fi
+  BUILD_CONTAINER_CLEANUP_ATTEMPTED=2
+  return "$BUILD_CONTAINER_CLEANUP_STATUS"
+}
+
+build_artifact_cleanup_workspace() {
+  local resource
+
+  for resource in "${BUILD_LEFTOVER_RESOURCES[@]}"; do
+    if [[ "$resource" == "build:${BUILD_RUN_DIR}" ]]; then
+      return 1
+    fi
+  done
+  if [[ -e "$BUILD_RUN_DIR" || -L "$BUILD_RUN_DIR" ]]; then
+    if ! rm -rf -- "$BUILD_RUN_DIR"; then
+      build_outcome_add_leftover "build:${BUILD_RUN_DIR}"
+      build_outcome_note_cleanup_failure 'Remove only this run work directory after verifying that no container can still access its source mount.'
+      return 1
+    fi
+  fi
+  return 0
+}
+
+build_artifact_write_failure_result() {
+  publication_finalize_result
+}
+
+build_artifact_handle_second_signal() {
+  printf 'MirrorOS build: a second signal interrupted cleanup; resources may remain for run %s.\n' "$RUN_ID" >&2
+  trap - INT TERM
+  exit "$BUILD_SIGNAL_STATUS"
+}
+
+build_artifact_handle_signal() {
+  local signal_name="$1"
+  local status
+
+  if [[ "$BUILD_SIGNAL_ACTIVE" -eq 1 ]]; then
+    build_artifact_handle_second_signal
+  fi
+  BUILD_SIGNAL_ACTIVE=1
+  case "$signal_name" in
+    INT) BUILD_SIGNAL_STATUS=130 ;;
+    TERM) BUILD_SIGNAL_STATUS=143 ;;
+    *) BUILD_SIGNAL_STATUS=5 ;;
+  esac
+  trap 'build_artifact_handle_second_signal' INT TERM
+  build_outcome_mark_interrupted "$BUILD_SIGNAL_STATUS" "$signal_name"
+  publication_abort_candidate || true
+  if publication_cleanup_scan_scratch; then
+    :
+  else
+    build_outcome_note_cleanup_failure 'Preserve the private Gitleaks scan input and inspect it before authorized manual cleanup.'
+  fi
+  if build_artifact_cleanup_container; then
+    :
+  else
+    status=$?
+    printf 'MirrorOS build: interruption cleanup was incomplete (status %s); inspect recorded leftover resources.\n' "$status" >&2
+  fi
+  if build_artifact_cleanup_workspace; then
+    :
+  else
+    status=$?
+    build_outcome_note_cleanup_failure 'Preserve the remaining private work directory and verify that no container can access it before manual cleanup.'
+  fi
+  build_artifact_write_failure_result || true
+  if [[ "$BUILD_PUBLISHED" == 'true' ]]; then
+    printf 'MirrorOS build: bundle %s was published before interruption; the run did not complete successfully.\n' \
+      "dist/${RUN_ID}/" >&2
+  fi
+  exit "$BUILD_SIGNAL_STATUS"
+}
+
+build_artifact_finish_failure() {
+  local status="$1"
+  local stage="$2"
+  local original_status="${3:-}"
+  local cleanup_status
+  local final_status
+
+  build_outcome_mark_failure "$status" "$stage" "$original_status"
+  publication_abort_candidate || true
+  if publication_cleanup_scan_scratch; then
+    :
+  else
+    build_outcome_note_cleanup_failure 'Preserve the private Gitleaks scan input and inspect it before authorized manual cleanup.'
+  fi
+  if build_artifact_cleanup_container; then
+    :
+  else
+    cleanup_status=$?
+    printf 'MirrorOS build: cleanup reported leftover resources (status %s).\n' "$cleanup_status" >&2
+  fi
+  if build_artifact_cleanup_workspace; then
+    :
+  else
+    cleanup_status=$?
+    build_outcome_note_cleanup_failure 'Preserve the remaining private work directory and verify that no container can access it before manual cleanup.'
+  fi
+  final_status="$BUILD_PRIMARY_STATUS"
+  if [[ "$final_status" -eq 0 ]]; then
+    final_status="$status"
+    build_outcome_mark_failure "$final_status" "$stage" "$original_status"
+  fi
+  build_artifact_write_failure_result || true
+  if [[ "$BUILD_PUBLISHED" == 'true' ]]; then
+    printf 'MirrorOS build: bundle %s was published, but the run failed afterward (status %s).\n' \
+      "dist/${RUN_ID}/" "$BUILD_PRIMARY_STATUS" >&2
+  fi
+  return "$BUILD_PRIMARY_STATUS"
+}
+
+build_artifact_main() {
+  local status
+  local stage
+
+  if preconditions_parse_arguments "$@"; then
+    :
+  else
+    status=$?
+    return "$status"
+  fi
+  preconditions_check_user "$EUID" || return $?
+  preconditions_check_tools || return $?
+  preconditions_check_docker_access || return $?
+  if container_validate_checkout; then
+    :
+  else
+    status=$?
+    return "$status"
+  fi
+
+  umask 077
+  run_resources_new_id || return $?
+  if build_outcome_initialize; then
+    :
+  else
+    status=$?
+    printf '%s\n' 'MirrorOS build: could not record the execution start instant.' >&2
+    return "$status"
+  fi
+  run_resources_prepare "$REPOSITORY_ROOT" "$RUN_ID" || return $?
+  trap 'build_artifact_handle_signal INT' INT
+  trap 'build_artifact_handle_signal TERM' TERM
+
+  if source_capture_profile "$REPOSITORY_ROOT" "${BUILD_RUN_DIR}/source"; then
+    :
+  else
+    status=$?
+    build_outcome_set_validation profile_secret_scan not_run
+    build_artifact_finish_failure "$status" source-capture ''
+    return $?
+  fi
+  if source_capture_scan \
+    "$SOURCE_CAPTURE_PROFILE_PATH" "${EVIDENCE_RUN_DIR}/gitleaks-profile.json"; then
+    build_outcome_set_validation profile_secret_scan passed
+  else
+    status=$?
+    build_outcome_set_validation profile_secret_scan failed
+    build_artifact_finish_failure "$status" profile-secret-scan "$status"
+    return $?
+  fi
+
+  if container_construct; then
+    :
+  else
+    status=$?
+    build_artifact_finish_failure "$status" "${BUILD_FAILED_STAGE:-construction}" "${BUILD_ORIGINAL_STATUS:-$status}"
+    return $?
+  fi
+  if build_artifact_cleanup_container; then
+    :
+  else
+    status=$?
+    build_artifact_finish_failure "$BUILD_PRIMARY_STATUS" "${BUILD_FAILED_STAGE:-cleanup}" "${BUILD_ORIGINAL_STATUS:-$status}"
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+  if [[ "$BUILD_PRIMARY_STATUS" -ne 0 ]]; then
+    build_artifact_finish_failure "$BUILD_PRIMARY_STATUS" "$BUILD_FAILED_STAGE" "$BUILD_ORIGINAL_STATUS"
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+
+  BUILD_CLEANUP_OUTCOME='pending'
+  BUILD_CLEANUP_GUIDANCE=''
+  if publication_prepare_bundle; then
+    :
+  else
+    status=$?
+    build_outcome_mark_failure "$status" publication "$status"
+    build_artifact_finish_failure "$status" publication "$status"
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+
+  build_outcome_add_diagnostic 'gitleaks-publication.json'
+  if build_outcome_write_result; then
+    :
+  else
+    build_outcome_mark_failure 5 execution-result ''
+    build_artifact_finish_failure 5 execution-result ''
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+  if publication_scan_content gitleaks-publication.json "$PUBLICATION_CANDIDATE_DIR"; then
+    # shellcheck disable=SC2034 # Consumed by outcome.sh and artifact metadata.
+    BUILD_VALIDATION_EVIDENCE_SCAN='passed'
+  else
+    status=$?
+    publication_record_scan_failure publication-secret-scan
+    build_artifact_finish_failure "$BUILD_PRIMARY_STATUS" publication-secret-scan \
+      "${PUBLICATION_SCAN_ORIGINAL_STATUS:-$status}"
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+
+  if publication_validate_and_publish; then
+    :
+  else
+    status=$?
+    build_outcome_mark_failure "$status" publication "$status"
+    build_artifact_finish_failure "$status" publication "$status"
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+
+  if build_artifact_cleanup_workspace; then
+    # shellcheck disable=SC2034 # Consumed by outcome.sh when the final result is written.
+    BUILD_CLEANUP_OUTCOME='success'
+    # shellcheck disable=SC2034 # Consumed by outcome.sh when the final result is written.
+    BUILD_CLEANUP_GUIDANCE=''
+  else
+    status=$?
+    build_outcome_note_cleanup_failure 'The bundle is immutable and published; inspect the recorded work directory and remove it only after confirming that no container can access it.'
+  fi
+
+  if publication_finalize_result; then
+    printf 'MirrorOS build: published bundle at dist/%s/\n' "$RUN_ID"
+    return 0
+  else
+    status=$?
+    if [[ "$BUILD_PUBLISHED" == 'true' ]]; then
+      printf 'MirrorOS build: bundle dist/%s/ was published, but the run failed afterward (status %s).\n' \
+        "$RUN_ID" "$BUILD_PRIMARY_STATUS" >&2
+    fi
+    return "$BUILD_PRIMARY_STATUS"
+  fi
+}
+
+build_artifact_main "$@"

@@ -963,6 +963,17 @@ mirroros/
 │   └── .obsidian/                  # Documentation tooling; outside product runtime
 │
 ├── image/
+│   ├── builder/                    # `image/builder/`
+│   │   ├── arch-image-signature.conf
+│   │   ├── build-artifact
+│   │   ├── build-documents.mjs
+│   │   └── lib/
+│   │       ├── container.sh
+│   │       ├── outcome.sh
+│   │       ├── preconditions.sh
+│   │       ├── publication.sh
+│   │       ├── run-resources.sh
+│   │       └── source-capture.sh
 │   └── archiso/
 │       ├── UPSTREAM.md
 │       ├── profiledef.sh

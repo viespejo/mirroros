@@ -2,25 +2,35 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REPOSITORY_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
 HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
+BUILDER_PATH="${REPOSITORY_ROOT}/image/builder/build-artifact"
 
-# shellcheck disable=SC1090 # The helper path is resolved from BASH_SOURCE to support arbitrary working directories and paths with spaces.
-if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
+if [[ "$#" -eq 1 && "$1" == '--help' ]]; then
+  # shellcheck disable=SC1090 # The helper path is resolved from BASH_SOURCE to support arbitrary working directories and paths with spaces.
+  if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
+    printf '%s\n' \
+      'MirrorOS: incomplete or damaged checkout; the lifecycle discovery helper could not be loaded.' \
+      'Restore the helper from Git or re-clone the repository.' >&2
+    exit 6
+  fi
+
+  lifecycle_discovery_print_help \
+    'build' \
+    'Build a traceable MirrorOS installation artifact from the fixed image/archiso profile.' \
+    'Run as a normal user with direct Docker access; require docker, cosign, gitleaks, git, node, flock, and timeout.' \
+    'Accepts no arguments, a sole --no-cache, or a sole --help. The source is image/archiso.' \
+    'Creates private run work and evidence, uses a privileged ephemeral Docker container, and may publish dist/<run-id>/.' \
+    'Run records and stage logs are retained under evidence/archiso-build/<run-id>/.'
+  exit 0
+fi
+
+if [[ ! -f "$BUILDER_PATH" || ! -r "$BUILDER_PATH" || ! -x "$BUILDER_PATH" ]] || \
+  ! /usr/bin/bash -n "$BUILDER_PATH" >/dev/null 2>&1; then
   printf '%s\n' \
-    'MirrorOS: incomplete or damaged checkout; the lifecycle discovery helper could not be loaded.' \
-    'Restore the helper from Git or re-clone the repository.' >&2
+    'MirrorOS: incomplete or damaged checkout; the image builder could not be loaded.' \
+    'Restore image/builder/build-artifact from Git or re-clone the repository.' >&2
   exit 6
 fi
 
-if lifecycle_discovery_main \
-  'build' \
-  'Build a traceable MirrorOS installation artifact from the version-controlled Archiso profile.' \
-  'An Arch Linux build environment and Archiso tooling are anticipated; exact supported requirements are Pending.' \
-  'The image/archiso profile is the known source input; additional input details are Pending.' \
-  'A future build is expected to create generated build work and an installation artifact; exact effects are Pending. The current command makes no changes.' \
-  'Run-associated output belongs under evidence/; the exact path and format are Pending, and this command creates none.' \
-  "$@"; then
-  exit 0
-else
-  exit "$?"
-fi
+exec "$BUILDER_PATH" "$@"

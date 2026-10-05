@@ -4,13 +4,13 @@ MirrorOS is a governed, version-controlled project for reconstructing an Arch Li
 
 ## Current state
 
-The repository currently provides governance and lifecycle discovery. The Archiso `releng` profile has been imported, but ISO construction and boot qualification have **not yet been performed**. The six lifecycle entry points provide help and safe refusal only; their domain behavior is pending. Repository validation is not ISO or VM qualification.
+The repository provides governance and lifecycle discovery, and the `build` command implements traceable ISO construction. The Archiso `releng` profile has been imported; boot qualification has **not yet been performed**. The other five lifecycle entry points provide help and safe refusal only; their domain behavior is pending. Repository validation is not ISO or VM qualification.
 
 ## Lifecycle commands
 
 | Command | Availability | Procedure |
 | --- | --- | --- |
-| `build` | help only; domain behavior pending | [Build procedure](docs/procedures/build.md) |
+| `build` | implemented | [Build procedure](docs/procedures/build.md) |
 | `test` | help only; domain behavior pending | [Test procedure](docs/procedures/test.md) |
 | `install` | help only; domain behavior pending | [Install procedure](docs/procedures/install.md) |
 | `configure` | help only; domain behavior pending | [Configure procedure](docs/procedures/configure.md) |

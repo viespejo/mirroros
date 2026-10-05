@@ -27,11 +27,11 @@ teardown() {
   done
 }
 
-@test "build without arguments refuses pending work without success wording" {
-  lifecycle_invoke build
+@test "build rejects repeated cache arguments without success wording" {
+  lifecycle_invoke build --no-cache --no-cache
   lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'MirrorOS build is pending'
-  lifecycle_assert_stderr_contains 'docs/procedures/build.md'
+  lifecycle_assert_stderr_contains 'unsupported argument(s)'
+  lifecycle_assert_stderr_does_not_contain 'is pending'
   lifecycle_assert_no_success_output
 }
 
@@ -71,4 +71,20 @@ teardown() {
   lifecycle_assert_status 6
   lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
   lifecycle_assert_stderr_contains 'Restore the helper from Git or re-clone the repository.'
+}
+
+@test "build reports a missing builder as a damaged checkout" {
+  rm -f -- "$LIFECYCLE_COPY_ROOT/image/builder/build-artifact"
+  lifecycle_invoke build
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+  lifecycle_assert_stderr_contains 'Restore image/builder/build-artifact from Git or re-clone the repository.'
+}
+
+@test "build reports an unloadable builder as a damaged checkout" {
+  printf '%s\n' 'if then' > "$LIFECYCLE_COPY_ROOT/image/builder/build-artifact"
+  lifecycle_invoke build
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+  lifecycle_assert_stderr_contains 'Restore image/builder/build-artifact from Git or re-clone the repository.'
 }
