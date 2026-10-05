@@ -1,0 +1,163 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+REFERENCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REPOSITORY_ROOT="$(cd -- "${REFERENCE_DIR}/../.." && pwd -P)"
+DOCUMENTS_CLI="${REFERENCE_DIR}/bootstrap-documents.mjs"
+QUALIFY_FINALIZED=0
+
+for QUALIFY_LIBRARY in preconditions.sh run-resources.sh nocloud.sh launch.sh stop-cleanup.sh outcome.sh evidence.sh; do
+  QUALIFY_LIBRARY_PATH="${REFERENCE_DIR}/lib/${QUALIFY_LIBRARY}"
+  if [[ ! -f "$QUALIFY_LIBRARY_PATH" || ! -r "$QUALIFY_LIBRARY_PATH" ]] || \
+    ! /usr/bin/bash -n "$QUALIFY_LIBRARY_PATH" >/dev/null 2>&1; then
+    printf 'MirrorOS: incomplete or damaged checkout; reference VM library could not be loaded: %s\n' \
+      "$QUALIFY_LIBRARY_PATH" >&2
+    exit 6
+  fi
+  # shellcheck disable=SC1090 # Reference VM libraries are resolved relative to this script.
+  if ! source "$QUALIFY_LIBRARY_PATH"; then
+    printf 'MirrorOS: incomplete or damaged checkout; reference VM library could not be loaded: %s\n' \
+      "$QUALIFY_LIBRARY_PATH" >&2
+    exit 6
+  fi
+done
+
+if [[ ! -f "$DOCUMENTS_CLI" || ! -r "$DOCUMENTS_CLI" ]]; then
+  printf 'MirrorOS: incomplete or damaged checkout; the structured-data module could not be loaded: %s\n' \
+    "$DOCUMENTS_CLI" >&2
+  exit 6
+fi
+
+# Runs the stages that need run resources. Failures are recorded, never returned, so that
+# qualify_finalize always runs the stop, cleanup, result, and scan sequence.
+qualify_run_stages() {
+  local status=0
+  local iso_path
+
+  if ! iso_path="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).iso_path)' "$QUALIFY_BUNDLE_ADMISSION")"; then
+    outcome_mark_failure 6 bundle-admission
+    return 0
+  fi
+
+  printf 'MirrorOS test: run %s: preparing the NoCloud medium.\n' "$RUN_ID" >&2
+  nocloud_prepare "$RUN_ID" "$BUILD_RUN_DIR" "$EVIDENCE_RUN_DIR" "${REFERENCE_DIR}/guest/bootstrap-checks.sh" \
+    "$REFERENCE_VM_NOCLOUD_LABEL" "$REFERENCE_VM_GUEST_HTTPS_URL" "$REFERENCE_VM_GUEST_HTTPS_TIMEOUT_SECONDS" || status=$?
+  outcome_record_tool_status nocloud_prepare "$status"
+  case "$status" in
+    0) outcome_set_scan nocloud passed ;;
+    2)
+      outcome_set_scan nocloud findings
+      outcome_mark_failure 2 nocloud-scan
+      return 0
+      ;;
+    5)
+      outcome_set_scan nocloud failed
+      outcome_mark_failure 5 nocloud
+      return 0
+      ;;
+    *)
+      outcome_mark_failure 6 nocloud
+      return 0
+      ;;
+  esac
+
+  printf '%s\n' 'MirrorOS test: creating the disk and the UEFI variable store.' >&2
+  status=0
+  launch_prepare_disk "$BUILD_RUN_DIR" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    outcome_mark_failure 5 disk-preparation
+    return 0
+  fi
+
+  printf '%s\n' 'MirrorOS test: launching the reference VM.' >&2
+  launch_build_command "$iso_path" "$NOCLOUD_SEED_FILE" "$EVIDENCE_RUN_DIR"
+  status=0
+  launch_start "$EVIDENCE_RUN_DIR" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    outcome_mark_failure 5 qemu-launch
+    return 0
+  fi
+
+  printf 'MirrorOS test: waiting for the guest report (deadline %s s).\n' "$REFERENCE_VM_GLOBAL_DEADLINE_SECONDS" >&2
+  launch_wait "$RUN_ID" "$BUILD_RUN_DIR" "$REFERENCE_VM_GLOBAL_DEADLINE_SECONDS"
+  if [[ -n "$LAUNCH_QEMU_STATUS" ]]; then
+    outcome_record_tool_status qemu "$LAUNCH_QEMU_STATUS"
+  fi
+
+  status=0
+  launch_evaluate "$DOCUMENTS_CLI" "$RUN_ID" || status=$?
+  outcome_record_tool_status guest_report_validation "$status"
+  case "$status" in
+    0) ;;
+    4) outcome_mark_failure 4 guest-checks ;;
+    5)
+      case "$LAUNCH_OUTCOME" in
+        deadline) outcome_mark_failure 5 deadline ;;
+        qemu_exited) outcome_mark_failure 5 qemu-exit ;;
+        *) outcome_mark_failure 5 guest-report ;;
+      esac
+      ;;
+    *) outcome_mark_failure 6 guest-report ;;
+  esac
+}
+
+# Stops the owned QEMU, removes run resources only after its exit is confirmed, then writes,
+# scans, and summarizes the evidence. Idempotent.
+qualify_finalize() {
+  if [[ "$QUALIFY_FINALIZED" -eq 1 ]]; then
+    return 0
+  fi
+  QUALIFY_FINALIZED=1
+  trap 'outcome_mark_interrupted 130 INT' INT
+  trap 'outcome_mark_interrupted 143 TERM' TERM
+
+  if ! stop_cleanup_stop_qemu; then
+    outcome_mark_failure 5 qemu-stop
+  fi
+  stop_cleanup_remove_resources "$BUILD_RUN_DIR" || true
+  outcome_note_cleanup "$STOP_CLEANUP_OUTCOME" "$STOP_CLEANUP_GUIDANCE" "${STOP_CLEANUP_LEFTOVERS[@]}"
+  evidence_finalize || true
+}
+
+qualify_handle_signal() {
+  outcome_mark_interrupted "$1" "$2"
+  qualify_finalize
+  exit "$OUTCOME_PRIMARY_STATUS"
+}
+
+qualify_handle_exit() {
+  if [[ "$QUALIFY_FINALIZED" -eq 0 ]]; then
+    outcome_mark_failure 6 internal
+    qualify_finalize
+    exit "$OUTCOME_PRIMARY_STATUS"
+  fi
+}
+
+qualify_bootstrap_main() {
+  preconditions_parse_arguments "$@" || return $?
+  preconditions_check_user "$EUID" || return $?
+  preconditions_check_tools || return $?
+  preconditions_admit_bundle "$QUALIFY_BUNDLE_DIR" "$DOCUMENTS_CLI" || return $?
+  preconditions_check_firmware || return $?
+  preconditions_check_kvm || return $?
+
+  launch_load_configuration "${REFERENCE_DIR}/reference-vm.conf" || return $?
+  launch_describe_configuration
+  launch_collect_versions
+  outcome_capture_test_code "$REPOSITORY_ROOT" || return $?
+
+  umask 077
+  run_resources_new_id || return $?
+  run_resources_prepare "$REPOSITORY_ROOT" "$RUN_ID" || return $?
+  outcome_initialize || return 5
+
+  trap 'qualify_handle_signal 130 INT' INT
+  trap 'qualify_handle_signal 143 TERM' TERM
+  trap qualify_handle_exit EXIT
+
+  qualify_run_stages
+  qualify_finalize
+  return "$OUTCOME_PRIMARY_STATUS"
+}
+
+qualify_bootstrap_main "$@"

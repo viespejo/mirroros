@@ -1111,10 +1111,20 @@ mirroros/
 ├── vm/
 │   └── reference/
 │       ├── README.md
-│       ├── create-disk
-│       ├── launch-installer
-│       ├── launch-installed
-│       └── collect-evidence
+│       ├── qualify-bootstrap
+│       ├── reference-vm.conf
+│       ├── bootstrap-documents.mjs
+│       ├── guest/
+│       │   └── bootstrap-checks.sh
+│       └── lib/
+│           ├── bootstrap-documents.mjs
+│           ├── preconditions.sh
+│           ├── run-resources.sh
+│           ├── nocloud.sh
+│           ├── launch.sh
+│           ├── stop-cleanup.sh
+│           ├── outcome.sh
+│           └── evidence.sh
 │
 ├── prototypes/
 │   ├── README.md

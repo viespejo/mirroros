@@ -27,12 +27,50 @@ teardown() {
   done
 }
 
-@test "test without arguments refuses pending work without success wording" {
+@test "test without arguments names the missing bundle directory without success wording" {
   lifecycle_invoke test
   lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'MirrorOS test is pending'
-  lifecycle_assert_stderr_contains 'docs/procedures/test.md'
+  lifecycle_assert_stderr_contains 'the bundle directory argument is missing'
+  lifecycle_assert_stderr_does_not_contain 'is pending'
   lifecycle_assert_no_success_output
+}
+
+@test "test rejects more than one argument before creating files or invoking tools" {
+  lifecycle_invoke test one two
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument(s)'
+  lifecycle_assert_no_success_output
+}
+
+@test "test refuses a missing bundle directory with spaces in its path" {
+  lifecycle_invoke test 'relative bundle dir/with spaces'
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'not an accessible directory'
+  lifecycle_assert_stderr_contains 'relative bundle dir/with spaces'
+  lifecycle_assert_no_success_output
+}
+
+@test "test reports a missing qualifier as a damaged checkout" {
+  rm -f -- "$LIFECYCLE_COPY_ROOT/vm/reference/qualify-bootstrap"
+  lifecycle_invoke test some-bundle
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+  lifecycle_assert_stderr_contains 'Restore vm/reference/qualify-bootstrap from Git or re-clone the repository.'
+}
+
+@test "test reports an unparseable qualifier as a damaged checkout" {
+  printf '%s\n' 'if then' > "$LIFECYCLE_COPY_ROOT/vm/reference/qualify-bootstrap"
+  chmod 755 "$LIFECYCLE_COPY_ROOT/vm/reference/qualify-bootstrap"
+  lifecycle_invoke test some-bundle
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+}
+
+@test "test reports a missing reference library as a damaged checkout" {
+  rm -f -- "$LIFECYCLE_COPY_ROOT/vm/reference/lib/preconditions.sh"
+  lifecycle_invoke test some-bundle
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
 }
 
 @test "test rejects unsupported arguments distinctly" {
