@@ -1129,14 +1129,16 @@ mirroros/
 ├── prototypes/
 │   ├── README.md
 │   ├── installation/
+│   │   ├── README.md
+│   │   ├── lib/
 │   │   ├── archinstall-json-cli/
 │   │   │   ├── README.md
 │   │   │   ├── run
-│   │   │   └── results/            # Generated, ignored, and secret-scanned
+│   │   │   └── # Results: evidence/prototypes/installation/<engine>/<run-id>/
 │   │   └── native-arch/
 │   │       ├── README.md
 │   │       ├── run
-│   │       └── results/            # Generated, ignored, and secret-scanned
+│   │       └── # Results: evidence/prototypes/installation/<engine>/<run-id>/
 │   └── convergence/
 │       ├── shell/
 │       │   ├── README.md

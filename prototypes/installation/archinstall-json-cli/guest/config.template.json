@@ -1,0 +1,66 @@
+{
+  "archinstall-language": "English",
+  "bootloader_config": {
+    "bootloader": "Systemd-boot",
+    "uki": false,
+    "removable": false
+  },
+  "disk_config": {
+    "config_type": "manual_partitioning",
+    "device_modifications": [
+      {
+        "device": "/dev/vda",
+        "wipe": true,
+        "partitions": [
+          {
+            "obj_id": "6f1c1c2e-0f4b-4a53-9a43-5d0a3f0d1a01",
+            "status": "create",
+            "type": "primary",
+            "start": {"unit": "MiB", "value": 1, "sector_size": {"unit": "B", "value": 512}},
+            "size": {"unit": "MiB", "value": 1024, "sector_size": {"unit": "B", "value": 512}},
+            "fs_type": "fat32",
+            "mountpoint": "/boot",
+            "mount_options": [],
+            "flags": ["boot", "esp"],
+            "dev_path": null,
+            "btrfs": []
+          },
+          {
+            "obj_id": "6f1c1c2e-0f4b-4a53-9a43-5d0a3f0d1a02",
+            "status": "create",
+            "type": "primary",
+            "start": {"unit": "MiB", "value": 1025, "sector_size": {"unit": "B", "value": 512}},
+            "size": {"unit": "MiB", "value": 1, "sector_size": {"unit": "B", "value": 512}},
+            "fs_type": "ext4",
+            "mountpoint": "/",
+            "mount_options": [],
+            "flags": [],
+            "dev_path": null,
+            "btrfs": []
+          }
+        ]
+      }
+    ]
+  },
+  "hostname": "mirroros-ref",
+  "kernels": ["linux"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_lang": "en_US.UTF-8",
+    "sys_enc": "UTF-8"
+  },
+  "network_config": {
+    "type": "nm"
+  },
+  "ntp": true,
+  "pacman_config": {
+    "parallel_downloads": 5,
+    "color": true
+  },
+  "packages": ["neovim", "man-db", "man-pages"],
+  "services": ["systemd-boot-update.service"],
+  "swap": {
+    "enabled": false
+  },
+  "timezone": "Europe/Madrid"
+}

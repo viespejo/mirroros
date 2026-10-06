@@ -1,0 +1,232 @@
+#!/usr/bin/bash
+# Archinstall JSON/CLI prototype: installs the shared Story 2.1 scenario with the packaged archinstall
+# CLI (configuration JSON plus a protected --creds file), then applies the items Archinstall cannot
+# express in one bounded native finalization step (finalize). It runs in the live environment (see
+# lib/README.md, "Engine contract"). Prototype-only: this is not a production installer and it never
+# retries. No Archinstall Python API, no plugins, and no project-owned Python are used.
+#
+# Arguments (attended sessions pass them through /run/mirroros-attended.sh):
+#   --silent          run archinstall with --silent (no menu, no confirmation); implied when unattended
+#   --contract-check  run only `archinstall --silent --dry-run` with and without a root password;
+#                     the disk is not touched
+# Optional switch for the contract-level check of the omitted-root-password case:
+#   MIRROROS_OMIT_ROOT_PASSWORD=1 leaves root locked (no root_enc_password is supplied).
+#
+# Stops on the first failure and exits with the failing command's own status.
+set -u
+set -o pipefail
+
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR:?}/common.sh"
+
+TARGET_DISK="${MIRROROS_TARGET_DISK:?}"
+TARGET_ROOT=/mnt
+ENGINE_DIR="${MIRROROS_SEED_DIR}/engine"
+EXPECTED_USER='mirroros'
+ROOT_START_MIB=1025
+SILENT=0
+CONTRACT_CHECK=0
+INTERRUPTED=0
+WORK_DIR=''
+CONFIG_FILE=''
+CREDS_FILE=''
+
+cleanup() {
+  [[ -z "$WORK_DIR" ]] || rm -rf -- "$WORK_DIR"
+}
+
+# Runs a command; on failure logs the step and exits with the command's own status.
+run() {
+  local status=0
+
+  "$@" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "step failed with exit status ${status}: $*"
+    exit "$status"
+  fi
+}
+
+parse_arguments() {
+  [[ "${MIRROROS_UNATTENDED:-0}" != '1' ]] || SILENT=1
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --silent) SILENT=1 ;;
+      --contract-check) CONTRACT_CHECK=1 ;;
+      *)
+        mirroros_proto_log "unsupported argument: $1"
+        exit 2
+        ;;
+    esac
+    shift
+  done
+}
+
+# Prints a SHA-512 crypt hash of the password read from stdin. Archinstall's current credential form
+# is hash-only (the plaintext keys are deprecated), so the hash is produced here.
+hash_password() {
+  openssl passwd -6 -stdin
+}
+
+# Writes the --creds file (0600, under the private work directory). Argument: 1 to include the root
+# password hash, 0 to omit it (root stays locked). The hashes reach jq through descriptors, never as
+# arguments, and the plaintext never reaches a file.
+build_credentials() {
+  local include_root="$1"
+
+  (
+    umask 077
+    jq -n --rawfile user_hash <(printf '%s\n' "$MIRROROS_USER_PASSWORD" | hash_password) \
+      --rawfile root_hash <(printf '%s\n' "$MIRROROS_ROOT_PASSWORD" | hash_password) \
+      --argjson include_root "$include_root" --arg username "$EXPECTED_USER" '
+        {users: [{username: $username, enc_password: ($user_hash | rtrimstr("\n")), sudo: false, groups: ["wheel"]}]}
+        + (if $include_root == 1 then {root_enc_password: ($root_hash | rtrimstr("\n"))} else {} end)
+      ' > "$CREDS_FILE"
+  )
+}
+
+# Writes the configuration from the template: only the device and the root partition size (the rest
+# of the disk, leaving 1 MiB for the backup GPT) are filled in.
+build_config() {
+  local disk_bytes
+  local root_mib
+
+  disk_bytes="$(blockdev --getsize64 "$TARGET_DISK")" || exit 1
+  root_mib=$((disk_bytes / 1048576 - ROOT_START_MIB - 1))
+  (
+    umask 077
+    jq --arg disk "$TARGET_DISK" --argjson root_mib "$root_mib" '
+      .disk_config.device_modifications[0].device = $disk
+      | .disk_config.device_modifications[0].partitions[1].size.value = $root_mib
+    ' "${ENGINE_DIR}/config.template.json" > "$CONFIG_FILE"
+  ) || {
+    mirroros_proto_log 'could not build the archinstall configuration'
+    exit 1
+  }
+}
+
+# Runs the packaged CLI with the extra arguments given and reports its own exit status.
+# Sets ARCHINSTALL_STATUS.
+run_archinstall() {
+  local -a args=(--config "$CONFIG_FILE" --creds "$CREDS_FILE" "$@")
+
+  ARCHINSTALL_STATUS=0
+  mirroros_proto_log "archinstall $(archinstall --version 2> /dev/null): starting"
+  archinstall "${args[@]}" || ARCHINSTALL_STATUS=$?
+  mirroros_proto_log "archinstall exit status: ${ARCHINSTALL_STATUS}"
+}
+
+# Configuration-level check of the omitted-root-password case: archinstall --dry-run builds and saves
+# the configuration, then exits without touching the disk.
+contract_check() {
+  local include_root
+
+  for include_root in 1 0; do
+    build_credentials "$include_root" || exit 1
+    run_archinstall --silent --dry-run
+    mirroros_proto_log "contract check: root password supplied=${include_root}, dry-run exit status ${ARCHINSTALL_STATUS}"
+    [[ "$ARCHINSTALL_STATUS" -eq 0 ]] || exit "$ARCHINSTALL_STATUS"
+  done
+  mirroros_proto_log 'contract check: archinstall accepted the configuration with and without a root password'
+}
+
+# Archinstall can exit 0 without having installed anything (menu cancellation exits 0) or with a
+# missing step it only warns about, so success is never inferred from its exit status alone.
+require_installation() {
+  local -a entries=()
+
+  if ! mountpoint -q "$TARGET_ROOT" || ! mountpoint -q "${TARGET_ROOT}/boot" || [[ ! -s "${TARGET_ROOT}/etc/fstab" ]]; then
+    mirroros_proto_log 'archinstall exited 0 but did not leave an installed system mounted; this is not a success'
+    exit 1
+  fi
+  mapfile -t entries < <(find "${TARGET_ROOT}/boot/loader/entries" -maxdepth 1 -type f -name '*_linux.conf' 2> /dev/null)
+  if [[ "${#entries[@]}" -ne 1 ]]; then
+    mirroros_proto_log "archinstall left ${#entries[@]} boot entries instead of one; this is not a success"
+    exit 1
+  fi
+}
+
+# Searches Archinstall's logs and the configuration it saved for the credentials. Only outcomes are
+# printed (paths and counts), never a value. Plaintext is searched in the live logs and in the
+# directories of the installed system where it could land; the hashes only in the Archinstall logs,
+# because /etc/shadow legitimately holds them.
+leak_check() {
+  local dir
+  local -a log_dirs=()
+  local -a plaintext_dirs=()
+  local plaintext_hits
+  local hash_hits
+
+  for dir in /var/log/archinstall "${TARGET_ROOT}/var/log/archinstall"; do
+    [[ ! -e "$dir" ]] || log_dirs+=("$dir")
+  done
+  plaintext_dirs=("${log_dirs[@]}")
+  for dir in "${TARGET_ROOT}/etc" "${TARGET_ROOT}/root" "${TARGET_ROOT}/home" "${TARGET_ROOT}/var/tmp"; do
+    [[ ! -e "$dir" ]] || plaintext_dirs+=("$dir")
+  done
+
+  plaintext_hits="$(grep -rlaF --no-messages -f <(printf '%s\n%s\n' "$MIRROROS_USER_PASSWORD" "$MIRROROS_ROOT_PASSWORD") \
+    -- "${plaintext_dirs[@]}" | wc -l)"
+  hash_hits="$(grep -rlaF --no-messages -f <(jq -r '.users[].enc_password, (.root_enc_password // empty)' "$CREDS_FILE") \
+    -- "${log_dirs[@]}" | wc -l)"
+  mirroros_proto_log "leak check: files with a plaintext credential: ${plaintext_hits}; files with a password hash in the Archinstall logs: ${hash_hits}"
+  mirroros_proto_log "leak check: saved configuration lists users: $(jq -r 'has("users") or has("root_enc_password")' \
+    "${TARGET_ROOT}/var/log/archinstall/user_configuration.json" 2> /dev/null || printf 'unknown')"
+  mirroros_proto_log "leak check: saved credentials file present: $([[ -e "${TARGET_ROOT}/var/log/archinstall/user_credentials.json" ]] && printf yes || printf no)"
+}
+
+main() {
+  mirroros_proto_log "archinstall-json-cli: run ${MIRROROS_RUN_ID:-unknown}, target ${TARGET_DISK}"
+  parse_arguments "$@"
+  mirroros_proto_read_secrets || {
+    mirroros_proto_log 'could not read the credentials from file descriptor 3'
+    exit 1
+  }
+  WORK_DIR="$(mktemp -d /run/mirroros-archinstall.XXXXXX)" || exit 1
+  CONFIG_FILE="${WORK_DIR}/user_configuration.json"
+  CREDS_FILE="${WORK_DIR}/user_credentials.json"
+  trap cleanup EXIT
+  trap 'INTERRUPTED=1' INT
+  build_config
+
+  if [[ "$CONTRACT_CHECK" -eq 1 ]]; then
+    contract_check
+    return 0
+  fi
+
+  if [[ "${MIRROROS_OMIT_ROOT_PASSWORD:-0}" == '1' ]]; then
+    mirroros_proto_log 'accounts: the root password is omitted; root stays locked'
+    build_credentials 0 || exit 1
+  else
+    build_credentials 1 || exit 1
+  fi
+
+  if [[ "$SILENT" -eq 1 ]]; then
+    run_archinstall --silent
+  else
+    run_archinstall
+  fi
+  if [[ "$ARCHINSTALL_STATUS" -ne 0 ]]; then
+    mirroros_proto_log 'archinstall failed; nothing further is attempted and no retry is made'
+    exit "$ARCHINSTALL_STATUS"
+  fi
+  if [[ "$INTERRUPTED" -eq 1 ]]; then
+    mirroros_proto_log 'interrupted (SIGINT) while archinstall reported success; this is not a success'
+    exit 130
+  fi
+  require_installation
+
+  mirroros_proto_log 'native finalization'
+  run env MIRROROS_TARGET_ROOT="$TARGET_ROOT" /usr/bin/bash "${ENGINE_DIR}/finalize"
+  leak_check
+  rm -f -- "$CREDS_FILE"
+
+  mirroros_proto_install_verifier "$TARGET_ROOT" || {
+    mirroros_proto_log 'installing the verification unit failed'
+    exit 1
+  }
+  run sync
+  run umount -R "$TARGET_ROOT"
+  mirroros_proto_log 'archinstall-json-cli: installation finished'
+}
+
+main "$@"

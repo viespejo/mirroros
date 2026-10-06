@@ -1,0 +1,14 @@
+[Unit]
+Description=MirrorOS prototype postcondition verification (known prototype contamination)
+Documentation=file:///usr/local/lib/mirroros-proto/verify-postconditions.sh
+After=network-online.target NetworkManager.service systemd-timesyncd.service
+Wants=network-online.target
+ConditionPathExists=/etc/mirroros-proto/verify.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/lib/mirroros-proto/verify-postconditions.sh
+
+[Install]
+WantedBy=multi-user.target

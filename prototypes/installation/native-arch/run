@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034 # PROTO_ENGINE_NAME is consumed by the harness sourced below.
+# Native Arch prototype entry point (Story 2.1, Track 1). Non-production.
+# The shared harness does everything except the engine, which is guest/install.
+
+PROTO_ENGINE_NAME='native-arch'
+PROTO_ENGINE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PROTO_HARNESS_PATH="${PROTO_ENGINE_DIR}/../lib/harness.sh"
+
+if [[ ! -f "$PROTO_HARNESS_PATH" || ! -r "$PROTO_HARNESS_PATH" ]]; then
+  printf 'MirrorOS prototype: incomplete or damaged checkout; the harness is missing: %s\n' "$PROTO_HARNESS_PATH" >&2
+  exit 6
+fi
+
+# shellcheck disable=SC1090 # Resolved relative to this file.
+source "$PROTO_HARNESS_PATH" || exit 6
+proto_main "$@"

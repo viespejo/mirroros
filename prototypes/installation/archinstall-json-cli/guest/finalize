@@ -1,0 +1,168 @@
+#!/usr/bin/bash
+# Bounded native finalization for the Archinstall prototype (Story 2.1, Track 1). It runs once, in the
+# live environment, after archinstall exited successfully and before the installed system's first
+# boot, with the target still mounted. Prototype-only: not a production step, and it never retries.
+#
+# It applies only what the archinstall 4.5 configuration cannot express. Each section names the
+# scenario item it covers. It handles no credentials: the accounts are created by archinstall.
+#
+# Stops on the first failure and exits with the failing command's own status.
+set -u
+set -o pipefail
+
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR:?}/common.sh"
+
+TARGET_ROOT="${MIRROROS_TARGET_ROOT:?}"
+ROOT_PARTITION="${MIRROROS_TARGET_DISK:?}2"
+MKINITCPIO_CONF="${TARGET_ROOT}/etc/mkinitcpio.conf"
+LOADER_CONF="${TARGET_ROOT}/boot/loader/loader.conf"
+# The default systemd-based hooks of mkinitcpio (DEC-010). Archinstall 4.5 rewrites them to udev-based
+# ones when no FIDO2 device is used.
+DEFAULT_HOOKS='HOOKS=(base systemd autodetect microcode modconf kms keyboard sd-vconsole block filesystems fsck)'
+ENTRY_FILE=''
+
+# Runs a command; on failure logs the step and exits with the command's own status.
+run() {
+  local status=0
+
+  "$@" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "finalization step failed with exit status ${status}: $*"
+    exit "$status"
+  fi
+}
+
+# Writes stdin to a file; on failure logs the step and exits with the failing status.
+put() {
+  local status=0
+
+  cat > "$1" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "could not write ${1} (exit status ${status})"
+    exit "$status"
+  fi
+}
+
+# Sets "key value" in loader.conf, replacing an existing or commented line, or appending it.
+set_loader_option() {
+  local key="$1"
+  local value="$2"
+
+  if grep -Eq "^#?${key}[[:space:]]" "$LOADER_CONF"; then
+    run sed -i "s/^#\\?${key}[[:space:]].*/${key} ${value}/" "$LOADER_CONF"
+  else
+    printf '%s %s\n' "$key" "$value" >> "$LOADER_CONF" || exit 1
+  fi
+}
+
+# Records what archinstall left, so the comparison measures how much had to be corrected.
+record_archinstall_state() {
+  mirroros_proto_log 'state left by archinstall, before finalization:'
+  printf '# loader.conf\n'
+  grep -Ev '^[[:space:]]*$' "$LOADER_CONF"
+  printf '# %s\n' "$ENTRY_FILE"
+  grep -Ev '^[[:space:]]*(#|$)' "${TARGET_ROOT}/boot/loader/entries/${ENTRY_FILE}"
+  printf '# mkinitcpio.conf\n'
+  grep -E '^HOOKS=' "$MKINITCPIO_CONF"
+}
+
+finalize_localization() {
+  mirroros_proto_log 'finalization: second locale (archinstall accepts one sys_lang)'
+  run sed -i 's/^#\(es_ES\.UTF-8 UTF-8\)/\1/' "${TARGET_ROOT}/etc/locale.gen"
+  run arch-chroot "$TARGET_ROOT" locale-gen
+}
+
+finalize_clock() {
+  mirroros_proto_log 'finalization: hardware clock in UTC (archinstall does not run hwclock)'
+  run arch-chroot "$TARGET_ROOT" hwclock --systohc
+}
+
+finalize_initramfs() {
+  mirroros_proto_log 'finalization: default systemd-based initramfs hooks'
+  if grep -q '^HOOKS=.*udev' "$MKINITCPIO_CONF"; then
+    run sed -i "s/^HOOKS=.*/${DEFAULT_HOOKS}/" "$MKINITCPIO_CONF"
+    run arch-chroot "$TARGET_ROOT" mkinitcpio -P
+  fi
+}
+
+# Swapfile, resume parameters, boot entries, and loader settings.
+finalize_swap_and_boot() {
+  local root_uuid
+  local offset
+  local entry_path="${TARGET_ROOT}/boot/loader/entries/${ENTRY_FILE}"
+  local options
+
+  mirroros_proto_log 'finalization: swapfile and resume (archinstall add_swapfile is not reachable from the configuration)'
+  run mkswap -U clear --size 4G --file "${TARGET_ROOT}/swapfile"
+  printf '/swapfile none swap defaults 0 0\n' >> "${TARGET_ROOT}/etc/fstab" || {
+    mirroros_proto_log 'could not append the swapfile to fstab'
+    exit 1
+  }
+  root_uuid="$(blkid -s UUID -o value "$ROOT_PARTITION")" || exit 1
+  offset="$(filefrag -v "${TARGET_ROOT}/swapfile" | awk '$1 == "0:" { gsub(/\./, "", $4); print $4; exit }')"
+  if [[ -z "$root_uuid" || ! "$offset" =~ ^[0-9]+$ ]]; then
+    mirroros_proto_log 'could not determine the root UUID or the swapfile resume offset'
+    exit 1
+  fi
+
+  mirroros_proto_log 'finalization: boot entry options (archinstall names the root by PARTUUID and sets no resume)'
+  run sed -i -e "s|root=PARTUUID=[^ ]*|root=UUID=${root_uuid}|" \
+    -e '/^options/ s|$| resume=UUID='"${root_uuid}"' resume_offset='"${offset}"'|' "$entry_path"
+  options="$(sed -n 's/^options[[:space:]]\{1,\}//p' "$entry_path" | head -n 1)"
+  if [[ " ${options} " != *" root=UUID=${root_uuid} "* ]]; then
+    mirroros_proto_log 'the boot entry does not carry root=UUID after the rewrite'
+    exit 1
+  fi
+  if [[ -f "${TARGET_ROOT}/boot/initramfs-linux-fallback.img" ]]; then
+    mirroros_proto_log 'finalization: fallback boot entry (archinstall creates only the default one)'
+    put "${TARGET_ROOT}/boot/loader/entries/arch-fallback.conf" <<EOF
+title   Arch Linux (fallback initramfs)
+linux   /vmlinuz-linux
+initrd  /initramfs-linux-fallback.img
+options ${options}
+EOF
+  fi
+
+  mirroros_proto_log 'finalization: loader settings (timeout 3 and editor no)'
+  set_loader_option timeout 3
+  set_loader_option editor no
+}
+
+finalize_system() {
+  mirroros_proto_log 'finalization: sysrq and the pacman.conf options archinstall does not set'
+  put "${TARGET_ROOT}/etc/sysctl.d/90-sysrq.conf" <<'EOF'
+kernel.sysrq = 1
+EOF
+  run sed -i 's/^#VerbosePkgLists$/VerbosePkgLists/' "${TARGET_ROOT}/etc/pacman.conf"
+  if ! grep -q '^ILoveCandy' "${TARGET_ROOT}/etc/pacman.conf"; then
+    run sed -i '/^Color$/a ILoveCandy' "${TARGET_ROOT}/etc/pacman.conf"
+  fi
+}
+
+finalize_sudoers() {
+  mirroros_proto_log 'finalization: wheel sudoers drop-in (archinstall writes only per-user rules)'
+  put "${TARGET_ROOT}/etc/sudoers.d/10-wheel" <<'EOF'
+%wheel ALL=(ALL:ALL) ALL
+EOF
+  run chmod 0440 "${TARGET_ROOT}/etc/sudoers.d/10-wheel"
+  run arch-chroot "$TARGET_ROOT" visudo -c
+}
+
+main() {
+  ENTRY_FILE="$(find "${TARGET_ROOT}/boot/loader/entries" -maxdepth 1 -type f -name '*_linux.conf' -printf '%f\n' | head -n 1)"
+  if [[ -z "$ENTRY_FILE" ]]; then
+    mirroros_proto_log 'finalization: the archinstall boot entry is missing'
+    exit 1
+  fi
+  record_archinstall_state
+  finalize_localization
+  finalize_clock
+  finalize_initramfs
+  finalize_swap_and_boot
+  finalize_system
+  finalize_sudoers
+  mirroros_proto_log 'finalization finished'
+}
+
+main "$@"
