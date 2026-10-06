@@ -48,4 +48,20 @@ Run on a disposable disk over the serial console, together with the user. Record
 
 ## Result
 
-Pending. To be completed from the counted runs and the attended session (Tasks 7–9).
+All runs were made at commit `144eff7` with `dirty: false`, against the qualified bundle A.
+
+| Run | Run-id | Provenance | Outcome |
+| --- | --- | --- | --- |
+| Counted unattended 1 | `20261006T165554Z-f8e92294` | measured | engine exit 0 in 112 s; every postcondition passed |
+| Counted unattended 2 | `20261006T165859Z-5c61dee2` | measured | engine exit 0 in 84 s; every postcondition passed |
+| Failure injection | `20261006T170130Z-bacdedaf` | measured | engine exit 1 after 1 s, run exit 3; pacman's own error is on the console; the disk is partitioned, formatted, and mounted at `/mnt` |
+| Attended: plan and confirmation | `20261006T180251Z-e76ba9b8` | observed manually | the plan and `lsblk` are shown before the typed `install`; the installation finished |
+| Attended: rejection | `20261006T181659Z-89c1afbc` | observed manually | answer `no`; exit 1; the disk has no partition table |
+| Attended: SIGINT | `20261006T182418Z-9e1ef754` | observed manually | `Interrupt signal received`; the `pacstrap` step fails with status 1; `vda1` and `vda2` stay mounted at `/mnt/boot` and `/mnt` |
+
+The omitted-root-password path is implemented but was not exercised in any run. Only the console and the
+serial log hold diagnostics. The comparison with Archinstall is in [`../README.md`](../README.md).
+
+Decision: selected as the installation engine by
+[ADR 0002](../../../docs/adr/0002-installation-engine-selection.md). This prototype stays non-production;
+`install/engine/apply` is populated later (Story 2.5).

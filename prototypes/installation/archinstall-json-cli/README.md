@@ -116,4 +116,23 @@ Run on a disposable disk over the serial console, together with the user. Record
 
 ## Result
 
-Pending. To be completed from the counted runs and the attended session (Tasks 7–9).
+All runs were made at commit `144eff7` with `dirty: false`, against the qualified bundle A (`archinstall
+4.5-1`, source commit `78982a624824aa415f59bf88c515676a589e3c55`).
+
+| Run | Run-id | Provenance | Outcome |
+| --- | --- | --- | --- |
+| Counted unattended 1 | `20261006T170225Z-04586fed` | measured | engine exit 0 in 110 s; every postcondition passed |
+| Counted unattended 2 | `20261006T170512Z-ace9ccf1` | measured | engine exit 0 in 121 s; every postcondition passed |
+| Failure injection | `20261006T170810Z-64e01275` | measured | engine exit 1 after 7 s, run exit 3; the console shows a generic message, not pacman's error; the disk has no partition table |
+| Attended: contract check | `20261006T182807Z-c79529a2` | observed manually | `--silent --dry-run` exits 0 with and without a root password |
+| Attended: menu, rejection | `20261006T183152Z-9d7e7092` | observed manually | archinstall exits 0, the wrapper reports that no installed system is mounted and exits 1; the disk has no partition table |
+| Attended: `--silent` | `20261006T184058Z-ffad3fa7` | observed manually | a 5-second countdown, no confirmation; the installation and the finalization finished |
+| Attended: menu, SIGINT | `20261006T184658Z-bf5a1940` | observed manually | `KeyboardInterrupt` traceback; archinstall exit 1, wrapper exit 1; `/var/log/archinstall/` keeps four files; `vda1` and `vda2` stay mounted. Evidence incomplete: four result files are empty |
+
+The leak check found no plaintext credential and no hash in the Archinstall logs; whether the saved
+configuration lists users was recorded as `unknown`. The menu rendered and responded over the serial
+console in the recorded sessions; the evidence does not record a workaround. The comparison with the
+native path is in [`../README.md`](../README.md).
+
+Decision: not selected ([ADR 0002](../../../docs/adr/0002-installation-engine-selection.md)). This
+prototype remains as evidence only.

@@ -58,7 +58,7 @@ MirrorOS has a narrow product and organizational scope but significant systems-e
 - Estimated architectural components: 8 logical responsibility areas
 - User interaction complexity: Moderate to high at installation and recovery boundaries
 - Data complexity: Low volume, but high integrity and provenance requirements
-- Integration complexity: High due to operating-system tools, package sources, virtualization, hardware, and potentially Archinstall
+- Integration complexity: High due to operating-system tools, package sources, virtualization, hardware, and native Arch installation commands
 - Real-time requirements: None
 - Multi-tenancy requirements: None
 - Regulatory requirements: None identified
@@ -67,7 +67,7 @@ MirrorOS has a narrow product and organizational scope but significant systems-e
 
 - Arch Linux and its rolling package ecosystem form the base platform and a continuously changing upstream dependency.
 - Archiso is the expected image-construction baseline, but final integration details remain subject to research.
-- Archinstall is a candidate installation engine, not yet a binding architectural choice.
+- Native Arch installation commands are the installation engine, selected by [ADR 0002](adr/0002-installation-engine-selection.md); Archinstall is not selected.
 - QEMU/KVM or an equivalent disposable virtualization environment is required for pre-hardware validation.
 - The MVP support boundary is one reference VM and one target laptop; broader hardware compatibility is explicitly excluded.
 - The installation medium must remain minimal, while personal environment configuration evolves independently.
@@ -229,7 +229,7 @@ Exact repository paths and privilege boundaries may be refined by the first impl
 - Bind every destructive authorization to a concrete target and plan digest.
 - Use UEFI, GPT, systemd-boot, an unencrypted ext4 root, and a resizeable swapfile supporting mandatory hibernation.
 - Qualify artifacts through QEMU/KVM before physical installation.
-- Resolve the installation engine through an Archinstall JSON/CLI versus native Arch commands spike and ADR.
+- Install through native Arch commands, as selected by [ADR 0002](adr/0002-installation-engine-selection.md) after an Archinstall JSON/CLI versus native Arch commands spike.
 - Resolve the convergence mechanism through a shell versus Ansible local-mode spike and ADR.
 - Require package provenance, secret scanning, capability verification, and retained evidence before artifact promotion.
 
@@ -410,7 +410,7 @@ Allowed aggregate states are `passed`, `failed`, and `blocked_external`. Human a
 
 - Documented scripts provide the initial lifecycle interface.
 - A unified `mirroros` executable is not required.
-- If selected, Archinstall is first integrated through its documented JSON/CLI boundary.
+- Archinstall is not selected as the installation engine ([ADR 0002](adr/0002-installation-engine-selection.md)); no Archinstall integration is planned.
 - `arch-chroot` defines the live-environment to installed-target boundary.
 - Wrappers never convert upstream failure into success.
 - Completion markers never replace postcondition verification.
@@ -451,7 +451,7 @@ Each command documents its purpose, prerequisites, inputs, consequential effects
 5. Permit cancellation without changes.
 6. Require confirmation bound to the target and plan digest.
 
-MirrorOS introduces no custom TUI. If Archinstall wins its prototype, its existing interaction model must satisfy this contract. Otherwise, reviewable paginated text is sufficient.
+MirrorOS introduces no custom TUI. The native installation engine ([ADR 0002](adr/0002-installation-engine-selection.md)) provides no interaction model of its own, so reviewable paginated text is sufficient to satisfy this contract.
 
 **Terminal output:**
 
@@ -526,7 +526,7 @@ Hibernation validation covers swapfile resume configuration, offset recalculatio
 
 **Technology gates:**
 
-- Compare Archinstall JSON/CLI against native Arch installation commands and record the outcome in an ADR.
+- The installation-engine gate is resolved: native Arch installation commands, recorded in [ADR 0002](adr/0002-installation-engine-selection.md).
 - Compare minimal shell against Ansible local mode using one representative end-to-end capability.
 - Begin dotfile integration with explicit Git checkouts and links; evaluate Stow or chezmoi only after demonstrated repetition or machine-specific complexity.
 - Begin orchestration with documented scripts; add Make, Just, or a unified CLI only after the real command graph demonstrates value.
@@ -1329,8 +1329,8 @@ Components communicate through arguments, explicit structured files, stdout, std
 
 - Archiso through `mkarchiso`.
 - Pacman and signed Arch repositories.
-- Candidate Archinstall through JSON/CLI only inside its authorized prototype until selected.
-- Native Arch installation commands inside their authorized prototype.
+- Native Arch installation commands as the selected installation engine ([ADR 0002](adr/0002-installation-engine-selection.md)), behind `install/engine/apply` once it is populated.
+- Archinstall JSON/CLI only as evidence inside its non-production prototype.
 - QEMU/KVM and OVMF through `vm/reference/`.
 - AUR through reviewed `PKGBUILD` workflows and `yay`.
 - Git hosting for explicitly declared external configuration repositories.
@@ -1525,7 +1525,7 @@ Agents have explicit rules for technology authority, Bash and JavaScript selecti
 
 **Important Gated Work:**
 
-1. Complete the Archinstall JSON/CLI versus native Arch installation prototype and ADR.
+1. Populate `install/engine/apply` with the native Arch installation engine selected by [ADR 0002](adr/0002-installation-engine-selection.md).
 2. Complete the shell versus Ansible convergence prototype and ADR.
 3. Freeze the exact MVP capability inventory before broad environment implementation.
 4. Define installation, execution, and verification schemas through their prototypes and contract tests.
