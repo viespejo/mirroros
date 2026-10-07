@@ -13,6 +13,7 @@
 # of Gum (130) is passed through without mapping; its mapping is left to Story 2.4.
 
 FLOW_HEADER_TEXT='MirrorOS interactive session (mock)'
+FLOW_BANNER_FILE="${BASH_SOURCE[0]%/*}/banner.txt"
 FLOW_LOG="${FLOW_LOG:-}"
 FLOW_NONINTERACTIVE=0
 FLOW_NATIVE_STATUS=''
@@ -120,13 +121,21 @@ wrapper_stage_status_normalization() {
 }
 
 flow_header() {
+  local line
+  local index=0
+  local -a shades=(255 252 249 246 243 240)
+
   wrapper_tty_gate || return 0
-  gum style --border rounded --border-foreground 212 --bold --padding '0 2' "$FLOW_HEADER_TEXT"
+  while IFS= read -r line; do
+    gum style --foreground "${shades[index]:-240}" "$line"
+    index=$((index + 1))
+  done < "$FLOW_BANNER_FILE"
+  gum style --border rounded --border-foreground 245 --bold --padding '0 2' "$FLOW_HEADER_TEXT"
 }
 
 flow_section() {
   if flow_interactive; then
-    gum style --bold --foreground 212 "$1"
+    gum style --bold --foreground 255 "$1"
   else
     printf '%s\n' "$1"
   fi
@@ -134,7 +143,7 @@ flow_section() {
 
 flow_destructive() {
   if flow_interactive; then
-    gum style --bold --foreground 196 "DESTRUCTIVE: $1"
+    gum style --bold --foreground 0 --background 255 "DESTRUCTIVE: $1"
   else
     printf 'DESTRUCTIVE: %s\n' "$1"
   fi
@@ -151,7 +160,9 @@ flow_confirm() {
     wrapper_colorless_confirm "$prompt"
     native=$FLOW_NATIVE_STATUS
   else
-    gum confirm --default=false --affirmative 'Yes, apply' --negative 'No, cancel' "$prompt" || native=$?
+    gum confirm --default=false --affirmative 'Yes, apply' --negative 'No, cancel' \
+      --prompt.foreground 255 --selected.foreground 0 --selected.background 255 \
+      --unselected.foreground 250 --unselected.background 236 "$prompt" || native=$?
     FLOW_NATIVE_STATUS=$native
   fi
   wrapper_confirm_status_map "$native"
@@ -164,7 +175,8 @@ flow_read_secret() {
   local -n flow_secret_target="$2"
 
   wrapper_tty_precheck || return 2
-  flow_secret_target="$(gum input --password --placeholder 'hidden input' --header "$prompt")" || return 3
+  flow_secret_target="$(gum input --password --placeholder 'hidden input' \
+    --header.foreground 255 --prompt.foreground 250 --cursor.foreground 255 --header "$prompt")" || return 3
 }
 
 # Arguments: title, next action, command and arguments. Returns 0, or 5 with the original status.
@@ -175,7 +187,7 @@ flow_stage() {
 
   shift 2
   if flow_interactive; then
-    gum spin --show-error --title "$title" -- "$@" || status=$?
+    gum spin --show-error --spinner.foreground 250 --title.foreground 255 --title "$title" -- "$@" || status=$?
   else
     wrapper_spin_plain_fallback "$title" "$@" || status=$?
   fi
@@ -208,9 +220,11 @@ flow_review() {
   done < <(mock_destructive_operations)
   printf '\n'
   flow_section 'Step 4/6: The complete plan is available in a pager'
+  printf '\n'
   while :; do
     status=0
-    choice="$(gum choose --cursor '> ' \
+    choice="$(gum choose --cursor '> ' --header.foreground 255 --cursor.foreground 255 \
+      --selected.foreground 255 --item.foreground 245 \
       --header 'Step 5/6: Choose how to proceed (cancelling makes no changes)' \
       'Inspect the complete plan' 'Continue to confirmation' 'Cancel without changes')" || status=$?
     if [[ "$status" -eq 130 ]]; then
@@ -219,7 +233,10 @@ flow_review() {
       choice='Cancel without changes'
     fi
     case "$choice" in
-      'Inspect the complete plan') gum pager < "$plan_file" ;;
+      'Inspect the complete plan')
+        gum pager --match.foreground 255 --match-highlight.foreground 0 \
+          --match-highlight.background 255 < "$plan_file"
+        ;;
       'Continue to confirmation') break ;;
       *)
         flow_log 'review: cancelled before confirmation'
