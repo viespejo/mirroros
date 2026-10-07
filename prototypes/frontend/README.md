@@ -73,22 +73,54 @@ derives `<track>/<name>/<run-id>`.
 
 ## Result matrix
 
-Pending: the evidence runs have not been executed yet.
+Both evidence runs executed at commit `78af2aefc722ccfe1bf6a13368f701d0d0653957` with `dirty: false`,
+Gum `2.0.2 (879f048)`. Earlier runs were development runs or predate fix commits and do not count. Cells
+show the class and the short run-id (`a1144b57` for `terminal`, `c810f5e8` for `vt`).
 
 | Point | `terminal` | `vt` |
 | --- | --- | --- |
-| C1 | pending | pending |
-| C2 | pending | pending |
-| C3 | pending | pending |
-| C4 | pending | pending |
-| C5 | pending | pending |
-| C6 | pending | pending |
-| C7 | pending | pending |
-| C8 | pending | pending |
-| C9 | pending | pending |
-| C10 | pending | pending |
+| C1 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C2 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C3 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C4 | pass (`a1144b57`) | pass (`c810f5e8`) |
+| C5 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C6 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C7 | pass (`a1144b57`) | pass (`c810f5e8`) |
+| C8 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C9 | pass-with-wrapper (`a1144b57`) | pass-with-wrapper (`c810f5e8`) |
+| C10 | pass (`a1144b57`) | pass (`c810f5e8`) |
 
-| Surface | Run ID |
-| --- | --- |
-| `terminal` | pending |
-| `vt` | pending |
+Each surface: 3 `pass`, 7 `pass-with-wrapper`, 0 `fail`. The canary search and the redacted Gitleaks scan
+of the evidence passed on both runs. The attended verdicts of C1 and C7 are `pass` on both surfaces.
+
+| Surface | TERM | Run ID |
+| --- | --- | --- |
+| `terminal` | `xterm-kitty` | `20261007T231607Z-a1144b57-f5b7-4cd7-b10b-403cae6121f3` |
+| `vt` | `linux` | `20261007T230932Z-c810f5e8-ec5d-4111-868f-f798a76bc1bc` |
+
+### Required wrappers
+
+Each wrapper is a named `wrapper_*` function in `lib/flow.sh` and becomes a mandatory constraint of
+ADR 0004.
+
+| Wrapper | Serves | Why native Gum is not enough |
+| --- | --- | --- |
+| `tty_precheck` | C1, C3 | Native `gum confirm` without a terminal returns `1`, not `2`, and `gum spin` silently runs the command. |
+| `confirm_status_map` | C1, C2 | Native decline and Esc return `1`; the contract requires `3`. |
+| `colorless_confirm` | C5, C6 | Native `gum confirm` shows no focus cue under `NO_COLOR` or `TERM=dumb`; the confirmation uses `gum choose` with a text cursor and the safe answer first. |
+| `stage_status_normalization` | C8 | `gum spin` preserves the child status (`7`); the flow normalizes it to `5` and records the original. |
+| `spin_plain_fallback` | C8 | Without an interactive terminal the stage is announced as plain text and run directly. |
+| `tty_gate` | C9 | Native `gum style` prints the header without a terminal. |
+
+### Outcome
+
+By the pre-agreed rule: no point fails on either surface, and every point passes natively or with a
+wrapper, so the derived outcome is **Accepted**, bound to the six wrappers above. The maintainer confirms
+it at the ADR 0004 checkpoint.
+
+### Evidence limits
+
+- The host console font may differ from the live ISO console font.
+- Ctrl+C returns `130` and is not remapped; its mapping is left to Story 2.4 (TODO-002).
+- One host and one run per surface.
+- Live ISO console validation belongs to the story that adds `gum` to `image/`.

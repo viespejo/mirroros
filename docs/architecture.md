@@ -451,7 +451,7 @@ Each command documents its purpose, prerequisites, inputs, consequential effects
 5. Permit cancellation without changes.
 6. Require confirmation bound to the target and plan digest.
 
-MirrorOS introduces no custom TUI. The native installation engine ([ADR 0002](adr/0002-installation-engine-selection.md)) provides no interaction model of its own, so reviewable paginated text is sufficient to satisfy this contract.
+MirrorOS introduces no custom TUI. [Gum](https://github.com/charmbracelet/gum) is the interactive presentation layer ([ADR 0004](adr/0004-interactive-presentation-with-gum.md)): it only presents and collects input, and the plan, its digest, and `install/engine/apply` do not depend on it. The native installation engine ([ADR 0002](adr/0002-installation-engine-selection.md)) provides no interaction model of its own; the wrappers required by ADR 0004 keep this contract when Gum is used.
 
 **Terminal output:**
 
@@ -462,7 +462,7 @@ MirrorOS introduces no custom TUI. The native installation engine ([ADR 0002](ad
 - Progress does not depend on animation.
 - Color never carries meaning alone.
 - Commands respect non-interactive terminals and `NO_COLOR`.
-- MirrorOS adds no banners, welcome flow, or persistent healthy-state notifications.
+- A styled header or welcome is allowed only in interactive TTY sessions of `install` and `configure`; it is suppressed in non-interactive mode, without a TTY, and in logs. MirrorOS adds no persistent healthy-state notifications.
 
 **Desktop boundary:**
 
@@ -612,6 +612,7 @@ Technology mentions do not imply technology selection.
 | JavaScript ESM on Node.js | Selected for structured lifecycle data | Plan processing, hardware normalization, verification aggregation, and other non-trivial structured logic |
 | Python | Not selected for project-owned code | Upstream runtime dependency only unless an accepted ADR approves Archinstall API/plugin integration |
 | Lua | Tool-local only | Existing Neovim, Niri, or other tool-owned configuration |
+| Gum | Selected for interactive presentation | Presents and collects input only, under the wrappers of [ADR 0004](adr/0004-interactive-presentation-with-gum.md); not part of the plan, its digest, or `install/engine/apply` |
 
 Invoking the packaged Archinstall CLI does not authorize project-owned Python code.
 
@@ -1146,6 +1147,11 @@ mirroros/
 │   │   ├── btrfs-rescue/
 │   │   ├── btrfs-limine/
 │   │   └── # Results: evidence/prototypes/storage/<variant>/<run-id>/
+│   ├── frontend/
+│   │   ├── README.md
+│   │   ├── run
+│   │   ├── lib/
+│   │   └── # Results: evidence/prototypes/frontend/contract-check/<run-id>/
 │   └── convergence/
 │       ├── shell/
 │       │   ├── README.md
