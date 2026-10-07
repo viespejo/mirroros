@@ -141,6 +141,16 @@ flow_section() {
   fi
 }
 
+# Reads the explanatory text from stdin and prints it in a muted grey when stdout is a terminal.
+# Stdin is a pipe here, so only stdout is checked.
+flow_text() {
+  if [[ -t 1 ]]; then
+    gum style --foreground 248 "$(cat)"
+  else
+    cat
+  fi
+}
+
 flow_destructive() {
   if flow_interactive; then
     gum style --bold --foreground 0 --background 255 "DESTRUCTIVE: $1"
@@ -161,7 +171,7 @@ flow_confirm() {
     native=$FLOW_NATIVE_STATUS
   else
     gum confirm --default=false --affirmative 'Yes, apply' --negative 'No, cancel' \
-      --prompt.foreground 255 --selected.foreground 0 --selected.background 255 \
+      --prompt.foreground 248 --selected.foreground 0 --selected.background 255 \
       --unselected.foreground 250 --unselected.background 236 "$prompt" || native=$?
     FLOW_NATIVE_STATUS=$native
   fi
@@ -209,10 +219,10 @@ flow_review() {
   wrapper_tty_precheck || return 2
   flow_header
   flow_section 'Step 1/6: Target summary'
-  mock_target_summary
+  mock_target_summary | flow_text
   printf '\n'
   flow_section 'Step 2/6: Proposed defaults and their provenance'
-  mock_defaults
+  mock_defaults | flow_text
   printf '\n'
   flow_section 'Step 3/6: Destructive operations'
   while IFS= read -r operation; do
@@ -237,7 +247,11 @@ flow_review() {
         gum pager --match.foreground 255 --match-highlight.foreground 0 \
           --match-highlight.background 255 < "$plan_file"
         ;;
-      'Continue to confirmation') break ;;
+      'Continue to confirmation')
+        flow_section 'Step 5/6: Continue to confirmation'
+        printf '\n'
+        break
+        ;;
       *)
         flow_log 'review: cancelled before confirmation'
         printf '%s\n' 'Cancelled. No changes were made.'
