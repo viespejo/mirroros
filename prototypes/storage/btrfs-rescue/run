@@ -1,0 +1,19 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034 # Variables are consumed by the storage harness sourced below.
+# btrfs-rescue variant entry point (Story 2.1, Track 2): Btrfs/Snapper with rescue-based rollback.
+# Non-production. The shared storage harness does everything except the variant stages.
+
+STORAGE_VARIANT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PROTO_ENGINE_NAME='btrfs-rescue'
+PROTO_ENGINE_DIR="$(cd -- "${STORAGE_VARIANT_DIR}/.." && pwd -P)"
+STORAGE_RECOVERY_KIND='rescue'
+PROTO_HARNESS_PATH="${PROTO_ENGINE_DIR}/lib/harness.sh"
+
+if [[ ! -f "$PROTO_HARNESS_PATH" || ! -r "$PROTO_HARNESS_PATH" ]]; then
+  printf 'MirrorOS prototype: incomplete or damaged checkout; the harness is missing: %s\n' "$PROTO_HARNESS_PATH" >&2
+  exit 6
+fi
+
+# shellcheck disable=SC1090 # Resolved relative to this file.
+source "$PROTO_HARNESS_PATH" || exit 6
+storage_main "$@"

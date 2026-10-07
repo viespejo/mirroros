@@ -13,8 +13,11 @@ SETTLE_WAIT_SECONDS=180
 
 # shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
 source "${SEED_DIR}/common.sh"
+set -a
 # shellcheck disable=SC1091 # Written by the host harness next to this file.
 source "${SEED_DIR}/seed.env"
+set +a
+ENGINE_SCRIPT="${MIRROROS_ENGINE_SCRIPT:-install}"
 
 exec > >(tee -a /run/mirroros-runner.log > "$SERIAL_DEVICE") 2>&1
 
@@ -58,10 +61,10 @@ if [[ "$MIRROROS_MODE" == 'attended' ]]; then
   # The attended helper starts the engine with the credentials on file descriptor 3.
   {
     printf '#!/usr/bin/bash\n'
-    printf 'source %q/seed.env\n' "$SEED_DIR"
+    printf 'set -a\nsource %q/seed.env\nset +a\n' "$SEED_DIR"
     printf 'export MIRROROS_RUN_ID MIRROROS_VARIANT MIRROROS_TARGET_DISK MIRROROS_HTTPS_URL MIRROROS_HTTPS_TIMEOUT_SECONDS\n'
     printf 'export MIRROROS_SEED_DIR=%q MIRROROS_UNATTENDED=0\n' "$SEED_DIR"
-    printf 'exec /usr/bin/bash %q/engine/install "$@" 3< %q/secrets\n' "$SEED_DIR" "$SEED_DIR"
+    printf 'exec /usr/bin/bash %q/engine/%q "$@" 3< %q/secrets\n' "$SEED_DIR" "$ENGINE_SCRIPT" "$SEED_DIR"
   } > /run/mirroros-attended.sh
   mirroros_proto_log 'attended session: log in on this serial console, then run: bash /run/mirroros-attended.sh'
   systemctl start serial-getty@ttyS0.service
@@ -72,7 +75,7 @@ export MIRROROS_UNATTENDED=1
 exec 3< "${SEED_DIR}/secrets"
 
 started="$SECONDS"
-/usr/bin/bash "${SEED_DIR}/engine/install" < /dev/null
+/usr/bin/bash "${SEED_DIR}/engine/${ENGINE_SCRIPT}" < /dev/null
 engine_status=$?
 duration=$((SECONDS - started))
 exec 3<&-

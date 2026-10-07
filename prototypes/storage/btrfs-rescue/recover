@@ -1,0 +1,93 @@
+#!/usr/bin/bash
+# btrfs-rescue recovery (Story 2.1, Track 2). Runs in the live environment of the bundle A ISO,
+# delivered over NoCloud, and is the candidate documented rescue procedure for rollback of @.
+# Prototype-only: it never retries and stops on the first failure.
+#   1. Mount the top level of the Btrfs filesystem.
+#   2. Select the "post-install baseline" snapshot of the Snapper root configuration.
+#   3. Keep the damaged @ under a new name (diagnostics) and replace @ by a snapshot of the baseline.
+#   4. D2 only: regenerate the initramfs on the ESP from inside a chroot.
+set -u
+set -o pipefail
+
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR:?}/common.sh"
+
+TARGET_DISK="${MIRROROS_TARGET_DISK:?}"
+TARGET_ROOT=/mnt
+TOP_LEVEL=/mnt-top
+ESP_PARTITION="${TARGET_DISK}1"
+ROOT_PARTITION="${TARGET_DISK}2"
+BASELINE_DESCRIPTION='post-install baseline'
+MOUNT_OPTIONS='compress=zstd:1,relatime'
+STEP=0
+
+# Logs the next numbered recovery step. The harness counts these lines.
+step() {
+  STEP=$((STEP + 1))
+  mirroros_proto_log "recovery step ${STEP}: $*"
+}
+
+# Runs a command; on failure logs it and exits with the command's own status.
+run() {
+  local status=0
+
+  "$@" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "recovery failed with exit status ${status}: $*"
+    exit "$status"
+  fi
+}
+
+# Prints the number of the baseline snapshot (the highest one when several match).
+find_baseline() {
+  local info
+  local number
+  local found=''
+
+  for info in "${TOP_LEVEL}"/@snapshots/*/info.xml; do
+    [[ -f "$info" ]] || continue
+    if grep -q "<description>${BASELINE_DESCRIPTION}</description>" "$info"; then
+      number="$(basename -- "$(dirname -- "$info")")"
+      if [[ -z "$found" || "$number" -gt "$found" ]]; then found="$number"; fi
+    fi
+  done
+  [[ -n "$found" ]] || return 1
+  printf '%s' "$found"
+}
+
+main() {
+  local baseline
+  local damaged
+
+  step "mounting the top level of the Btrfs filesystem on ${ROOT_PARTITION}"
+  run mount --mkdir -o subvolid=5 "$ROOT_PARTITION" "$TOP_LEVEL"
+
+  step "selecting the '${BASELINE_DESCRIPTION}' snapshot"
+  baseline="$(find_baseline)" || {
+    mirroros_proto_log "recovery failed: no '${BASELINE_DESCRIPTION}' snapshot found in @snapshots"
+    exit 1
+  }
+  mirroros_proto_log "baseline snapshot number: ${baseline}"
+
+  step 'keeping the damaged @ and restoring it from the snapshot'
+  damaged="@damaged-$(date -u +%Y%m%dT%H%M%SZ)"
+  run mv -- "${TOP_LEVEL}/@" "${TOP_LEVEL}/${damaged}"
+  run btrfs subvolume snapshot "${TOP_LEVEL}/@snapshots/${baseline}/snapshot" "${TOP_LEVEL}/@"
+
+  if [[ "${MIRROROS_DAMAGE:-none}" == 'd2' ]]; then
+    step 'regenerating the initramfs images in a chroot'
+    run mount --mkdir -o "${MOUNT_OPTIONS},subvol=@" "$ROOT_PARTITION" "$TARGET_ROOT"
+    run mount --mkdir -o umask=0077 "$ESP_PARTITION" "${TARGET_ROOT}/boot"
+    run arch-chroot "$TARGET_ROOT" mkinitcpio -P
+    run umount -R "$TARGET_ROOT"
+  elif [[ "${MIRROROS_DAMAGE:-none}" != 'd1' ]]; then
+    mirroros_proto_log "no damage to recover from (MIRROROS_DAMAGE=${MIRROROS_DAMAGE:-none})"
+    exit 1
+  fi
+
+  step 'unmounting the Btrfs filesystem'
+  run sync
+  run umount -R "$TOP_LEVEL"
+}
+
+main "$@"

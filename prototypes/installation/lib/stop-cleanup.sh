@@ -78,7 +78,8 @@ stop_cleanup_stop_qemu() {
 # Sets STOP_CLEANUP_OUTCOME to success, preserved, or failure. Returns 0 only on success.
 stop_cleanup_remove_resources() {
   local build_run_dir="$1"
-  local run_label="build/prototypes/installation/${build_run_dir#*/build/prototypes/installation/}"
+  local track="${PROTO_TRACK:-installation}"
+  local run_label="build/prototypes/${track}/${build_run_dir#*/build/prototypes/"${track}"/}"
 
   STOP_CLEANUP_GUIDANCE=''
   if [[ "$STOP_QEMU_STATE" == 'unconfirmed' ]]; then
@@ -86,9 +87,9 @@ stop_cleanup_remove_resources() {
     STOP_CLEANUP_GUIDANCE="QEMU exit was not confirmed; run resources were preserved. Confirm the QEMU process for this run has exited, then remove only ${run_label}/ and keep the evidence."
     return 1
   fi
-  if [[ "$build_run_dir" != */build/prototypes/installation/*/* || -L "$build_run_dir" || ! -d "$build_run_dir" ]]; then
+  if [[ "$build_run_dir" != */build/prototypes/${track}/*/* || -L "$build_run_dir" || ! -d "$build_run_dir" ]]; then
     STOP_CLEANUP_OUTCOME='failure'
-    STOP_CLEANUP_GUIDANCE="The run build directory was not a regular directory under build/prototypes/installation/ and was not removed. Inspect ${run_label} and remove it manually if it is yours."
+    STOP_CLEANUP_GUIDANCE="The run build directory was not a regular directory under build/prototypes/${track}/ and was not removed. Inspect ${run_label} and remove it manually if it is yours."
     return 1
   fi
   if rm -rf -- "$build_run_dir"; then

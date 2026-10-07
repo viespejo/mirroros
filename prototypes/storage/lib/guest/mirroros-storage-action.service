@@ -1,0 +1,15 @@
+[Unit]
+Description=MirrorOS prototype storage action runner (known prototype contamination)
+Documentation=file:///usr/local/lib/mirroros-proto/storage-action.sh
+After=mirroros-proto-verify.service
+Wants=mirroros-proto-verify.service
+ConditionPathExists=/etc/mirroros-proto/storage.env
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=infinity
+ExecStart=/usr/local/lib/mirroros-proto/storage-action.sh
+
+[Install]
+WantedBy=multi-user.target

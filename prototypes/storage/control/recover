@@ -1,0 +1,59 @@
+#!/usr/bin/bash
+# Control rescue recovery (Story 2.1, Track 2). Runs in the live environment of the bundle A ISO,
+# delivered over NoCloud, and is the candidate documented rescue procedure for the ext4 baseline.
+# Prototype-only: it never retries and stops on the first failure.
+#   D1: remove the damage package from the installed system (pacman against the mounted root).
+#   D2: regenerate the initramfs on the ESP from inside a chroot.
+set -u
+set -o pipefail
+
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR:?}/common.sh"
+
+TARGET_DISK="${MIRROROS_TARGET_DISK:?}"
+TARGET_ROOT=/mnt
+ESP_PARTITION="${TARGET_DISK}1"
+ROOT_PARTITION="${TARGET_DISK}2"
+STEP=0
+
+# Logs the next numbered recovery step. The harness counts these lines.
+step() {
+  STEP=$((STEP + 1))
+  mirroros_proto_log "recovery step ${STEP}: $*"
+}
+
+# Runs a command; on failure logs it and exits with the command's own status.
+run() {
+  local status=0
+
+  "$@" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "recovery failed with exit status ${status}: $*"
+    exit "$status"
+  fi
+}
+
+main() {
+  step "mounting the installed system from ${ROOT_PARTITION} and the ESP"
+  run mount "$ROOT_PARTITION" "$TARGET_ROOT"
+  run mount --mkdir -o umask=0077 "$ESP_PARTITION" "${TARGET_ROOT}/boot"
+  case "${MIRROROS_DAMAGE:-none}" in
+    d1)
+      step 'removing the damage package mirroros-damage-d1'
+      run pacman --root "$TARGET_ROOT" --dbpath "${TARGET_ROOT}/var/lib/pacman" --noconfirm -Rns mirroros-damage-d1
+      ;;
+    d2)
+      step 'regenerating the initramfs images in a chroot'
+      run arch-chroot "$TARGET_ROOT" mkinitcpio -P
+      ;;
+    *)
+      mirroros_proto_log "no damage to recover from (MIRROROS_DAMAGE=${MIRROROS_DAMAGE:-none})"
+      exit 1
+      ;;
+  esac
+  step 'unmounting the installed system'
+  run sync
+  run umount -R "$TARGET_ROOT"
+}
+
+main "$@"

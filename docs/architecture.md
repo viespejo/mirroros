@@ -1139,6 +1139,13 @@ mirroros/
 │   │       ├── README.md
 │   │       ├── run
 │   │       └── # Results: evidence/prototypes/installation/<engine>/<run-id>/
+│   ├── storage/
+│   │   ├── README.md
+│   │   ├── lib/
+│   │   ├── control/
+│   │   ├── btrfs-rescue/
+│   │   ├── btrfs-limine/
+│   │   └── # Results: evidence/prototypes/storage/<variant>/<run-id>/
 │   └── convergence/
 │       ├── shell/
 │       │   ├── README.md

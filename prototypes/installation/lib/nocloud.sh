@@ -9,6 +9,10 @@
 # credential values, through a temporary configuration kept in build/. No other scan has an
 # exclusion (see lib/README.md).
 
+# Optional parameters (defaults preserve the Track 1 behavior):
+#   PROTO_NOCLOUD_BASENAME        staging directory and medium name (default nocloud)
+#   PROTO_NOCLOUD_ENGINE_SCRIPT   engine script the guest runner executes (default install)
+#   PROTO_NOCLOUD_EXTRA_SEED_ENV  extra KEY='value' lines appended to seed.env (default none)
 NOCLOUD_SEED_FILE=''
 # Reference to the lib directory, set by harness.sh.
 PROTO_LIB_DIR="${PROTO_LIB_DIR:-}"
@@ -39,15 +43,17 @@ proto_nocloud_prepare() {
   local https_timeout="$7"
   local variant="$8"
   local mode="$9"
-  local seed_directory="${build_run_dir}/nocloud"
-  local config_path="${build_run_dir}/gitleaks-nocloud.toml"
-  local report_path="${evidence_run_dir}/gitleaks-nocloud.json"
+  local base="${PROTO_NOCLOUD_BASENAME:-nocloud}"
+  local engine_script="${PROTO_NOCLOUD_ENGINE_SCRIPT:-install}"
+  local seed_directory="${build_run_dir}/${base}"
+  local config_path="${build_run_dir}/gitleaks-${base}.toml"
+  local report_path="${evidence_run_dir}/gitleaks-${base}.json"
   local guest_dir="${PROTO_LIB_DIR}/guest"
   local scanner_status
   local file
 
   for file in "${guest_dir}/runner.sh" "${guest_dir}/common.sh" "${guest_dir}/verify-postconditions.sh" \
-    "${guest_dir}/mirroros-proto-verify.service" "${engine_guest_dir}/install"; do
+    "${guest_dir}/mirroros-proto-verify.service" "${engine_guest_dir}/${engine_script}"; do
     if [[ ! -f "$file" || ! -r "$file" ]]; then
       printf 'MirrorOS prototype: incomplete or damaged checkout; a guest file is missing: %s\n' "$file" >&2
       return 6
@@ -70,6 +76,12 @@ proto_nocloud_prepare() {
     printf "MIRROROS_TARGET_DISK='%s'\n" "$PROTO_TARGET_DISK"
     printf "MIRROROS_HTTPS_URL='%s'\n" "$https_url"
     printf "MIRROROS_HTTPS_TIMEOUT_SECONDS='%s'\n" "$https_timeout"
+    if [[ -n "${PROTO_NOCLOUD_ENGINE_SCRIPT:-}" ]]; then
+      printf "MIRROROS_ENGINE_SCRIPT='%s'\n" "$PROTO_NOCLOUD_ENGINE_SCRIPT"
+    fi
+    if [[ -n "${PROTO_NOCLOUD_EXTRA_SEED_ENV:-}" ]]; then
+      printf '%s\n' "$PROTO_NOCLOUD_EXTRA_SEED_ENV"
+    fi
   } > "${seed_directory}/seed.env" || return 5
   proto_secrets_write_file "${seed_directory}/secrets" || return 5
   if [[ "$variant" == 'unreachable-mirrors' ]]; then
@@ -99,11 +111,11 @@ proto_nocloud_prepare() {
     return 5
   fi
 
-  if ! xorriso -as mkisofs -quiet -output "${build_run_dir}/nocloud-seed.iso" \
+  if ! xorriso -as mkisofs -quiet -output "${build_run_dir}/${base}-seed.iso" \
     -volid "$volume_label" -joliet -rational-rock "$seed_directory"; then
     printf '%s\n' 'MirrorOS prototype: building the NoCloud medium failed.' >&2
     return 5
   fi
-  chmod 600 -- "${build_run_dir}/nocloud-seed.iso"
-  NOCLOUD_SEED_FILE="${build_run_dir}/nocloud-seed.iso"
+  chmod 600 -- "${build_run_dir}/${base}-seed.iso"
+  NOCLOUD_SEED_FILE="${build_run_dir}/${base}-seed.iso"
 }

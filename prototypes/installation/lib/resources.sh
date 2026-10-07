@@ -5,6 +5,8 @@
 RUN_ID=''
 BUILD_RUN_DIR=''
 EVIDENCE_RUN_DIR=''
+# Track segment of the build and evidence paths. Track 2 sets it to storage before sourcing.
+PROTO_TRACK="${PROTO_TRACK:-installation}"
 
 proto_resources_new_id() {
   local timestamp
@@ -61,12 +63,12 @@ proto_resources_prepare() {
   local -a bases=(
     "${repository_root}/build"
     "${repository_root}/build/prototypes"
-    "${repository_root}/build/prototypes/installation"
-    "${repository_root}/build/prototypes/installation/${engine}"
+    "${repository_root}/build/prototypes/${PROTO_TRACK}"
+    "${repository_root}/build/prototypes/${PROTO_TRACK}/${engine}"
     "${repository_root}/evidence"
     "${repository_root}/evidence/prototypes"
-    "${repository_root}/evidence/prototypes/installation"
-    "${repository_root}/evidence/prototypes/installation/${engine}"
+    "${repository_root}/evidence/prototypes/${PROTO_TRACK}"
+    "${repository_root}/evidence/prototypes/${PROTO_TRACK}/${engine}"
   )
 
   if [[ ! "$engine" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
@@ -84,8 +86,8 @@ proto_resources_prepare() {
       return 2
     fi
   done
-  for base in "build/prototypes/installation/${engine}/${requested_run_id}" \
-    "evidence/prototypes/installation/${engine}/${requested_run_id}"; do
+  for base in "build/prototypes/${PROTO_TRACK}/${engine}/${requested_run_id}" \
+    "evidence/prototypes/${PROTO_TRACK}/${engine}/${requested_run_id}"; do
     if [[ -e "${repository_root}/${base}" || -L "${repository_root}/${base}" ]]; then
       printf 'MirrorOS prototype: refusing existing reserved run path: %s\n' "${repository_root}/${base}" >&2
       return 2
@@ -96,8 +98,8 @@ proto_resources_prepare() {
   done
 
   RUN_ID="$requested_run_id"
-  BUILD_RUN_DIR="${repository_root}/build/prototypes/installation/${engine}/${RUN_ID}"
-  EVIDENCE_RUN_DIR="${repository_root}/evidence/prototypes/installation/${engine}/${RUN_ID}"
+  BUILD_RUN_DIR="${repository_root}/build/prototypes/${PROTO_TRACK}/${engine}/${RUN_ID}"
+  EVIDENCE_RUN_DIR="${repository_root}/evidence/prototypes/${PROTO_TRACK}/${engine}/${RUN_ID}"
   proto_resources_assert_inside "$BUILD_RUN_DIR" "${repository_root}/build" || return 2
   proto_resources_assert_inside "$EVIDENCE_RUN_DIR" "${repository_root}/evidence" || return 2
   if ! mkdir -m 700 -- "$BUILD_RUN_DIR" || ! mkdir -m 700 -- "$EVIDENCE_RUN_DIR"; then

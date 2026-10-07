@@ -25,6 +25,9 @@ EVIDENCE_SCAN_STATUS='not_run'
 EVIDENCE_COMMIT=''
 EVIDENCE_DIRTY='false'
 EVIDENCE_DIRTY_PATHS_JSON='[]'
+# Extra JSON objects merged into run-metadata.json and result.json (Track 2 stage details).
+PROTO_METADATA_EXTRA_JSON='{}'
+PROTO_RESULT_EXTRA_JSON='{}'
 
 # Records the repository commit and whether the tree (untracked files included) is dirty.
 evidence_capture_commit() {
@@ -139,14 +142,14 @@ evidence_write_metadata() {
     --arg smp "$REFERENCE_VM_SMP" --arg disk_size "$REFERENCE_VM_DISK_SIZE" \
     --arg config_version "$REFERENCE_VM_CONFIG_VERSION" \
     --argjson install_deadline "$PROTO_INSTALL_DEADLINE_SECONDS" \
-    --argjson verify_deadline "$PROTO_VERIFY_DEADLINE_SECONDS" \
+    --argjson verify_deadline "$PROTO_VERIFY_DEADLINE_SECONDS" --argjson extra "$PROTO_METADATA_EXTRA_JSON" \
     '{schema_version: 1, run_id: $run_id, engine: $engine, variant: $variant, mode: $mode,
       commit: $commit, dirty: $dirty, dirty_paths: $dirty_paths,
       bundle: {directory: $bundle_directory, iso: $iso, iso_sha256: $iso_sha256,
                artifact_commit: $artifact_commit, artifact_run_id: $artifact_run_id},
       vm: {config_version: $config_version, machine: $machine, memory_mib: $memory, smp: $smp,
            disk_size: $disk_size, qemu: $qemu},
-      deadlines_seconds: {install: $install_deadline, verify: $verify_deadline}}' \
+      deadlines_seconds: {install: $install_deadline, verify: $verify_deadline}} + $extra' \
     > "${dir}/run-metadata.json" && chmod 600 -- "${dir}/run-metadata.json"
 }
 
@@ -171,7 +174,7 @@ evidence_write_result() {
     --arg nocloud_scan "$PROTO_NOCLOUD_SCAN" --arg canary "$EVIDENCE_CANARY_STATUS" \
     --arg evidence_scan "$EVIDENCE_SCAN_STATUS" \
     --arg cleanup "$STOP_CLEANUP_OUTCOME" --arg cleanup_guidance "$STOP_CLEANUP_GUIDANCE" \
-    --arg qemu_state "$STOP_QEMU_STATE" \
+    --arg qemu_state "$STOP_QEMU_STATE" --argjson extra "$PROTO_RESULT_EXTRA_JSON" \
     '{schema_version: 1, run_id: $run_id, engine: $engine, variant: $variant, mode: $mode,
       commit: $commit, dirty: $dirty,
       exit_status: $status, failure_stage: (if $stage == "" then null else $stage end),
@@ -182,7 +185,7 @@ evidence_write_result() {
                report_result: (if $verify_result == "" then null else $verify_result end)},
       scans: {nocloud: $nocloud_scan, canary_search: $canary, evidence: $evidence_scan},
       cleanup: {outcome: $cleanup, qemu_stop: $qemu_state,
-                guidance: (if $cleanup_guidance == "" then null else $cleanup_guidance end)}}' \
+                guidance: (if $cleanup_guidance == "" then null else $cleanup_guidance end)}} + $extra' \
     > "${dir}/result.json" && chmod 600 -- "${dir}/result.json"
 }
 

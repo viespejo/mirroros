@@ -11,6 +11,19 @@ ENV_FILE=/etc/mirroros-proto/verify.env
 source "$ENV_FILE" || exit 1
 : "${MIRROROS_RUN_ID:?}" "${MIRROROS_HTTPS_URL:?}" "${MIRROROS_HTTPS_TIMEOUT_SECONDS:?}"
 
+# Optional parameters, all defaulting to the Track 1 behavior (read from the same environment file):
+#   MIRROROS_VERIFY_EXCLUDE_GROUPS    space-separated check groups (the id prefix before the first
+#                                     underscore) whose checks are dropped; default none
+#   MIRROROS_VERIFY_SWAPFILE          swapfile path (default /swapfile)
+#   MIRROROS_VERIFY_SWAP_OFFSET_TOOL  filefrag (default) or btrfs
+#   MIRROROS_VERIFY_EXTRA_CHECKS      script sourced before the report; it may use pass, fail, and
+#                                     replaces to register the checks that stand in for a group
+EXCLUDE_GROUPS=" ${MIRROROS_VERIFY_EXCLUDE_GROUPS:-} "
+SWAPFILE_PATH="${MIRROROS_VERIFY_SWAPFILE:-/swapfile}"
+SWAP_OFFSET_TOOL="${MIRROROS_VERIFY_SWAP_OFFSET_TOOL:-filefrag}"
+EXTRA_CHECKS="${MIRROROS_VERIFY_EXTRA_CHECKS:-}"
+declare -A REPLACEMENT_IDS=()
+
 NETWORK_WAIT_SECONDS=60
 SERIAL_DEVICE=/dev/ttyS0
 EXPECTED_HOSTNAME='mirroros-ref'
@@ -40,6 +53,9 @@ sanitize() {
 }
 
 record() {
+  local group="${1%%_*}"
+
+  [[ "$EXCLUDE_GROUPS" != *" ${group} "* ]] || return 0
   CHECK_IDS+=("$1")
   CHECK_STATUS[$1]="$2"
   CHECK_DETAIL[$1]="$(sanitize "$3")"
@@ -47,6 +63,9 @@ record() {
 
 pass() { record "$1" passed "$2"; }
 fail() { record "$1" failed "$2"; }
+
+# Registers a check id as a replacement for an excluded group.
+replaces() { REPLACEMENT_IDS[$1]+="${REPLACEMENT_IDS[$1]:+ }$2"; }
 
 # Records passed or failed according to the status of the command after the detail arguments.
 verdict() {
@@ -73,11 +92,16 @@ gather_facts() {
   local disk_name
 
   ROOT_DEV="$(findmnt -no SOURCE / 2> /dev/null)"
+  ROOT_DEV="${ROOT_DEV%%\[*}"
   ROOT_UUID="$(findmnt -no UUID / 2> /dev/null)"
   ESP_DEV="$(findmnt -no SOURCE /boot 2> /dev/null)"
   disk_name="$(lsblk -no PKNAME "$ROOT_DEV" 2> /dev/null | head -n 1)"
   [[ -z "$disk_name" ]] || DISK="/dev/${disk_name}"
-  SWAP_OFFSET="$(filefrag -v /swapfile 2> /dev/null | awk '$1 == "0:" { gsub(/\./, "", $4); print $4; exit }')"
+  if [[ "$SWAP_OFFSET_TOOL" == 'btrfs' ]]; then
+    SWAP_OFFSET="$(btrfs inspect-internal map-swapfile -r "$SWAPFILE_PATH" 2> /dev/null)"
+  else
+    SWAP_OFFSET="$(filefrag -v "$SWAPFILE_PATH" 2> /dev/null | awk '$1 == "0:" { gsub(/\./, "", $4); print $4; exit }')"
+  fi
 }
 
 entry_options() {
@@ -373,6 +397,10 @@ emit_report() {
   local checks=''
   local extra
   local body
+  local group
+  local ids
+  local excluded=''
+  local excluded_json=''
 
   for id in "${CHECK_IDS[@]}"; do
     extra=''
@@ -382,7 +410,18 @@ emit_report() {
     fi
     checks+="${checks:+,}\"${id}\":{\"status\":\"${CHECK_STATUS[$id]}\",\"detail\":\"${CHECK_DETAIL[$id]}\"${extra}}"
   done
-  body="{\"schema_version\":1,\"kind\":\"postconditions\",\"run_id\":\"${MIRROROS_RUN_ID}\",\"checks\":{${checks}},\"result\":\"${result}\"}"
+  # Every excluded group is named with the checks that replaced it; a group without any replacement
+  # check fails the report, so that no postcondition disappears silently.
+  for group in $EXCLUDE_GROUPS; do
+    ids=''
+    for id in ${REPLACEMENT_IDS[$group]:-}; do
+      ids+="${ids:+,}\"${id}\""
+    done
+    [[ -n "$ids" ]] || result=failed
+    excluded+="${excluded:+,}\"${group}\":[${ids}]"
+  done
+  [[ -z "$excluded" ]] || excluded_json=",\"excluded_groups\":{${excluded}}"
+  body="{\"schema_version\":1,\"kind\":\"postconditions\",\"run_id\":\"${MIRROROS_RUN_ID}\",\"checks\":{${checks}}${excluded_json},\"result\":\"${result}\"}"
 
   {
     printf '\nMIRROROS-REPORT-BEGIN %s\n' "$MIRROROS_RUN_ID"
@@ -400,4 +439,8 @@ check_time_identity
 check_network
 check_accounts
 check_system
+if [[ -n "$EXTRA_CHECKS" ]]; then
+  # shellcheck disable=SC1090 # Installed into the target by the Track 2 storage support.
+  source "$EXTRA_CHECKS" || fail extra_checks_script 'the extra checks script could not be loaded'
+fi
 emit_report

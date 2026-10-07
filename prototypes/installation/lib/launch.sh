@@ -204,23 +204,24 @@ launch_wait_exit() {
 
 # Boot 2: waits for the run-bound report, QEMU exit, or the deadline.
 # Sets LAUNCH_OUTCOME to report, qemu_exited, or deadline. Never stops QEMU.
-# Arguments: run ID, report path, deadline seconds.
+# Arguments: run ID, report path, deadline seconds, optional marker name (default MIRROROS-REPORT).
 launch_wait_report() {
   local run_id="$1"
   local report_path="$2"
   local deadline_seconds="$3"
+  local marker="${4:-MIRROROS-REPORT}"
   local started="$SECONDS"
 
   LAUNCH_OUTCOME=''
   while true; do
-    if launch_extract_report "$LAUNCH_SERIAL_PATH" MIRROROS-REPORT "$run_id" "$report_path"; then
+    if launch_extract_report "$LAUNCH_SERIAL_PATH" "$marker" "$run_id" "$report_path"; then
       LAUNCH_OUTCOME='report'
       break
     fi
     if ! launch_qemu_running; then
       if wait "$LAUNCH_QEMU_PID"; then LAUNCH_QEMU_STATUS=0; else LAUNCH_QEMU_STATUS=$?; fi
       # A report written just before exit must not be lost.
-      if launch_extract_report "$LAUNCH_SERIAL_PATH" MIRROROS-REPORT "$run_id" "$report_path"; then
+      if launch_extract_report "$LAUNCH_SERIAL_PATH" "$marker" "$run_id" "$report_path"; then
         LAUNCH_OUTCOME='report'
       else
         LAUNCH_OUTCOME='qemu_exited'

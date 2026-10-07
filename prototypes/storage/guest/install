@@ -1,0 +1,175 @@
+#!/usr/bin/bash
+# Storage prototype installer (Story 2.1, Track 2): derived once from
+# prototypes/installation/native-arch/guest/install. The common stages are identical to the original;
+# the storage, swap and boot, and snapshot stages are routed to the variant's stage.sh (see README.md,
+# "Installer diff"). It runs in the live environment (see lib/README.md, "Engine contract").
+# Prototype-only: this is not a production installer and it never retries.
+#
+# Stops on the first failure and exits with the failing command's own status.
+# Optional switch for the contract-level check of the omitted-root-password case:
+#   MIRROROS_OMIT_ROOT_PASSWORD=1 leaves root locked (no root password is set).
+set -u
+set -o pipefail
+
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR:?}/common.sh"
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR}/engine/support/storage-common.sh"
+# shellcheck disable=SC1091 # Resolved from the mounted NoCloud medium at run time.
+source "${MIRROROS_SEED_DIR}/engine/variant/stage.sh"
+
+TARGET_DISK="${MIRROROS_TARGET_DISK:?}"
+TARGET_ROOT=/mnt
+# shellcheck disable=SC2034 # Used by the variant stage.sh.
+ESP_PARTITION="${TARGET_DISK}1"
+# shellcheck disable=SC2034 # Used by the variant stage.sh.
+ROOT_PARTITION="${TARGET_DISK}2"
+EXPECTED_USER='mirroros'
+EXPECTED_HOSTNAME='mirroros-ref'
+PACKAGES=(base linux linux-firmware sudo neovim man-db man-pages networkmanager "${VARIANT_PACKAGES[@]}")
+
+# Runs a command; on failure logs the step and exits with the command's own status.
+run() {
+  local status=0
+
+  "$@" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "step failed with exit status ${status}: $*"
+    exit "$status"
+  fi
+}
+
+# Writes stdin to a file; on failure logs the step and exits with the failing status.
+put() {
+  local status=0
+
+  cat > "$1" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "could not write ${1} (exit status ${status})"
+    exit "$status"
+  fi
+}
+
+# Sets a password through chpasswd on stdin. The value never appears in an argument list.
+set_password() {
+  local account="$1"
+  local password="$2"
+  local status=0
+
+  printf '%s:%s\n' "$account" "$password" | arch-chroot "$TARGET_ROOT" chpasswd || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    mirroros_proto_log "setting the password for ${account} failed with exit status ${status}"
+    exit "$status"
+  fi
+}
+
+confirm_plan() {
+  local answer=''
+
+  [[ "${MIRROROS_UNATTENDED:-0}" != '1' ]] || return 0
+  printf '\nPlan: the disk %s will be erased and installed as follows.\n' "$TARGET_DISK"
+  variant_plan_lines
+  printf '  2. pacstrap: %s\n' "${PACKAGES[*]}"
+  printf '  5. locales en_US.UTF-8 and es_ES.UTF-8, Europe/Madrid, hostname %s, console keymap us\n' "$EXPECTED_HOSTNAME"
+  printf '  6. sysrq, pacman.conf options, fstrim.timer, NetworkManager, systemd-timesyncd\n'
+  printf '  7. user %s in wheel, a wheel sudoers drop-in, and the account passwords\n' "$EXPECTED_USER"
+  printf 'Current disk state:\n'
+  lsblk "$TARGET_DISK"
+  printf 'Type "install" to continue; anything else cancels without touching the disk: '
+  read -r answer || answer=''
+  if [[ "$answer" != 'install' ]]; then
+    mirroros_proto_log 'installation rejected at the confirmation; the disk was not touched'
+    exit 1
+  fi
+}
+
+install_base() {
+  mirroros_proto_log 'base: pacstrap'
+  run pacstrap -K "$TARGET_ROOT" "${PACKAGES[@]}"
+  mirroros_proto_log 'base: genfstab'
+  genfstab -U "$TARGET_ROOT" > "${TARGET_ROOT}/etc/fstab" || {
+    mirroros_proto_log 'genfstab failed'
+    exit 1
+  }
+}
+
+configure_localization() {
+  mirroros_proto_log 'localization'
+  run sed -i -e 's/^#\(en_US\.UTF-8 UTF-8\)/\1/' -e 's/^#\(es_ES\.UTF-8 UTF-8\)/\1/' "${TARGET_ROOT}/etc/locale.gen"
+  run arch-chroot "$TARGET_ROOT" locale-gen
+  put "${TARGET_ROOT}/etc/locale.conf" <<'EOF'
+LANG=en_US.UTF-8
+EOF
+  put "${TARGET_ROOT}/etc/vconsole.conf" <<'EOF'
+KEYMAP=us
+EOF
+}
+
+configure_time_identity() {
+  mirroros_proto_log 'time and identity'
+  run ln -sf /usr/share/zoneinfo/Europe/Madrid "${TARGET_ROOT}/etc/localtime"
+  run arch-chroot "$TARGET_ROOT" hwclock --systohc
+  put "${TARGET_ROOT}/etc/hostname" <<EOF
+${EXPECTED_HOSTNAME}
+EOF
+}
+
+configure_system() {
+  mirroros_proto_log 'system'
+  put "${TARGET_ROOT}/etc/sysctl.d/90-sysrq.conf" <<'EOF'
+kernel.sysrq = 1
+EOF
+  run sed -i -e 's/^#Color$/Color/' -e 's/^#ParallelDownloads = 5$/ParallelDownloads = 5/' \
+    -e 's/^#VerbosePkgLists$/VerbosePkgLists/' "${TARGET_ROOT}/etc/pacman.conf"
+  run sed -i '/^Color$/a ILoveCandy' "${TARGET_ROOT}/etc/pacman.conf"
+  run arch-chroot "$TARGET_ROOT" systemctl enable NetworkManager.service systemd-timesyncd.service fstrim.timer
+}
+
+configure_accounts() {
+  mirroros_proto_log 'accounts'
+  run arch-chroot "$TARGET_ROOT" useradd -m -G wheel -s /bin/bash "$EXPECTED_USER"
+  set_password "$EXPECTED_USER" "$MIRROROS_USER_PASSWORD"
+  if [[ "${MIRROROS_OMIT_ROOT_PASSWORD:-0}" == '1' ]]; then
+    mirroros_proto_log 'accounts: the root password is omitted; root stays locked'
+  else
+    set_password root "$MIRROROS_ROOT_PASSWORD"
+  fi
+  put "${TARGET_ROOT}/etc/sudoers.d/10-wheel" <<'EOF'
+%wheel ALL=(ALL:ALL) ALL
+EOF
+  run chmod 0440 "${TARGET_ROOT}/etc/sudoers.d/10-wheel"
+  run arch-chroot "$TARGET_ROOT" visudo -c
+}
+
+main() {
+  mirroros_proto_log "native-arch: run ${MIRROROS_RUN_ID:-unknown}, target ${TARGET_DISK}"
+  mirroros_proto_read_secrets || {
+    mirroros_proto_log 'could not read the credentials from file descriptor 3'
+    exit 1
+  }
+  confirm_plan
+  variant_install_storage
+  install_base
+  configure_localization
+  configure_time_identity
+  variant_configure_swap_and_boot
+  configure_system
+  configure_accounts
+  mirroros_proto_install_verifier "$TARGET_ROOT" || {
+    mirroros_proto_log 'installing the verification unit failed'
+    exit 1
+  }
+  mirroros_storage_install_support "$TARGET_ROOT" || {
+    mirroros_proto_log 'installing the storage support failed'
+    exit 1
+  }
+  variant_finalize
+  run sync
+  # A gpg-agent left by pacstrap keeps the target busy on current Arch (see prototypes/storage/README.md).
+  gpgconf --homedir "${TARGET_ROOT}/etc/pacman.d/gnupg" --kill all || true
+  pkill -x gpg-agent || true
+  run umount -R "$TARGET_ROOT"
+  mirroros_proto_log 'native-arch: installation finished'
+}
+
+main "$@"
