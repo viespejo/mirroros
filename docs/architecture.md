@@ -111,7 +111,7 @@ Arch Linux distribution lifecycle and local system-configuration tooling, based 
 - Keep independently maintained application configurations, including Neovim and Pi, in their existing repositories.
 - Use official Arch repositories first and treat AUR packages as explicitly reviewed external sources.
 - Defer Chaotic-AUR and CachyOS repositories until a measured requirement justifies their additional trust and maintenance surface.
-- Use UEFI, GPT, systemd-boot, and an unencrypted ext4 root filesystem.
+- Use UEFI and GPT with a selectable storage option: ext4 with systemd-boot (default), Btrfs with Snapper and systemd-boot (supported), or Btrfs with Snapper and Limine (experimental), as recorded in [ADR 0003](adr/0003-storage-and-recovery-baseline.md); every root filesystem is unencrypted.
 - Use a resizeable swapfile for both ordinary swap and hibernation.
 - Treat hibernation as an essential MVP capability.
 - Manage and verify the resume device and swapfile offset whenever the swapfile is created or resized.
@@ -227,7 +227,7 @@ Exact repository paths and privilege boundaries may be refined by the first impl
 - Implement lifecycle stages as a synchronous local pipeline with explicit process, file, exit-status, and evidence contracts.
 - Use standard Linux accounts, PAM, narrowly scoped privilege elevation, and runtime-only secret injection.
 - Bind every destructive authorization to a concrete target and plan digest.
-- Use UEFI, GPT, systemd-boot, an unencrypted ext4 root, and a resizeable swapfile supporting mandatory hibernation.
+- Use UEFI, GPT, an unencrypted root with the storage option selected under [ADR 0003](adr/0003-storage-and-recovery-baseline.md) (ext4 with systemd-boot by default), and a resizeable swapfile supporting mandatory hibernation.
 - Qualify artifacts through QEMU/KVM before physical installation.
 - Install through native Arch commands, as selected by [ADR 0002](adr/0002-installation-engine-selection.md) after an Archinstall JSON/CLI versus native Arch commands spike.
 - Resolve the convergence mechanism through a shell versus Ansible local-mode spike and ADR.
@@ -341,7 +341,7 @@ MirrorOS exposes no remote product API and introduces no application-specific au
 
 **Accepted security posture:**
 
-- The ext4 root filesystem remains unencrypted.
+- The root filesystem, ext4 or Btrfs, remains unencrypted.
 - Secure Boot remains disabled for the MVP.
 - Exposure of local data under physical access is an explicitly accepted risk.
 - External backup and independent rescue media remain mandatory before physical installation.
@@ -1454,7 +1454,7 @@ The architecture is internally compatible:
 - Python remains an upstream implementation detail unless an accepted ADR authorizes project-owned integration.
 - Installation and convergence choices remain behind explicit prototype and ADR gates.
 - Native formats remain authoritative while minimal JSON contracts provide cross-stage interoperability.
-- UEFI, systemd-boot, ext4, a resizeable swapfile, and hibernation form a compatible target-system baseline.
+- UEFI, the default ext4 and systemd-boot option, a resizeable swapfile, and hibernation form a compatible target-system baseline; the Btrfs options are selectable under [ADR 0003](adr/0003-storage-and-recovery-baseline.md).
 - Official Arch `linux` remains the qualification kernel while CachyOS remains an isolated experiment.
 
 No incompatible version pins were found. Recorded versions are dated observations and build metadata, not permanent constraints.

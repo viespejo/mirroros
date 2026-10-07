@@ -161,7 +161,7 @@ NFR52: A task must have a documented manual or assisted process and demonstrated
 - Implement a synchronous local pipeline with explicit process, file, exit-status, plan, evidence, and target-root contracts; preserve upstream diagnostics and original child exit status.
 - Use normalized lifecycle exit statuses: success (0), invalid input/precondition (2), cancellation (3), verification not ready (4), execution failure (5), and internal contract failure (6).
 - Generate reviewable installation plans containing target identity, discovery facts, proposed operations, default provenance, secret requirements, and a content digest; confirmation is bound to that digest and expires when plan or target state changes.
-- Use UEFI, GPT, systemd-boot, an unencrypted ext4 root filesystem, and a resizeable swapfile; hibernation is an MVP capability, including resume-offset maintenance and repeated validation with hybrid AMD/NVIDIA graphics.
+- Use UEFI, GPT, an unencrypted root filesystem with the storage option selected under [ADR 0003](adr/0003-storage-and-recovery-baseline.md) (ext4 with systemd-boot by default), and a resizeable swapfile; hibernation is an MVP capability, including resume-offset maintenance and repeated validation with hybrid AMD/NVIDIA graphics.
 - Keep Secure Boot disabled for the MVP; use the official Arch `linux` kernel for initial qualification, with CachyOS kernel evaluation isolated as a reversible experiment.
 - Separate image, installation, hardware, target override, system capability, user capability, visual capability, verification, inventory, and prototype ownership; Niri remains a replaceable compositor provider.
 - Treat native Arch and application formats as authoritative; do not create a proprietary configuration schema or database.
@@ -516,7 +516,7 @@ So that the target receives a bootable Arch base without hidden policy changes.
 **Given** a current approved plan and required runtime inputs
 **When** installation starts
 **Then** only operations represented by the approved digest are executed
-**And** UEFI, GPT, systemd-boot, unencrypted ext4 root, official Arch `linux`, and the declared resizeable swapfile policy are applied.
+**And** UEFI, GPT, the selected storage option (ext4 with systemd-boot by default, per ADR 0003), unencrypted root, official Arch `linux`, and the declared resizeable swapfile policy are applied.
 
 **Given** credentials or secret values are required
 **When** they are supplied

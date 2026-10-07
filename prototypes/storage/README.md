@@ -26,23 +26,46 @@ Raw results: `evidence/prototypes/storage/<variant>/<run-id>/` (ignored).
 | `btrfs-rescue` | 1 GiB FAT32 ESP, one Btrfs filesystem with flat subvolumes `@`, `@home`, `@log`, `@pkg`, `@snapshots`, `@swap` | `compress=zstd:1`, `relatime` | Snapper root configuration for `@` only, snap-pac, no timeline | systemd-boot | Rescue-based rollback of `@` from a snapshot, from the bundle A ISO |
 | `btrfs-limine` | Same as `btrfs-rescue` | Same as `btrfs-rescue` | Same as `btrfs-rescue` | Limine (unsigned) with snapshot entries | Attended selection of a snapshot entry over the serial console |
 
+## Counted runs
+
+All counted runs use commit `331155d7fee84c0d19ab7c87523a925ea4b80231` (commit 1) with `dirty: false`.
+Cells below cite the short run-id (timestamp and first UUID group); the full run-id names the ignored
+evidence directory `evidence/prototypes/storage/<variant>/<run-id>/`.
+
+| Variant | Scenario | Short run-id | Full run-id |
+| --- | --- | --- | --- |
+| control | D1 | `20261007T155452Z-9db16ef8` | `20261007T155452Z-9db16ef8-cc56-42fa-b006-1cdefbcdef66` |
+| control | D2 | `20261007T160124Z-46c3c2c4` | `20261007T160124Z-46c3c2c4-6c4e-4462-943b-b42edbad5ca3` |
+| control | hibernation cycle | `20261007T160807Z-068dd7f5` | `20261007T160807Z-068dd7f5-afb5-4396-aeac-0cd6c3044796` |
+| control | pending image (attended) | `20261007T191629Z-ee1b3c98` | `20261007T191629Z-ee1b3c98-3f23-4ac4-a7aa-cf728db73dc8` |
+| btrfs-rescue | D1 | `20261007T161057Z-99b85d90` | `20261007T161057Z-99b85d90-36ed-4259-9d68-c302aea9ef0c` |
+| btrfs-rescue | D2 | `20261007T161735Z-5e1e7a85` | `20261007T161735Z-5e1e7a85-f50f-42dc-ad86-68f83455b3bc` |
+| btrfs-rescue | hibernation cycle | `20261007T162419Z-696e5e5a` | `20261007T162419Z-696e5e5a-d272-4f41-9fd6-bdb7e96973ba` |
+| btrfs-rescue | pending image (attended) | `20261007T193917Z-792f4175` | `20261007T193917Z-792f4175-c0ee-4238-9112-b42c8e9088db` |
+| btrfs-limine | D1 | `20261007T181105Z-1b4408a0` | `20261007T181105Z-1b4408a0-c952-4aa3-879a-f304e4ca0744` |
+| btrfs-limine | D2 | `20261007T183708Z-0ddfe7ea` | `20261007T183708Z-0ddfe7ea-271e-431d-bf84-3bef7b14ee2f` |
+| btrfs-limine | hibernation cycle | `20261007T162711Z-d0a9bcc1` | `20261007T162711Z-d0a9bcc1-130a-4e5e-a7d4-0a2bf1e245d2` |
+| btrfs-limine | pending image (attended) | `20261007T195628Z-e239b0d8` | `20261007T195628Z-e239b0d8-cd3a-4a9b-8745-f6120c7ba260` |
+
+The development runs listed above are not counted and are not cited in the criteria table.
+
 ## Criteria
 
 Provenance is one of `measured`, `observed manually`, or `source-reviewed`. Every cell states its
-provenance and its evidence run-id (or source revision).
+provenance and its evidence run-id (or source revision). Run-ids are the short ids of the table above.
 
 | Criterion | `control` | `btrfs-rescue` | `btrfs-limine` |
 | --- | --- | --- | --- |
-| D1 recovery (userspace damage inside `@`) | | | |
-| D2 recovery (boot path damage on the ESP) | | | |
-| Rescue-media need | | | |
-| Diagnostics retention | | | |
-| `/home` retention | | | |
-| Hibernation | | | |
-| Dependencies and provenance | | | |
-| Maintenance cost | | | |
-| ESP occupancy with several snapshots | | | |
-| Architecture impact | | | |
+| D1 recovery (userspace damage inside `@`) | Recovered. Failure confirmed (no report within the 180 s deadline); rescue boot 49 s, script 0 s, 3 steps (`pacman --root /mnt -Rns`); verifying boot passed. Measured, `…155452Z-9db16ef8`. | Recovered. Failure confirmed; rescue boot 49 s, script 1 s, 4 steps (restore `@` from the baseline snapshot, keep damaged `@`); verifying boot passed. Measured, `…161057Z-99b85d90`. | Recovered by selecting a snapshot entry; failure confirmed; attended session 350 s (includes human time); verifying boot passed. Observed manually, `…181105Z-1b4408a0`. The snapshot boot is a temporary overlay, not a persistent restore of `@`. |
+| D2 recovery (boot path damage on the ESP) | Recovered. Failure confirmed; rescue boot 53 s, script 4 s, 3 steps (`mkinitcpio -P` in a chroot); verifying boot passed. Measured, `…160124Z-46c3c2c4`. | Recovered. Failure confirmed; rescue boot 54 s, script 4 s, 5 steps (restore `@`, then regenerate the initramfs, because the ESP is outside every snapshot); verifying boot passed. Measured, `…161735Z-5e1e7a85`. | Recovered by selecting a snapshot entry (its own kernel and initramfs copies on the ESP); failure confirmed; attended session 116 s; verifying boot passed. Observed manually, `…183708Z-0ddfe7ea`. The damaged initramfs of the live entry is not repaired. |
+| Rescue-media need | Needed for D1 and D2. Measured, `…155452Z-9db16ef8`, `…160124Z-46c3c2c4`. | Needed for D1 and D2. Measured, `…161057Z-99b85d90`, `…161735Z-5e1e7a85`. | Not needed for D1 and D2 (bootloader menu only). Observed manually, `…181105Z-1b4408a0`, `…183708Z-0ddfe7ea`. |
+| Diagnostics retention | D1: kept (persistent journal holds the failed boot). D2: not observable, the kernel never reached userspace. Measured, `…155452Z-9db16ef8`, `…160124Z-46c3c2c4`. | Same as `control` (`@log`). Measured, `…161057Z-99b85d90`, `…161735Z-5e1e7a85`. | Same as `control` (`@log`). Observed manually, `…181105Z-1b4408a0`, `…183708Z-0ddfe7ea`. |
+| `/home` retention | Marker survived D1 and D2. Measured, `…155452Z-9db16ef8`, `…160124Z-46c3c2c4`. | Marker survived D1 and D2 (`@home` is outside the restore). Measured, `…161057Z-99b85d90`, `…161735Z-5e1e7a85`. | Marker survived D1 and D2. Observed manually, `…181105Z-1b4408a0`, `…183708Z-0ddfe7ea`. |
+| Hibernation | Configuration postcondition passed; one real cycle resumed. Pending image: after the rescue session the disk boot was a normal boot, with no resume (`not_hibernated` after 180 s). Measured, `…160807Z-068dd7f5`; observed manually, `…191629Z-ee1b3c98`. | Same pattern; the session also restored `@` from the baseline before the disk boot. Measured, `…162419Z-696e5e5a`; observed manually, `…193917Z-792f4175`. | Cycle resumed. Pending image: the session shows no rescue script and a mount listing only; the disk boot was a normal boot, with no resume. Measured, `…162711Z-d0a9bcc1`; observed manually, `…195628Z-e239b0d8`. See [Evidence limits](#evidence-limits). |
+| Dependencies and provenance | Official repositories only. Source-reviewed, [`control/stage.sh`](control/stage.sh). | Adds `btrfs-progs`, `snapper`, `snap-pac`, `compsize` (official repositories). Source-reviewed, [`btrfs-rescue/stage.sh`](btrfs-rescue/stage.sh). | Adds `limine` and official dependencies, plus two AUR packages (single maintainer) pinned by AUR and upstream commits, built with Gradle and GraalVM `native-image` over the network; Maven Central dependencies pinned by version only; `base-devel` and `git` present. Source-reviewed, [`btrfs-limine/README.md`](btrfs-limine/README.md#limine-snapshot-tooling-provenance-review) (review date 2026-10-07). |
+| Maintenance cost | 150 variant lines (`stage.sh` 72, `recover` 59, `run` 19). Measured by `wc -l`, commit `331155d`. | 162 variant lines (`stage.sh` 50, `recover` 93, `run` 19) plus the 100-line shared Btrfs stage. Measured by `wc -l`, commit `331155d`. | 135 variant lines (`stage.sh` 81, `aur-build.sh` 35, `run` 19) plus the 100-line shared Btrfs stage; no recovery script, but a two-package AUR pin to maintain. Measured by `wc -l`, commit `331155d`. |
+| ESP occupancy with several snapshots | Not measured. Snapshots do not exist in this variant. | Not measured. Snapshots stay in `@snapshots`, not on the ESP (design, source-reviewed). | Not measured. The tools copy a kernel and initramfs per snapshot entry to the ESP and stop at `LIMIT_USAGE_PERCENT=85` (source-reviewed, [`btrfs-limine/README.md`](btrfs-limine/README.md)). Snapper held 2 snapshots before and 4 after damage in `…181105Z-1b4408a0` (measured), but the entry count and ESP usage were not collected. |
+| Architecture impact | None: this is the current baseline. Source-reviewed, [`docs/architecture.md`](../../docs/architecture.md). | Would amend the ext4 and systemd-boot statements and `docs/epics.md` lines 164 and 519; adds Snapper and a rescue recovery script to later recovery work. Source-reviewed. | Same amendments as `btrfs-rescue`, plus a Limine boot loader and an AUR build path routed through Story 3.2. Source-reviewed. |
 
 ## Secondary metrics
 
@@ -50,8 +73,9 @@ Reported as secondary metrics only. They do not rank the variants.
 
 | Metric | `control` | `btrfs-rescue` | `btrfs-limine` |
 | --- | --- | --- | --- |
-| Space after installation (`compsize` or `df`) | | | |
-| Installation duration | | | |
+| Space after installation (`compsize` or `df`) | Not measured | Not measured | Not measured |
+| Pacman installed size of the install transaction (not the space metric above) | 1291.15 MiB (measured, `…155452Z-9db16ef8`) | 1427.08 MiB (measured, `…161057Z-99b85d90`) | 1917.10 MiB, plus a 766.98 MiB build-dependency transaction (`jdk-openjdk`, `gradle`, …) (measured, `…181105Z-1b4408a0`) |
+| Installation duration (counted runs) | 116–136 s (measured, four runs above) | 133–142 s (measured, four runs above) | 441–484 s (measured, four runs above) |
 
 ## Installer diff
 
@@ -126,7 +150,40 @@ storage evidence, and the attended regression evidence returned zero findings. S
 a usable temporary overlay, not a persistent restore of `@`. Pending-image sessions and counted
 runs remain later tasks; the final Limine rootflags configuration still needs a hibernation cycle.
 
+## DEC-007 working hypothesis
+
+The hypothesis was: the control repairs both damages from rescue media, Btrfs with rescue rolls back
+D1 but still regenerates the initramfs for D2, and Limine recovers both by booting the previous
+snapshot. The counted runs are consistent with it, within the limits below:
+
+- `control` recovered D1 and D2 from rescue media (3 steps each).
+- `btrfs-rescue` recovered D1 by rollback (4 steps) and needed an extra initramfs regeneration for D2
+  (5 steps).
+- `btrfs-limine` booted a snapshot entry for both damages without rescue media. That boot is a
+  temporary overlay; the damaged live entry and a persistent restore of `@` were not exercised.
+
 ## Evidence limits
 
-To be recorded with the comparison: VM only, one run per case, attended observations, and any
-`blocked_external` case.
+- VM only (the reference VM); no target-laptop claim, in particular none about laptop hibernation.
+- One counted run per case. No case was repeated; none showed an unexpected or inconsistent result.
+- `btrfs-limine` D1 and D2 recoveries are attended observations; their session durations include
+  human time and are not comparable with the automated rescue boots.
+- Failure confirmation is a 180 s deadline without a completion report, not a captured failure
+  signature.
+- Real hibernation cycles are confirmed by the systemd-sleep journal message; the kernel's
+  `Image restored successfully` line was not observed (`kernel_image_restored: false` in all three).
+- Pending-image sessions: the harness records that the disk boot afterwards was a normal boot with no
+  resume (`not_hibernated`) in all three variants. It does not record whether the image was
+  discarded, why, or what a snapshot selection in Limine did; the maintainer's observations beyond
+  the serial logs are not in the evidence.
+- Not measured: `compsize` or `df` space after installation, and ESP occupancy with several
+  snapshots. The harness does not collect them.
+- No case was `blocked_external` and no variant was unsupported.
+
+Follow-up, not part of this comparison:
+
+- ESP occupancy with several snapshots and the ESP size stay unmeasured. A larger ESP for
+  `btrfs-limine` (for example 4 GiB) is a hypothesis to evaluate in a later experiment; it changes the
+  1 GiB FAT32 ESP of the shared scenario and therefore requires an ADR.
+- Recovery with a pending hibernation image needs a stricter session (confirm the image exists, record
+  the kernel messages of the next boot) and, for the target laptop, its own validation.

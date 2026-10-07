@@ -43,4 +43,12 @@ run-id.
 
 ## Result
 
-To be recorded in Task 9, with provenance and run-id for every cell.
+Counted runs at commit `331155d` (`dirty: false`); the full comparison is in
+[`../README.md`](../README.md).
+
+| Case | Result | Provenance | Run-id |
+| --- | --- | --- | --- |
+| D1 | Recovered from rescue media; 3 steps, rescue boot 49 s; `/home` marker survived; diagnostics kept | measured | `20261007T155452Z-9db16ef8` |
+| D2 | Recovered from rescue media; 3 steps, rescue boot 53 s; `/home` marker survived; diagnostics not observable | measured | `20261007T160124Z-46c3c2c4` |
+| Hibernation cycle | Resumed | measured | `20261007T160807Z-068dd7f5` |
+| Pending image | Rescue session mounted the ext4 root; the disk boot afterwards was a normal boot, no resume | observed manually | `20261007T191629Z-ee1b3c98` |

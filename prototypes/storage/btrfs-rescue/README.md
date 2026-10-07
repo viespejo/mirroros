@@ -51,4 +51,12 @@ run-id.
 
 ## Result
 
-To be recorded in Task 9, with provenance and run-id for every cell.
+Counted runs at commit `331155d` (`dirty: false`); the full comparison is in
+[`../README.md`](../README.md).
+
+| Case | Result | Provenance | Run-id |
+| --- | --- | --- | --- |
+| D1 | Recovered by restoring `@` from the baseline; 4 steps, rescue boot 49 s; `/home` marker survived; diagnostics kept | measured | `20261007T161057Z-99b85d90` |
+| D2 | Recovered by restoring `@` and regenerating the initramfs; 5 steps, rescue boot 54 s; `/home` marker survived; diagnostics not observable | measured | `20261007T161735Z-5e1e7a85` |
+| Hibernation cycle | Resumed | measured | `20261007T162419Z-696e5e5a` |
+| Pending image | The session restored `@` from the baseline; the disk boot afterwards was a normal boot, no resume | observed manually | `20261007T193917Z-792f4175` |

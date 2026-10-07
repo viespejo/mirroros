@@ -80,7 +80,17 @@ session from the ISO on the serial console.
 
 ## Result
 
-To be recorded in Task 9, with provenance and run-id for every cell.
+Counted runs at commit `331155d` (`dirty: false`); the full comparison is in
+[`../README.md`](../README.md).
+
+| Case | Result | Provenance | Run-id |
+| --- | --- | --- | --- |
+| D1 | Recovered by selecting a snapshot entry, no rescue media; session 350 s (includes human time); `/home` marker survived; diagnostics kept | observed manually | `20261007T181105Z-1b4408a0` |
+| D2 | Recovered by selecting a snapshot entry, no rescue media; session 116 s; `/home` marker survived; diagnostics not observable | observed manually | `20261007T183708Z-0ddfe7ea` |
+| Hibernation cycle | Resumed | measured | `20261007T162711Z-d0a9bcc1` |
+| Pending image | The session shows a mount listing only; the disk boot afterwards was a normal boot, no resume | observed manually | `20261007T195628Z-e239b0d8` |
+
+The snapshot boot is a temporary overlay, not a persistent restore of `@`.
 
 ## Limine snapshot tooling: provenance review
 
