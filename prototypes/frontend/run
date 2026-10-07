@@ -1,0 +1,185 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034 # State variables are shared across the libraries sourced here.
+# Frontend contract check entry point (Story 2.1, Track 3): a single-candidate check of Gum against
+# the interaction and terminal-output contract, driven by mock data. Non-production.
+#
+# Usage: prototypes/frontend/run <terminal|vt>
+#   terminal  run in a terminal emulator (TERM is not linux or dumb)
+#   vt        run in a host virtual console (TERM=linux on /dev/ttyN)
+#
+# It sources the generic modules of prototypes/installation/lib/ as they are: run identity and
+# private directories (resources.sh, with PROTO_TRACK=frontend), the commit and dirty capture, the
+# allowlist, and the Gitleaks scan (evidence.sh), and the canaries (secrets.sh). It defines its own
+# metadata and result writer. Exit statuses: 0 every point classified without a failure; 2 refusal,
+# precondition, or scan finding; 4 completed with at least one failing point; 5 infrastructure
+# failure; 6 internal error or damaged checkout; 130 interrupted.
+#
+# Evidence: evidence/prototypes/frontend/contract-check/<run-id>/ (ignored, allowlisted, scanned).
+# Development runs on a dirty tree report dirty: true and are not evidence.
+
+FE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+FE_LIB_DIR="${FE_DIR}/lib"
+PROTO_LIB_DIR="$(cd -- "${FE_DIR}/../installation/lib" 2> /dev/null && pwd -P)"
+REPOSITORY_ROOT="$(cd -- "${FE_DIR}/../.." && pwd -P)"
+PROTO_TRACK='frontend'
+FE_ENGINE_NAME='contract-check'
+FE_SECRET_OUT=''
+FLOW_LOG=''
+
+for FE_LIBRARY in \
+  "${PROTO_LIB_DIR}/resources.sh" "${PROTO_LIB_DIR}/secrets.sh" "${PROTO_LIB_DIR}/evidence.sh" \
+  "${FE_LIB_DIR}/mock.sh" "${FE_LIB_DIR}/flow.sh" "${FE_LIB_DIR}/common.sh" \
+  "${FE_LIB_DIR}/result.sh" "${FE_LIB_DIR}/points.sh"; do
+  if [[ ! -f "$FE_LIBRARY" || ! -r "$FE_LIBRARY" ]]; then
+    printf 'MirrorOS prototype: incomplete or damaged checkout; a library is missing: %s\n' "$FE_LIBRARY" >&2
+    exit 6
+  fi
+  # shellcheck disable=SC1090 # Resolved relative to this file.
+  source "$FE_LIBRARY" || exit 6
+done
+FE_SCENARIO="${FE_LIB_DIR}/scenario.sh"
+
+fe_usage() {
+  printf '%s\n' 'Usage: prototypes/frontend/run <terminal|vt>' >&2
+}
+
+# shellcheck disable=SC2329 # Invoked by the EXIT trap below.
+fe_cleanup() {
+  fe_sampler_stop
+  [[ -z "$FE_SECRET_OUT" ]] || rm -f -- "$FE_SECRET_OUT"
+}
+
+fe_preflight() {
+  local tool
+  local tty_name
+
+  for tool in gum jq gitleaks script ps timeout stty git; do
+    if ! command -v "$tool" > /dev/null 2>&1; then
+      printf 'MirrorOS prototype: required tool not found: %s\n' "$tool" >&2
+      return 2
+    fi
+  done
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    printf '%s\n' 'MirrorOS prototype: this check is attended and needs an interactive terminal.' >&2
+    return 2
+  fi
+  FE_TERM="${TERM:-}"
+  tty_name="$(tty 2> /dev/null)" || tty_name=''
+  case "$FE_SURFACE" in
+    terminal)
+      if [[ "$FE_TERM" == linux || "$FE_TERM" == dumb || -z "$FE_TERM" || "$tty_name" != /dev/pts/* ]]; then
+        printf 'MirrorOS prototype: the terminal surface needs a terminal emulator (TERM=%s, tty %s).\n' \
+          "$FE_TERM" "$tty_name" >&2
+        return 2
+      fi
+      FE_TTY_KIND='pts'
+      ;;
+    vt)
+      if [[ "$FE_TERM" != linux || ! "$tty_name" =~ ^/dev/tty[0-9]+$ ]]; then
+        printf 'MirrorOS prototype: the vt surface needs a virtual console (TERM=%s, tty %s).\n' \
+          "$FE_TERM" "$tty_name" >&2
+        return 2
+      fi
+      FE_TTY_KIND='vt'
+      ;;
+  esac
+  FE_GUM_VERSION="$(gum --version 2> /dev/null)" || return 2
+}
+
+# Canary search over the retained evidence and the run build directory; records only the outcome.
+fe_canary_search_all() {
+  local dir="$1"
+  local status=0
+  local verdict
+
+  proto_secrets_canary_search "$dir" "$BUILD_RUN_DIR" || status=$?
+  case "$status" in
+    0) EVIDENCE_CANARY_STATUS='passed'; verdict='none_found' ;;
+    1) EVIDENCE_CANARY_STATUS='found'; verdict='found' ;;
+    *) EVIDENCE_CANARY_STATUS='failed'; verdict='search_failed' ;;
+  esac
+  jq -n --arg verdict "$verdict" \
+    '{schema_version: 1, searched: ["evidence run directory", "build run directory"], values: 2, result: $verdict}' \
+    > "${dir}/canary-search.json" && chmod 600 -- "${dir}/canary-search.json"
+  case "$status" in
+    0) return 0 ;;
+    1)
+      printf 'MirrorOS prototype: a canary value was found in the run files; they stay private at %s.\n' "$dir" >&2
+      return 2
+      ;;
+    *)
+      printf '%s\n' 'MirrorOS prototype: the canary search failed.' >&2
+      return 5
+      ;;
+  esac
+}
+
+# Allowlist, canary search, result, then the redacted scan including the result.
+fe_finalize() {
+  local dir="$EVIDENCE_RUN_DIR"
+  local status=0
+  local failing
+
+  fe_keep "$FLOW_LOG" flow.log
+  fe_canary_search_all "$dir" || status=$?
+  EVIDENCE_ALLOWLIST=(result.json run-metadata.json canary-search.json gitleaks-evidence.json "${FE_KEPT[@]}")
+  evidence_enforce_allowlist "$dir"
+  failing="$(jq '[.[] | select(.class == "fail")] | length' <<< "$FE_POINTS_JSON")" || return 6
+  if [[ "$status" -eq 0 && "$failing" -gt 0 ]]; then
+    status=4
+  fi
+  fe_write_result "$dir" "$status" || return 5
+  if ! evidence_scan "$dir"; then
+    status=2
+  fi
+  fe_write_result "$dir" "$status" || return 5
+  evidence_scan "$dir" > /dev/null 2>&1 || status=2
+  [[ "$status" -ne 2 ]] || fe_write_result "$dir" 2 || return 5
+  printf '\nEvidence: %s\n' "$dir"
+  printf 'Result: %s (exit status %s, dirty: %s)\n' "$(jq -r .verdict "${dir}/result.json")" "$status" "$EVIDENCE_DIRTY"
+  return "$status"
+}
+
+fe_main() {
+  local status=0
+
+  if [[ $# -ne 1 || ( "$1" != terminal && "$1" != vt ) ]]; then
+    fe_usage
+    return 2
+  fi
+  FE_SURFACE="$1"
+  umask 077
+  unset "${!GUM_@}"
+  fe_preflight || return $?
+  proto_resources_new_id || return 2
+  proto_resources_prepare "$REPOSITORY_ROOT" "$FE_ENGINE_NAME" "$RUN_ID" || return 2
+  evidence_capture_commit "$REPOSITORY_ROOT" || return 6
+  proto_secrets_generate || return 5
+  FLOW_LOG="${BUILD_RUN_DIR}/flow.log"
+  FE_SECRET_OUT="${BUILD_RUN_DIR}/secrets.out"
+  : > "$FLOW_LOG"
+  export FLOW_LOG FE_SECRET_OUT
+  fe_write_metadata "$EVIDENCE_RUN_DIR" || return 5
+
+  printf 'Frontend contract check: surface %s, TERM %s, %s\n' "$FE_SURFACE" "$FE_TERM" "$FE_GUM_VERSION"
+  printf 'Run: %s (commit %s, dirty: %s)\n' "$RUN_ID" "${EVIDENCE_COMMIT:0:12}" "$EVIDENCE_DIRTY"
+  fe_point_c1 || return 5
+  fe_point_c7 || return 5
+  printf '\n%s\n' 'Automated points (no input needed; each one runs in a pty for a few seconds each):'
+  fe_point_c2
+  fe_point_c3
+  fe_point_c4
+  fe_point_c5
+  fe_point_c6
+  fe_point_c8
+  fe_point_c9
+  fe_point_c10
+  fe_finalize || status=$?
+  return "$status"
+}
+
+trap fe_cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+fe_main "$@"
+exit $?
