@@ -411,7 +411,7 @@ container_stop_and_verify() {
   fi
   case "$state" in
     running|paused|restarting)
-      if container_run_stage container-stop 60 \
+      if container_run_stage container-stop 180 \
         docker stop -t 30 "$CONTAINER_ID"; then
         :
       else

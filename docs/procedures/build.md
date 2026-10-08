@@ -78,7 +78,7 @@ The current operation timeouts are:
 | Output export | 15 minutes |
 | Individual Docker control requests | 2 minutes |
 
-A timeout is an execution failure, not proof that work inside Docker has stopped. When the container may still be active, the builder requests a stop with a 30-second grace period, waits at most 60 seconds for the Docker client, and verifies the stopped state before removal. If stopping or state verification fails, it preserves the container and records recovery guidance rather than force-removing it.
+A timeout is an execution failure, not proof that work inside Docker has stopped. When the container may still be active, the builder requests a stop with a 30-second grace period, waits at most 180 seconds for the Docker client, and verifies the stopped state before removal. If stopping or state verification fails, it preserves the container and records recovery guidance rather than force-removing it.
 
 ## Outputs, evidence, and permissions
 
@@ -137,7 +137,7 @@ Recovery is manual and applies only to resources positively tied to one run. Do 
 2. **Confirm identity and authorization.** Read `container-identity.json` and use its actual container ID. Inspect that exact ID and verify both labels, `org.mirroros.stage=build` and `org.mirroros.run-id=<run-id>`, before acting. Docker access is root-equivalent; proceed only as an authorized normal user with direct access to the intended daemon. Do not identify a container by a guessed name alone.
 3. **Refuse incomplete evidence.** If the run evidence directory, lock, execution result, or required container identity is missing, unreadable, or inconsistent with the resource, do not stop or remove a container based on assumptions. Preserve what exists and escalate for maintainer review.
 4. **Preserve diagnostics before removal.** Save output from the recorded container ID under that run's evidence directory with private permissions, then run a redacted Gitleaks scan over the retained evidence and keep its report. Do not overwrite existing records or discard a finding. If the evidence cannot be preserved and scanned, do not remove the container.
-5. **Stop only after confirming its state.** If the verified container is paused, unpause that exact ID only after confirming authorization and identity. Request `docker stop -t 30 <container-id>` under a 60-second client deadline, then inspect the same ID and verify its state is `exited` or `created`. If stop or verification fails, leave it in place for further authorized recovery; never use `docker rm -f`.
+5. **Stop only after confirming its state.** If the verified container is paused, unpause that exact ID only after confirming authorization and identity. Request `docker stop -t 30 <container-id>` under a 180-second client deadline, then inspect the same ID and verify its state is `exited` or `created`. If stop or verification fails, leave it in place for further authorized recovery; never use `docker rm -f`.
 6. **Remove only the verified stopped container.** After diagnostics are preserved and scanned, remove the exact recorded ID with `docker rm <container-id>`. Do not remove another run's resources or the shared Pacman cache volume. Keep the run evidence and published bundle for review.
 
 If the required identity or evidence is absent, the safe outcome is refusal to remove resources—not guessing, adopting, or deleting them.
