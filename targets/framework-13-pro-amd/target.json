@@ -1,0 +1,9 @@
+{
+  "format_version": 1,
+  "target_id": "framework-13-pro-amd",
+  "identity": {
+    "status": "pending_capture",
+    "virtualization": "none",
+    "dmi_fields_pending": ["sys_vendor", "product_name"]
+  }
+}

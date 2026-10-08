@@ -1,0 +1,17 @@
+{
+  "format_version": 1,
+  "policy": {
+    "minimum_disk_bytes": {
+      "value": 21474836480,
+      "provenance": "technical_necessity"
+    },
+    "https_probe_url": {
+      "value": "https://archlinux.org/",
+      "provenance": "arch_guidance"
+    },
+    "https_probe_timeout_seconds": {
+      "value": 30,
+      "provenance": "technical_necessity"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# PATH double for systemd-detect-virt: prints virtualization; exits 1 for "none" like the real tool.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'systemd-detect-virt %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+virtualization="$(< "${DOUBLE_STATE}/virtualization")"
+printf '%s\n' "$virtualization"
+if [[ -f "${DOUBLE_STATE}/virt_status" ]]; then
+  exit "$(< "${DOUBLE_STATE}/virt_status")"
+fi
+[[ "$virtualization" != 'none' ]]

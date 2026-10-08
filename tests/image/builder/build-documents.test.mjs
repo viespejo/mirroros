@@ -27,6 +27,14 @@ function validMetadata() {
       profile_identity: 'b'.repeat(40),
       dirty_paths: [],
     },
+    embedded_code: {
+      iso_path: '/usr/local/lib/mirroros',
+      subtrees: [
+        { path: 'install', identity: '1'.repeat(40) },
+        { path: 'operations/install', identity: '2'.repeat(40) },
+      ],
+      dirty_paths: [],
+    },
     construction: {
       architecture: 'x86_64',
       image_digest: `sha256:${'c'.repeat(64)}`,
@@ -139,6 +147,7 @@ test('builds valid artifact metadata and execution results', () => {
 const metadataMissingPaths = [
   'schema_version',
   'execution', 'execution.run_id', 'execution.commit', 'execution.dirty', 'execution.profile_identity', 'execution.dirty_paths',
+  'embedded_code', 'embedded_code.iso_path', 'embedded_code.subtrees', 'embedded_code.dirty_paths',
   'construction', 'construction.architecture', 'construction.image_digest', 'construction.archiso_version',
   'construction.source_date_epoch', 'construction.tool_versions', 'construction.cosign',
   'construction.cosign.identity', 'construction.cosign.issuer',
@@ -164,6 +173,8 @@ const metadataWrongTypes = [
   ['schema_version', '1'],
   ['execution', []], ['execution.run_id', 1], ['execution.commit', 'bad'], ['execution.dirty', 'false'],
   ['execution.profile_identity', 1], ['execution.dirty_paths', 'image/archiso/file'],
+  ['embedded_code', []], ['embedded_code.iso_path', 1], ['embedded_code.subtrees', []],
+  ['embedded_code.dirty_paths', 'install/file'],
   ['construction', []], ['construction.architecture', 1], ['construction.image_digest', 1],
   ['construction.archiso_version', 91], ['construction.source_date_epoch', '1791201600'],
   ['construction.tool_versions', []], ['construction.cosign', []], ['construction.cosign.identity', 1],
@@ -200,6 +211,33 @@ test('dirty metadata requires the dirty-path identity and a traceability limitat
   document.traceability_limitations = ['Dirty source content is not identified by a content hash.'];
   document.execution.profile_identity = 'b'.repeat(40);
   assert.ok(validateArtifactMetadata(document).some(error => error.includes('dirty-path-list')));
+});
+
+test('embedded code identities must match the clean or dirty execution state', () => {
+  const invalidSubtrees = [
+    [{ path: 'install', identity: 'dirty-path-list' }],
+    [{ path: 'install', identity: 'bad' }],
+    [{ identity: '1'.repeat(40) }],
+    ['install'],
+  ];
+  for (const subtrees of invalidSubtrees) {
+    const document = validMetadata();
+    document.embedded_code.subtrees = subtrees;
+    assert.ok(validateArtifactMetadata(document).length > 0, `Expected ${JSON.stringify(subtrees)} to be rejected`);
+  }
+
+  const clean = validMetadata();
+  clean.embedded_code.dirty_paths = ['install/file'];
+  assert.ok(validateArtifactMetadata(clean).some(error => error.includes('clean embedded_code.dirty_paths')));
+
+  const dirty = validMetadata();
+  dirty.execution.dirty = true;
+  dirty.execution.profile_identity = 'dirty-path-list';
+  dirty.traceability_limitations = ['Dirty source content is not identified by a content hash.'];
+  assert.ok(validateArtifactMetadata(dirty).some(error => error.includes('dirty-path-list for a dirty execution')));
+  dirty.embedded_code.subtrees = dirty.embedded_code.subtrees.map(subtree => ({ ...subtree, identity: 'dirty-path-list' }));
+  dirty.embedded_code.dirty_paths = ['install/file'];
+  assert.deepEqual(validateArtifactMetadata(dirty), []);
 });
 
 const resultMissingPaths = [

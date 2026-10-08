@@ -1113,12 +1113,15 @@ mirroros/
 │   └── reference/
 │       ├── README.md
 │       ├── qualify-bootstrap
+│       ├── qualify-discovery
 │       ├── reference-vm.conf
 │       ├── bootstrap-documents.mjs
 │       ├── guest/
-│       │   └── bootstrap-checks.sh
+│       │   ├── bootstrap-checks.sh
+│       │   └── discovery-trigger.sh
 │       └── lib/
 │           ├── bootstrap-documents.mjs
+│           ├── discovery.sh
 │           ├── preconditions.sh
 │           ├── run-resources.sh
 │           ├── nocloud.sh
@@ -1209,6 +1212,8 @@ No root `package.json` is required while JavaScript uses only Node built-ins and
 - Diagnostics.
 - Installation entry point.
 - Tools required by accepted installation and validation paths.
+
+The live medium also embeds MirrorOS-owned installation code at `/usr/local/lib/mirroros/`, captured from the repository at build time, with `mirroros-install` on `PATH`; the image does not own that code.
 
 It does not own the complete installed desktop or personal environment. Adding a package to the image requires a live-environment reason even if the same package is installed on the target.
 

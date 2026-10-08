@@ -72,3 +72,51 @@ teardown() {
   lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
   lifecycle_assert_stderr_contains 'Restore the helper from Git or re-clone the repository.'
 }
+
+@test "install discover --help prints its own help on stdout without touching the system" {
+  lifecycle_invoke install discover --help
+  lifecycle_assert_status 0
+  lifecycle_assert_stderr_empty
+  lifecycle_assert_stdout_contains 'Usage: install discover --target <id> [--output <dir>]'
+  lifecycle_assert_stdout_contains 'Normalized exit outcomes:'
+  lifecycle_assert_stdout_contains 'Documentation: docs/procedures/install.md'
+}
+
+@test "install discover rejects unsupported and malformed arguments before any inspection" {
+  lifecycle_invoke install discover --bogus
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument: --bogus'
+  lifecycle_assert_no_success_output
+
+  lifecycle_invoke install discover --target
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains '--target requires a value'
+
+  lifecycle_invoke install discover --help extra
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument: --help'
+}
+
+@test "install discover refuses a non-empty output directory without writing" {
+  mkdir -p "${LIFECYCLE_TEST_ROOT}/occupied"
+  printf '%s\n' keep > "${LIFECYCLE_TEST_ROOT}/occupied/previous.txt"
+  lifecycle_invoke install discover --target reference-vm --output "${LIFECYCLE_TEST_ROOT}/occupied"
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'must be an absent or empty directory'
+  [[ "$(find "${LIFECYCLE_TEST_ROOT}/occupied" -mindepth 1 | wc -l)" -eq 1 ]]
+}
+
+@test "install discover works through a symlink as on the live medium" {
+  ln -s "${LIFECYCLE_COPY_ROOT}/operations/install" "${LIFECYCLE_TEST_ROOT}/mirroros-install"
+  run "${LIFECYCLE_TEST_ROOT}/mirroros-install" discover --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Usage: install discover'* ]]
+}
+
+@test "install discover reports a missing orchestrator as a damaged checkout" {
+  rm -f -- "$LIFECYCLE_COPY_ROOT/install/discovery/discover"
+  lifecycle_invoke install discover --help
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+  lifecycle_assert_stderr_contains 'Restore install/discovery from Git or re-clone the repository.'
+}

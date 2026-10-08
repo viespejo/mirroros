@@ -1,0 +1,12 @@
+{
+  "format_version": 1,
+  "target_id": "synthetic-laptop",
+  "identity": {
+    "status": "defined",
+    "virtualization": "none",
+    "dmi": {
+      "sys_vendor": "Synthetic Vendor",
+      "product_name": "Synthetic Laptop"
+    }
+  }
+}

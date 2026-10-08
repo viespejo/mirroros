@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+# PATH double for bootctl status: reports nothing, so the Secure Boot state stays unknown.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'bootctl %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+exit 1

@@ -22,4 +22,10 @@ file_permissions=(
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/bin/Installation_guide"]="0:0:755"
   ["/usr/local/bin/livecd-sound"]="0:0:755"
+  ["/usr/local/lib/mirroros/operations/install"]="0:0:755"
+  ["/usr/local/lib/mirroros/install/discovery/discover"]="0:0:755"
+  ["/usr/local/lib/mirroros/install/discovery/discover-firmware"]="0:0:755"
+  ["/usr/local/lib/mirroros/install/discovery/discover-hardware"]="0:0:755"
+  ["/usr/local/lib/mirroros/install/discovery/discover-network"]="0:0:755"
+  ["/usr/local/lib/mirroros/install/discovery/discover-storage"]="0:0:755"
 )

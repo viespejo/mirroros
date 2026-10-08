@@ -20,6 +20,11 @@ builder_setup() {
     "$BUILDER_DOUBLE_DIR" \
     "$BUILDER_FILTERED_PATH_DIR"
   cp -a -- "${BUILDER_TEST_SOURCE_ROOT}/operations" "$BUILDER_REPOSITORY_ROOT/"
+  cp -a -- \
+    "${BUILDER_TEST_SOURCE_ROOT}/install" \
+    "${BUILDER_TEST_SOURCE_ROOT}/hardware" \
+    "${BUILDER_TEST_SOURCE_ROOT}/targets" \
+    "$BUILDER_REPOSITORY_ROOT/"
   mkdir -p "${BUILDER_REPOSITORY_ROOT}/image"
   cp -a -- \
     "${BUILDER_TEST_SOURCE_ROOT}/image/archiso" \
@@ -29,7 +34,7 @@ builder_setup() {
   git -C "$BUILDER_REPOSITORY_ROOT" init -q
   git -C "$BUILDER_REPOSITORY_ROOT" config user.name 'MirrorOS contract tests'
   git -C "$BUILDER_REPOSITORY_ROOT" config user.email 'mirroros-contract-tests@example.invalid'
-  git -C "$BUILDER_REPOSITORY_ROOT" -c commit.gpgsign=false add -- operations image
+  git -C "$BUILDER_REPOSITORY_ROOT" -c commit.gpgsign=false add -- operations image install hardware targets
   GIT_AUTHOR_NAME='MirrorOS contract tests' \
     GIT_AUTHOR_EMAIL='mirroros-contract-tests@example.invalid' \
     GIT_COMMITTER_NAME='MirrorOS contract tests' \
@@ -376,6 +381,26 @@ builder_capture_profile() {
       "$SOURCE_CAPTURE_PROFILE_PATH"
     for path in "${SOURCE_CAPTURE_DIRTY_PATHS[@]}"; do
       printf "dirty_path=%s\n" "$path"
+    done
+  ' _ "$module_path" "$BUILDER_REPOSITORY_ROOT" "$destination_root"
+}
+
+builder_capture_embedded() {
+  local destination_root="$1"
+  local module_path="${BUILDER_REPOSITORY_ROOT}/image/builder/lib/source-capture.sh"
+
+  /usr/bin/bash -c '
+    set -Eeuo pipefail
+    source "$1"
+    source_capture_profile "$2" "$3"
+    source_capture_embedded_code "$2" "$3"
+    printf "dirty=%s\n" "$SOURCE_CAPTURE_DIRTY"
+    for index in "${!SOURCE_CAPTURE_EMBEDDED_PATHS[@]}"; do
+      printf "subtree=%s identity=%s\n" \
+        "${SOURCE_CAPTURE_EMBEDDED_PATHS[$index]}" "${SOURCE_CAPTURE_EMBEDDED_IDENTITIES[$index]}"
+    done
+    for path in "${SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS[@]}"; do
+      printf "embedded_dirty_path=%s\n" "$path"
     done
   ' _ "$module_path" "$BUILDER_REPOSITORY_ROOT" "$destination_root"
 }

@@ -7,6 +7,19 @@ SOURCE_CAPTURE_PROFILE_IDENTITY=''
 SOURCE_CAPTURE_PROFILE_PATH=''
 SOURCE_CAPTURE_DIRTY=0
 SOURCE_CAPTURE_DIRTY_PATHS=()
+# shellcheck disable=SC2034 # Consumed by publication.sh metadata collection.
+SOURCE_CAPTURE_EMBEDDED_ISO_PATH='/usr/local/lib/mirroros'
+SOURCE_CAPTURE_EMBEDDED_PATHS=(
+  'operations/install'
+  'operations/lib/lifecycle-discovery.sh'
+  'install'
+  'hardware/discovery'
+  'targets'
+)
+# shellcheck disable=SC2034 # Consumed by publication.sh metadata collection.
+SOURCE_CAPTURE_EMBEDDED_IDENTITIES=()
+# shellcheck disable=SC2034 # Consumed by publication.sh metadata collection.
+SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS=()
 
 source_capture_check_entry_type() {
   local path="$1"
@@ -308,6 +321,123 @@ source_capture_profile() {
   }
   # shellcheck disable=SC2034 # Consumed by build-artifact container setup.
   SOURCE_CAPTURE_PROFILE_PATH="$profile_root"
+}
+
+source_capture_embedded_code() {
+  local repository_root="$1"
+  local destination_root="$2"
+  local embedded_root="${destination_root}/image/archiso/airootfs${SOURCE_CAPTURE_EMBEDDED_ISO_PATH}"
+  local files_file="${destination_root}.embedded-files.$$"
+  local dirty_file="${destination_root}.embedded-dirty.$$"
+  local embedded_path
+  local repository_path
+  local source_path
+  local entry_type
+  local identity
+  local dirty_text=false
+  local -a embedded_files=()
+
+  if [[ -z "$SOURCE_CAPTURE_COMMIT" || ! -d "${destination_root}/image/archiso" ]]; then
+    printf '%s\n' 'MirrorOS build: the profile must be captured before the embedded code.' >&2
+    return 2
+  fi
+  if [[ -e "$embedded_root" || -L "$embedded_root" ]]; then
+    printf 'MirrorOS build: refusing existing embedded code path: %s\n' "$embedded_root" >&2
+    return 2
+  fi
+
+  SOURCE_CAPTURE_EMBEDDED_IDENTITIES=()
+  SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS=()
+  for embedded_path in "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}"; do
+    if [[ "$SOURCE_CAPTURE_DIRTY" -eq 0 ]]; then
+      if ! identity="$(git -C "$repository_root" rev-parse --verify --quiet "${SOURCE_CAPTURE_COMMIT}:${embedded_path}")"; then
+        printf 'MirrorOS build: declared embedded subtree is missing from the commit: %s\n' "$embedded_path" >&2
+        return 2
+      fi
+    else
+      source_path="${repository_root}/${embedded_path}"
+      if [[ ! -e "$source_path" && ! -L "$source_path" ]]; then
+        printf 'MirrorOS build: declared embedded subtree is missing from the working tree: %s\n' "$embedded_path" >&2
+        return 2
+      fi
+      identity='dirty-path-list'
+    fi
+    SOURCE_CAPTURE_EMBEDDED_IDENTITIES+=("$identity")
+  done
+
+  if ! (umask 022 && mkdir -p -- "$embedded_root"); then
+    printf 'MirrorOS build: could not create the embedded code directory: %s\n' "$embedded_root" >&2
+    return 2
+  fi
+
+  if [[ "$SOURCE_CAPTURE_DIRTY" -eq 0 ]]; then
+    if ! git -C "$repository_root" archive --format=tar "$SOURCE_CAPTURE_COMMIT" -- \
+      "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" | (umask 022 && tar -xf - -C "$embedded_root"); then
+      printf '%s\n' 'MirrorOS build: could not materialize the committed embedded code.' >&2
+      return 2
+    fi
+  else
+    dirty_text=true
+    if ! git -C "$repository_root" ls-files -co --exclude-standard -z -- \
+      "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" > "$files_file"; then
+      printf '%s\n' 'MirrorOS build: could not enumerate embedded code files.' >&2
+      rm -f -- "$files_file"
+      return 2
+    fi
+    if ! mapfile -d '' -t embedded_files < "$files_file"; then
+      printf '%s\n' 'MirrorOS build: could not read the embedded code file list.' >&2
+      rm -f -- "$files_file"
+      return 2
+    fi
+    for repository_path in "${embedded_files[@]}"; do
+      source_path="${repository_root}/${repository_path}"
+      if [[ ! -e "$source_path" && ! -L "$source_path" ]]; then
+        continue
+      fi
+      if ! entry_type="$(stat -c '%F' -- "$source_path")" || \
+        ! source_capture_check_entry_type "$repository_path" "$entry_type"; then
+        rm -f -- "$files_file"
+        return 2
+      fi
+      if ! (cd -- "$repository_root" && umask 022 && cp -a --parents -- "$repository_path" "$embedded_root"); then
+        printf 'MirrorOS build: could not copy embedded code path: %s\n' "$repository_path" >&2
+        rm -f -- "$files_file"
+        return 2
+      fi
+      if [[ -L "$source_path" && ! -L "${embedded_root}/${repository_path}" ]]; then
+        printf 'MirrorOS build: symbolic link was not preserved literally: %s\n' "$repository_path" >&2
+        rm -f -- "$files_file"
+        return 2
+      fi
+    done
+
+    if ! { git -C "$repository_root" diff --name-only --no-renames -z HEAD -- \
+      "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" && \
+      git -C "$repository_root" ls-files -o --exclude-standard -z -- \
+        "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}"; } > "$dirty_file"; then
+      printf '%s\n' 'MirrorOS build: could not determine embedded code dirty paths.' >&2
+      rm -f -- "$files_file" "$dirty_file"
+      return 2
+    fi
+    while IFS= read -r -d '' repository_path; do
+      SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS+=("$repository_path")
+    done < "$dirty_file"
+  fi
+  rm -f -- "$files_file" "$dirty_file"
+
+  for embedded_path in "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}"; do
+    if [[ ! -e "${embedded_root}/${embedded_path}" && ! -L "${embedded_root}/${embedded_path}" ]]; then
+      printf 'MirrorOS build: declared embedded subtree was not captured: %s\n' "$embedded_path" >&2
+      return 2
+    fi
+  done
+
+  if ! printf '{\n  "commit": "%s",\n  "dirty": %s\n}\n' \
+    "$SOURCE_CAPTURE_COMMIT" "$dirty_text" > "${embedded_root}/identity.json" || \
+    ! chmod 644 -- "${embedded_root}/identity.json"; then
+    printf '%s\n' 'MirrorOS build: could not write the embedded code identity file.' >&2
+    return 2
+  fi
 }
 
 source_capture_scan() {

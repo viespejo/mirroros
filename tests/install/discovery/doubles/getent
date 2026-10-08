@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+# PATH double for getent ahosts: status from dns_status (0 resolves, 2 not found).
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'getent %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+status="$(< "${DOUBLE_STATE}/dns_status")"
+if [[ "$status" -eq 0 ]]; then
+  printf '%s\n' '192.0.2.10      STREAM archlinux.org'
+else
+  printf '%s\n' 'getent: simulated failure' >&2
+fi
+exit "$status"

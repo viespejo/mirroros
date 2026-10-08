@@ -1,0 +1,80 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+# shellcheck disable=SC1091 # The shared helper is resolved from BASH_SOURCE to support arbitrary working directories.
+source "${SCRIPT_DIR}/lib/collect.sh"
+
+architecture="$(uname -m)" || discovery_child_fail uname "$?"
+
+# systemd-detect-virt prints "none" and exits 1 on bare metal; any other failure is unexpected.
+virt_status=0
+virtualization="$(systemd-detect-virt)" || virt_status=$?
+virtualization="$(discovery_trim "$virtualization")"
+if [[ "$virt_status" -ne 0 && ( "$virt_status" -ne 1 || "$virtualization" != 'none' ) ]]; then
+  discovery_child_fail systemd-detect-virt "$virt_status"
+fi
+
+cpu_vendor=''
+cpu_model=''
+cpu_cores=0
+while IFS= read -r line; do
+  [[ "$line" == *:* ]] || continue
+  key="$(discovery_trim "${line%%:*}")"
+  value="$(discovery_trim "${line#*:}")"
+  case "$key" in
+    processor) cpu_cores=$((cpu_cores + 1)) ;;
+    vendor_id) [[ -n "$cpu_vendor" ]] || cpu_vendor="$value" ;;
+    'model name') [[ -n "$cpu_model" ]] || cpu_model="$value" ;;
+  esac
+done < "$(discovery_path /proc/cpuinfo)"
+
+memory_kib=''
+while IFS= read -r line; do
+  if [[ "$line" =~ ^MemTotal:[[:space:]]*([0-9]+)[[:space:]]*kB ]]; then
+    memory_kib="${BASH_REMATCH[1]}"
+    break
+  fi
+done < "$(discovery_path /proc/meminfo)"
+
+display_json=''
+for device_dir in "$(discovery_path /sys/bus/pci/devices)"/*; do
+  [[ -d "$device_dir" ]] || continue
+  class="$(discovery_first_line "${device_dir}/class")" || continue
+  [[ "$class" == 0x03* ]] || continue
+  vendor_id="$(discovery_first_line "${device_dir}/vendor")" || continue
+  device_id="$(discovery_first_line "${device_dir}/device")" || device_id=''
+  driver=''
+  if [[ -L "${device_dir}/driver" ]]; then
+    driver_link="$(readlink -- "${device_dir}/driver")"
+    driver="${driver_link##*/}"
+  fi
+  boot_vga='false'
+  if boot_vga_value="$(discovery_first_line "${device_dir}/boot_vga")" && [[ "$boot_vga_value" == '1' ]]; then
+    boot_vga='true'
+  fi
+  entry="{\"vendor_id\":$(discovery_json_string "$vendor_id")"
+  [[ -z "$device_id" ]] || entry+=",\"device_id\":$(discovery_json_string "$device_id")"
+  [[ -z "$driver" ]] || entry+=",\"driver\":$(discovery_json_string "$driver")"
+  entry+=",\"boot_vga\":${boot_vga}}"
+  display_json+="${display_json:+,}${entry}"
+done
+
+# Only the presence of a battery is recorded; its serial and manufacturer are never read.
+battery_present='false'
+for supply_dir in "$(discovery_path /sys/class/power_supply)"/*; do
+  [[ -d "$supply_dir" ]] || continue
+  if supply_type="$(discovery_first_line "${supply_dir}/type")" && [[ "$supply_type" == 'Battery' ]]; then
+    battery_present='true'
+    break
+  fi
+done
+
+printf '{"architecture":%s,"cpu":{"vendor_id":%s,"model_name":%s,"cores":%s}' \
+  "$(discovery_json_string "$architecture")" "$(discovery_json_string "$cpu_vendor")" \
+  "$(discovery_json_string "$cpu_model")" "$cpu_cores"
+if [[ -n "$memory_kib" ]]; then
+  printf ',"memory_total_kib":%s' "$memory_kib"
+fi
+printf ',"display_devices":[%s],"battery_present":%s,"virtualization":%s}\n' \
+  "$display_json" "$battery_present" "$(discovery_json_string "$virtualization")"

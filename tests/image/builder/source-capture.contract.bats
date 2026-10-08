@@ -179,3 +179,102 @@ teardown() {
   ! grep -Fq -- "$synthetic" "$report_path"
   ! grep -Fq -- "$synthetic" "$BUILDER_STDOUT_PATH" "$BUILDER_STDERR_PATH"
 }
+
+@test "clean embedded capture materializes the declared subtrees with identities and modes" {
+  local destination="${BUILDER_TEST_ROOT}/embedded clean"
+  local embedded="${destination}/image/archiso/airootfs/usr/local/lib/mirroros"
+  local tree_identity
+
+  mkdir -p "${BUILDER_REPOSITORY_ROOT}/tests" "${BUILDER_REPOSITORY_ROOT}/contracts"
+  printf '%s\n' 'not embedded' > "${BUILDER_REPOSITORY_ROOT}/tests/not-embedded.txt"
+  printf '%s\n' 'not embedded' > "${BUILDER_REPOSITORY_ROOT}/contracts/not-embedded.txt"
+  git -C "$BUILDER_REPOSITORY_ROOT" add -- tests contracts
+  git -C "$BUILDER_REPOSITORY_ROOT" -c commit.gpgsign=false \
+    -c user.name='MirrorOS contract tests' -c user.email='mirroros-contract-tests@example.invalid' \
+    commit -qm 'unrelated content'
+
+  run builder_capture_embedded "$destination"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'dirty=0'* ]]
+  tree_identity="$(git -C "$BUILDER_REPOSITORY_ROOT" rev-parse HEAD:install)"
+  [[ "$output" == *"subtree=install identity=${tree_identity}"* ]]
+  [[ "$output" == *"subtree=operations/install identity=$(git -C "$BUILDER_REPOSITORY_ROOT" rev-parse HEAD:operations/install)"* ]]
+  [[ "$output" != *'embedded_dirty_path='* ]]
+  [ -x "${embedded}/operations/install" ]
+  [ -f "${embedded}/operations/lib/lifecycle-discovery.sh" ]
+  [ -x "${embedded}/install/discovery/discover" ]
+  [ -f "${embedded}/hardware/discovery/normalize-hardware.mjs" ]
+  [ -d "${embedded}/targets/reference-vm" ]
+  [ ! -e "${embedded}/operations/build" ]
+  [ ! -e "${embedded}/tests" ]
+  [ ! -e "${embedded}/contracts" ]
+  [ "$(stat -c '%a' "$embedded")" = '755' ]
+  [ "$(stat -c '%a' "${embedded}/install")" = '755' ]
+  [ "$(stat -c '%a' "${embedded}/identity.json")" = '644' ]
+  grep -Fq "\"commit\": \"$(git -C "$BUILDER_REPOSITORY_ROOT" rev-parse HEAD)\"" "${embedded}/identity.json"
+  grep -Fq '"dirty": false' "${embedded}/identity.json"
+}
+
+@test "dirty embedded capture copies working tree changes and records dirty paths" {
+  local destination="${BUILDER_TEST_ROOT}/embedded dirty"
+  local embedded="${destination}/image/archiso/airootfs/usr/local/lib/mirroros"
+
+  printf '%s\n' '# dirty embedded fixture' >> "${BUILDER_REPOSITORY_ROOT}/hardware/discovery/normalize-hardware.mjs"
+  printf '%s\n' 'untracked embedded input' > "${BUILDER_REPOSITORY_ROOT}/targets/new embedded file.txt"
+  chmod 751 "${BUILDER_REPOSITORY_ROOT}/targets/new embedded file.txt"
+
+  run builder_capture_embedded "$destination"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'dirty=1'* ]]
+  [[ "$output" == *'subtree=install identity=dirty-path-list'* ]]
+  [[ "$output" == *'embedded_dirty_path=hardware/discovery/normalize-hardware.mjs'* ]]
+  [[ "$output" == *'embedded_dirty_path=targets/new embedded file.txt'* ]]
+  cmp -s "${BUILDER_REPOSITORY_ROOT}/hardware/discovery/normalize-hardware.mjs" \
+    "${embedded}/hardware/discovery/normalize-hardware.mjs"
+  [ "$(stat -c '%a' "${embedded}/targets/new embedded file.txt")" = '751' ]
+  [ -x "${embedded}/operations/install" ]
+  grep -Fq '"dirty": true' "${embedded}/identity.json"
+}
+
+@test "a declared subtree missing from the commit fails the build capture by name" {
+  local destination="${BUILDER_TEST_ROOT}/embedded missing clean"
+
+  git -C "$BUILDER_REPOSITORY_ROOT" rm -rq -- hardware
+  git -C "$BUILDER_REPOSITORY_ROOT" -c commit.gpgsign=false \
+    -c user.name='MirrorOS contract tests' -c user.email='mirroros-contract-tests@example.invalid' \
+    commit -qm 'remove hardware'
+
+  run builder_capture_embedded "$destination"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'declared embedded subtree is missing from the commit: hardware/discovery'* ]]
+}
+
+@test "a declared subtree missing from a dirty working tree fails the build capture by name" {
+  local destination="${BUILDER_TEST_ROOT}/embedded missing dirty"
+
+  rm -rf -- "${BUILDER_REPOSITORY_ROOT}/targets"
+  run builder_capture_embedded "$destination"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'declared embedded subtree is missing from the working tree: targets'* ]]
+}
+
+@test "the profile secret scan covers the embedded code" {
+  local destination="${BUILDER_TEST_ROOT}/embedded scan"
+  local report_path="${BUILDER_TEST_ROOT}/embedded-scan.json"
+  local synthetic='ghp_'
+  local fragment
+  local index
+
+  for ((index = 0; index < 9; index++)); do
+    printf -v fragment '%04x' "$RANDOM"
+    synthetic+="$fragment"
+  done
+  printf 'token=%s\n' "$synthetic" > "${BUILDER_REPOSITORY_ROOT}/install/synthetic-secret.txt"
+
+  run builder_capture_embedded "$destination"
+  [ "$status" -eq 0 ]
+  BUILDER_GITLEAKS_REAL=1 run builder_scan_profile "${destination}/image/archiso" "$report_path"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'Gitleaks detected a secret in the captured profile'* ]]
+  ! grep -Fq -- "$synthetic" "$report_path"
+}

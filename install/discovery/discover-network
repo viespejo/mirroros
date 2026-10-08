@@ -1,0 +1,72 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+# shellcheck disable=SC1091 # The shared helper is resolved from BASH_SOURCE to support arbitrary working directories.
+source "${SCRIPT_DIR}/lib/collect.sh"
+
+# The orchestrator resolves the effective probe policy; the collector never defines its own.
+probe_url="${MIRROROS_DISCOVERY_PROBE_URL:?The orchestrator must provide the HTTPS probe URL.}"
+probe_timeout="${MIRROROS_DISCOVERY_PROBE_TIMEOUT:?The orchestrator must provide the HTTPS probe timeout.}"
+
+# curl statuses that mean "the network step failed"; every other non-zero status is unexpected.
+readonly CURL_NETWORK_FAILURES=' 5 6 7 22 28 35 47 51 52 55 56 58 60 77 80 83 90 91 '
+
+host="${probe_url#https://}"
+host="${host%%/*}"
+host="${host%%:*}"
+
+# MAC addresses, SSIDs, and iwd state are never read: only the name, kind, and operational state.
+interfaces_json=''
+for interface_dir in "$(discovery_path /sys/class/net)"/*; do
+  [[ -d "$interface_dir" ]] || continue
+  name="${interface_dir##*/}"
+  [[ "$name" != 'lo' ]] || continue
+  state="$(discovery_first_line "${interface_dir}/operstate")" || state='unknown'
+  kind='other'
+  if [[ -d "${interface_dir}/wireless" ]]; then
+    kind='wireless'
+  elif [[ "$(discovery_first_line "${interface_dir}/type" || true)" == '1' && -e "${interface_dir}/device" ]]; then
+    kind='wired'
+  fi
+  addresses_v4="$(ip -o -4 addr show dev "$name" scope global)" || discovery_child_fail ip "$?"
+  addresses_v6="$(ip -o -6 addr show dev "$name" scope global)" || discovery_child_fail ip "$?"
+  has_v4='false'
+  has_v6='false'
+  [[ -z "$addresses_v4" ]] || has_v4='true'
+  [[ -z "$addresses_v6" ]] || has_v6='true'
+  interfaces_json+="${interfaces_json:+,}{\"name\":$(discovery_json_string "$name"),\"kind\":\"${kind}\",\"state\":$(discovery_json_string "$state"),\"has_global_ipv4\":${has_v4},\"has_global_ipv6\":${has_v6}}"
+done
+
+routes_v4="$(ip -o -4 route show default)" || discovery_child_fail ip "$?"
+routes_v6="$(ip -o -6 route show default)" || discovery_child_fail ip "$?"
+default_route='false'
+[[ -z "$routes_v4" && -z "$routes_v6" ]] || default_route='true'
+
+dns_resolved='false'
+https_ok='false'
+
+if [[ "$default_route" == 'true' ]]; then
+  dns_status=0
+  getent ahosts "$host" > /dev/null || dns_status=$?
+  case "$dns_status" in
+    0) dns_resolved='true' ;;
+    2) ;;
+    *) discovery_child_fail getent "$dns_status" ;;
+  esac
+fi
+
+if [[ "$dns_resolved" == 'true' ]]; then
+  curl_status=0
+  curl --silent --show-error --fail --proto '=https' --max-time "$probe_timeout" \
+    --output /dev/null -- "$probe_url" || curl_status=$?
+  if [[ "$curl_status" -eq 0 ]]; then
+    https_ok='true'
+  elif [[ "$CURL_NETWORK_FAILURES" != *" ${curl_status} "* ]]; then
+    discovery_child_fail curl "$curl_status"
+  fi
+fi
+
+printf '{"interfaces":[%s],"default_route":%s,"dns":{"host":%s,"resolved":%s},"https":{"url":%s,"ok":%s,"timeout_seconds":%s}}\n' \
+  "$interfaces_json" "$default_route" "$(discovery_json_string "$host")" "$dns_resolved" \
+  "$(discovery_json_string "$probe_url")" "$https_ok" "$probe_timeout"

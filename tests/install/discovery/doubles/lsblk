@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# PATH double for lsblk: replays the fixture JSON, or fails with the status in lsblk_status.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'lsblk %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+if [[ -f "${DOUBLE_STATE}/lsblk_status" ]]; then
+  printf '%s\n' 'lsblk: simulated failure' >&2
+  exit "$(< "${DOUBLE_STATE}/lsblk_status")"
+fi
+cat "${DOUBLE_STATE}/lsblk.json"

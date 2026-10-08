@@ -1,0 +1,158 @@
+{
+  "firmware": {
+    "boot_mode": "uefi",
+    "fw_platform_size": 64,
+    "efivars_available": true,
+    "secure_boot": "disabled",
+    "dmi": {
+      "sys_vendor": "QEMU",
+      "product_name": "Standard PC (Q35 + ICH9, 2009)",
+      "product_version": "pc-q35-9.0",
+      "board_name": "Standard PC (Q35 + ICH9, 2009)",
+      "bios_vendor": "EDK II",
+      "bios_version": "synthetic-1",
+      "bios_date": "02/02/2022"
+    }
+  },
+  "network": {
+    "interfaces": [
+      {
+        "name": "enp0s2",
+        "kind": "wired",
+        "state": "up",
+        "has_global_ipv4": true,
+        "has_global_ipv6": false
+      }
+    ],
+    "default_route": true,
+    "dns": {
+      "host": "archlinux.org",
+      "resolved": true
+    },
+    "https": {
+      "url": "https://archlinux.org/",
+      "ok": true,
+      "timeout_seconds": 30
+    }
+  },
+  "storage": {
+    "blockdevices": [
+      {
+        "path": "/dev/vda",
+        "kname": "vda",
+        "type": "disk",
+        "size": 34359738368,
+        "model": null,
+        "serial": "SYNTH-VDA-0001",
+        "wwn": null,
+        "tran": null,
+        "rm": false,
+        "ro": false,
+        "hotplug": false,
+        "pttype": "gpt",
+        "ptuuid": "00000000-0000-4000-8000-000000000001",
+        "fstype": null,
+        "label": null,
+        "uuid": null,
+        "partuuid": null,
+        "mountpoints": [
+          null
+        ],
+        "children": [
+          {
+            "path": "/dev/vda1",
+            "kname": "vda1",
+            "type": "part",
+            "size": 536870912,
+            "model": null,
+            "serial": null,
+            "wwn": null,
+            "tran": null,
+            "rm": false,
+            "ro": false,
+            "hotplug": false,
+            "pttype": "gpt",
+            "ptuuid": null,
+            "fstype": "vfat",
+            "label": "SYNTH-ESP",
+            "uuid": "ABCD-0001",
+            "partuuid": "00000000-0000-4000-8000-0000000000a1",
+            "mountpoints": [
+              null
+            ]
+          },
+          {
+            "path": "/dev/vda2",
+            "kname": "vda2",
+            "type": "part",
+            "size": 32212254720,
+            "model": null,
+            "serial": null,
+            "wwn": null,
+            "tran": null,
+            "rm": false,
+            "ro": false,
+            "hotplug": false,
+            "pttype": "gpt",
+            "ptuuid": null,
+            "fstype": "ext4",
+            "label": "SYNTH-DATA",
+            "uuid": "00000000-0000-4000-8000-0000000000b2",
+            "partuuid": "00000000-0000-4000-8000-0000000000a2",
+            "mountpoints": [
+              null
+            ]
+          }
+        ]
+      },
+      {
+        "path": "/dev/sr0",
+        "kname": "sr0",
+        "type": "rom",
+        "size": 1073741824,
+        "model": "QEMU DVD-ROM",
+        "serial": null,
+        "wwn": null,
+        "tran": "sata",
+        "rm": true,
+        "ro": false,
+        "hotplug": true,
+        "pttype": null,
+        "ptuuid": null,
+        "fstype": "iso9660",
+        "label": "MIRROROS_LIVE",
+        "uuid": null,
+        "partuuid": null,
+        "mountpoints": [
+          "/run/archiso/bootmnt"
+        ]
+      }
+    ],
+    "by_id": [
+      {
+        "name": "virtio-SYNTH-VDA-0001",
+        "target": "/dev/vda"
+      }
+    ],
+    "live_medium_device": "/dev/sr0"
+  },
+  "hardware": {
+    "architecture": "x86_64",
+    "cpu": {
+      "vendor_id": "AuthenticAMD",
+      "model_name": "Synthetic CPU Model",
+      "cores": 4
+    },
+    "memory_total_kib": 4194304,
+    "display_devices": [
+      {
+        "vendor_id": "0x1234",
+        "device_id": "0x1111",
+        "driver": "bochs-drm",
+        "boot_vga": true
+      }
+    ],
+    "battery_present": false,
+    "virtualization": "kvm"
+  }
+}

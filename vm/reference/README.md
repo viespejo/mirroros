@@ -4,4 +4,6 @@ This directory owns the fixed reference VM used by `operations/test` to qualify 
 
 The command contract, prerequisites, outcomes, and recovery steps are documented in the [test procedure](../../docs/procedures/test.md). Generated runs live in the ignored `build/reference-vm/` and `evidence/reference-vm/` paths, never here.
 
+`qualify-discovery` reuses the same configuration and libraries to qualify read-only target discovery (Story 2.2): it boots the bundle ISO, runs the embedded `mirroros-install discover` through `guest/discovery-trigger.sh`, and compares the disk before and after. Its evidence lives in the ignored `evidence/reference-vm/discovery/` path; see the [test procedure](../../docs/procedures/test.md#discovery-qualification).
+
 Changing `reference-vm.conf` changes the qualification contract and requires an explicit decision.

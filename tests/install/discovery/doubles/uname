@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+# PATH double for uname -m.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'uname %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+cat "${DOUBLE_STATE}/architecture"

@@ -1,0 +1,212 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+REFERENCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+REPOSITORY_ROOT="$(cd -- "${REFERENCE_DIR}/../.." && pwd -P)"
+DOCUMENTS_CLI="${REFERENCE_DIR}/bootstrap-documents.mjs"
+QUALIFY_FINALIZED=0
+
+print_help() {
+  cat <<'EOF'
+MirrorOS qualify-discovery — qualify read-only target discovery in the reference VM
+Usage: vm/reference/qualify-discovery --scenario empty|layout|framework-target [--development-overlay] <bundle-directory>
+       vm/reference/qualify-discovery --help
+Scenarios: empty (fresh 32 GiB disk, expects exit 0), layout (GPT with two labeled partitions, expects exit 0), framework-target (--target framework-13-pro-amd, expects exit 2).
+Prerequisites: a normal user with functional KVM, OVMF firmware, and qemu-system-x86_64, qemu-img, xorriso, node, gitleaks, git, and timeout; sfdisk and truncate for layout.
+Effects: boots the bundle ISO headless, runs the embedded `mirroros-install discover`, then compares the disk before and after with qemu-img compare. Run state lives under build/reference-vm/<run-id>/ and is removed after confirmed QEMU exit.
+--development-overlay copies the working-tree embedded subtrees into the guest and marks the run as not counted.
+Evidence: evidence/reference-vm/discovery/<run-id>/ (result.json, target-facts.json, guest-serial.log, qemu-diagnostics.log, redacted Gitleaks reports), 0700 directories and 0600 files.
+Normalized exit outcomes: 0 qualified, 2 invalid input or unmet prerequisite, 4 unexpected discovery outcome or changed disk, 5 tool or VM failure, 6 damaged checkout.
+Documentation: docs/procedures/test.md
+EOF
+}
+
+if [[ "$#" -eq 1 && "$1" == '--help' ]]; then
+  print_help
+  exit 0
+fi
+
+for QUALIFY_LIBRARY in preconditions.sh run-resources.sh nocloud.sh launch.sh stop-cleanup.sh outcome.sh evidence.sh discovery.sh; do
+  QUALIFY_LIBRARY_PATH="${REFERENCE_DIR}/lib/${QUALIFY_LIBRARY}"
+  if [[ ! -f "$QUALIFY_LIBRARY_PATH" || ! -r "$QUALIFY_LIBRARY_PATH" ]] || \
+    ! /usr/bin/bash -n "$QUALIFY_LIBRARY_PATH" >/dev/null 2>&1; then
+    printf 'MirrorOS: incomplete or damaged checkout; reference VM library could not be loaded: %s\n' \
+      "$QUALIFY_LIBRARY_PATH" >&2
+    exit 6
+  fi
+  # shellcheck disable=SC1090 # Reference VM libraries are resolved relative to this script.
+  if ! source "$QUALIFY_LIBRARY_PATH"; then
+    printf 'MirrorOS: incomplete or damaged checkout; reference VM library could not be loaded: %s\n' \
+      "$QUALIFY_LIBRARY_PATH" >&2
+    exit 6
+  fi
+done
+
+if [[ ! -f "$DOCUMENTS_CLI" || ! -r "$DOCUMENTS_CLI" ]]; then
+  printf 'MirrorOS: incomplete or damaged checkout; the structured-data module could not be loaded: %s\n' \
+    "$DOCUMENTS_CLI" >&2
+  exit 6
+fi
+
+# Runs the stages that need run resources. Failures are recorded, never returned, so that
+# qualify_finalize always runs the stop, compare, cleanup, result, and scan sequence.
+qualify_run_stages() {
+  local status=0
+  local iso_path
+  local guest_script
+
+  if ! iso_path="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).iso_path)' "$QUALIFY_BUNDLE_ADMISSION")"; then
+    outcome_mark_failure 6 bundle-admission
+    return 0
+  fi
+
+  if [[ "$DISCOVERY_OVERLAY" -eq 1 ]]; then
+    printf 'MirrorOS qualify-discovery: run %s: archiving the working-tree embedded code (development overlay).\n' "$RUN_ID" >&2
+    discovery_build_overlay "$REPOSITORY_ROOT" || status=$?
+    if [[ "$status" -ne 0 ]]; then
+      outcome_mark_failure 5 overlay
+      return 0
+    fi
+  fi
+
+  printf 'MirrorOS qualify-discovery: run %s: preparing the NoCloud medium.\n' "$RUN_ID" >&2
+  status=0
+  discovery_write_guest_script "$BUILD_RUN_DIR" "${REFERENCE_DIR}/guest/discovery-trigger.sh" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    outcome_mark_failure "$status" guest-script
+    return 0
+  fi
+  guest_script="${BUILD_RUN_DIR}/${DISCOVERY_GUEST_SCRIPT_NAME}"
+  status=0
+  nocloud_prepare "$RUN_ID" "$BUILD_RUN_DIR" "$EVIDENCE_RUN_DIR" "$guest_script" \
+    "$REFERENCE_VM_NOCLOUD_LABEL" "$REFERENCE_VM_GUEST_HTTPS_URL" "$REFERENCE_VM_GUEST_HTTPS_TIMEOUT_SECONDS" || status=$?
+  rm -f -- "$guest_script"
+  outcome_record_tool_status nocloud_prepare "$status"
+  case "$status" in
+    0) outcome_set_scan nocloud passed ;;
+    2)
+      outcome_set_scan nocloud findings
+      outcome_mark_failure 2 nocloud-scan
+      return 0
+      ;;
+    5)
+      outcome_set_scan nocloud failed
+      outcome_mark_failure 5 nocloud
+      return 0
+      ;;
+    *)
+      outcome_mark_failure 6 nocloud
+      return 0
+      ;;
+  esac
+
+  printf 'MirrorOS qualify-discovery: creating the %s disk and the UEFI variable store.\n' "$DISCOVERY_SCENARIO" >&2
+  status=0
+  discovery_prepare_disk "$BUILD_RUN_DIR" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    outcome_mark_failure 5 disk-preparation
+    return 0
+  fi
+
+  printf '%s\n' 'MirrorOS qualify-discovery: launching the reference VM.' >&2
+  launch_build_command "$iso_path" "$NOCLOUD_SEED_FILE" "$EVIDENCE_RUN_DIR"
+  status=0
+  launch_start "$EVIDENCE_RUN_DIR" || status=$?
+  if [[ "$status" -ne 0 ]]; then
+    outcome_mark_failure 5 qemu-launch
+    return 0
+  fi
+
+  printf 'MirrorOS qualify-discovery: waiting for the guest report (deadline %s s).\n' "$REFERENCE_VM_GLOBAL_DEADLINE_SECONDS" >&2
+  launch_wait "$RUN_ID" "$BUILD_RUN_DIR" "$REFERENCE_VM_GLOBAL_DEADLINE_SECONDS"
+  if [[ -n "$LAUNCH_QEMU_STATUS" ]]; then
+    outcome_record_tool_status qemu "$LAUNCH_QEMU_STATUS"
+  fi
+
+  status=0
+  discovery_evaluate_report "$LAUNCH_REPORT_PATH" "$RUN_ID" "$EVIDENCE_RUN_DIR" || status=$?
+  case "$status" in
+    0) ;;
+    4) outcome_mark_failure 4 discovery-exit ;;
+    5)
+      case "$LAUNCH_OUTCOME" in
+        deadline) outcome_mark_failure 5 deadline ;;
+        qemu_exited) outcome_mark_failure 5 qemu-exit ;;
+        *) outcome_mark_failure 5 guest-report ;;
+      esac
+      ;;
+    *) outcome_mark_failure 6 guest-report ;;
+  esac
+}
+
+# Stops the owned QEMU, compares the disk only after its exit is confirmed, removes run resources,
+# then writes, scans, and summarizes the evidence. Idempotent.
+qualify_finalize() {
+  local compare_status=0
+
+  if [[ "$QUALIFY_FINALIZED" -eq 1 ]]; then
+    return 0
+  fi
+  QUALIFY_FINALIZED=1
+  trap 'outcome_mark_interrupted 130 INT' INT
+  trap 'outcome_mark_interrupted 143 TERM' TERM
+
+  if ! stop_cleanup_stop_qemu; then
+    outcome_mark_failure 5 qemu-stop
+  elif [[ "$STOP_QEMU_STATE" != 'not_started' && -f "${BUILD_RUN_DIR}/${DISCOVERY_DISK_BEFORE_NAME}" ]]; then
+    discovery_compare_disks "$BUILD_RUN_DIR" || compare_status=$?
+    case "$compare_status" in
+      0) ;;
+      1) outcome_mark_failure 4 disk-identity ;;
+      *) outcome_mark_failure 5 disk-compare ;;
+    esac
+  fi
+  discovery_remove_extra_files "$BUILD_RUN_DIR"
+  stop_cleanup_remove_resources "$BUILD_RUN_DIR" || true
+  outcome_note_cleanup "$STOP_CLEANUP_OUTCOME" "$STOP_CLEANUP_GUIDANCE" "${STOP_CLEANUP_LEFTOVERS[@]}"
+  discovery_finalize_evidence || true
+}
+
+qualify_handle_signal() {
+  outcome_mark_interrupted "$1" "$2"
+  qualify_finalize
+  exit "$OUTCOME_PRIMARY_STATUS"
+}
+
+qualify_handle_exit() {
+  if [[ "$QUALIFY_FINALIZED" -eq 0 ]]; then
+    outcome_mark_failure 6 internal
+    qualify_finalize
+    exit "$OUTCOME_PRIMARY_STATUS"
+  fi
+}
+
+qualify_discovery_main() {
+  discovery_parse_arguments "$@" || return $?
+  preconditions_check_user "$EUID" || return $?
+  preconditions_check_tools || return $?
+  discovery_check_tools || return $?
+  preconditions_admit_bundle "$QUALIFY_BUNDLE_DIR" "$DOCUMENTS_CLI" || return $?
+  preconditions_check_firmware || return $?
+  preconditions_check_kvm || return $?
+
+  launch_load_configuration "${REFERENCE_DIR}/reference-vm.conf" || return $?
+  launch_describe_configuration
+  launch_collect_versions
+  outcome_capture_test_code "$REPOSITORY_ROOT" || return $?
+
+  umask 077
+  run_resources_new_id || return $?
+  discovery_run_prepare "$REPOSITORY_ROOT" "$RUN_ID" || return $?
+  outcome_initialize || return 5
+
+  trap 'qualify_handle_signal 130 INT' INT
+  trap 'qualify_handle_signal 143 TERM' TERM
+  trap qualify_handle_exit EXIT
+
+  qualify_run_stages
+  qualify_finalize
+  return "$OUTCOME_PRIMARY_STATUS"
+}
+
+qualify_discovery_main "$@"

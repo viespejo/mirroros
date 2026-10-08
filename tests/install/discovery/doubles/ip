@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+# PATH double for ip: handles "-o -4|-6 addr show dev <if> scope global" and "-o -4|-6 route show default".
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'ip %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+if [[ -f "${DOUBLE_STATE}/ip_status" ]]; then
+  printf '%s\n' 'ip: simulated failure' >&2
+  exit "$(< "${DOUBLE_STATE}/ip_status")"
+fi
+family="${2#-}"
+case "$3" in
+  addr) state_file="${DOUBLE_STATE}/addr${family}.${6}" ;;
+  route) state_file="${DOUBLE_STATE}/route${family}" ;;
+  *) exit 64 ;;
+esac
+if [[ -f "$state_file" ]]; then
+  cat "$state_file"
+fi

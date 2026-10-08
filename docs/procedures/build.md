@@ -47,6 +47,17 @@ The fixed input is `image/archiso/`; there are no profile-selection options.
 - A profile path that is both tracked and ignored, a submodule, or an unsupported filesystem entry (such as a device, socket, or FIFO) is rejected before construction.
 - Gitleaks scans the captured profile before a container is created. Findings block construction.
 
+### Embedded MirrorOS code
+
+Besides the profile, the build embeds the MirrorOS code the live environment runs, so `mirroros-install` works without a repository checkout. The declared list is explicit (no globs): `operations/install`, `operations/lib/lifecycle-discovery.sh`, `install/`, `hardware/discovery/`, and `targets/`. `contracts/` and `tests/` are not embedded.
+
+- The code is captured into the private profile copy at `airootfs/usr/local/lib/mirroros/`, keeping the repository-relative layout and file modes, together with `identity.json` (`commit` and `dirty`). Nothing is committed under `image/archiso/airootfs/usr/local/lib/`.
+- A clean repository materializes the declared paths from the commit with `git archive`; a dirty one copies the tracked and untracked, non-ignored paths, as for the profile.
+- A declared subtree that is missing from the commit (clean) or the working tree (dirty) stops the build with status `2` and names the path.
+- The embedded code is part of the captured profile, so the Gitleaks scan above covers it.
+- `/usr/local/bin/mirroros-install` is a literal symlink in the profile to `/usr/local/lib/mirroros/operations/install`.
+- `nodejs` is added to the live package list because discovery normalization runs on Node.js in the live environment, and later plan processing will too.
+
 **Capture is not atomic.** Git status checks and working-tree copying happen over time; the repository can change between those operations. Do not edit the checkout while a build is capturing it. The fixed private copy is the only profile mounted into the container, read-only, once capture is complete. A dirty run has reduced traceability: its recorded paths identify changes but do not constitute a content hash of the complete dirty source state.
 
 ## Construction and timeouts
@@ -81,7 +92,7 @@ Each run uses an ID of the form `YYYYMMDDTHHMMSSZ-<uuid>`. Existing reserved run
 
 Run-specific directories are mode `0700`; run files are mode `0600` and owned by the invoking user. The builder holds an exclusive lock for the run, including cleanup, and does not unlink `run.lock`. Generated build, distribution, and evidence paths are local outputs; preserve the evidence needed for review or recovery.
 
-Artifact metadata records the execution and source identity, clean/dirty state and profile identity, architecture, verified image digest, exact Archiso version, `SOURCE_DATE_EPOCH`, tool versions, Cosign identity and issuer, the effective profile `pacman.conf` reference, mirrorlist hash, ISO name/size/SHA-256, manifest, control outcomes, traceability limitations, and the absence of boot qualification. The native package manifest records installed package names and versions, not per-package repository origin. Compare manifests between runs to review rolling-resolution changes; do not infer repository attribution from them.
+Artifact metadata records the execution and source identity, clean/dirty state and profile identity, architecture, verified image digest, exact Archiso version, `SOURCE_DATE_EPOCH`, tool versions, Cosign identity and issuer, the `embedded_code` block (ISO path, declared subtrees with per-subtree Git object hashes, or `dirty-path-list` and the embedded dirty-path list for a dirty run), the effective profile `pacman.conf` reference, mirrorlist hash, ISO name/size/SHA-256, manifest, control outcomes, traceability limitations, and the absence of boot qualification. The native package manifest records installed package names and versions, not per-package repository origin. Compare manifests between runs to review rolling-resolution changes; do not infer repository attribution from them.
 
 ## Secret-scan scope
 

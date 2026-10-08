@@ -81,6 +81,33 @@ export function validateArtifactMetadata(metadata) {
   stringField(execution, 'profile_identity', 'execution.profile_identity', errors);
   stringArrayField(execution, 'dirty_paths', 'execution.dirty_paths', errors);
 
+  const embedded = objectAt(metadata, 'embedded_code', 'embedded_code', errors);
+  stringField(embedded, 'iso_path', 'embedded_code.iso_path', errors);
+  stringArrayField(embedded, 'dirty_paths', 'embedded_code.dirty_paths', errors);
+  if (!Array.isArray(embedded.subtrees) || embedded.subtrees.length === 0) {
+    errors.push('embedded_code.subtrees must be a non-empty array');
+  } else {
+    embedded.subtrees.forEach((subtree, index) => {
+      const path = `embedded_code.subtrees[${index}]`;
+      if (!isRecord(subtree)) {
+        errors.push(`${path} must be an object`);
+        return;
+      }
+      stringField(subtree, 'path', `${path}.path`, errors);
+      if (typeof execution.dirty === 'boolean') {
+        if (execution.dirty && subtree.identity !== 'dirty-path-list') {
+          errors.push(`${path}.identity must be dirty-path-list for a dirty execution`);
+        }
+        if (!execution.dirty && (typeof subtree.identity !== 'string' || !GIT_TREE_PATTERN.test(subtree.identity))) {
+          errors.push(`${path}.identity must be a Git object hash for a clean execution`);
+        }
+      }
+    });
+  }
+  if (execution.dirty === false && Array.isArray(embedded.dirty_paths) && embedded.dirty_paths.length > 0) {
+    errors.push('clean embedded_code.dirty_paths must be empty');
+  }
+
   const construction = objectAt(metadata, 'construction', 'construction', errors);
   stringField(construction, 'architecture', 'construction.architecture', errors);
   if (typeof construction.image_digest !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(construction.image_digest)) {

@@ -76,6 +76,7 @@ ndisc6
 nfs-utils
 nilfs-utils
 nmap
+nodejs
 ntfsprogs
 nvme-cli
 open-iscsi

@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+# PATH double for sudo, pkexec, doas, and su: records the call and fails.
+: "${DOUBLE_STATE:?}"
+printf '%s\n' "${0##*/}" >> "${DOUBLE_STATE}/elevation.log"
+exit 97

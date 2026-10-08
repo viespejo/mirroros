@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# PATH double for curl: status from curl_status.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'curl %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+status="$(< "${DOUBLE_STATE}/curl_status")"
+if [[ "$status" -ne 0 ]]; then
+  printf '%s\n' 'curl: simulated failure' >&2
+fi
+exit "$status"

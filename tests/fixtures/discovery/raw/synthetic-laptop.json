@@ -1,0 +1,89 @@
+{
+  "firmware": {
+    "boot_mode": "uefi",
+    "fw_platform_size": 64,
+    "efivars_available": true,
+    "secure_boot": "disabled",
+    "dmi": {
+      "sys_vendor": "Synthetic Vendor",
+      "product_name": "Synthetic Laptop",
+      "product_version": "1",
+      "board_name": "Synthetic Board",
+      "bios_vendor": "Synthetic BIOS",
+      "bios_version": "1.0",
+      "bios_date": "01/01/2025"
+    }
+  },
+  "network": {
+    "interfaces": [
+      {
+        "name": "wlan0",
+        "kind": "wireless",
+        "state": "up",
+        "has_global_ipv4": true,
+        "has_global_ipv6": true
+      }
+    ],
+    "default_route": true,
+    "dns": {
+      "host": "archlinux.org",
+      "resolved": true
+    },
+    "https": {
+      "url": "https://archlinux.org/",
+      "ok": true,
+      "timeout_seconds": 30
+    }
+  },
+  "storage": {
+    "blockdevices": [
+      {
+        "path": "/dev/nvme0n1",
+        "kname": "nvme0n1",
+        "type": "disk",
+        "size": 1000204886016,
+        "model": "SYNTH NVMe 1TB",
+        "serial": "SYNTH-NVME-0002",
+        "wwn": "eui.0000000000000002",
+        "tran": "nvme",
+        "rm": false,
+        "ro": false,
+        "hotplug": false,
+        "pttype": null,
+        "ptuuid": null,
+        "fstype": null,
+        "label": null,
+        "uuid": null,
+        "partuuid": null,
+        "mountpoints": [
+          null
+        ]
+      }
+    ],
+    "by_id": [
+      {
+        "name": "nvme-eui.0000000000000002",
+        "target": "/dev/nvme0n1"
+      }
+    ]
+  },
+  "hardware": {
+    "architecture": "x86_64",
+    "cpu": {
+      "vendor_id": "AuthenticAMD",
+      "model_name": "Synthetic CPU Model",
+      "cores": 12
+    },
+    "memory_total_kib": 33554432,
+    "display_devices": [
+      {
+        "vendor_id": "0x1002",
+        "device_id": "0x1900",
+        "driver": "amdgpu",
+        "boot_vga": true
+      }
+    ],
+    "battery_present": true,
+    "virtualization": "none"
+  }
+}

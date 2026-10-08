@@ -193,7 +193,8 @@ build_artifact_main() {
   trap 'build_artifact_handle_signal INT' INT
   trap 'build_artifact_handle_signal TERM' TERM
 
-  if source_capture_profile "$REPOSITORY_ROOT" "${BUILD_RUN_DIR}/source"; then
+  if source_capture_profile "$REPOSITORY_ROOT" "${BUILD_RUN_DIR}/source" && \
+    source_capture_embedded_code "$REPOSITORY_ROOT" "${BUILD_RUN_DIR}/source"; then
     :
   else
     status=$?

@@ -1,10 +1,10 @@
 # Install lifecycle procedure
 
-**Availability:** help only; domain behavior pending.
+**Availability:** `discover` is implemented; planning, confirmation, and installation remain pending.
 
 ## Current behavior
 
-Invoke the command by path from any working directory; it does not need to be installed on `PATH`.
+Invoke the command by path from any working directory; it does not need to be installed on `PATH`. On the live medium it is available as `mirroros-install`, a symlink to the embedded `operations/install`.
 
 | Invocation | Outcome |
 | --- | --- |
@@ -12,8 +12,61 @@ Invoke the command by path from any working directory; it does not need to be in
 | No arguments | Returns `2`; writes a pending-operation diagnostic to stderr that names `install` and links to this procedure. |
 | Unsupported arguments, including `--help` with extra arguments | Returns `2`; writes a distinct unsupported-argument diagnostic to stderr. |
 | Missing or unloadable `operations/lib/lifecycle-discovery.sh` helper | Returns `6`; reports an incomplete or damaged checkout and advises restoring the helper from Git or recloning. |
+| `discover …` | Delegates to `install/discovery/discover`; see [Target discovery](#target-discovery). A missing orchestrator returns `6`. |
 
-These invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
+Except for `discover`, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
+
+## Target discovery
+
+```text
+operations/install discover --target <id> [--output <dir>]
+operations/install discover --help
+```
+
+Discovery inspects a supported target from the live environment without modifying it, records firmware, network, storage, and hardware facts, and normalizes them into `target-facts.json`. The format is documented in [`contracts/target-facts.md`](../../contracts/target-facts.md). Discovery is non-interactive: it prompts for nothing, uses no Gum, and never selects a disk.
+
+### Inputs
+
+- `--target <id>` names the supported target: `reference-vm` or `framework-13-pro-amd`. A missing, unknown, or malformed id exits `2` with a `target_missing` or `target_unknown` reason.
+- `--output <dir>` names an absent or empty directory; otherwise the command returns `2` without writing. The default is `evidence/install/<run-id>/`, relative to the working directory.
+- Prerequisites on the target: a 64-bit UEFI boot of the live medium with Secure Boot disabled, a ready network (default route, DNS for the probe host, and a bounded HTTPS probe, all configured beforehand because discovery never configures the network), and at least one eligible disk.
+
+### Read-only guarantees
+
+Discovery never invokes `sudo` or any other elevation mechanism and never writes to a device. It reads `/sys`, `/proc`, `lsblk`, `ip`, `getent`, `systemd-detect-virt`, and `uname`, and the HTTPS probe creates outbound traffic only. The live session is already privileged, so "no elevation" means that discovery never requests it. MAC addresses, SSIDs, Wi-Fi credentials, `iwd` state, DMI product, board, and chassis serials, the product UUID, and battery serials are never recorded. Disk identity (by-id link, WWN, serial, model, size) is recorded because later confirmation binds to it.
+
+### Evidence
+
+Each run writes a directory with `0700` permissions and `0600` files, using atomic writes:
+
+| Path | Content |
+| --- | --- |
+| `target-facts.json` | The normalized document. Written for exits `0` and `2`; with exit `2` its `validation.status` is `invalid`. |
+| `raw/<collector>.json`, `raw/<collector>.stderr` | Uninterpreted collector output and its stderr, for `firmware`, `hardware`, `storage`, and `network`. |
+| `error.json` | The structured error (`code`, `stage`, `operation`, `message`, `next_step`, `child_exit_status`). Written only for exits `5` and `6`, which write no `target-facts.json`. |
+
+The directory is local, ignored, and never committed. Stdout carries a plain-text summary of the key facts with their provenance; diagnostics go to stderr.
+
+### Exit outcomes
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Valid facts, possibly with warnings (for example an unknown Secure Boot state). |
+| `2` | Invalid arguments, an unknown or contradictory target, a missing required fact, unsupported firmware, a network that is not ready, no eligible disk, or an invalid target override. |
+| `5` | An external command failed unexpectedly. `error.json` carries `child_exit_status` and the child's stderr stays in `raw/`. |
+| `6` | Damaged embedded code, a missing identity file, or an internal invariant failure such as the produced document failing its own validator. |
+
+### Identity of the embedded code
+
+`target-facts.json` records the commit and dirty state of the code that produced it. On the live medium they come from the `IDENTITY` file at the root of the embedded code (`/usr/local/lib/mirroros/IDENTITY`, lines `commit=<40 hex>` and `dirty=<true|false>`); in a Git checkout they come from Git. Without either, discovery returns `6`.
+
+### Pending Framework identity
+
+The DMI identity of the Framework Laptop 13 Pro is not recorded yet, so `--target framework-13-pro-amd` returns `2` with a `target_identity_pending_capture` reason until `targets/framework-13-pro-amd/target.json` is completed from a real capture.
+
+### Recovery
+
+Discovery changes nothing, so recovery is to fix the reported cause and rerun it into a new output directory. For example, boot the medium in UEFI mode and disable CSM or legacy boot, disable Secure Boot, connect a cable or configure Wi-Fi with `iwctl`, or restore a damaged embedded tree by rebuilding the medium.
 
 ## Intended contract
 
@@ -43,4 +96,4 @@ The target-specific recovery process, retry boundaries, and installation failure
 
 ## Normalized outcomes
 
-The architecture defines `0` as success, `2` as invalid input or unmet precondition, `3` as explicit cancellation, `4` as execution completed but verification is not ready, `5` as execution or upstream-operation failure, and `6` as internal contract or invariant failure. Currently `0` applies only to successful help, `2` to pending work or invalid arguments, and `6` to a missing or unloadable helper. Install-specific use of the remaining outcomes is **Pending**.
+The architecture defines `0` as success, `2` as invalid input or unmet precondition, `3` as explicit cancellation, `4` as execution completed but verification is not ready, `5` as execution or upstream-operation failure, and `6` as internal contract or invariant failure. Currently `0` applies to successful help and to valid discovery, `2` to pending work, invalid arguments, or unmet discovery preconditions, `5` to an unexpected external command failure during discovery, and `6` to a missing or unloadable helper or to damaged discovery code. Install-specific use of `3` and `4` is **Pending**.

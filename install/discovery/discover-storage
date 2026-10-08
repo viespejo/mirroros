@@ -1,0 +1,47 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+# shellcheck disable=SC1091 # The shared helper is resolved from BASH_SOURCE to support arbitrary working directories.
+source "${SCRIPT_DIR}/lib/collect.sh"
+
+readonly LSBLK_COLUMNS='PATH,KNAME,TYPE,SIZE,MODEL,SERIAL,WWN,TRAN,RM,RO,HOTPLUG,PTTYPE,PTUUID,FSTYPE,LABEL,UUID,PARTUUID,MOUNTPOINTS'
+readonly LIVE_MEDIUM_MOUNTPOINT='/run/archiso/bootmnt'
+
+lsblk_json="$(lsblk --json --tree --bytes --output "$LSBLK_COLUMNS")" || discovery_child_fail lsblk "$?"
+
+# lsblk prints one object whose only member is "blockdevices"; keep that member and add the others.
+devices_json="${lsblk_json#*\"blockdevices\"}"
+devices_json="${devices_json#*:}"
+devices_json="${devices_json%\}*}"
+devices_json="$(discovery_trim "$devices_json")"
+if [[ "$devices_json" != '['*']' ]]; then
+  printf '%s\n' 'lsblk did not report a blockdevices array.' >&2
+  discovery_child_fail lsblk 0
+fi
+
+by_id_json=''
+by_id_dir="$(discovery_path /dev/disk/by-id)"
+for link in "$by_id_dir"/*; do
+  [[ -L "$link" ]] || continue
+  resolved="$(readlink -f -- "$link")" || continue
+  resolved="${resolved#"$DISCOVERY_ROOT"}"
+  [[ "$resolved" == /dev/* ]] || continue
+  by_id_json+="${by_id_json:+,}{\"name\":$(discovery_json_string "${link##*/}"),\"target\":$(discovery_json_string "$resolved")}"
+done
+
+live_medium=''
+mounts_file="$(discovery_path /proc/self/mounts)"
+if [[ -r "$mounts_file" ]]; then
+  while IFS=' ' read -r mount_source mount_point _; do
+    if [[ "$mount_point" == "$LIVE_MEDIUM_MOUNTPOINT" && "$mount_source" == /dev/* ]]; then
+      live_medium="$mount_source"
+    fi
+  done < "$mounts_file"
+fi
+
+printf '{"blockdevices":%s,"by_id":[%s]' "$devices_json" "$by_id_json"
+if [[ -n "$live_medium" ]]; then
+  printf ',"live_medium_device":%s' "$(discovery_json_string "$live_medium")"
+fi
+printf '}\n'

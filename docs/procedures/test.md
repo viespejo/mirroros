@@ -114,3 +114,29 @@ A run that could not confirm QEMU exit, or that was killed abruptly, can leave `
 4. Keep `evidence/reference-vm/<run-id>/`; it documents the failed run.
 
 Never remove directories of other runs, and never remove the bundle under `dist/`.
+
+## Discovery qualification
+
+`vm/reference/qualify-discovery` qualifies read-only target discovery (Story 2.2) in the same reference VM. It is separate from `operations/test`, whose contract stays unchanged. It reuses the VM configuration, the NoCloud medium, the serial report channel, the deadlines, the stop and cleanup rules, and the evidence scan described above.
+
+| Invocation | Behavior |
+| --- | --- |
+| `vm/reference/qualify-discovery --scenario <name> <bundle-directory>` | Boots the bundle ISO, runs the embedded `mirroros-install discover`, and writes evidence. |
+| `vm/reference/qualify-discovery --scenario <name> --development-overlay <bundle-directory>` | Also copies the working-tree embedded subtrees over `/usr/local/lib/mirroros/` through the NoCloud medium. The run is never counted. |
+| `vm/reference/qualify-discovery --help` | Prints help and exits `0` without side effects. |
+
+The prerequisites are those of `operations/test`, plus `sfdisk` and `truncate` for the `layout` scenario and `tar` and `base64` for the overlay. Any other argument form exits `2` before a run resource is created.
+
+| Scenario | Disk | Target | Expected discovery exit |
+| --- | --- | --- | --- |
+| `empty` | Fresh sparse 32 GiB qcow2 | `reference-vm` | `0` |
+| `layout` | GPT with two labeled partitions, built without root through `sfdisk` on a raw file and `qemu-img convert` | `reference-vm` | `0` |
+| `framework-target` | Fresh sparse 32 GiB qcow2 | `framework-13-pro-amd` | `2` (identity pending capture) |
+
+The guest waits for a default route and DNS, runs discovery with a private output directory on tmpfs, and returns one run-bound JSON report over the serial console. The report carries the discovery exit status, `target-facts.json`, and `error.json` when present. The harness accepts only a complete report bound to the current run ID and checks that the exit status agrees with the facts.
+
+A copy of the disk is kept before launch. After QEMU exit is confirmed, `qemu-img compare` of the copy and the final disk must report identical images; a different disk yields `4`, and a comparison tool failure yields `5`. The comparison is skipped when QEMU exit cannot be confirmed.
+
+Evidence is written to `evidence/reference-vm/discovery/<run-id>/` with `0700` directories and `0600` files: `result.json`, `target-facts.json`, `error.json` when present, `guest-serial.log`, `qemu-diagnostics.log`, and redacted Gitleaks reports. Run resources live in `build/reference-vm/<run-id>/` and follow the cleanup rules above. `result.json` records the artifact identity, the test-code commit and dirty state, the scenario, the expected and actual discovery exit, the disk comparison, the scans, the cleanup outcome, and `counted`.
+
+A run is counted only when it succeeded, used no overlay, the test checkout is clean, and the bundle was built from a clean tree at the same commit as the test code. Development runs (a dirty tree, a dirty bundle, a different commit, or the overlay) record `counted: false`. The status values follow the normalized outcomes above. The recovery steps for a residual run are the same, using `evidence/reference-vm/discovery/<run-id>/` as the evidence to keep.

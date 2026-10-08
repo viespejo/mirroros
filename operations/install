@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
 HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
 
 # shellcheck disable=SC1090 # The helper path is resolved from BASH_SOURCE to support arbitrary working directories and paths with spaces.
@@ -10,6 +10,18 @@ if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
     'MirrorOS: incomplete or damaged checkout; the lifecycle discovery helper could not be loaded.' \
     'Restore the helper from Git or re-clone the repository.' >&2
   exit 6
+fi
+
+if [[ "${1:-}" == 'discover' ]]; then
+  DISCOVER_PATH="${SCRIPT_DIR}/../install/discovery/discover"
+  if [[ ! -x "$DISCOVER_PATH" ]]; then
+    printf '%s\n' \
+      'MirrorOS: incomplete or damaged checkout; the discovery orchestrator could not be found.' \
+      'Restore install/discovery from Git or re-clone the repository.' >&2
+    exit 6
+  fi
+  shift
+  exec "$DISCOVER_PATH" "$@"
 fi
 
 if lifecycle_discovery_main \

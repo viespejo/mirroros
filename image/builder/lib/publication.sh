@@ -75,7 +75,11 @@ publication_write_metadata_input() {
     "$BUILD_VALIDATION_PROFILE_SCAN" "$BUILD_VALIDATION_EVIDENCE_SCAN" \
     "$BUILD_VALIDATION_BUNDLE" \
     "${#tool_versions[@]}" "${tool_versions[@]}" \
-    "${#SOURCE_CAPTURE_DIRTY_PATHS[@]}" "${SOURCE_CAPTURE_DIRTY_PATHS[@]}" <<'NODE'
+    "${#SOURCE_CAPTURE_DIRTY_PATHS[@]}" "${SOURCE_CAPTURE_DIRTY_PATHS[@]}" \
+    "$SOURCE_CAPTURE_EMBEDDED_ISO_PATH" \
+    "${#SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" \
+    "${#SOURCE_CAPTURE_EMBEDDED_IDENTITIES[@]}" "${SOURCE_CAPTURE_EMBEDDED_IDENTITIES[@]}" \
+    "${#SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS[@]}" "${SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS[@]}" <<'NODE'
 import { writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -113,12 +117,23 @@ for (const entry of args.slice(cursor, cursor + Number(toolCountText))) {
 cursor += Number(toolCountText);
 const dirtyPathCount = Number(args[cursor++]);
 const dirtyPaths = args.slice(cursor, cursor + dirtyPathCount);
+cursor += dirtyPathCount;
+const embeddedIsoPath = args[cursor++];
+const embeddedPathCount = Number(args[cursor++]);
+const embeddedPaths = args.slice(cursor, cursor + embeddedPathCount);
+cursor += embeddedPathCount;
+const embeddedIdentityCount = Number(args[cursor++]);
+const embeddedIdentities = args.slice(cursor, cursor + embeddedIdentityCount);
+cursor += embeddedIdentityCount;
+const embeddedDirtyCount = Number(args[cursor++]);
+const embeddedDirtyPaths = args.slice(cursor, cursor + embeddedDirtyCount);
 const limitations = [
   'Official rolling repositories can resolve different package versions across builds.',
   'The native package manifest does not record per-package repository attribution.',
 ];
 if (dirtyText === 'true') {
   limitations.push('The repository was dirty; the profile capture is identified by its recorded dirty-path list, not a content hash.');
+  limitations.push('The embedded code is identified by its recorded dirty-path list, not a content hash.');
 }
 const document = {
   execution: {
@@ -127,6 +142,11 @@ const document = {
     dirty: dirtyText === 'true',
     profile_identity: profileIdentity,
     dirty_paths: dirtyPaths,
+  },
+  embedded_code: {
+    iso_path: embeddedIsoPath,
+    subtrees: embeddedPaths.map((path, index) => ({ path, identity: embeddedIdentities[index] })),
+    dirty_paths: embeddedDirtyPaths,
   },
   construction: {
     architecture: 'x86_64',

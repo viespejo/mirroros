@@ -1,0 +1,323 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+umask 077
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+
+readonly COLLECTORS=(firmware hardware storage network)
+readonly REQUIRED_FILES=(
+  install/discovery/lib/collect.sh
+  install/discovery/policy.json
+  install/discovery/normalize-facts.mjs
+  install/discovery/resolve-layers.mjs
+  install/discovery/validate-facts.mjs
+  install/discovery/write-facts.mjs
+  hardware/discovery/normalize-hardware.mjs
+  operations/install
+  operations/lib/lifecycle-discovery.sh
+)
+
+OUTPUT_DIR=''
+
+print_help() {
+  cat <<'EOF'
+MirrorOS install discover — read-only target discovery
+Usage: install discover --target <id> [--output <dir>]
+       install discover --help
+Purpose: Inspect a supported target from the live environment without modifying it, record firmware, network, storage, and hardware facts, and normalize them into target-facts.json.
+Prerequisites: UEFI boot of the live medium, a ready network, and at least one eligible disk. Run on the target; no elevation is used or needed beyond the live session.
+Inputs: --target names a supported target (reference-vm or framework-13-pro-amd). --output names an absent or empty directory; the default is evidence/install/<run-id>/.
+Consequential effects: None on the target; no device is written and no elevation is invoked. The network probe creates outbound HTTPS traffic only. Evidence is written with 0700 directories and 0600 files.
+Evidence: target-facts.json, raw collector output under raw/, and error.json when discovery fails with status 5 or 6.
+Normalized exit outcomes:
+  0: valid facts, possibly with warnings
+  2: invalid input or unmet precondition (target-facts.json is still written as invalid)
+  5: an external command failed unexpectedly (child_exit_status and stderr retained)
+  6: damaged embedded code or internal invariant failure
+Documentation: docs/procedures/install.md
+EOF
+}
+
+usage_error() {
+  printf 'MirrorOS install discover: %s\n' "$1" >&2
+  printf '%s\n' 'Usage: install discover --target <id> [--output <dir>]; see install discover --help.' >&2
+  exit 2
+}
+
+write_private() {
+  local destination="$1"
+  local content="$2"
+  local temporary="${destination}.tmp.$$"
+
+  printf '%s\n' "$content" > "$temporary"
+  mv -f -- "$temporary" "$destination"
+}
+
+abort() {
+  local status="$1"
+  local code="$2"
+  local operation="$3"
+  local message="$4"
+  local next_step="$5"
+  local child_status="${6:-null}"
+
+  if [[ -n "$OUTPUT_DIR" && -d "$OUTPUT_DIR" ]]; then
+    write_private "${OUTPUT_DIR}/error.json" "$(printf '{"code":"%s","stage":"discover","operation":"%s","message":%s,"next_step":%s,"child_exit_status":%s}' \
+      "$code" "$operation" "$(json_string "$message")" "$(json_string "$next_step")" "$child_status")"
+  fi
+  printf 'MirrorOS install discover: %s\n' "$message" >&2
+  printf 'Next step: %s\n' "$next_step" >&2
+  exit "$status"
+}
+
+# Minimal escaping for the structured error; the shared helper may itself be the damaged part.
+json_string() {
+  local value="$1"
+
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  value="${value//[[:cntrl:]]/}"
+  printf '"%s"' "$value"
+}
+
+target_id=''
+output_given=0
+if [[ "$#" -eq 1 && "$1" == '--help' ]]; then
+  print_help
+  exit 0
+fi
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --target)
+      [[ "$#" -ge 2 && "$2" != --* ]] || usage_error '--target requires a value.'
+      [[ -z "${target_seen:-}" ]] || usage_error '--target may be given only once.'
+      target_seen=1
+      target_id="$2"
+      shift 2
+      ;;
+    --output)
+      [[ "$#" -ge 2 && -n "$2" && "$2" != --* ]] || usage_error '--output requires a directory.'
+      [[ "$output_given" -eq 0 ]] || usage_error '--output may be given only once.'
+      output_given=1
+      OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    *)
+      usage_error "unsupported argument: $1"
+      ;;
+  esac
+done
+
+if [[ "$output_given" -eq 1 ]]; then
+  if [[ -e "$OUTPUT_DIR" ]]; then
+    [[ -d "$OUTPUT_DIR" ]] || usage_error "--output is not a directory: ${OUTPUT_DIR}"
+    if [[ -n "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+      usage_error "--output must be an absent or empty directory: ${OUTPUT_DIR}"
+    fi
+  fi
+fi
+
+RUN_ID=''
+if [[ -r /proc/sys/kernel/random/uuid ]]; then
+  run_uuid="$(< /proc/sys/kernel/random/uuid)"
+  RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-${run_uuid}"
+fi
+[[ -n "$RUN_ID" ]] || { printf '%s\n' 'MirrorOS install discover: could not generate a run identifier.' >&2; exit 6; }
+if [[ "$output_given" -eq 0 ]]; then
+  OUTPUT_DIR="evidence/install/${RUN_ID}"
+fi
+
+mkdir -p -- "$OUTPUT_DIR"
+chmod 700 -- "$OUTPUT_DIR"
+RAW_DIR="${OUTPUT_DIR}/raw"
+mkdir -m 700 -- "$RAW_DIR"
+
+for required in "${REQUIRED_FILES[@]}"; do
+  [[ -f "${CODE_ROOT}/${required}" ]] || abort 6 embedded_code_damaged preflight \
+    "The embedded MirrorOS code is incomplete or damaged: ${required} is missing." \
+    'Rebuild or re-clone the installation medium and rerun discovery.'
+done
+for collector in "${COLLECTORS[@]}"; do
+  [[ -x "${SCRIPT_DIR}/discover-${collector}" ]] || abort 6 embedded_code_damaged preflight \
+    "The embedded MirrorOS code is incomplete or damaged: discover-${collector} is missing or not executable." \
+    'Rebuild or re-clone the installation medium and rerun discovery.'
+done
+[[ -d "${CODE_ROOT}/targets" ]] || abort 6 embedded_code_damaged preflight \
+  'The embedded MirrorOS code is incomplete or damaged: targets/ is missing.' \
+  'Rebuild or re-clone the installation medium and rerun discovery.'
+
+# shellcheck disable=SC1091 # The shared helper is resolved from BASH_SOURCE to support arbitrary working directories.
+source "${SCRIPT_DIR}/lib/collect.sh"
+
+read_identity() {
+  local identity_file="${CODE_ROOT}/identity.json"
+  local content
+  local commit=''
+  local dirty=''
+  local git_status
+
+  if [[ -f "$identity_file" ]]; then
+    content="$(< "$identity_file")"
+    if [[ "$content" =~ \"commit\"[[:space:]]*:[[:space:]]*\"([0-9a-f]{40})\" ]]; then
+      commit="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$content" =~ \"dirty\"[[:space:]]*:[[:space:]]*(true|false) ]]; then
+      dirty="${BASH_REMATCH[1]}"
+    fi
+  elif [[ -e "${CODE_ROOT}/.git" ]]; then
+    commit="$(git -C "$CODE_ROOT" rev-parse HEAD)" || abort 5 child_failed identity \
+      'git could not report the checkout commit.' 'Fix the checkout and rerun discovery.' "$?"
+    git_status="$(git -C "$CODE_ROOT" --no-optional-locks status --porcelain)" || abort 5 child_failed identity \
+      'git could not report the checkout state.' 'Fix the checkout and rerun discovery.' "$?"
+    dirty='false'
+    [[ -z "$git_status" ]] || dirty='true'
+  fi
+  if [[ ! "$commit" =~ ^[0-9a-f]{40}$ || ( "$dirty" != 'true' && "$dirty" != 'false' ) ]]; then
+    abort 6 identity_missing identity \
+      'The embedded code identity (commit and dirty state) is missing or damaged.' \
+      'Rebuild or re-clone the installation medium and rerun discovery.'
+  fi
+  IDENTITY_COMMIT="$commit"
+  IDENTITY_DIRTY="$dirty"
+}
+read_identity
+
+NODE_SCRIPT="$(cat <<'EOF'
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const [mode, codeRoot, outputDir, targetId, runId, commit, dirty] = process.argv.slice(2);
+const internal = message => {
+  process.stderr.write(`${message}\n`);
+  process.exit(6);
+};
+const load = path => import(pathToFileURL(join(codeRoot, path)).href);
+
+let normalize, layers, writer, validator;
+try {
+  [normalize, layers, writer, validator] = await Promise.all([
+    load('install/discovery/normalize-facts.mjs'),
+    load('install/discovery/resolve-layers.mjs'),
+    load('install/discovery/write-facts.mjs'),
+    load('install/discovery/validate-facts.mjs'),
+  ]);
+} catch (error) {
+  internal(`The embedded Node modules could not be loaded: ${error.message}`);
+}
+
+const targetsRoot = join(codeRoot, 'targets');
+try {
+  const baseline = layers.loadBaselinePolicy(join(codeRoot, 'install/discovery/policy.json'));
+  const loaded = layers.loadTarget(targetsRoot, targetId);
+  const loadReasons = [...loaded.reasons];
+  let override = {};
+  if (loaded.target) {
+    const loadedOverride = layers.loadOverride(targetsRoot, targetId);
+    override = loadedOverride.override;
+    loadReasons.push(...loadedOverride.reasons);
+  }
+  if (mode === 'policy') {
+    const { values } = layers.resolvePolicy({ baseline, override });
+    process.stdout.write(`${values.https_probe_url}\n${values.https_probe_timeout_seconds}\n`);
+  } else {
+    const raw = {};
+    for (const name of ['firmware', 'network', 'storage', 'hardware']) {
+      try {
+        raw[name] = JSON.parse(readFileSync(join(outputDir, 'raw', `${name}.json`), 'utf8'));
+      } catch (error) {
+        internal(`The ${name} collector produced output that is not valid JSON: ${error.message}`);
+      }
+    }
+    const document = normalize.normalizeFacts({
+      raw,
+      baseline,
+      target: loaded.target,
+      override,
+      loadReasons,
+      source: { run_id: runId, commit, dirty: dirty === 'true', target_id: targetId },
+    });
+    writer.writeFacts(document, outputDir);
+    process.stdout.write(writer.renderSummary(document));
+    process.exitCode = validator.exitStatusFor(document);
+  }
+} catch (error) {
+  internal(`Discovery normalization failed an internal contract check: ${error.message}`);
+}
+EOF
+)"
+
+run_node() {
+  local mode="$1"
+  local stdout_file="$2"
+  local stderr_file="$3"
+  local status=0
+
+  node --input-type=module - "$mode" "$CODE_ROOT" "$OUTPUT_DIR" "$target_id" "$RUN_ID" \
+    "$IDENTITY_COMMIT" "$IDENTITY_DIRTY" <<< "$NODE_SCRIPT" > "$stdout_file" 2> "$stderr_file" || status=$?
+  return "$status"
+}
+
+# The probe policy is the effective baseline-plus-override view; an invalid override falls back to
+# the baseline here and is reported as invalid input by the final validation.
+policy_status=0
+run_node policy "${RAW_DIR}/policy.out" "${RAW_DIR}/policy.stderr" || policy_status=$?
+if [[ "$policy_status" -eq 6 ]]; then
+  cat "${RAW_DIR}/policy.stderr" >&2
+  abort 6 embedded_code_damaged policy \
+    'The embedded discovery policy could not be resolved.' \
+    'Rebuild or re-clone the installation medium and rerun discovery.'
+elif [[ "$policy_status" -ne 0 ]]; then
+  cat "${RAW_DIR}/policy.stderr" >&2
+  abort 5 child_failed node 'Node.js failed while resolving the discovery policy.' \
+    'Check that nodejs is installed and rerun discovery.' "$policy_status"
+fi
+{ IFS= read -r probe_url; IFS= read -r probe_timeout; } < "${RAW_DIR}/policy.out"
+rm -f -- "${RAW_DIR}/policy.out" "${RAW_DIR}/policy.stderr"
+export MIRROROS_DISCOVERY_PROBE_URL="$probe_url"
+export MIRROROS_DISCOVERY_PROBE_TIMEOUT="$probe_timeout"
+
+for collector in "${COLLECTORS[@]}"; do
+  collector_status=0
+  "${SCRIPT_DIR}/discover-${collector}" > "${RAW_DIR}/${collector}.json.tmp" 2> "${RAW_DIR}/${collector}.stderr" || collector_status=$?
+  mv -f -- "${RAW_DIR}/${collector}.json.tmp" "${RAW_DIR}/${collector}.json"
+  if [[ "$collector_status" -ne 0 ]]; then
+    child_status="$collector_status"
+    operation="discover-${collector}"
+    last_line="$(tail -n 1 "${RAW_DIR}/${collector}.stderr")"
+    if [[ "$collector_status" -eq 5 && "$last_line" =~ ^child_exit_status=([0-9]+)\ operation=([A-Za-z0-9_.-]+)$ ]]; then
+      child_status="${BASH_REMATCH[1]}"
+      operation="${BASH_REMATCH[2]}"
+    fi
+    cat "${RAW_DIR}/${collector}.stderr" >&2
+    abort 5 child_failed "$operation" \
+      "An external command failed unexpectedly during ${collector} discovery (exit status ${child_status})." \
+      "Inspect raw/${collector}.stderr in ${OUTPUT_DIR}, fix the reported cause, and rerun discovery." "$child_status"
+  fi
+done
+
+facts_status=0
+run_node facts "${RAW_DIR}/summary.out" "${RAW_DIR}/normalize.stderr" || facts_status=$?
+case "$facts_status" in
+  0|2)
+    cat "${RAW_DIR}/summary.out"
+    rm -f -- "${RAW_DIR}/summary.out"
+    if [[ "$facts_status" -eq 2 ]]; then
+      printf 'MirrorOS install discover: the discovered facts are invalid; see target-facts.json in %s.\n' "$OUTPUT_DIR" >&2
+    fi
+    exit "$facts_status"
+    ;;
+  6)
+    cat "${RAW_DIR}/normalize.stderr" >&2
+    abort 6 internal_contract_failure normalize \
+      'Discovery normalization failed an internal contract check.' \
+      "Inspect raw/normalize.stderr in ${OUTPUT_DIR}; rebuild or re-clone the installation medium and rerun discovery."
+    ;;
+  *)
+    cat "${RAW_DIR}/normalize.stderr" >&2
+    abort 5 child_failed node 'Node.js failed unexpectedly during normalization.' \
+      'Check that nodejs is installed and rerun discovery.' "$facts_status"
+    ;;
+esac

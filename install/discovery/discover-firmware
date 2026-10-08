@@ -1,0 +1,77 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+# shellcheck disable=SC1091 # The shared helper is resolved from BASH_SOURCE to support arbitrary working directories.
+source "${SCRIPT_DIR}/lib/collect.sh"
+
+readonly SECURE_BOOT_VARIABLE='SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c'
+# Only non-sensitive DMI fields are read; serial numbers and the product UUID are never touched.
+readonly DMI_FIELDS=(sys_vendor product_name product_version board_name bios_vendor bios_version bios_date)
+
+boot_mode='bios'
+platform_size=''
+efivars_available='false'
+secure_boot='unknown'
+
+efi_dir="$(discovery_path /sys/firmware/efi)"
+efivars_dir="${efi_dir}/efivars"
+
+if [[ -d "$efi_dir" ]]; then
+  boot_mode='uefi'
+  if size="$(discovery_first_line "${efi_dir}/fw_platform_size")" && [[ "$size" =~ ^[0-9]+$ ]]; then
+    platform_size="$size"
+  fi
+fi
+
+if [[ -d "$efivars_dir" ]] && compgen -G "${efivars_dir}/*" > /dev/null; then
+  efivars_available='true'
+fi
+
+read_secure_boot_variable() {
+  local variable="${efivars_dir}/${SECURE_BOOT_VARIABLE}"
+  local value
+
+  [[ -r "$variable" ]] || return 1
+  value="$(od -An -tu1 -j4 -N1 -- "$variable")" || discovery_child_fail od "$?"
+  case "$(discovery_trim "$value")" in
+    1) secure_boot='enabled' ;;
+    0) secure_boot='disabled' ;;
+  esac
+}
+
+read_secure_boot_status() {
+  local status_output=''
+  local line
+
+  command -v bootctl > /dev/null 2>&1 || return 1
+  # bootctl status exits non-zero on systems it cannot inspect; that only leaves the state unknown.
+  status_output="$(bootctl status 2> /dev/null)" || true
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^[[:space:]]*Secure\ Boot:[[:space:]]*([a-z]+) ]]; then
+      case "${BASH_REMATCH[1]}" in
+        enabled) secure_boot='enabled' ;;
+        disabled) secure_boot='disabled' ;;
+      esac
+      return 0
+    fi
+  done <<< "$status_output"
+}
+
+if [[ "$boot_mode" == 'uefi' ]]; then
+  read_secure_boot_variable || read_secure_boot_status || true
+fi
+
+dmi_json=''
+for field in "${DMI_FIELDS[@]}"; do
+  if value="$(discovery_first_line "$(discovery_path "/sys/class/dmi/id/${field}")")" && [[ -n "$value" ]]; then
+    dmi_json+="${dmi_json:+,}\"${field}\":$(discovery_json_string "$value")"
+  fi
+done
+
+printf '{"boot_mode":%s' "$(discovery_json_string "$boot_mode")"
+if [[ -n "$platform_size" ]]; then
+  printf ',"fw_platform_size":%s' "$platform_size"
+fi
+printf ',"efivars_available":%s,"secure_boot":%s,"dmi":{%s}}\n' \
+  "$efivars_available" "$(discovery_json_string "$secure_boot")" "$dmi_json"

@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "target_id": "reference-vm",
+  "identity": {
+    "status": "defined",
+    "virtualization": "kvm",
+    "dmi": {
+      "sys_vendor": "QEMU"
+    }
+  }
+}
