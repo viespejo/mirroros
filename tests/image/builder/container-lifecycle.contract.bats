@@ -27,6 +27,7 @@ builder_last_result() {
   local create_call
   create_call="$(grep '^docker create ' "$BUILDER_CALL_LOG")"
   [[ "$create_call" == *'--privileged'* ]]
+  [[ "$create_call" == *'--init'* ]]
   [[ "$create_call" == *'--platform=linux/amd64'* ]]
   [[ "$create_call" == *'--name mirroros-archiso-build-'* ]]
   [[ "$create_call" == *'--label org.mirroros.stage=build'* ]]

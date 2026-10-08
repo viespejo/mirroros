@@ -62,7 +62,7 @@ Besides the profile, the build embeds the MirrorOS code the live environment run
 
 ## Construction and timeouts
 
-The builder creates a privileged, run-labeled Docker container without `--rm`. It mounts only the captured profile as a read-only bind and, for the default invocation, the named Pacman cache volume. It does not pass the host environment, an env-file, or credential mounts. `/work` and `/out` remain inside the container. `SOURCE_DATE_EPOCH` is the run start time in seconds and is passed explicitly to `mkarchiso`.
+The builder creates a privileged, run-labeled Docker container with `--init` (so the container's PID 1 honors `SIGTERM` and `docker stop` completes promptly) and without `--rm`. It mounts only the captured profile as a read-only bind and, for the default invocation, the named Pacman cache volume. It does not pass the host environment, an env-file, or credential mounts. `/work` and `/out` remain inside the container. `SOURCE_DATE_EPOCH` is the run start time in seconds and is passed explicitly to `mkarchiso`.
 
 Stage output is displayed live and recorded with `tee` in private per-stage logs under `evidence/archiso-build/<run-id>/logs/`. After the build, the native package manifest is extracted from the ISO inside the container, and the effective container mirrorlist is copied into evidence. The exported ISO, manifest, and mirrorlist are checked before the container is removed.
 

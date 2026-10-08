@@ -227,6 +227,7 @@ container_create() {
   local -a create_arguments=(
     docker create
     --privileged
+    --init
     --platform=linux/amd64
     --name "$CONTAINER_NAME"
     --label org.mirroros.stage=build
