@@ -109,6 +109,61 @@ use_matching_bundle() {
   [ "$(reference_result_field counted)" == 'true' ]
 }
 
+@test "the plan scenario records both plans, the checks, private plan evidence, and a counted run" {
+  use_matching_bundle
+  export REFERENCE_PLAN_REPORT=1
+
+  reference_invoke_discovery --scenario plan "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+
+  local evidence
+  evidence="$(reference_discovery_evidence_dir)"
+  [ "$(reference_result_field scenario)" == 'plan' ]
+  [ "$(reference_result_field plan.exits)" == '0,0,0,2' ]
+  [ "$(reference_result_field plan.digests_differ)" == 'true' ]
+  [ "$(reference_result_field plan.first_plan_identical)" == 'true' ]
+  [ "$(reference_result_field plan.ok)" == 'true' ]
+  [ "$(reference_result_field disk_identity.comparison)" == 'identical' ]
+  [ "$(reference_result_field counted)" == 'true' ]
+  [ -f "${evidence}/plan-default/installation-plan.json" ]
+  [ -f "${evidence}/plan-edited/installation-plan.txt" ]
+  [ -f "${evidence}/plan-invalid/plan-run.json" ]
+  [ ! -e "${evidence}/plan-invalid/installation-plan.json" ]
+  [ "$(stat -c '%a' "${evidence}/plan-default")" == '700' ]
+  [ -z "$(find "$evidence" -perm /077)" ]
+}
+
+@test "the plan scenario fails with 4 when digests match, the first plan changes, or the invalid run succeeds" {
+  use_matching_bundle
+  export REFERENCE_PLAN_REPORT=1
+  local variable
+
+  local -A failed_check=(
+    [REFERENCE_PLAN_SAME_DIGEST=1]='digests_differ'
+    [REFERENCE_PLAN_TAMPER=1]='first_plan_identical'
+    [REFERENCE_PLAN_INVALID_EXIT=0]='exits_as_expected'
+  )
+
+  for variable in 'REFERENCE_PLAN_SAME_DIGEST=1' 'REFERENCE_PLAN_TAMPER=1' 'REFERENCE_PLAN_INVALID_EXIT=0'; do
+    rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence"
+    export "$variable"
+    reference_invoke_discovery --scenario plan "$REFERENCE_BUNDLE_DIR"
+    unset "${variable%%=*}"
+    [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
+    [ "$(reference_result_field plan.ok)" == 'false' ]
+    [ "$(reference_result_field "plan.${failed_check[$variable]}")" == 'false' ]
+    [ "$(reference_result_field counted)" == 'false' ]
+  done
+}
+
+@test "the plan scenario without a plan section in the report fails with 5" {
+  use_matching_bundle
+
+  reference_invoke_discovery --scenario plan "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 5 ]
+  [ "$(reference_result_field counted)" == 'false' ]
+}
+
 @test "an unexpected discovery exit fails with 4 and is never counted" {
   use_matching_bundle
   export REFERENCE_DISCOVERY_TARGET='framework-13-pro-amd' REFERENCE_DISCOVERY_EXIT=0

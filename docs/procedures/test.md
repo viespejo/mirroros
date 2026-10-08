@@ -132,6 +132,9 @@ The prerequisites are those of `operations/test`, plus `sfdisk` and `truncate` f
 | `empty` | Fresh sparse 32 GiB qcow2 | `reference-vm` | `0` |
 | `layout` | GPT with two labeled partitions, built without root through `sfdisk` on a raw file and `qemu-img convert` | `reference-vm` | `0` |
 | `framework-target` | Fresh sparse 32 GiB qcow2 | `framework-13-pro-amd` | `2` (identity pending capture) |
+| `plan` | Fresh sparse 32 GiB qcow2 | `reference-vm` | `0`, then the plan runs below |
+
+The `plan` scenario (Story 2.3) runs, in the guest and in order: `discover`, `plan` with defaults (expects `0`), `plan` with a choices file that sets `hostname` and `storage_option` to `btrfs-rescue` (expects `0`), and `plan` with an invalid choices file (expects `2`). The report also carries both plans, their renders, and their `plan-run.json` files, plus the checksum of the first plan taken right after it was written and again after the last run. The run is qualified only when the exits are `0,0,0,2`, the two digests differ, the first plan is byte-identical to its first checksum, the default hostname resolves from the override (`mirroros-ref`), the edited plan shows `choice` as the source of the new hostname and storage option, and the invalid run wrote no plan. A failed plan check yields `4`. Besides the usual evidence, the run keeps `plan-default/`, `plan-edited/`, and `plan-invalid/` with `0700` directories and `0600` files, and `result.json` gains a `plan` object with the exits, digests, and each check.
 
 The guest waits for a default route and DNS, runs discovery with a private output directory on tmpfs, and returns one run-bound JSON report over the serial console. The report carries the discovery exit status, `target-facts.json`, and `error.json` when present. The harness accepts only a complete report bound to the current run ID and checks that the exit status agrees with the facts.
 

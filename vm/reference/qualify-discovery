@@ -9,13 +9,13 @@ QUALIFY_FINALIZED=0
 print_help() {
   cat <<'EOF'
 MirrorOS qualify-discovery — qualify read-only target discovery in the reference VM
-Usage: vm/reference/qualify-discovery --scenario empty|layout|framework-target [--development-overlay] <bundle-directory>
+Usage: vm/reference/qualify-discovery --scenario empty|layout|framework-target|plan [--development-overlay] <bundle-directory>
        vm/reference/qualify-discovery --help
-Scenarios: empty (fresh 32 GiB disk, expects exit 0), layout (GPT with two labeled partitions, expects exit 0), framework-target (--target framework-13-pro-amd, expects exit 2).
+Scenarios: empty (fresh 32 GiB disk, expects exit 0), layout (GPT with two labeled partitions, expects exit 0), framework-target (--target framework-13-pro-amd, expects exit 2), plan (discovery, then `mirroros-install plan` with defaults, with a valid choices file, and with an invalid choices file; expects exits 0, 0, 0, 2, different digests, and an unchanged first plan).
 Prerequisites: a normal user with functional KVM, OVMF firmware, and qemu-system-x86_64, qemu-img, xorriso, node, gitleaks, git, and timeout; sfdisk and truncate for layout.
 Effects: boots the bundle ISO headless, runs the embedded `mirroros-install discover`, then compares the disk before and after with qemu-img compare. Run state lives under build/reference-vm/<run-id>/ and is removed after confirmed QEMU exit.
 --development-overlay copies the working-tree embedded subtrees into the guest and marks the run as not counted.
-Evidence: evidence/reference-vm/discovery/<run-id>/ (result.json, target-facts.json, guest-serial.log, qemu-diagnostics.log, redacted Gitleaks reports), 0700 directories and 0600 files.
+Evidence: evidence/reference-vm/discovery/<run-id>/ (result.json, target-facts.json, plan-default/, plan-edited/, plan-invalid/ for plan, guest-serial.log, qemu-diagnostics.log, redacted Gitleaks reports), 0700 directories and 0600 files.
 Normalized exit outcomes: 0 qualified, 2 invalid input or unmet prerequisite, 4 unexpected discovery outcome or changed disk, 5 tool or VM failure, 6 damaged checkout.
 Documentation: docs/procedures/test.md
 EOF

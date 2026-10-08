@@ -24,6 +24,18 @@ if [[ "${1:-}" == 'discover' ]]; then
   exec "$DISCOVER_PATH" "$@"
 fi
 
+if [[ "${1:-}" == 'plan' ]]; then
+  PLAN_PATH="${SCRIPT_DIR}/../install/plan/plan"
+  if [[ ! -x "$PLAN_PATH" ]]; then
+    printf '%s\n' \
+      'MirrorOS: incomplete or damaged checkout; the plan orchestrator could not be found.' \
+      'Restore install/plan from Git or re-clone the repository.' >&2
+    exit 6
+  fi
+  shift
+  exec "$PLAN_PATH" "$@"
+fi
+
 if lifecycle_discovery_main \
   'install' \
   'Coordinate target discovery, reviewable planning, confirmation, and application of the selected installation engine.' \

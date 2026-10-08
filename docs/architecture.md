@@ -1023,7 +1023,8 @@ mirroros/
 │
 ├── contracts/
 │   ├── README.md
-│   ├── installation-plan.schema.json
+│   ├── installation-plan.md
+│   ├── target-facts.md
 │   ├── verification-result.schema.json
 │   └── execution-result.schema.json
 │

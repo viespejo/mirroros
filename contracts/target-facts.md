@@ -7,6 +7,8 @@ records what was detected, keeps the four precedence layers distinguishable, res
 
 Conventions: JSON fields use `snake_case`; fields that do not apply are omitted; sizes are integer bytes.
 
+Note: installation policy is resolved in the plan, not here; see [`installation-plan.md`](installation-plan.md).
+
 ## Sensitive data
 
 The document, the retained raw collector output, and stdout never contain MAC addresses, SSIDs, Wi-Fi

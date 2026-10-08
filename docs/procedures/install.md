@@ -1,6 +1,6 @@
 # Install lifecycle procedure
 
-**Availability:** `discover` is implemented; planning, confirmation, and installation remain pending.
+**Availability:** `discover` and `plan` are implemented; confirmation and installation remain pending.
 
 ## Current behavior
 
@@ -13,8 +13,9 @@ Invoke the command by path from any working directory; it does not need to be in
 | Unsupported arguments, including `--help` with extra arguments | Returns `2`; writes a distinct unsupported-argument diagnostic to stderr. |
 | Missing or unloadable `operations/lib/lifecycle-discovery.sh` helper | Returns `6`; reports an incomplete or damaged checkout and advises restoring the helper from Git or recloning. |
 | `discover …` | Delegates to `install/discovery/discover`; see [Target discovery](#target-discovery). A missing orchestrator returns `6`. |
+| `plan …` | Delegates to `install/plan/plan`; see [Installation plan](#installation-plan). A missing orchestrator returns `6`. |
 
-Except for `discover`, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
+Except for `discover` and `plan`, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
 
 ## Target discovery
 
@@ -68,6 +69,55 @@ The DMI identity of the Framework Laptop 13 Pro is not recorded yet, so `--targe
 
 Discovery changes nothing, so recovery is to fix the reported cause and rerun it into a new output directory. For example, boot the medium in UEFI mode and disable CSM or legacy boot, disable Secure Boot, connect a cable or configure Wi-Fi with `iwctl`, or restore a damaged embedded tree by rebuilding the medium.
 
+## Installation plan
+
+```text
+operations/install plan --facts <file> [--choices <file>] [--output <dir>]
+operations/install plan --help
+```
+
+`plan` turns a valid `target-facts.json` and the installation policy into a validated installation plan bound to its inputs by a SHA-256 digest. The plan identifies the target disk, the ordered declarative operations with their `destructive` flags, every default with its provenance and source, the secret requirements by name, and the hardware selections. The format, the operation vocabulary, the validation codes, and the digest rules are documented in [`contracts/installation-plan.md`](../../contracts/installation-plan.md). Planning is non-interactive: it prompts for nothing, uses no Gum, executes no operation, and never approves the plan.
+
+### Inputs
+
+- `--facts <file>` names a `target-facts.json` produced by `discover`. Unreadable, malformed, unknown-format, or invalid facts exit `2`. The `target_id` is taken from the facts, and the facts file is never modified.
+- `--choices <file>` optionally names a flat JSON object with `format_version: 1` that sets editable keys (`target_disk`, `storage_option`, `swapfile_size`, `locales`, `lang`, `console_keymap`, `timezone`, `hostname`, `user_name`, `root_account`). Unknown, non-editable, invalid, and secret-like keys (for example `password` or `user_password`) exit `2` without writing a plan; secrets are never accepted through this file.
+- `--output <dir>` names the run directory. A directory that already contains a plan exits `2` without writing. The default is `evidence/install/<run-id>/`, relative to the working directory.
+- With exactly one eligible disk, that disk is preselected. With several, `--choices` must name one through `target_disk`; otherwise the command exits `2` and lists the eligible candidates.
+
+### Overrides and precedence
+
+Values resolve as policy, then detected, then target override, then choice, and each plan value records its source. A target may set only `hostname` in `targets/<id>/overrides/plan.json`; for `reference-vm` it is `mirroros-ref`.
+
+### Outputs
+
+Each run writes a directory with `0700` permissions and `0600` files, each written through a temporary file that is re-read, revalidated, and renamed:
+
+| Path | Content |
+| --- | --- |
+| `installation-plan.json` | The plan with its digest. Contains no timestamp or run id and no secret value. |
+| `installation-plan.txt` | Plain-text render for review, within 80 columns where possible, with `DESTRUCTIVE` markers. |
+| `plan-run.json` | Run metadata: `run_id`, timestamp, input paths, digest, exit status, reasons, and warnings. |
+
+An invalid run writes only `plan-run.json` with its reasons. Stdout carries a summary (target, disk, storage option, destructive operation count, required secrets, digest, and plan path) ending with "Review installation-plan.txt; approval is not part of this stage."; diagnostics and warnings go to stderr.
+
+### Exit outcomes
+
+| Status | Meaning |
+| --- | --- |
+| `0` | Plan generated and persisted, possibly with warnings (for example a disk addressed by path or an experimental storage option). |
+| `2` | Invalid arguments, facts, choices, or target override, an ambiguous or ineligible disk, or an output directory that already holds a plan. |
+| `5` | An unexpected failure outside the plan contract, such as an unwritable output location or Node.js failing. |
+| `6` | Damaged embedded code, or an internal invariant failure such as the generated plan failing its own validator. |
+
+### Regeneration and approval
+
+Changing a choice and rerunning `plan` creates a new run directory with a new plan and a different digest; the earlier plan stays byte-identical and unapproved. The plan has no approval field, and a plan carrying an `approved` or `approval` field is rejected by the validator. Reviewing and approving a plan, bound to its digest, belongs to Story 2.4, and executing it belongs to Story 2.5.
+
+### Recovery
+
+Planning changes nothing on the target. Fix the reported cause, such as the choices file or the facts, and rerun it into a new output directory.
+
 ## Intended contract
 
 ### Purpose
@@ -96,4 +146,4 @@ The target-specific recovery process, retry boundaries, and installation failure
 
 ## Normalized outcomes
 
-The architecture defines `0` as success, `2` as invalid input or unmet precondition, `3` as explicit cancellation, `4` as execution completed but verification is not ready, `5` as execution or upstream-operation failure, and `6` as internal contract or invariant failure. Currently `0` applies to successful help and to valid discovery, `2` to pending work, invalid arguments, or unmet discovery preconditions, `5` to an unexpected external command failure during discovery, and `6` to a missing or unloadable helper or to damaged discovery code. Install-specific use of `3` and `4` is **Pending**.
+The architecture defines `0` as success, `2` as invalid input or unmet precondition, `3` as explicit cancellation, `4` as execution completed but verification is not ready, `5` as execution or upstream-operation failure, and `6` as internal contract or invariant failure. Currently `0` applies to successful help, valid discovery, and a generated plan, `2` to pending work, invalid arguments, unmet discovery preconditions, or invalid plan inputs, `5` to an unexpected external command failure during discovery or planning, and `6` to a missing or unloadable helper or to damaged discovery or plan code. Install-specific use of `3` and `4` is **Pending**.

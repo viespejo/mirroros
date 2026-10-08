@@ -1,0 +1,108 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+umask 077
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+
+readonly REQUIRED_FILES=(
+  install/plan/cli.mjs
+  install/plan/policy.json
+  install/plan/canonical-json.mjs
+  install/plan/digest-plan.mjs
+  install/plan/generate-plan.mjs
+  install/plan/render-plan.mjs
+  install/plan/resolve-choices.mjs
+  install/plan/validate-plan.mjs
+  install/plan/write-plan.mjs
+  install/discovery/validate-facts.mjs
+  install/discovery/write-facts.mjs
+)
+
+print_help() {
+  cat <<'EOF'
+MirrorOS install plan — explainable, digest-bound installation plan
+Usage: install plan --facts <file> [--choices <file>] [--output <dir>]
+       install plan --help
+Purpose: Turn a valid target-facts.json and the installation policy into a validated installation plan with a plain-text render. The plan is never approved by this command.
+Prerequisites: a target-facts.json produced by install discover with valid facts.
+Inputs: --facts names the facts file. --choices names an optional JSON file of editable choices. --output names a directory that holds no plan yet; the default is evidence/install/<run-id>/.
+Consequential effects: None on the target; no device is read or written and no elevation is invoked. Evidence is written with 0700 directories and 0600 files, and an existing plan is never overwritten.
+Evidence: installation-plan.json, installation-plan.txt, and plan-run.json; an invalid run writes only plan-run.json with its reasons.
+Normalized exit outcomes:
+  0: plan generated and persisted
+  2: invalid input (facts, choices, override, or output directory)
+  5: an unexpected failure outside the plan contract
+  6: damaged embedded code or internal invariant failure
+Documentation: docs/procedures/install.md
+EOF
+}
+
+usage_error() {
+  printf 'MirrorOS install plan: %s\n' "$1" >&2
+  printf '%s\n' 'Usage: install plan --facts <file> [--choices <file>] [--output <dir>]; see install plan --help.' >&2
+  exit 2
+}
+
+facts_path=''
+choices_path=''
+output_path=''
+if [[ "$#" -eq 1 && "$1" == '--help' ]]; then
+  print_help
+  exit 0
+fi
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --facts)
+      [[ "$#" -ge 2 && -n "$2" && "$2" != --* ]] || usage_error '--facts requires a file.'
+      [[ -z "$facts_path" ]] || usage_error '--facts may be given only once.'
+      facts_path="$2"
+      shift 2
+      ;;
+    --choices)
+      [[ "$#" -ge 2 && -n "$2" && "$2" != --* ]] || usage_error '--choices requires a file.'
+      [[ -z "$choices_path" ]] || usage_error '--choices may be given only once.'
+      choices_path="$2"
+      shift 2
+      ;;
+    --output)
+      [[ "$#" -ge 2 && -n "$2" && "$2" != --* ]] || usage_error '--output requires a directory.'
+      [[ -z "$output_path" ]] || usage_error '--output may be given only once.'
+      output_path="$2"
+      shift 2
+      ;;
+    *)
+      usage_error "unsupported argument: $1"
+      ;;
+  esac
+done
+[[ -n "$facts_path" ]] || usage_error '--facts is required.'
+
+for required in "${REQUIRED_FILES[@]}"; do
+  if [[ ! -f "${CODE_ROOT}/${required}" ]]; then
+    printf 'MirrorOS install plan: the embedded MirrorOS code is incomplete or damaged: %s is missing.\n' "$required" >&2
+    printf '%s\n' 'Next step: rebuild or re-clone the installation medium and rerun plan.' >&2
+    exit 6
+  fi
+done
+if [[ ! -d "${CODE_ROOT}/targets" ]]; then
+  printf '%s\n' 'MirrorOS install plan: the embedded MirrorOS code is incomplete or damaged: targets/ is missing.' >&2
+  printf '%s\n' 'Next step: rebuild or re-clone the installation medium and rerun plan.' >&2
+  exit 6
+fi
+if ! command -v node > /dev/null 2>&1; then
+  printf '%s\n' 'MirrorOS install plan: Node.js is not available.' >&2
+  printf '%s\n' 'Next step: check that nodejs is installed and rerun plan.' >&2
+  exit 5
+fi
+
+status=0
+node "${CODE_ROOT}/install/plan/cli.mjs" "$CODE_ROOT" "$facts_path" "$choices_path" "$output_path" || status=$?
+case "$status" in
+  0|2|5|6) exit "$status" ;;
+  *)
+    printf 'MirrorOS install plan: Node.js failed unexpectedly (exit status %s).\n' "$status" >&2
+    printf '%s\n' 'Next step: check that nodejs is installed and rerun plan.' >&2
+    exit 5
+    ;;
+esac

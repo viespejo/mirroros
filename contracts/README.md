@@ -7,5 +7,6 @@ reserves final schemas until that evidence exists, so no formal `*.schema.json` 
 | Contract | Produced by | Enforced by |
 | --- | --- | --- |
 | [`target-facts.md`](target-facts.md) | `install/discovery/` | `install/discovery/validate-facts.mjs`, `tests/install/discovery/` |
+| [`installation-plan.md`](installation-plan.md) | `install/plan/` | `install/plan/validate-plan.mjs`, `tests/install/plan/` |
 
 Contracts are documentation: they are not embedded in the live medium. The validator lives in code.

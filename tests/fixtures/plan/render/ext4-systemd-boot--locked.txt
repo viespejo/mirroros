@@ -1,0 +1,219 @@
+MirrorOS installation plan (format 1)
+================================================================================
+
+1. Target
+=========
+  Target            reference-vm
+  Disk path         /dev/vda
+  Disk by-id        virtio-SYNTH-VDA-0001
+  Serial            SYNTH-VDA-0001
+  Size              34359738368 bytes (32.0 GiB)
+
+  DESTRUCTIVE: every partition and all data on this disk will be erased.
+
+  Current layout (this content will be destroyed):
+    Partition table   gpt 00000000-0000-4000-8000-000000000001
+    /dev/vda1  536870912 bytes (512.0 MiB); vfat; label SYNTH-ESP
+    /dev/vda2  32212254720 bytes (30.0 GiB); ext4; label SYNTH-DATA
+
+2. Choices and defaults
+=======================
+  target_disk: virtio-SYNTH-VDA-0001
+      provenance hardware_detection; source detected [editable]
+  storage_option: ext4-systemd-boot
+      provenance personal_preference; source policy [editable]
+      tier default; filesystem ext4; boot loader systemd-boot
+      resume offset method: filefrag
+  bootloader_options: timeout=3; editor=false; fallback_entry=true
+      provenance personal_preference; source policy
+  console_keymap: us
+      provenance personal_preference; source policy [editable]
+  esp: size_bytes=1073741824; filesystem=vfat; mount_point=/boot
+      provenance arch_guidance; source policy
+  firmware_mode: uefi
+      provenance technical_necessity; source policy
+  fstrim: fstrim.timer
+      provenance personal_preference; source policy
+  hardware_clock: utc
+      provenance arch_guidance; source policy
+  hostname: mirroros-ref
+      provenance personal_preference; source override [editable]
+  initramfs: mkinitcpio-default-hooks-no-uki
+      provenance arch_guidance; source policy
+  kernel: linux
+      provenance technical_necessity; source policy
+  kernel_cmdline: root=UUID=<root> rw resume=UUID=<root>
+      resume_offset=<resume_offset>
+      provenance personal_preference; source policy
+  lang: en_US.UTF-8
+      provenance personal_preference; source policy [editable]
+  locales: en_US.UTF-8, es_ES.UTF-8
+      provenance personal_preference; source policy [editable]
+  mirrorlist: inherited_from_live_environment_and_recorded
+      provenance technical_necessity; source policy
+  network: manager=NetworkManager; package=networkmanager;
+      predefined_connections=false
+      provenance personal_preference; source policy
+  packages: base, linux, linux-firmware, sudo, neovim, man-db, man-pages
+      provenance personal_preference; source policy
+  pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
+      provenance personal_preference; source policy
+  partition_table: gpt
+      provenance technical_necessity; source policy
+  root_account: locked
+      provenance personal_preference; source policy [editable]
+  root_minimum_bytes: 16106127360
+      provenance technical_necessity; source policy
+  sudoers: %wheel ALL=(ALL:ALL) ALL
+      provenance personal_preference; source policy
+  swapfile_size: 4096
+      provenance personal_preference; source policy [editable]
+  sysrq: kernel.sysrq = 1
+      provenance personal_preference; source policy
+  time_sync: systemd-timesyncd
+      provenance personal_preference; source policy
+  timezone: Europe/Madrid
+      provenance personal_preference; source policy [editable]
+  user_groups: wheel
+      provenance personal_preference; source policy
+  user_name: mirroros
+      provenance personal_preference; source policy [editable]
+  user_shell: bash
+      provenance personal_preference; source policy
+  zram: false
+      provenance personal_preference; source policy
+
+3. Destructive operations
+=========================
+  DESTRUCTIVE wipe_disk_signatures
+      Remove existing filesystem and partition-table signatures from the target
+      disk.
+  DESTRUCTIVE create_partition_table
+      Write an empty GPT on the target disk.
+  DESTRUCTIVE create_partitions
+      Create the ESP and a root partition on the remaining space.
+  DESTRUCTIVE format_filesystems
+      Format the ESP as FAT32 and the root partition with the selected
+      filesystem.
+
+4. Operations in order
+======================
+  01. wipe_disk_signatures DESTRUCTIVE
+      Remove existing filesystem and partition-table signatures from the target
+      disk.
+      disk: virtio-SYNTH-VDA-0001
+  02. create_partition_table DESTRUCTIVE
+      Write an empty GPT on the target disk.
+      disk: virtio-SYNTH-VDA-0001
+      table: gpt
+  03. create_partitions DESTRUCTIVE
+      Create the ESP and a root partition on the remaining space.
+      disk: virtio-SYNTH-VDA-0001
+      esp_size_bytes: 1073741824
+      esp_mount_point: /boot
+      root: remaining_space
+  04. format_filesystems DESTRUCTIVE
+      Format the ESP as FAT32 and the root partition with the selected
+      filesystem.
+      esp_filesystem: vfat
+      root_filesystem: ext4
+      resolved at apply: partition_uuids (blkid)
+  05. mount_target
+      Mount the root filesystem and the ESP under the target root.
+      esp_mount_point: /boot
+  06. install_packages
+      Install the base package set and the packages of the storage option.
+      packages: base, linux, linux-firmware, sudo, neovim, man-db, man-pages,
+        networkmanager
+  07. generate_fstab
+      Generate /etc/fstab by UUID.
+      identifier: uuid
+  08. create_swapfile
+      Create the swapfile and list it in fstab.
+      path: /swapfile
+      size_mib: 4096
+      resolved at apply: resume_offset (filefrag)
+  09. configure_locale_time_console
+      Configure locales, language, console keymap, time zone, hardware clock,
+      and time sync.
+      locales: en_US.UTF-8, es_ES.UTF-8
+      lang: en_US.UTF-8
+      console_keymap: us
+      timezone: Europe/Madrid
+      hardware_clock: utc
+      time_sync: systemd-timesyncd
+  10. configure_hostname_network
+      Set the hostname and configure NetworkManager without predefined
+      connections.
+      hostname: mirroros-ref
+      network_manager: NetworkManager
+  11. create_user
+      Create the user account and set its password from a protected prompt.
+      user_name: mirroros
+      groups: wheel
+      shell: bash
+  12. configure_root_account
+      Configure the root account as selected.
+      mode: locked
+  13. configure_sudo_sysrq_pacman
+      Install the sudoers drop-in, the sysrq setting, and the pacman options.
+      sudoers: %wheel ALL=(ALL:ALL) ALL
+      sysrq: kernel.sysrq = 1
+      pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
+  14. install_bootloader
+      Install and configure the boot loader and the kernel command line.
+      bootloader: systemd-boot
+      kernel_cmdline: root=UUID=<root> rw resume=UUID=<root>
+        resume_offset=<resume_offset>
+      options: timeout=3; editor=false; fallback_entry=true
+      resolved at apply: root_uuid (blkid)
+      resolved at apply: resume_offset (filefrag)
+  15. enable_services
+      Enable the network, time sync, trim, and storage option services.
+      services: NetworkManager, systemd-timesyncd, fstrim.timer
+
+5. Secret requirements
+======================
+  Only names are recorded. Values are never stored in the plan.
+
+  user_password
+    Purpose           Password of the created user account.
+    Required by       create_user
+    Channel           protected_prompt
+    Provenance        technical_necessity
+
+6. Hardware-derived selections
+==============================
+  Selections:
+    target_disk: virtio-SYNTH-VDA-0001
+        fact storage.disks; rule single_eligible_disk; provenance
+        hardware_detection
+    boot_mode: uefi
+        fact firmware.boot_mode; rule uefi_boot_mode_check; provenance
+        hardware_detection
+
+  Detected capabilities (not evaluated in this stage):
+    graphics_vendor: qemu_virtual
+        fact hardware.graphics; rule not_evaluated; next story 2.6
+    battery_present: false
+        fact hardware.battery_present; rule not_evaluated; next story 2.6
+    virtualization: kvm
+        fact hardware.virtualization; rule not_evaluated; next story 2.6
+    cpu_vendor: AuthenticAMD
+        fact hardware.cpu.vendor; rule not_evaluated; next story 2.6
+
+7. Warnings
+===========
+  None.
+
+8. Digest and bindings
+======================
+  Digest (sha256)   1ccb58bd115e228bf19caefaa8300c29096b68302281f40730ed2fbb694613d2
+  Facts sha256      7c712a7bf6ad182654e5401b3d266f75ebcd77bfb344a3a55f0eee8e55786b69
+  Facts run         20261007T120000Z-11111111-2222-4333-8444-555555555555
+  Facts target      reference-vm
+  Code commit       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (dirty false)
+  Policy sha256     d3acd01fc7e5567922ae3e6d68796c86e45949c0bd8c28b3ea2de7fc5f8c6d77
+  Override sha256   0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242
+
+  This plan is not approved. Approval is a separate step bound to this digest.

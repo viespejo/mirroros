@@ -120,3 +120,35 @@ teardown() {
   lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
   lifecycle_assert_stderr_contains 'Restore install/discovery from Git or re-clone the repository.'
 }
+
+@test "install plan --help prints its own help on stdout without touching the system" {
+  lifecycle_invoke install plan --help
+  lifecycle_assert_status 0
+  lifecycle_assert_stderr_empty
+  lifecycle_assert_stdout_contains 'Usage: install plan --facts <file> [--choices <file>] [--output <dir>]'
+  lifecycle_assert_stdout_contains 'Normalized exit outcomes:'
+  lifecycle_assert_stdout_contains 'Documentation: docs/procedures/install.md'
+}
+
+@test "install plan rejects missing, unsupported, and malformed arguments before any work" {
+  lifecycle_invoke install plan
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains '--facts is required.'
+  lifecycle_assert_no_success_output
+
+  lifecycle_invoke install plan --bogus
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument: --bogus'
+
+  lifecycle_invoke install plan --facts
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains '--facts requires a file.'
+}
+
+@test "install plan reports a missing orchestrator as a damaged checkout" {
+  rm -f -- "$LIFECYCLE_COPY_ROOT/install/plan/plan"
+  lifecycle_invoke install plan --help
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+  lifecycle_assert_stderr_contains 'Restore install/plan from Git or re-clone the repository.'
+}

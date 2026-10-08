@@ -4,6 +4,9 @@ load vm-support
 # REFERENCE_DISCOVERY_TARGET: target id echoed in the guest report.
 # REFERENCE_DISCOVERY_EXIT: discovery exit status the guest reports (0, 2, 5, or 6).
 # REFERENCE_QEMU_MODE: pass (default) or exit (QEMU exits before a report).
+# REFERENCE_PLAN_REPORT: 1 adds a plan section; REFERENCE_PLAN_SAME_DIGEST=1 gives both plans one digest,
+# REFERENCE_PLAN_TAMPER=1 changes the first plan checksum after the last run, and
+# REFERENCE_PLAN_INVALID_EXIT sets the exit of the invalid-choices run (default 2).
 # REFERENCE_COMPARE_STATUS: qemu-img compare status (0 identical, 1 different, 2 error).
 reference_install_discovery_doubles() {
   reference_install_e2e_doubles
@@ -29,8 +32,32 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
   pass)
     if [[ "$exit_status" -eq 0 ]]; then validation='valid'; else validation='invalid'; fi
     facts="{\"format_version\":1,\"validation\":{\"status\":\"${validation}\",\"reasons\":[{\"code\":\"identity_pending_capture\"}],\"warnings\":[]}}"
-    printf 'MIRROROS-REPORT-BEGIN %s\r\n{"schema_version":1,"run_id":"%s","target":"%s","exit_status":%s,"facts":%s,"error":null,"stderr_tail":""}\r\nMIRROROS-REPORT-END %s\r\n' \
-      "$run_id" "$run_id" "${REFERENCE_DISCOVERY_TARGET:?}" "$exit_status" "$facts" "$run_id" >> "$serial"
+    plan_section=''
+    if [[ "${REFERENCE_PLAN_REPORT:-0}" == 1 ]]; then
+      # shellcheck disable=SC2016 # The Node program is a literal; its arguments are passed explicitly.
+      plan_section=",\"plan\":$(node -e '
+        const { createHash } = require("node:crypto");
+        const [same, tamper, invalidExit] = process.argv.slice(1);
+        const plan = (hostname, option, digest, hostSource) => JSON.stringify({
+          choices: { hostname: { value: hostname, source: hostSource }, storage_option: { value: option, source: "choice" } },
+          digest: { algorithm: "sha256", value: digest },
+        });
+        const first = plan("mirroros-ref", "ext4-systemd-boot", "a".repeat(64), "override");
+        const second = plan("mirroros-edit", "btrfs-rescue", (same === "1" ? "a" : "b").repeat(64), "choice");
+        const sha = createHash("sha256").update(first).digest("hex");
+        const run = (name, status, body) => ({
+          name, exit_status: status, plan: body, plan_text: body === null ? null : "plan text\n",
+          plan_run: "{}", stdout_tail: "", stderr_tail: "",
+        });
+        process.stdout.write(JSON.stringify({
+          runs: [run("default", 0, first), run("edited", 0, second), run("invalid", Number(invalidExit), null)],
+          sha256_before: sha,
+          sha256_after: tamper === "1" ? "f".repeat(64) : sha,
+        }));
+      ' "${REFERENCE_PLAN_SAME_DIGEST:-0}" "${REFERENCE_PLAN_TAMPER:-0}" "${REFERENCE_PLAN_INVALID_EXIT:-2}")"
+    fi
+    printf 'MIRROROS-REPORT-BEGIN %s\r\n{"schema_version":1,"run_id":"%s","target":"%s","exit_status":%s,"facts":%s,"error":null,"stderr_tail":""%s}\r\nMIRROROS-REPORT-END %s\r\n' \
+      "$run_id" "$run_id" "${REFERENCE_DISCOVERY_TARGET:?}" "$exit_status" "$facts" "$plan_section" "$run_id" >> "$serial"
     ;;
 esac
 exec sleep 31

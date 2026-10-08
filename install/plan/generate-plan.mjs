@@ -1,0 +1,341 @@
+import { readFileSync } from 'node:fs';
+import { isRecord, reason, validateDocument } from '../discovery/validate-facts.mjs';
+import { PlanContractError } from './canonical-json.mjs';
+import { sha256Canonical, withDigest } from './digest-plan.mjs';
+import { resolveValues } from './resolve-choices.mjs';
+import { FORMAT_VERSION, KINDS, SECRET_CHANNEL, operationSequence, validatePlan } from './validate-plan.mjs';
+
+const GIBIBYTE = 1024 ** 3;
+
+// Failures of these rules are caused by what the user asked for, not by a defect of the generator.
+const INPUT_CAUSED_CODES = ['lang_not_in_locales', 'plan_size_does_not_fit'];
+
+export const OPERATION_DESCRIPTIONS = {
+  wipe_disk_signatures: 'Remove existing filesystem and partition-table signatures from the target disk.',
+  create_partition_table: 'Write an empty GPT on the target disk.',
+  create_partitions: 'Create the ESP and a root partition on the remaining space.',
+  format_filesystems: 'Format the ESP as FAT32 and the root partition with the selected filesystem.',
+  create_btrfs_subvolumes: 'Create the flat Btrfs subvolumes on the new filesystem.',
+  mount_target: 'Mount the root filesystem and the ESP under the target root.',
+  install_packages: 'Install the base package set and the packages of the storage option.',
+  generate_fstab: 'Generate /etc/fstab by UUID.',
+  create_swapfile: 'Create the swapfile and list it in fstab.',
+  configure_locale_time_console: 'Configure locales, language, console keymap, time zone, hardware clock, and time sync.',
+  configure_hostname_network: 'Set the hostname and configure NetworkManager without predefined connections.',
+  create_user: 'Create the user account and set its password from a protected prompt.',
+  configure_root_account: 'Configure the root account as selected.',
+  configure_sudo_sysrq_pacman: 'Install the sudoers drop-in, the sysrq setting, and the pacman options.',
+  install_bootloader: 'Install and configure the boot loader and the kernel command line.',
+  install_limine_snapshot_tools: 'Build and install the pinned Limine snapshot tools.',
+  configure_snapper: 'Create the Snapper root configuration for the root subvolume only.',
+  enable_services: 'Enable the network, time sync, trim, and storage option services.',
+  create_baseline_snapshot: 'Take the post-install baseline snapshot.',
+  sync_limine_snapshot_entries: 'Write the Limine snapshot boot entries.',
+};
+
+export function loadFacts(path) {
+  const fail = (code, message, nextStep) => ({ facts: undefined, reasons: [reason(code, message, nextStep)] });
+  let facts;
+  try {
+    facts = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    return fail(
+      'facts_invalid',
+      `The facts file cannot be read as JSON (${error.code ?? error.name}).`,
+      'Run operations/install discover and pass its target-facts.json.',
+    );
+  }
+  if (!isRecord(facts) || facts.format_version !== 1) {
+    return fail(
+      'facts_format_unknown',
+      'The facts file is not a target-facts document of a supported format_version.',
+      'Run operations/install discover with this version of MirrorOS and pass its target-facts.json.',
+    );
+  }
+  const errors = validateDocument(facts);
+  if (errors.length > 0) {
+    return fail(
+      'facts_invalid',
+      `The facts document fails its validator: ${errors.slice(0, 3).join('; ')}.`,
+      'Rerun operations/install discover and pass the new target-facts.json.',
+    );
+  }
+  if (facts.validation.status !== 'valid') {
+    const codes = facts.validation.reasons.map(item => item.code).join(', ');
+    return fail(
+      'facts_invalid',
+      `The facts are invalid (${codes}); a plan needs valid facts.`,
+      'Resolve the discovery reasons, rerun operations/install discover, and pass the new target-facts.json.',
+    );
+  }
+  try {
+    sha256Canonical(facts);
+  } catch (error) {
+    return fail('facts_invalid', `The facts document cannot be canonicalized: ${error.message}`, 'Rerun operations/install discover.');
+  }
+  return { facts, reasons: [] };
+}
+
+function diskIdentifier(disk) {
+  return disk.identity.by_id ?? disk.identity.path;
+}
+
+function describeDisk(disk) {
+  const { identity } = disk;
+  const size = identity.size_bytes === undefined ? 'unknown size' : `${(identity.size_bytes / GIBIBYTE).toFixed(1)} GiB`;
+  return `${diskIdentifier(disk) ?? 'unidentified disk'} (${size}${identity.model === undefined ? '' : `, ${identity.model}`})`;
+}
+
+function candidatesText(disks) {
+  const eligible = disks.filter(disk => disk.eligible);
+  return eligible.length === 0 ? 'none' : eligible.map(describeDisk).join('; ');
+}
+
+function selectDisk(disks, requested) {
+  const eligible = disks.filter(disk => disk.eligible);
+  if (requested !== undefined) {
+    const named = disks.find(disk => disk.identity.by_id === requested || disk.identity.path === requested);
+    if (named === undefined) {
+      return { reasons: [reason(
+        'disk_unknown',
+        `The target_disk choice names no disk of the facts. Eligible candidates: ${candidatesText(disks)}.`,
+        'Set target_disk to the by_id of an eligible candidate and rerun plan.',
+      )] };
+    }
+    if (!named.eligible) {
+      return { reasons: [reason(
+        'disk_ineligible',
+        `The disk named by target_disk is not eligible (${(named.ineligible_reasons ?? []).join(', ')}). Eligible candidates: ${candidatesText(disks)}.`,
+        'Set target_disk to the by_id of an eligible candidate and rerun plan.',
+      )] };
+    }
+    return { disk: named, preselected: false, reasons: [] };
+  }
+  if (eligible.length === 1) return { disk: eligible[0], preselected: true, reasons: [] };
+  if (eligible.length === 0) {
+    return { reasons: [reason('facts_invalid', 'The facts list no eligible disk.', 'Rerun operations/install discover and resolve its reasons.')] };
+  }
+  return { reasons: [reason(
+    'disk_selection_required',
+    `Several disks are eligible and a plan never guesses. Candidates: ${candidatesText(disks)}.`,
+    'Name one candidate as target_disk in a choices file (--choices) and rerun plan.',
+  )] };
+}
+
+function parametersFor(kind, { values, option, disk }) {
+  switch (kind) {
+    case 'wipe_disk_signatures':
+      return { disk };
+    case 'create_partition_table':
+      return { disk, table: values.partition_table };
+    case 'create_partitions':
+      return { disk, esp_size_bytes: values.esp.size_bytes, esp_mount_point: values.esp.mount_point, root: 'remaining_space' };
+    case 'format_filesystems':
+      return { esp_filesystem: values.esp.filesystem, root_filesystem: option.filesystem };
+    case 'create_btrfs_subvolumes':
+      return { subvolumes: option.subvolumes, mount_options: option.mount_options };
+    case 'mount_target':
+      return { esp_mount_point: values.esp.mount_point };
+    case 'install_packages':
+      return { packages: [...values.packages, values.network.package, ...option.additional_packages] };
+    case 'generate_fstab':
+      return { identifier: 'uuid' };
+    case 'create_swapfile':
+      return { path: '/swapfile', size_mib: values.swapfile_size };
+    case 'configure_locale_time_console':
+      return {
+        locales: values.locales,
+        lang: values.lang,
+        console_keymap: values.console_keymap,
+        timezone: values.timezone,
+        hardware_clock: values.hardware_clock,
+        time_sync: values.time_sync,
+      };
+    case 'configure_hostname_network':
+      return { hostname: values.hostname, network_manager: values.network.manager };
+    case 'create_user':
+      return { user_name: values.user_name, groups: values.user_groups, shell: values.user_shell };
+    case 'configure_root_account':
+      return { mode: values.root_account };
+    case 'configure_sudo_sysrq_pacman':
+      return { sudoers: values.sudoers, sysrq: values.sysrq, pacman_options: values.pacman_options };
+    case 'install_bootloader':
+      return { bootloader: option.bootloader, kernel_cmdline: values.kernel_cmdline, options: values.bootloader_options };
+    case 'enable_services':
+      return { services: [values.network.manager, values.time_sync, values.fstrim] };
+    default:
+      return {};
+  }
+}
+
+function resolvedAtApply(kind, option) {
+  if (kind === 'format_filesystems') return [{ name: 'partition_uuids', method: 'blkid' }];
+  if (kind === 'create_swapfile') return [{ name: 'resume_offset', method: option.resume_offset_method }];
+  if (kind === 'install_bootloader') {
+    return [
+      { name: 'root_uuid', method: 'blkid' },
+      { name: 'resume_offset', method: option.resume_offset_method },
+    ];
+  }
+  return undefined;
+}
+
+function buildOperations(storageOption, context) {
+  return operationSequence(storageOption).map(kind => {
+    const operation = {
+      id: kind,
+      kind,
+      destructive: KINDS[kind],
+      parameters: parametersFor(kind, context),
+      description: OPERATION_DESCRIPTIONS[kind],
+    };
+    const resolved = resolvedAtApply(kind, context.option);
+    if (resolved !== undefined) operation.resolved_at_apply = resolved;
+    return operation;
+  });
+}
+
+function buildSecrets(rootAccount) {
+  const secrets = [{
+    name: 'user_password',
+    purpose: 'Password of the created user account.',
+    required_by: ['create_user'],
+    channel: SECRET_CHANNEL,
+    provenance: 'technical_necessity',
+  }];
+  if (rootAccount === 'password') {
+    secrets.push({
+      name: 'root_password',
+      purpose: 'Password of the root account.',
+      required_by: ['configure_root_account'],
+      channel: SECRET_CHANNEL,
+      provenance: 'personal_preference',
+    });
+  }
+  return secrets;
+}
+
+function effectiveValue(facts, path) {
+  const entry = facts.effective[path];
+  return entry === undefined || entry.value === undefined ? 'unknown' : entry.value;
+}
+
+function buildHardwareSelections(facts, identifier, preselected) {
+  const selections = [];
+  if (preselected) {
+    selections.push({
+      id: 'target_disk',
+      fact: 'storage.disks',
+      value: identifier,
+      provenance: 'hardware_detection',
+      rule: 'single_eligible_disk',
+    });
+  }
+  selections.push({
+    id: 'boot_mode',
+    fact: 'firmware.boot_mode',
+    value: effectiveValue(facts, 'firmware.boot_mode'),
+    provenance: 'hardware_detection',
+    rule: 'uefi_boot_mode_check',
+  });
+  const graphics = effectiveValue(facts, 'hardware.graphics');
+  const capability = (id, fact, value) => ({ id, fact, value, rule: 'not_evaluated', next_story: '2.6' });
+  return {
+    selections,
+    detected_capabilities: [
+      capability('graphics_vendor', 'hardware.graphics', Array.isArray(graphics) ? graphics.map(device => device.vendor ?? 'unknown') : graphics),
+      capability('battery_present', 'hardware.battery_present', effectiveValue(facts, 'hardware.battery_present')),
+      capability('virtualization', 'hardware.virtualization', effectiveValue(facts, 'hardware.virtualization')),
+      capability('cpu_vendor', 'hardware.cpu.vendor', effectiveValue(facts, 'hardware.cpu.vendor')),
+    ],
+  };
+}
+
+// facts: a valid target-facts document. policy: the result of loadPlanPolicy. choices and override:
+// `{ values }` results of loadChoices and loadPlanOverride (override may also carry `sha256`).
+// Returns { plan, reasons }: reasons are input problems (exit 2). A plan that fails its own validator for
+// any other reason is an invariant violation and throws a PlanContractError (exit 6).
+export function generatePlan({ facts, policy, choices = { values: {} }, override = { values: {} } }) {
+  const disks = facts.layers.detected.storage.disks;
+  const selected = selectDisk(disks, choices.values.target_disk);
+  if (selected.reasons.length > 0) return { plan: undefined, reasons: selected.reasons };
+  const { disk, preselected } = selected;
+  const identifier = diskIdentifier(disk);
+  if (identifier === undefined) {
+    return { plan: undefined, reasons: [reason(
+      'disk_unidentifiable',
+      'The selected disk exposes neither a by_id nor a path, so it cannot be identified.',
+      'Rerun operations/install discover; if the disk stays unidentifiable, it cannot be a target.',
+    )] };
+  }
+
+  const detected = preselected
+    ? { target_disk: { value: identifier, provenance: 'hardware_detection', editable: true } }
+    : {};
+  const resolved = resolveValues({
+    policy: policy.policy,
+    detected,
+    override: override.values,
+    choices: { ...choices.values, ...(choices.values.target_disk === undefined ? {} : { target_disk: identifier }) },
+  });
+  const values = Object.fromEntries(Object.entries(resolved).map(([key, entry]) => [key, entry.value]));
+  const option = policy.storageOptions[values.storage_option];
+  resolved.storage_option = {
+    ...resolved.storage_option,
+    tier: option.tier,
+    filesystem: option.filesystem,
+    bootloader: option.bootloader,
+    resume_offset_method: option.resume_offset_method,
+  };
+
+  const warnings = [];
+  if (disk.identity.by_id === undefined) {
+    warnings.push(reason(
+      'disk_without_by_id',
+      'The target disk has no stable by_id; it is addressed by its path, which can change between boots.',
+      'Review the disk model and size again before approving the plan.',
+    ));
+  }
+  if (option.tier === 'experimental') {
+    warnings.push(reason(
+      'storage_option_experimental',
+      `The storage option ${values.storage_option} is experimental and has no support commitment.`,
+      'Select ext4-systemd-boot unless the experimental option is intended.',
+    ));
+  }
+
+  const binding = {
+    facts_sha256: sha256Canonical(facts),
+    run_id: facts.source.run_id,
+    target_id: facts.source.target_id,
+    commit: facts.source.commit,
+    dirty: facts.source.dirty,
+  };
+  const policyBinding = { policy_sha256: policy.sha256 };
+  if (override.sha256 !== undefined) policyBinding.override_sha256 = override.sha256;
+
+  const targetDisk = { eligible: disk.eligible, current_layout: disk.layout };
+  for (const key of ['path', 'by_id', 'wwn', 'serial', 'model', 'size_bytes']) {
+    if (disk.identity[key] !== undefined) targetDisk[key] = disk.identity[key];
+  }
+  const plan = withDigest({
+    format_version: FORMAT_VERSION,
+    target: { target_id: facts.source.target_id, disk: targetDisk },
+    choices: resolved,
+    operations: buildOperations(values.storage_option, { values, option, disk: identifier }),
+    secret_requirements: buildSecrets(values.root_account),
+    hardware_selections: buildHardwareSelections(facts, identifier, preselected),
+    warnings,
+    facts_binding: binding,
+    policy_binding: policyBinding,
+  });
+
+  const problems = validatePlan(plan, { facts });
+  const inputProblems = problems.filter(item => INPUT_CAUSED_CODES.includes(item.code));
+  const internalProblems = problems.filter(item => !INPUT_CAUSED_CODES.includes(item.code));
+  if (internalProblems.length > 0) {
+    throw new PlanContractError(internalProblems.map(item => `${item.code}: ${item.message}`));
+  }
+  if (inputProblems.length > 0) return { plan: undefined, reasons: inputProblems };
+  return { plan, reasons: [] };
+}

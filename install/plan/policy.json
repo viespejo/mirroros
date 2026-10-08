@@ -1,0 +1,192 @@
+{
+  "format_version": 1,
+  "policy": {
+    "firmware_mode": {
+      "value": "uefi",
+      "provenance": "technical_necessity",
+      "editable": false
+    },
+    "partition_table": {
+      "value": "gpt",
+      "provenance": "technical_necessity",
+      "editable": false
+    },
+    "esp": {
+      "value": {
+        "size_bytes": 1073741824,
+        "filesystem": "vfat",
+        "mount_point": "/boot"
+      },
+      "provenance": "arch_guidance",
+      "editable": false
+    },
+    "root_minimum_bytes": {
+      "value": 16106127360,
+      "provenance": "technical_necessity",
+      "editable": false
+    },
+    "storage_option": {
+      "value": "ext4-systemd-boot",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "kernel": {
+      "value": "linux",
+      "provenance": "technical_necessity",
+      "editable": false
+    },
+    "initramfs": {
+      "value": "mkinitcpio-default-hooks-no-uki",
+      "provenance": "arch_guidance",
+      "editable": false
+    },
+    "kernel_cmdline": {
+      "value": "root=UUID=<root> rw resume=UUID=<root> resume_offset=<resume_offset>",
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "bootloader_options": {
+      "value": {
+        "timeout": 3,
+        "editor": false,
+        "fallback_entry": true
+      },
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "swapfile_size": {
+      "value": 4096,
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "zram": {
+      "value": false,
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "packages": {
+      "value": ["base", "linux", "linux-firmware", "sudo", "neovim", "man-db", "man-pages"],
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "mirrorlist": {
+      "value": "inherited_from_live_environment_and_recorded",
+      "provenance": "technical_necessity",
+      "editable": false
+    },
+    "locales": {
+      "value": ["en_US.UTF-8", "es_ES.UTF-8"],
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "lang": {
+      "value": "en_US.UTF-8",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "console_keymap": {
+      "value": "us",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "timezone": {
+      "value": "Europe/Madrid",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "hardware_clock": {
+      "value": "utc",
+      "provenance": "arch_guidance",
+      "editable": false
+    },
+    "time_sync": {
+      "value": "systemd-timesyncd",
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "hostname": {
+      "value": "mirroros",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "network": {
+      "value": {
+        "manager": "NetworkManager",
+        "package": "networkmanager",
+        "predefined_connections": false
+      },
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "user_name": {
+      "value": "mirroros",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "user_groups": {
+      "value": ["wheel"],
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "user_shell": {
+      "value": "bash",
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "root_account": {
+      "value": "locked",
+      "provenance": "personal_preference",
+      "editable": true
+    },
+    "sudoers": {
+      "value": "%wheel ALL=(ALL:ALL) ALL",
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "sysrq": {
+      "value": "kernel.sysrq = 1",
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "pacman_options": {
+      "value": ["Color", "ParallelDownloads = 5", "VerbosePkgLists", "ILoveCandy"],
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "fstrim": {
+      "value": "fstrim.timer",
+      "provenance": "personal_preference",
+      "editable": false
+    }
+  },
+  "storage_options": {
+    "ext4-systemd-boot": {
+      "tier": "default",
+      "filesystem": "ext4",
+      "bootloader": "systemd-boot",
+      "resume_offset_method": "filefrag",
+      "additional_packages": []
+    },
+    "btrfs-rescue": {
+      "tier": "supported",
+      "filesystem": "btrfs",
+      "bootloader": "systemd-boot",
+      "resume_offset_method": "btrfs inspect-internal map-swapfile -r",
+      "subvolumes": ["@", "@home", "@log", "@pkg", "@snapshots", "@swap"],
+      "mount_options": "compress=zstd:1,relatime",
+      "additional_packages": ["btrfs-progs", "snapper", "snap-pac", "compsize"]
+    },
+    "btrfs-limine": {
+      "tier": "experimental",
+      "filesystem": "btrfs",
+      "bootloader": "limine",
+      "resume_offset_method": "btrfs inspect-internal map-swapfile -r",
+      "subvolumes": ["@", "@home", "@log", "@pkg", "@snapshots", "@swap"],
+      "mount_options": "compress=zstd:1,relatime",
+      "additional_packages": [
+        "btrfs-progs", "snapper", "snap-pac", "compsize",
+        "limine", "efibootmgr", "libnotify", "gettext", "base-devel", "git"
+      ]
+    }
+  }
+}

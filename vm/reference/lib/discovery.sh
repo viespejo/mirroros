@@ -27,7 +27,7 @@ DISCOVERY_OVERLAY_PATHS=(
 discovery_usage_error() {
   printf 'MirrorOS qualify-discovery: %s\n' "$1" >&2
   printf '%s\n' \
-    'Accepted forms: qualify-discovery --scenario empty|layout|framework-target [--development-overlay] BUNDLE_DIRECTORY, qualify-discovery --help.' >&2
+    'Accepted forms: qualify-discovery --scenario empty|layout|framework-target|plan [--development-overlay] BUNDLE_DIRECTORY, qualify-discovery --help.' >&2
   return 2
 }
 
@@ -62,7 +62,7 @@ discovery_parse_arguments() {
   done
 
   case "$DISCOVERY_SCENARIO" in
-    empty | layout)
+    empty | layout | plan)
       DISCOVERY_TARGET='reference-vm'
       DISCOVERY_EXPECTED_EXIT=0
       ;;
@@ -182,6 +182,7 @@ discovery_write_guest_script() {
   {
     printf '#!/usr/bin/bash\n'
     printf "MIRROROS_DISCOVERY_TARGET='%s'\n" "$DISCOVERY_TARGET"
+    printf "MIRROROS_DISCOVERY_SCENARIO='%s'\n" "$DISCOVERY_SCENARIO"
     if [[ "$DISCOVERY_OVERLAY" -eq 1 ]]; then
       printf "MIRROROS_DISCOVERY_OVERLAY_B64='%s'\n" "$DISCOVERY_OVERLAY_B64"
     fi
@@ -276,10 +277,11 @@ discovery_evaluate_report() {
 
   # shellcheck disable=SC2034 # Read by discovery_write_result.
   DISCOVERY_VERDICT="$(node --input-type=module - "$report_path" "$run_id" "$evidence_run_dir" \
-    "$DISCOVERY_TARGET" "$DISCOVERY_EXPECTED_EXIT" <<'NODE'
-import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
+    "$DISCOVERY_TARGET" "$DISCOVERY_EXPECTED_EXIT" "$DISCOVERY_SCENARIO" <<'NODE'
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
 
-const [reportPath, runId, evidenceDir, target, expectedText] = process.argv.slice(2);
+const [reportPath, runId, evidenceDir, target, expectedText, scenario] = process.argv.slice(2);
 const errors = [];
 let report = null;
 try {
@@ -319,6 +321,48 @@ if (errors.length === 0) {
     errors.push('exit status 0 or 2 requires target-facts.json');
   }
 }
+const planNames = ['default', 'edited', 'invalid'];
+const planFiles = [['installation-plan.json', 'plan'], ['installation-plan.txt', 'plan_text'], ['plan-run.json', 'plan_run']];
+if (errors.length === 0 && scenario === 'plan' && report.exit_status === 0) {
+  const plan = report.plan;
+  const wellFormed = isRecord(plan) && Array.isArray(plan.runs) && plan.runs.length === planNames.length
+    && plan.runs.every((run, index) => isRecord(run) && run.name === planNames[index] && Number.isInteger(run.exit_status)
+      && planFiles.every(([, key]) => run[key] === null || typeof run[key] === 'string'))
+    && typeof plan.sha256_before === 'string' && typeof plan.sha256_after === 'string';
+  if (!wellFormed) errors.push('the plan scenario requires a complete plan section');
+}
+if (errors.length === 0 && scenario === 'plan' && isRecord(report.plan)) {
+  const parse = text => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+  const sha256 = text => createHash('sha256').update(text).digest('hex');
+  const { runs } = report.plan;
+  const first = parse(runs[0].plan);
+  const second = parse(runs[1].plan);
+  const digests = [first?.digest?.value ?? null, second?.digest?.value ?? null];
+  const exits = [report.exit_status, ...runs.map(run => run.exit_status)];
+  const checks = {
+    exits_as_expected: exits.join(',') === '0,0,0,2',
+    digests_differ: digests[0] !== null && digests[1] !== null && digests[0] !== digests[1],
+    first_plan_identical: typeof runs[0].plan === 'string' && sha256(runs[0].plan) === report.plan.sha256_before
+      && report.plan.sha256_before === report.plan.sha256_after,
+    default_hostname_from_override: first?.choices?.hostname?.value === 'mirroros-ref' && first.choices.hostname.source === 'override',
+    edited_values_from_choice: second?.choices?.hostname?.source === 'choice'
+      && second.choices.storage_option?.value === 'btrfs-rescue' && second.choices.storage_option.source === 'choice',
+    invalid_choices_wrote_no_plan: runs[2].plan === null && runs[2].plan_text === null,
+  };
+  verdict.plan = {
+    expected_exits: [0, 0, 0, 2],
+    exits,
+    digests,
+    ...checks,
+    ok: Object.values(checks).every(Boolean),
+  };
+}
 if (errors.length === 0) {
   for (const [name, content] of [['target-facts.json', report.facts], ['error.json', report.error]]) {
     if (content === null) continue;
@@ -326,9 +370,21 @@ if (errors.length === 0) {
     writeFileSync(path, `${JSON.stringify(content, null, 2)}\n`, { mode: 0o600 });
     chmodSync(path, 0o600);
   }
+  if (verdict.plan !== undefined) {
+    for (const run of report.plan.runs) {
+      const directory = `${evidenceDir}/plan-${run.name}`;
+      mkdirSync(directory, { mode: 0o700 });
+      chmodSync(directory, 0o700);
+      for (const [name, key] of planFiles) {
+        if (run[key] === null) continue;
+        writeFileSync(`${directory}/${name}`, run[key], { mode: 0o600 });
+        chmodSync(`${directory}/${name}`, 0o600);
+      }
+    }
+  }
 }
 process.stdout.write(JSON.stringify(verdict));
-process.exitCode = errors.length > 0 ? 5 : (verdict.actual_exit === Number(expectedText) ? 0 : 4);
+process.exitCode = errors.length > 0 ? 5 : (verdict.actual_exit === Number(expectedText) && (verdict.plan?.ok ?? true) ? 0 : 4);
 NODE
   )" || status=$?
   outcome_record_tool_status guest_report_validation "$status"
@@ -455,6 +511,7 @@ const document = {
     reason_codes: accepted ? verdict.reason_codes : [],
     stderr_tail: accepted ? verdict.stderr_tail : '',
   },
+  ...(scenario === 'plan' && accepted && verdict.plan !== undefined ? { plan: verdict.plan } : {}),
   disk_identity: { method: 'qemu-img compare', comparison },
   duration_seconds: Number(durationText),
   failed_stage: failedStage || null,
