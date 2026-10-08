@@ -169,7 +169,7 @@ NFR52: A task must have a documented manual or assisted process and demonstrated
 - Record source identity, tool versions, repositories, resolved package manifests, checksums, VM configuration, stage durations, and secret-scanned allowlisted logs in per-run evidence.
 - Enforce secret scanning with gitleaks against source, staging trees, artifacts, retained evidence, and logs; use runtime-only secret injection and narrow privilege boundaries.
 - Qualify artifacts through QEMU/KVM with OVMF before physical installation; promote artifacts only through build, boot, install, configuration, hibernation, idempotency, and capability-verification gates.
-- Maintain distinct current-package canary and accepted-known-good artifact tracks; require external backup, independent rescue media, and VM qualification before the Slimbook physical migration.
+- Maintain distinct current-package canary and accepted-known-good artifact tracks; require external backup, independent rescue media, and VM qualification before the Framework Laptop 13 Pro physical migration.
 - Use the defined project layout, naming, atomic structured-output, validation-before-mutation, postcondition, idempotency, retry, attribution, testing, and documentation conventions from Architecture.
 - Do not introduce public-distribution infrastructure, Calamares, custom repositories, persistent assistants, welcome applications, background management daemons, remote control planes, or broad hardware support in the MVP.
 
@@ -1104,7 +1104,7 @@ So that recovery does not depend on repairing current upstream breakage first.
 **Requirements:** FR4, FR59, FR60
 
 As the MirrorOS user,
-I want to migrate the Slimbook using the VM-qualified process,
+I want to migrate the Framework Laptop 13 Pro using the VM-qualified process,
 So that the new laptop becomes a verified daily working environment with a recovery path available.
 
 **Acceptance Criteria:**

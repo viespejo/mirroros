@@ -479,7 +479,7 @@ MirrorOS deployment means reconstructing and qualifying a machine rather than de
 - Current Arch Linux-compatible build host.
 - QEMU/KVM reference laboratory with OVMF UEFI firmware.
 - One version-controlled reference VM configuration.
-- One physical target: Slimbook Creative.
+- One physical target: Framework Laptop 13 Pro (AMD Ryzen AI 300, integrated graphics only).
 - Working KVM is an automatically checked validation precondition.
 - Containers and remote CI are not required for the initial supported path.
 
@@ -561,7 +561,7 @@ Hibernation validation covers swapfile resume configuration, offset recalculatio
 8. Integrate package provenance and independent configuration repositories.
 9. Implement portable system, target hardware, desktop, NVIDIA, swapfile, and hibernation capabilities.
 10. Complete clean end-to-end VM reconstruction and artifact promotion.
-11. Qualify the Slimbook only after backup, rescue, and known-good gates pass.
+11. Qualify the Framework Laptop 13 Pro only after backup, rescue, and known-good gates pass.
 
 **Cross-Component Dependencies:**
 
@@ -1083,8 +1083,8 @@ mirroros/
 │   │   └── normalize-hardware.mjs
 │   └── rules/
 │       ├── amd-integrated-graphics/
-│       ├── nvidia-discrete-graphics/
-│       ├── hybrid-graphics/
+│       ├── nvidia-discrete-graphics/   # not applicable to the current target (ADR 0005)
+│       ├── hybrid-graphics/            # not applicable to the current target (ADR 0005)
 │       ├── battery/
 │       └── virtualization/
 │
@@ -1092,7 +1092,7 @@ mirroros/
 │   ├── reference-vm/
 │   │   ├── README.md
 │   │   └── overrides/
-│   └── slimbook-creative/
+│   └── framework-13-pro-amd/
 │       ├── README.md
 │       └── overrides/
 │
@@ -1256,7 +1256,7 @@ Niri is placed below `desktop/compositor/providers/` because it is a replaceable
 
 - `hardware/discovery/` normalizes observed capabilities.
 - `hardware/rules/` maps capabilities to applicable selections.
-- `targets/reference-vm/` and `targets/slimbook-creative/` contain explicit target overrides.
+- `targets/reference-vm/` and `targets/framework-13-pro-amd/` contain explicit target overrides.
 - Hardware rules do not modify portable capability definitions.
 - Target overrides have higher precedence than detected selections and remain reviewable.
 
@@ -1317,7 +1317,7 @@ Neovim, Pi, and other independent repositories remain authoritative. Their capab
 | Architecture decisions | `docs/adr/` |
 | Agent authority rules | `AGENTS.md`, `docs/architecture.md` |
 | Hibernation | `capabilities/power/hibernate/`, `tests/integration/hibernation/` |
-| Hybrid graphics | `hardware/rules/hybrid-graphics/`, target overrides, verification checks |
+| Hybrid graphics (not applicable to the current target, ADR 0005) | `hardware/rules/hybrid-graphics/`, target overrides, verification checks |
 
 ### Integration Points
 
@@ -1509,7 +1509,7 @@ All 65 functional requirements have an architectural owner.
 - Performance is addressed through measured stage durations, a controlled matrix, and cache-independent clean reconstruction.
 - Security is addressed through secret-free source, narrow privileges, target-bound authorization, package provenance, signature/checksum controls, and secret scanning.
 - Reliability is addressed through VM qualification, idempotency, postcondition verification, explicit failure states, safe retries, and retained known-good artifacts.
-- Portability is intentionally bounded to one reference VM and one Slimbook target.
+- Portability is intentionally bounded to one reference VM and one Framework Laptop 13 Pro target.
 - Maintainability is addressed through upstream-first integration, minimal profile changes, language constraints, ownership boundaries, and prototype gates.
 - Operational transparency is addressed through stable exit statuses, preserved upstream diagnostics, persistent logs, and explicit artifact metadata.
 - Visual and keyboard requirements have structural owners under desktop capabilities but require the MVP capability inventory to freeze their exact acceptance checks.
@@ -1542,7 +1542,7 @@ Agents have explicit rules for technology authority, Bash and JavaScript selecti
 2. Complete the shell versus Ansible convergence prototype and ADR.
 3. Freeze the exact MVP capability inventory before broad environment implementation.
 4. Define installation, execution, and verification schemas through their prototypes and contract tests.
-5. Capture actual Slimbook PCI, USB, firmware, storage, and graphics topology before final hardware rules.
+5. Capture actual Framework Laptop 13 Pro PCI, USB, firmware, storage, and graphics topology before final hardware rules.
 6. Validate swapfile hibernation and hybrid AMD/NVIDIA behavior on physical hardware.
 7. Decide whether the CachyOS kernel produces sufficient measured value to justify its repository and maintenance surface.
 
