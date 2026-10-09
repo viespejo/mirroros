@@ -1,0 +1,85 @@
+export const OUTCOMES = {
+  approved: [2],
+  cancelled: [3],
+  invalidated: [2],
+  blocked: [2],
+  failed: [5, 6],
+};
+
+export const SIGINT = 2;
+
+const STANDARD_REASONS = {
+  confirmation_mismatch: {
+    message: 'The typed device name does not match the selected disk.',
+    next_step: 'Run apply again and type the exact device name to confirm.',
+  },
+  engine_not_available: {
+    message: 'The installation engine is not part of this MirrorOS version and nothing was executed.',
+    next_step: 'Installation becomes available with Story 2.5.',
+  },
+  gum_not_qualified: {
+    message: 'Gum is missing or its major version is not 2, so its behavior is not qualified for this flow.',
+    next_step: 'Use the Gum version recorded for this medium, or requalify the flow (ADR 0004).',
+  },
+  device_name_unavailable: {
+    message: 'The selected disk has no kernel device path, so the device name to type cannot be derived.',
+    next_step: 'Regenerate and review the installation plan with a disk that reports its path.',
+  },
+};
+
+export function standardReason(code) {
+  const known = STANDARD_REASONS[code];
+  if (known === undefined) throw new Error(`unknown standard reason: ${code}`);
+  return { code, ...known };
+}
+
+// Gives a reason the architecture's structured error shape. `child_exit_status` appears only when a
+// child process exists.
+export function structuredReason(item, { operation = 'apply', childExitStatus } = {}) {
+  const shaped = {
+    code: item.code,
+    stage: 'install',
+    operation: item.operation ?? operation,
+    message: item.message,
+    next_step: item.next_step,
+  };
+  const child = item.child_exit_status ?? childExitStatus;
+  if (child !== undefined && child !== null) shaped.child_exit_status = child;
+  return shaped;
+}
+
+export function resultFor(outcome, { exitStatus, reasons = [] } = {}) {
+  const allowed = OUTCOMES[outcome];
+  if (allowed === undefined) throw new Error(`unknown outcome: ${outcome}`);
+  const status = exitStatus ?? allowed[0];
+  if (!allowed.includes(status)) throw new Error(`exit status ${status} is not valid for outcome ${outcome}`);
+  return { exit_status: status, outcome, reasons };
+}
+
+const cancelled = () => ({ action: 'stop', exit_status: 3, outcome: 'cancelled' });
+
+// Maps a Gum status for one interactive prompt. Phases: `menu`, `edit`, `confirm`, `name`. Gum returns
+// 1 for decline and Esc, and 130 for Ctrl+C (ADR 0004). Esc inside an edit widget goes back to the
+// dashboard; everywhere else decline and Esc cancel. Ctrl+C cancels only inside the interactive phase.
+export function mapGumStatus(status, phase, { interactive = true } = {}) {
+  if (status === 0) return { action: 'proceed' };
+  if (status === 130) return interactive ? cancelled() : { action: 'stop', exit_status: 130, outcome: null };
+  if (status === 1) return phase === 'edit' ? { action: 'back' } : cancelled();
+  return { action: 'stop', exit_status: 5, outcome: 'failed' };
+}
+
+// Maps a signal that ended the run. SIGINT inside the interactive phase is a cancellation; every other
+// case keeps the shell convention 128+n.
+export function mapSignal(signal, { interactive }) {
+  if (signal === SIGINT && interactive) return cancelled();
+  return { action: 'stop', exit_status: 128 + signal, outcome: null };
+}
+
+// Maps the exit status of a child stage (discover, plan). A status 2 before the review is `blocked`;
+// where an earlier approval or review could be stale it is `invalidated`.
+export function mapStageStatus(status, { invalidating }) {
+  if (status === 0) return { action: 'proceed' };
+  if (status === 2) return { action: 'stop', exit_status: 2, outcome: invalidating ? 'invalidated' : 'blocked' };
+  if (status === 6) return { action: 'stop', exit_status: 6, outcome: 'failed' };
+  return { action: 'stop', exit_status: 5, outcome: 'failed' };
+}

@@ -1,6 +1,6 @@
 # Install lifecycle procedure
 
-**Availability:** `discover` and `plan` are implemented; confirmation and installation remain pending.
+**Availability:** `discover`, `plan`, and interactive `apply` confirmation are implemented; the installation engine remains pending. A valid approval executes nothing and returns `2` with `engine_not_available`.
 
 ## Current behavior
 
@@ -14,8 +14,9 @@ Invoke the command by path from any working directory; it does not need to be in
 | Missing or unloadable `operations/lib/lifecycle-discovery.sh` helper | Returns `6`; reports an incomplete or damaged checkout and advises restoring the helper from Git or recloning. |
 | `discover …` | Delegates to `install/discovery/discover`; see [Target discovery](#target-discovery). A missing orchestrator returns `6`. |
 | `plan …` | Delegates to `install/plan/plan`; see [Installation plan](#installation-plan). A missing orchestrator returns `6`. |
+| `apply …` | Delegates to `install/confirmation/confirm-plan`; see [Interactive installation (apply)](#interactive-installation-apply). A missing orchestrator returns `6`. |
 
-Except for `discover` and `plan`, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
+Except for `discover`, `plan`, and `apply`, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
 
 ## Target discovery
 
@@ -112,13 +113,53 @@ An invalid run writes only `plan-run.json` with its reasons. Stdout carries a su
 
 ### Regeneration and approval
 
-Changing a choice and rerunning `plan` creates a new run directory with a new plan and a different digest; the earlier plan stays byte-identical and unapproved. The plan has no approval field, and a plan carrying an `approved` or `approval` field is rejected by the validator. Reviewing and approving a plan, bound to its digest, belongs to Story 2.4, and executing it belongs to Story 2.5.
+Changing a choice and rerunning `plan` creates a new run directory with a new plan and a different digest; the earlier plan stays byte-identical and unapproved. The plan has no approval field, and a plan carrying an `approved` or `approval` field is rejected by the validator. `apply` reviews and confirms the plan through ephemeral, single-use, in-process approval bound to the target and digest. Its `approval-record.json` is evidence only and cannot authorize a later run; every retry requires fresh confirmation. Executing the plan belongs to Story 2.5.
 
 ### Recovery
 
 Planning changes nothing on the target. Fix the reported cause, such as the choices file or the facts, and rerun it into a new output directory.
 
-## Intended contract
+## Interactive installation (apply)
+
+```text
+operations/install apply [--plan <file>] [--output <dir>]
+operations/install apply --help
+```
+
+The command is available as `mirroros-install apply` on the live medium. It performs read-only discovery, review, and confirmation, not installation. The full format, safety projection, reason codes, and records are specified in [`contracts/installation-confirmation.md`](../../contracts/installation-confirmation.md).
+
+### Inputs and flow
+
+- Stdin and stdout must both be terminals. Missing TTY, `--yes`, `--non-interactive`, `--target`, and unknown options return `2` before any prompt or discovery; there is no bypass.
+- Gum must be installed with major version `2`; missing or unqualified Gum returns `6`. Node.js and the embedded discovery and plan components are also required. No path requests elevation or invokes `sudo`.
+- Without `--plan`, choose a definition from `targets/` with Gum; there is no automatic target detection. Discovery checks that selection. Framework remains blocked while its DMI identity is pending capture.
+- `--plan <file>` validates and copies an existing plan into `plans/01/`, preserving the original; the target comes from the plan. `--output <dir>` names an absent or empty run directory, defaulting to `evidence/install/<run-id>/`.
+
+After the TTY and Gum checks, the flow chooses the target, runs `discovery/initial/`, generates or copies the plan, and checks its safety bindings before review. A single grayscale dashboard shows the digest, target, disk identity and layout, all choices with provenance and source, `DESTRUCTIVE` operations, and secret requirements by name, channel, and consumer. No secret value is requested.
+
+The safe-first menu offers Cancel, Edit a choice, and Continue to confirmation. Each valid edit regenerates a plan through the existing generator in a new `plans/NN/`; `choices.json` accumulates edits. Invalid combinations display `message` and `next_step`, discard the edit, and keep the previous plan. Esc in an edit widget returns unchanged to the dashboard. Policy-fixed keys are not editable.
+
+Confirmation starts focused on No and identifies the disk and digest prefix. Under `NO_COLOR` or `TERM=dumb`, it uses a safe-first Gum choice instead of buttons. After Yes, type the kernel device name shown by the prompt, such as `vda`; a mismatch cancels without retry. Final rediscovery then checks target identity, firmware, Secure Boot state, disk identity, eligibility and layout, policy and override hashes, and the plan file's digest. A change invalidates approval with a specific reason and the next step "Regenerate and review the installation plan." A valid approval stops at `engine_not_available`; no engine or destructive operation is executed.
+
+### Evidence and exits
+
+Once the run starts, it writes `apply-run.json`, non-authorizing `approval-record.json`, and plain `apply.log` (no ANSI or secrets), plus `discovery/initial/`, `discovery/final/` when reached, and `plans/NN/` with the plan, render, plan-run record, and choices. Directories are `0700`, files `0600`; generated evidence is local and never committed. Argument and TTY failures before the run starts report on stderr without records.
+
+| Status | Meaning |
+| --- | --- |
+| `2` | `approved` with `engine_not_available`, `invalidated` after a safety or digest change, or `blocked` by invalid input or discovery preconditions. |
+| `3` | `cancelled`: Cancel, No, Esc at confirmation, Ctrl+C during review or confirmation, or a wrong device name (`confirmation_mismatch`). |
+| `5` | `failed`: unexpected external operation failure. |
+| `6` | `failed`: damaged code, internal contract failure, or unqualified Gum. |
+| `128+n` | Signals outside the interactive phase; signals other than SIGINT retain this convention everywhere. |
+
+`apply` does not return `0` for any confirmation path; help alone returns `0`. Ctrl+C mapping belongs to the orchestrator, not the ADR 0004 wrapper.
+
+### Recovery
+
+No target change needs undoing. Keep the private evidence, fix the reported cause, and rerun into a new output directory with fresh discovery and confirmation. For invalidation, regenerate and review the plan; never reuse an approval record as permission. Installation becomes available only with Story 2.5 and its qualification gates.
+
+## Intended engine contract
 
 ### Purpose
 
@@ -126,24 +167,24 @@ Coordinate target discovery, reviewable installation planning, confirmation, and
 
 ### Prerequisites
 
-A completed reference-VM reconstruction must precede physical installation. An external backup, independent rescue medium, and known-good ISO are architectural prerequisites before physical migration. Exact host and target requirements, privilege boundaries, installation-engine selection, and confirmation implementation are **Pending**.
+A completed reference-VM reconstruction must precede physical installation. An external backup, independent rescue medium, and known-good ISO are architectural prerequisites before physical migration. The discovery, planning, and confirmation prerequisites are documented above. Exact engine execution requirements and privilege boundaries remain **Pending**.
 
 ### Inputs
 
-A selected target, discovered target state, and a reviewable plan are architectural inputs. Exact input format, plan interface, secret requirements, and supported target selection are **Pending**.
+A selected target, discovered target state, and a reviewable plan are architectural inputs, with formats and selection documented above. Protected collection of secret values for engine execution remains **Pending**.
 
 ### Consequential effects
 
-Installation is expected to modify the selected target and may include destructive storage operations. The architecture requires explicit target-bound confirmation for destructive actions; the production implementation and exact effects are **Pending**. The current help-only interface changes nothing.
+Installation is expected to modify the selected target and may include destructive storage operations. The architecture requires explicit target-bound confirmation for destructive actions; the production implementation and exact effects are **Pending**. The current discovery, planning, and confirmation interfaces do not modify the target.
 
 ### Evidence
 
-Architecture requires run-associated evidence identifying source, target-relevant non-secret context, stage outcome, diagnostics, and generated reports. The exact install evidence location within `evidence/`, contents, and retention policy are **Pending**.
+Architecture requires run-associated evidence identifying source, target-relevant non-secret context, stage outcome, diagnostics, and generated reports. Discovery, plan, and confirmation evidence are documented above; engine-specific evidence and retention policy remain **Pending**.
 
 ### Failure and recovery
 
-The target-specific recovery process, retry boundaries, and installation failure handling are **Pending**. Do not begin a supported physical installation until the required VM qualification, backup, rescue, and known-good-artifact gates are met. For the current help-only interface, restore a damaged checkout from Git or reclone it if the shared helper cannot be loaded.
+The target-specific recovery process, retry boundaries, and installation failure handling are **Pending**. Do not begin a supported physical installation until the required VM qualification, backup, rescue, and known-good-artifact gates are met. Restore a damaged checkout from Git or reclone it if the shared helper cannot be loaded.
 
 ## Normalized outcomes
 
-The architecture defines `0` as success, `2` as invalid input or unmet precondition, `3` as explicit cancellation, `4` as execution completed but verification is not ready, `5` as execution or upstream-operation failure, and `6` as internal contract or invariant failure. Currently `0` applies to successful help, valid discovery, and a generated plan, `2` to pending work, invalid arguments, unmet discovery preconditions, or invalid plan inputs, `5` to an unexpected external command failure during discovery or planning, and `6` to a missing or unloadable helper or to damaged discovery or plan code. Install-specific use of `3` and `4` is **Pending**.
+The architecture defines `0` as success, `2` as invalid input or unmet precondition, `3` as explicit cancellation, `4` as execution completed but verification is not ready, `5` as execution or upstream-operation failure, and `6` as internal contract or invariant failure. Currently `0` applies to successful help, valid discovery, and a generated plan; never to approval. `2` covers pending work, invalid arguments, unmet preconditions, invalid plan inputs, invalidated approval, and valid approval at the unavailable engine boundary. `3` is install-specific cancellation during interactive review or confirmation. `5` covers unexpected external command failures, and `6` covers missing or unloadable helpers, damaged code, internal contract failures, or unqualified Gum. Install-specific use of `4` remains **Pending**; signals retain `128+n` except SIGINT during interactive review or confirmation, which maps to `3`.

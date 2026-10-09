@@ -142,4 +142,23 @@ A copy of the disk is kept before launch. After QEMU exit is confirmed, `qemu-im
 
 Evidence is written to `evidence/reference-vm/discovery/<run-id>/` with `0700` directories and `0600` files: `result.json`, `target-facts.json`, `error.json` when present, `guest-serial.log`, `qemu-diagnostics.log`, and redacted Gitleaks reports. Run resources live in `build/reference-vm/<run-id>/` and follow the cleanup rules above. `result.json` records the artifact identity, the test-code commit and dirty state, the scenario, the expected and actual discovery exit, the disk comparison, the scans, the cleanup outcome, and `counted`.
 
+## Confirmation qualification
+
+Story 2.4 adds `vm/reference/qualify-discovery --scenario confirmation <bundle-directory>` using the existing launch, private evidence, scan, and cleanup machinery. Each case uses an isolated boot and a fresh disposable disk, so the host can confirm QEMU exit before comparing that case's disk. A development run uses `--development-overlay` with an ISO that already contains Gum and is never counted: the overlay supplies code, not packages.
+
+The guest runs `mirroros-install apply` under util-linux `script` with real Gum and scripted keystrokes. Four cases must produce:
+
+| Case | Apply exit | Outcome / reason | Disk check |
+| --- | --- | --- | --- |
+| Approve | `2` | `approved` / `engine_not_available` | Identical before and after |
+| Cancel | `3` | `cancelled` | Identical before and after |
+| Wrong device name | `3` | `cancelled` / `confirmation_mismatch` | Identical before and after |
+| Layout change | `2` | `invalidated` / `target_layout_changed` | Intentional fixture write only |
+
+Only the layout-change case writes to the disposable VM disk: after generating a plan, the guest uses `sgdisk` to write a GPT, then runs `apply --plan`. `apply` itself executes no destructive operation in any case. The host must check exits and records, compare the disks for the first three cases with `qemu-img compare`, and scan the evidence with redacted Gitleaks. Retain `apply-run.json`, `approval-record.json`, discovery and plan evidence, and plain `apply.log` under `<case>/apply/` for each case, with `0700` directories and `0600` files. Each case also keeps private serial and QEMU logs; the top-level `result.json` contains `confirmation.cases` with exits, outcomes, reasons, checks, and individual disk comparisons. Install's cancellation status `3` is an expected case result, not the qualification command's success status.
+
+Before counted qualification, run `operations/test` on the clean-commit bundle and inspect its package manifest for the installed Gum version and its ISO for an executable `confirm-plan`. Automated keystrokes do not establish readability. The maintainer must also boot the development ISO with a graphical VM console (VT, `TERM=linux`), choose `reference-vm`, edit choices, cancel, rerun, and confirm. Record an attended verdict on the grayscale palette, top margin above the menu header, readability, dashboard fit at 80x25, and a repeat with `NO_COLOR=1`. If the dashboard does not fit, apply DEC-013 compaction and repeat the review before continuing. No Framework run is part of this qualification.
+
+## Counted discovery and confirmation runs
+
 A run is counted only when it succeeded, used no overlay, the test checkout is clean, and the bundle was built from a clean tree at the same commit as the test code. Development runs (a dirty tree, a dirty bundle, a different commit, or the overlay) record `counted: false`. The status values follow the normalized outcomes above. The recovery steps for a residual run are the same, using `evidence/reference-vm/discovery/<run-id>/` as the evidence to keep.

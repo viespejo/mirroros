@@ -1,0 +1,22 @@
+{
+  "format_version": 1,
+  "run_id": "20261008T120000Z-11111111-2222-4333-8444-555555555555",
+  "timestamp": "2026-10-08T12:00:00Z",
+  "target_id": "reference-vm",
+  "gum_version": "gum version 2.0.2 (879f048)",
+  "digests": [
+    "1ccb58bd115e228bf19caefaa8300c29096b68302281f40730ed2fbb694613d2"
+  ],
+  "final_digest": "1ccb58bd115e228bf19caefaa8300c29096b68302281f40730ed2fbb694613d2",
+  "exit_status": 0,
+  "outcome": "approved",
+  "reasons": [
+    {
+      "code": "engine_not_available",
+      "stage": "install",
+      "operation": "engine_boundary",
+      "message": "The installation engine is not part of this MirrorOS version and nothing was executed.",
+      "next_step": "Installation becomes available with Story 2.5."
+    }
+  ]
+}

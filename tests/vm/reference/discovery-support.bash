@@ -24,7 +24,11 @@ for argument in "$@"; do
   [[ "$argument" == '-S' ]] && exit 0
   [[ "$argument" == file:*guest-serial.log ]] && serial="${argument#file:}"
 done
-run_id="$(basename "$(dirname "$serial")")"
+case_name="$(basename "$(dirname "$serial")")"
+run_id="$case_name"
+case "$case_name" in
+  approve | cancel | mismatch | layout-change) run_id="$(basename "$(dirname "$(dirname "$serial")")")" ;;
+esac
 printf 'SERIAL-NOISE-MARKER\r\n' >> "$serial"
 exit_status="${REFERENCE_DISCOVERY_EXIT:-0}"
 case "${REFERENCE_QEMU_MODE:-pass}" in
@@ -56,6 +60,19 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
         }));
       ' "${REFERENCE_PLAN_SAME_DIGEST:-0}" "${REFERENCE_PLAN_TAMPER:-0}" "${REFERENCE_PLAN_INVALID_EXIT:-2}")"
     fi
+    if [[ "${REFERENCE_CONFIRMATION_REPORT:-0}" == 1 ]]; then
+      # shellcheck disable=SC2016 # Literal Node program with explicit arguments.
+      plan_section=",\"confirmation\":$(node -e '
+        const [name, bad, missing] = process.argv.slice(1);
+        const expected = {approve: [2, "approved", "engine_not_available"], cancel: [3, "cancelled", undefined],
+          mismatch: [3, "cancelled", "confirmation_mismatch"], "layout-change": [2, "invalidated", "target_layout_changed"]}[name];
+        const common = {run_id: "apply-run", outcome: bad === "1" ? "failed" : expected[1]};
+        const files = {"apply-run.json": JSON.stringify({...common, exit_status: expected[0]}),
+          "approval-record.json": JSON.stringify({...common, reason: expected[2]}), "apply.log": "plain log\n"};
+        if (missing === "1") delete files["approval-record.json"];
+        process.stdout.write(JSON.stringify({name, exit_status: expected[0], files, private_permissions: true, layout_write_status: 0}));
+      ' "$case_name" "${REFERENCE_CONFIRMATION_BAD_OUTCOME:-0}" "${REFERENCE_CONFIRMATION_MISSING_RECORD:-0}")"
+    fi
     printf 'MIRROROS-REPORT-BEGIN %s\r\n{"schema_version":1,"run_id":"%s","target":"%s","exit_status":%s,"facts":%s,"error":null,"stderr_tail":""%s}\r\nMIRROROS-REPORT-END %s\r\n' \
       "$run_id" "$run_id" "${REFERENCE_DISCOVERY_TARGET:?}" "$exit_status" "$facts" "$plan_section" "$run_id" >> "$serial"
     ;;
@@ -68,7 +85,14 @@ printf 'qemu-img %s\n' "$*" >> "${REFERENCE_CALL_LOG:?}"
 case "$1" in
   create) : > "$5" ;;
   convert) : > "${*: -1}" ;;
-  compare) exit "${REFERENCE_COMPARE_STATUS:-0}" ;;
+  compare)
+    if [[ "${REFERENCE_CONFIRMATION_REPORT:-0}" == 1 && "${REFERENCE_COMPARE_STATUS:-0}" == 0 ]]; then
+      case "$(dirname "${*: -1}")" in
+        *) [[ "$(grep -c 'qemu-img compare' "$REFERENCE_CALL_LOG")" -eq 4 ]] && exit 1 ;;
+      esac
+    fi
+    exit "${REFERENCE_COMPARE_STATUS:-0}"
+    ;;
 esac
 EOF
   cat > "${REFERENCE_DOUBLE_DIR}/sfdisk" <<'EOF'

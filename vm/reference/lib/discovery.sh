@@ -5,6 +5,7 @@
 # touched. Requires preconditions.sh, run-resources.sh, launch.sh, outcome.sh, and evidence.sh.
 
 DISCOVERY_SCENARIO=''
+DISCOVERY_CONFIRMATION_CASE=''
 DISCOVERY_TARGET=''
 DISCOVERY_EXPECTED_EXIT=''
 DISCOVERY_OVERLAY=0
@@ -27,7 +28,7 @@ DISCOVERY_OVERLAY_PATHS=(
 discovery_usage_error() {
   printf 'MirrorOS qualify-discovery: %s\n' "$1" >&2
   printf '%s\n' \
-    'Accepted forms: qualify-discovery --scenario empty|layout|framework-target|plan [--development-overlay] BUNDLE_DIRECTORY, qualify-discovery --help.' >&2
+    'Accepted forms: qualify-discovery --scenario empty|layout|framework-target|plan|confirmation [--development-overlay] BUNDLE_DIRECTORY, qualify-discovery --help.' >&2
   return 2
 }
 
@@ -62,7 +63,7 @@ discovery_parse_arguments() {
   done
 
   case "$DISCOVERY_SCENARIO" in
-    empty | layout | plan)
+    empty | layout | plan | confirmation)
       DISCOVERY_TARGET='reference-vm'
       DISCOVERY_EXPECTED_EXIT=0
       ;;
@@ -183,6 +184,7 @@ discovery_write_guest_script() {
     printf '#!/usr/bin/bash\n'
     printf "MIRROROS_DISCOVERY_TARGET='%s'\n" "$DISCOVERY_TARGET"
     printf "MIRROROS_DISCOVERY_SCENARIO='%s'\n" "$DISCOVERY_SCENARIO"
+    printf "MIRROROS_CONFIRMATION_CASE='%s'\n" "$DISCOVERY_CONFIRMATION_CASE"
     if [[ "$DISCOVERY_OVERLAY" -eq 1 ]]; then
       printf "MIRROROS_DISCOVERY_OVERLAY_B64='%s'\n" "$DISCOVERY_OVERLAY_B64"
     fi
@@ -237,6 +239,9 @@ discovery_compare_disks() {
       return 5
       ;;
   esac
+  if [[ "$DISCOVERY_SCENARIO" == 'confirmation' && "$DISCOVERY_CONFIRMATION_CASE" == 'layout-change' && "$status" -eq 1 ]]; then
+    return 0
+  fi
   return "$status"
 }
 
@@ -277,11 +282,11 @@ discovery_evaluate_report() {
 
   # shellcheck disable=SC2034 # Read by discovery_write_result.
   DISCOVERY_VERDICT="$(node --input-type=module - "$report_path" "$run_id" "$evidence_run_dir" \
-    "$DISCOVERY_TARGET" "$DISCOVERY_EXPECTED_EXIT" "$DISCOVERY_SCENARIO" <<'NODE'
+    "$DISCOVERY_TARGET" "$DISCOVERY_EXPECTED_EXIT" "$DISCOVERY_SCENARIO" "$DISCOVERY_CONFIRMATION_CASE" <<'NODE'
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
 
-const [reportPath, runId, evidenceDir, target, expectedText, scenario] = process.argv.slice(2);
+const [reportPath, runId, evidenceDir, target, expectedText, scenario, confirmationCase] = process.argv.slice(2);
 const errors = [];
 let report = null;
 try {
@@ -319,6 +324,51 @@ if (errors.length === 0) {
     }
   } else if (report.exit_status === 0 || report.exit_status === 2) {
     errors.push('exit status 0 or 2 requires target-facts.json');
+  }
+}
+if (errors.length === 0 && scenario === 'confirmation') {
+  const confirmation = report.confirmation;
+  const expected = {
+    approve: [2, 'approved', 'engine_not_available'],
+    cancel: [3, 'cancelled', undefined],
+    mismatch: [3, 'cancelled', 'confirmation_mismatch'],
+    'layout-change': [2, 'invalidated', 'target_layout_changed'],
+  }[confirmationCase];
+  if (!isRecord(confirmation) || confirmation.name !== confirmationCase
+    || !Number.isInteger(confirmation.exit_status) || !isRecord(confirmation.files)) {
+    errors.push('the confirmation scenario requires a complete case report');
+  } else {
+    const parse = name => {
+      try { return JSON.parse(confirmation.files[name]); } catch { return null; }
+    };
+    const run = parse('apply-run.json');
+    const approval = parse('approval-record.json');
+    const files = Object.entries(confirmation.files);
+    if (files.some(([name, content]) => typeof content !== 'string'
+      || name.split('/').some(part => !part || part === '.' || part === '..')
+      || !/^[a-zA-Z0-9_./-]+$/.test(name))) errors.push('unsafe confirmation evidence path');
+    const checks = {
+      exits_as_expected: confirmation.exit_status === expected[0] && run?.exit_status === expected[0],
+      outcomes_as_expected: run?.outcome === expected[1] && approval?.outcome === expected[1],
+      reason_as_expected: expected[2] === undefined || approval?.reason === expected[2],
+      records_agree: run?.run_id === approval?.run_id && run?.final_digest === approval?.digest,
+      private_permissions: confirmation.private_permissions === true,
+      plain_log: typeof confirmation.files['apply.log'] === 'string' && !confirmation.files['apply.log'].includes('\u001b'),
+      fixture_write: confirmationCase !== 'layout-change' || confirmation.layout_write_status === 0,
+    };
+    verdict.confirmation = { name: confirmationCase, exit_status: confirmation.exit_status,
+      outcome: approval?.outcome ?? null, reason: approval?.reason ?? null,
+      driver_tail: typeof confirmation.driver_tail === 'string' ? confirmation.driver_tail.slice(-2000) : '', ...checks,
+      ok: Object.values(checks).every(Boolean) };
+    if (errors.length === 0) {
+      for (const [name, content] of files) {
+        const path = `${evidenceDir}/apply/${name}`;
+        const directory = path.slice(0, path.lastIndexOf('/'));
+        mkdirSync(directory, { recursive: true, mode: 0o700 });
+        writeFileSync(path, content, { mode: 0o600 });
+        chmodSync(path, 0o600);
+      }
+    }
   }
 }
 const planNames = ['default', 'edited', 'invalid'];
@@ -384,7 +434,7 @@ if (errors.length === 0) {
   }
 }
 process.stdout.write(JSON.stringify(verdict));
-process.exitCode = errors.length > 0 ? 5 : (verdict.actual_exit === Number(expectedText) && (verdict.plan?.ok ?? true) ? 0 : 4);
+process.exitCode = errors.length > 0 ? 5 : (verdict.actual_exit === Number(expectedText) && (verdict.plan?.ok ?? true) && (verdict.confirmation?.ok ?? true) ? 0 : 4);
 NODE
   )" || status=$?
   outcome_record_tool_status guest_report_validation "$status"
@@ -398,6 +448,57 @@ NODE
     DISCOVERY_ACTUAL_EXIT="$(node -e 'const v = JSON.parse(process.argv[1]); process.stdout.write(v.actual_exit === null ? "" : String(v.actual_exit))' "$DISCOVERY_VERDICT" 2>/dev/null)" || DISCOVERY_ACTUAL_EXIT=''
   fi
   return "$status"
+}
+
+# Four isolated boots let the host compare each non-writing case after confirmed QEMU exit.
+discovery_run_confirmation_cases() {
+  local evidence_base="$EVIDENCE_RUN_DIR"
+  local name
+  local compare_status
+  local verdict
+  local -a verdicts=()
+
+  for name in approve cancel mismatch layout-change; do
+    DISCOVERY_CONFIRMATION_CASE="$name"
+    EVIDENCE_RUN_DIR="${evidence_base}/${name}"
+    mkdir -m 700 -- "$EVIDENCE_RUN_DIR" || { outcome_mark_failure 5 case-directory; break; }
+    LAUNCH_QEMU_PID=''
+    LAUNCH_QEMU_STATUS=''
+    LAUNCH_OUTCOME=''
+    DISCOVERY_COMPARISON='not_run'
+    DISCOVERY_VERDICT=''
+    qualify_run_stages
+    if ! stop_cleanup_stop_qemu; then
+      outcome_mark_failure 5 qemu-stop
+    elif [[ -f "${BUILD_RUN_DIR}/${DISCOVERY_DISK_BEFORE_NAME}" ]]; then
+      compare_status=0
+      discovery_compare_disks "$BUILD_RUN_DIR" || compare_status=$?
+      case "$compare_status" in
+        0) ;;
+        1) outcome_mark_failure 4 disk-identity ;;
+        *) outcome_mark_failure 5 disk-compare ;;
+      esac
+    fi
+    verdict="$(node -e 'const v = JSON.parse(process.argv[1] || "{}"); process.stdout.write(JSON.stringify({...v.confirmation, name: process.argv[2], disk_comparison: process.argv[3]}))' \
+      "$DISCOVERY_VERDICT" "$name" "$DISCOVERY_COMPARISON")"
+    verdicts+=("$verdict")
+    if [[ "$STOP_QEMU_STATE" == 'unconfirmed' ]]; then break; fi
+    discovery_remove_extra_files "$BUILD_RUN_DIR"
+    stop_cleanup_remove_resources "$BUILD_RUN_DIR" || { outcome_mark_failure 5 cleanup; break; }
+    mkdir -m 700 -- "$BUILD_RUN_DIR" || { outcome_mark_failure 5 case-directory; break; }
+  done
+  EVIDENCE_RUN_DIR="$evidence_base"
+  DISCOVERY_VERDICT="$(node -e 'const cases = process.argv.slice(1).map(JSON.parse); process.stdout.write(JSON.stringify({errors: [], actual_exit: 0, facts_validation: "valid", reason_codes: [], stderr_tail: "", confirmation: {cases, ok: cases.length === 4 && cases.every(c => c.ok && (c.name === "layout-change" || c.disk_comparison === "identical"))}}))' "${verdicts[@]}")"
+  DISCOVERY_ACTUAL_EXIT=0
+  DISCOVERY_COMPARISON='not_run'
+  if ! node -e 'process.exit(JSON.parse(process.argv[1]).confirmation.ok ? 0 : 1)' "$DISCOVERY_VERDICT"; then
+    outcome_mark_failure 4 confirmation-cases
+  fi
+  if [[ "$STOP_QEMU_STATE" != 'unconfirmed' ]]; then
+    # shellcheck disable=SC2034 # Consumed by launch and stop-cleanup helpers.
+    LAUNCH_QEMU_PID=''
+    STOP_QEMU_STATE='not_started'
+  fi
 }
 
 discovery_next_action() {
@@ -512,6 +613,7 @@ const document = {
     stderr_tail: accepted ? verdict.stderr_tail : '',
   },
   ...(scenario === 'plan' && accepted && verdict.plan !== undefined ? { plan: verdict.plan } : {}),
+  ...(scenario === 'confirmation' && accepted && verdict.confirmation !== undefined ? { confirmation: verdict.confirmation } : {}),
   disk_identity: { method: 'qemu-img compare', comparison },
   duration_seconds: Number(durationText),
   failed_stage: failedStage || null,

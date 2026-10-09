@@ -6,8 +6,9 @@ disk, the ordered declarative operations, every value with its provenance and so
 requirements by name, and the hardware-derived selections. It is bound to its inputs by a digest.
 Unknown fields are rejected by `install/plan/validate-plan.mjs`.
 
-The plan cannot express approval. Approval is a separate, digest-bound artifact of a later stage, so a
-plan with an `approved` or `approval` field is invalid like any other unknown field.
+The plan cannot express approval. Approval is an ephemeral, in-process confirmation bound to the digest (see
+[`installation-confirmation.md`](installation-confirmation.md)); only a non-authorizing evidence record
+is persisted, so a plan with an `approved` or `approval` field is invalid like any other unknown field.
 
 Conventions: JSON fields use `snake_case`; fields that do not apply are omitted; sizes are integer bytes
 except `swapfile_size`, which is integer MiB; the document contains integers only, never fractional

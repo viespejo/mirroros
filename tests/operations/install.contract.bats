@@ -152,3 +152,43 @@ teardown() {
   lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
   lifecycle_assert_stderr_contains 'Restore install/plan from Git or re-clone the repository.'
 }
+
+@test "install apply --help prints its own help on stdout without touching the system" {
+  lifecycle_invoke install apply --help
+  lifecycle_assert_status 0
+  lifecycle_assert_stderr_empty
+  lifecycle_assert_stdout_contains 'Usage: install apply [--plan <file>] [--output <dir>]'
+  lifecycle_assert_stdout_contains 'Normalized exit outcomes:'
+  lifecycle_assert_stdout_contains '3: explicit user cancellation'
+  lifecycle_assert_stdout_contains 'Documentation: docs/procedures/install.md'
+}
+
+@test "install apply rejects bypass and unsupported options before any prompt or discovery" {
+  lifecycle_invoke install apply --yes
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument: --yes'
+  lifecycle_assert_no_success_output
+
+  lifecycle_invoke install apply --non-interactive
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument: --non-interactive'
+
+  lifecycle_invoke install apply --plan
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains '--plan requires a file.'
+}
+
+@test "install apply without a terminal exits 2 and confirms nothing" {
+  lifecycle_invoke install apply
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'not an interactive terminal'
+  lifecycle_assert_no_success_output
+}
+
+@test "install apply reports a missing orchestrator as a damaged checkout" {
+  rm -f -- "$LIFECYCLE_COPY_ROOT/install/confirmation/confirm-plan"
+  lifecycle_invoke install apply --help
+  lifecycle_assert_status 6
+  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
+  lifecycle_assert_stderr_contains 'Restore install/confirmation from Git or re-clone the repository.'
+}

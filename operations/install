@@ -36,6 +36,18 @@ if [[ "${1:-}" == 'plan' ]]; then
   exec "$PLAN_PATH" "$@"
 fi
 
+if [[ "${1:-}" == 'apply' ]]; then
+  APPLY_PATH="${SCRIPT_DIR}/../install/confirmation/confirm-plan"
+  if [[ ! -x "$APPLY_PATH" ]]; then
+    printf '%s\n' \
+      'MirrorOS: incomplete or damaged checkout; the confirmation orchestrator could not be found.' \
+      'Restore install/confirmation from Git or re-clone the repository.' >&2
+    exit 6
+  fi
+  shift
+  exec "$APPLY_PATH" "$@"
+fi
+
 if lifecycle_discovery_main \
   'install' \
   'Coordinate target discovery, reviewable planning, confirmation, and application of the selected installation engine.' \

@@ -164,6 +164,57 @@ use_matching_bundle() {
   [ "$(reference_result_field counted)" == 'false' ]
 }
 
+@test "confirmation runs four isolated cases with private evidence and counted true" {
+  use_matching_bundle
+  export REFERENCE_CONFIRMATION_REPORT=1
+
+  reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+  [ "$(reference_result_field confirmation.ok)" == 'true' ]
+  [ "$(reference_result_field counted)" == 'true' ]
+  [ "$(grep -c 'qemu-img compare' "$REFERENCE_CALL_LOG")" -eq 4 ]
+  local evidence name
+  evidence="$(reference_discovery_evidence_dir)"
+  for name in approve cancel mismatch layout-change; do
+    [ -f "${evidence}/${name}/apply/apply-run.json" ]
+    [ -f "${evidence}/${name}/apply/approval-record.json" ]
+  done
+  [ -z "$(find "$evidence" -perm /077)" ]
+  [ "$(reference_result_field confirmation.cases.0.disk_comparison)" == 'identical' ]
+  [ "$(reference_result_field confirmation.cases.3.disk_comparison)" == 'different' ]
+}
+
+@test "confirmation development overlay is never counted" {
+  use_matching_bundle
+  export REFERENCE_CONFIRMATION_REPORT=1
+  reference_invoke_discovery --scenario confirmation --development-overlay "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+  [ "$(reference_result_field confirmation.ok)" == 'true' ]
+  [ "$(reference_result_field counted)" == 'false' ]
+}
+
+@test "confirmation rejects wrong outcomes and missing records" {
+  use_matching_bundle
+  export REFERENCE_CONFIRMATION_REPORT=1 REFERENCE_CONFIRMATION_BAD_OUTCOME=1
+  reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
+  [ "$(reference_result_field counted)" == 'false' ]
+  unset REFERENCE_CONFIRMATION_BAD_OUTCOME
+  rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence"
+  export REFERENCE_CONFIRMATION_MISSING_RECORD=1
+  reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -ne 0 ]
+  [ "$(reference_result_field counted)" == 'false' ]
+}
+
+@test "confirmation rejects a changed disk in a non-writing case" {
+  use_matching_bundle
+  export REFERENCE_CONFIRMATION_REPORT=1 REFERENCE_COMPARE_STATUS=1
+  reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
+  [ "$(reference_result_field counted)" == 'false' ]
+}
+
 @test "an unexpected discovery exit fails with 4 and is never counted" {
   use_matching_bundle
   export REFERENCE_DISCOVERY_TARGET='framework-13-pro-amd' REFERENCE_DISCOVERY_EXIT=0

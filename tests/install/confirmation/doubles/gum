@@ -1,0 +1,66 @@
+#!/usr/bin/bash
+# PATH double for gum. Every call is logged to gum-calls.log. The prompts (choose, confirm, input,
+# filter) pop the first line of <subcommand>.queue in the double state directory: "<status>" or
+# "<status>|<output>" (output escapes are expanded, so \n separates lines); the status "hang" waits so a
+# test can send a real signal. A <subcommand>.hook file is run once, before the answer. An empty queue is
+# a test failure (status 99). spin runs its command; a first spin.queue line "hang" waits instead.
+: "${DOUBLE_STATE:?}"
+subcommand="${1:-}"
+printf '%s\n' "$*" >> "${DOUBLE_STATE}/gum-calls.log"
+
+pop() {
+  local queue="${DOUBLE_STATE}/${1}.queue"
+  local line
+
+  [[ -s "$queue" ]] || return 1
+  line="$(head -n 1 "$queue")"
+  tail -n +2 "$queue" > "${queue}.next"
+  mv -f -- "${queue}.next" "$queue"
+  printf '%s' "$line"
+}
+
+hook() {
+  local file="${DOUBLE_STATE}/${1}.hook"
+
+  [[ -f "$file" ]] || return 0
+  mv -f -- "$file" "${file}.done"
+  bash "${file}.done"
+}
+
+case "$subcommand" in
+  --version)
+    if [[ -f "${DOUBLE_STATE}/version" ]]; then
+      cat -- "${DOUBLE_STATE}/version"
+    else
+      printf '%s\n' 'gum version 2.0.2 (double)'
+    fi
+    ;;
+  format) cat ;;
+  style) printf '%s\n' "${!#}" ;;
+  spin)
+    if line="$(pop spin)" && [[ "$line" == hang ]]; then
+      sleep 30
+      exit 1
+    fi
+    while [[ "$#" -gt 0 && "$1" != -- ]]; do shift; done
+    shift
+    "$@" > /dev/null
+    ;;
+  choose | confirm | input | filter)
+    hook "$subcommand"
+    if ! line="$(pop "$subcommand")"; then
+      printf 'gum double: no scripted answer for %s\n' "$subcommand" >&2
+      exit 99
+    fi
+    status="${line%%|*}"
+    if [[ "$status" == hang ]]; then
+      sleep 30
+      exit 1
+    fi
+    if [[ "$line" == *'|'* ]]; then
+      printf '%b\n' "${line#*|}"
+    fi
+    exit "$status"
+    ;;
+  *) exit 0 ;;
+esac
