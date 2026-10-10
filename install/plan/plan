@@ -11,6 +11,7 @@ readonly REQUIRED_FILES=(
   install/plan/canonical-json.mjs
   install/plan/digest-plan.mjs
   install/plan/generate-plan.mjs
+  install/plan/preview-choices.mjs
   install/plan/render-plan.mjs
   install/plan/resolve-choices.mjs
   install/plan/validate-plan.mjs
@@ -23,15 +24,17 @@ print_help() {
   cat <<'EOF'
 MirrorOS install plan — explainable, digest-bound installation plan
 Usage: install plan --facts <file> [--choices <file>] [--output <dir>]
+       install plan preview-choices --facts <file> [--choices <file>]
+       install plan validate-choice --facts <file> [--choices <file>] --key <key> --value <value>
        install plan --help
-Purpose: Turn a valid target-facts.json and the installation policy into a validated installation plan with a plain-text render. The plan is never approved by this command.
+Purpose: Turn a valid target-facts.json and the installation policy into a validated installation plan with a plain-text render. The plan is never approved by this command. The preview-choices and validate-choice helpers print JSON for an interactive front end: the defaults, allowed values, and derived localization the plan would hold, and the check of one value.
 Prerequisites: a target-facts.json produced by install discover with valid facts.
-Inputs: --facts names the facts file. --choices names an optional JSON file of editable choices. --output names a directory that holds no plan yet; the default is evidence/install/<run-id>/.
-Consequential effects: None on the target; no device is read or written and no elevation is invoked. Evidence is written with 0700 directories and 0600 files, and an existing plan is never overwritten.
+Inputs: --facts names the facts file. --choices names an optional JSON file of editable choices. --output names a directory that holds no plan yet; the default is evidence/install/<run-id>/. --key and --value name the single choice that validate-choice checks.
+Consequential effects: None on the target; no device is read or written and no elevation is invoked. Evidence is written with 0700 directories and 0600 files, and an existing plan is never overwritten. The two helpers write no file and create no plan.
 Evidence: installation-plan.json, installation-plan.txt, and plan-run.json; an invalid run writes only plan-run.json with its reasons.
 Normalized exit outcomes:
-  0: plan generated and persisted
-  2: invalid input (facts, choices, override, or output directory)
+  0: plan generated and persisted, or a helper result printed
+  2: invalid input (facts, choices, override, output directory, or a rejected value)
   5: an unexpected failure outside the plan contract
   6: damaged embedded code or internal invariant failure
 Documentation: docs/procedures/install.md
@@ -40,16 +43,24 @@ EOF
 
 usage_error() {
   printf 'MirrorOS install plan: %s\n' "$1" >&2
-  printf '%s\n' 'Usage: install plan --facts <file> [--choices <file>] [--output <dir>]; see install plan --help.' >&2
+  printf '%s\n' 'Usage: install plan [preview-choices|validate-choice] --facts <file> [--choices <file>] ...; see install plan --help.' >&2
   exit 2
 }
 
+mode='plan'
 facts_path=''
 choices_path=''
 output_path=''
+choice_key=''
+choice_value=''
+choice_value_given=0
 if [[ "$#" -eq 1 && "$1" == '--help' ]]; then
   print_help
   exit 0
+fi
+if [[ "$#" -ge 1 && ( "$1" == 'preview-choices' || "$1" == 'validate-choice' ) ]]; then
+  mode="$1"
+  shift
 fi
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
@@ -71,12 +82,33 @@ while [[ "$#" -gt 0 ]]; do
       output_path="$2"
       shift 2
       ;;
+    --key)
+      [[ "$#" -ge 2 && -n "$2" && "$2" != --* ]] || usage_error '--key requires a choice key.'
+      [[ -z "$choice_key" ]] || usage_error '--key may be given only once.'
+      choice_key="$2"
+      shift 2
+      ;;
+    --value)
+      [[ "$#" -ge 2 ]] || usage_error '--value requires a value.'
+      [[ "$choice_value_given" -eq 0 ]] || usage_error '--value may be given only once.'
+      choice_value="$2"
+      choice_value_given=1
+      shift 2
+      ;;
     *)
       usage_error "unsupported argument: $1"
       ;;
   esac
 done
 [[ -n "$facts_path" ]] || usage_error '--facts is required.'
+if [[ "$mode" != 'plan' && -n "$output_path" ]]; then
+  usage_error "--output is not accepted by ${mode}."
+fi
+if [[ "$mode" == 'validate-choice' ]]; then
+  [[ -n "$choice_key" && "$choice_value_given" -eq 1 ]] || usage_error 'validate-choice requires --key and --value.'
+elif [[ -n "$choice_key" || "$choice_value_given" -eq 1 ]]; then
+  usage_error "--key and --value are accepted only by validate-choice."
+fi
 
 for required in "${REQUIRED_FILES[@]}"; do
   if [[ ! -f "${CODE_ROOT}/${required}" ]]; then
@@ -97,7 +129,7 @@ if ! command -v node > /dev/null 2>&1; then
 fi
 
 status=0
-node "${CODE_ROOT}/install/plan/cli.mjs" "$CODE_ROOT" "$facts_path" "$choices_path" "$output_path" || status=$?
+node "${CODE_ROOT}/install/plan/cli.mjs" "$mode" "$CODE_ROOT" "$facts_path" "$choices_path" "$output_path" "$choice_key" "$choice_value" || status=$?
 case "$status" in
   0|2|5|6) exit "$status" ;;
   *)

@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { renderPlan } from '../plan/render-plan.mjs';
 
 const GIBIBYTE = 1073741824;
 const MEBIBYTE = 1048576;
@@ -8,19 +9,7 @@ export function formatSize(bytes) {
   return bytes >= GIBIBYTE ? `${(bytes / GIBIBYTE).toFixed(1)} GiB` : `${(bytes / MEBIBYTE).toFixed(1)} MiB`;
 }
 
-// Markdown-significant characters in dynamic text are escaped so `gum format` shows them literally.
-function escape(text) {
-  return String(text).replace(/([\\`*_{}[\]<>#|~])/g, '\\$1');
-}
-
-function formatValue(value) {
-  if (Array.isArray(value)) return value.map(formatValue).join(', ');
-  if (value !== null && typeof value === 'object') {
-    return Object.entries(value).map(([key, item]) => `${key}=${formatValue(item)}`).join('; ');
-  }
-  return String(value);
-}
-
+// The plan reference: the first 12 hex characters of the plan digest. The user never types it.
 export function digestPrefix(plan) {
   return plan.digest.value.slice(0, 12);
 }
@@ -43,55 +32,65 @@ export function confirmationPrompt(plan) {
   return `Erase ${diskLabel(plan)} and apply plan ${digestPrefix(plan)}?`;
 }
 
+// Recognition identifies the machine; it is not shown as qualification or compatibility.
+export function machineLabel(plan) {
+  const { profile } = plan.target;
+  return profile.status === 'matched' ? `Recognized (${profile.profile_id})` : 'Unqualified (experimental)';
+}
+
 function layoutLines(layout) {
   const table = layout.partition_table?.type ?? 'none';
   const partitions = layout.partitions ?? [];
-  if (partitions.length === 0) return [`- Partition table: ${escape(table)}, no partitions`];
-  const lines = [`- Partition table: ${escape(table)}, ${partitions.length} partition(s)`];
+  if (partitions.length === 0) return [`Partition table: ${table}, no partitions`];
+  const lines = [`Partition table: ${table}, ${partitions.length} partition(s)`];
   for (const partition of partitions) {
     const detail = [partition.fstype ?? 'no filesystem', formatSize(partition.size_bytes)];
     if (partition.label !== undefined) detail.push(`"${partition.label}"`);
     if (partition.mountpoints !== undefined && partition.mountpoints.length > 0) detail.push(`mounted ${partition.mountpoints.join(', ')}`);
-    lines.push(`  - ${escape(partition.path)}: ${escape(detail.join(', '))}`);
+    lines.push(`  ${partition.path}: ${detail.join(', ')}`);
   }
   return lines;
 }
 
-// The review dashboard (plan review flow, steps 1 to 5) as Markdown for `gum format`. Every value
-// shown comes from the plan; the same rendering applies to every target.
-export function reviewMarkdown(plan) {
-  const disk = plan.target.disk;
-  const lines = [
-    '# Installation plan review',
-    '',
-    `Digest sha256:${digestPrefix(plan)} for target ${escape(plan.target.target_id)}`,
-    '',
-    '## Target disk',
-    '',
-    `- Disk: ${escape(diskLabel(plan))}`,
+// Every value of a row is one line of plain text: control characters become spaces.
+const oneLine = text => String(text).replace(/[\u0000-\u001f\u007f]/g, ' ');
+
+// The rows of the compact review, as [label, value] pairs from the validated plan. The assistant owns the
+// presentation and adds the rows that are not part of the plan (live connectivity).
+export function compactReview(plan) {
+  const { choices } = plan;
+  const storage = choices.storage_option;
+  const rows = [
+    ['Machine', machineLabel(plan)],
+    ['Disk', diskLabel(plan)],
+    ['Storage', `${storage.value} (${storage.tier})`],
+    ['Swapfile', `${choices.swapfile_size.value} MiB`],
+    ['Timezone', choices.timezone.value],
+    ['Language', choices.lang.value],
+    ['Formats', `${choices.regional_format.value} (${choices.locale_categories.value.LC_TIME})`],
+    ['Locales', choices.locales.value.join(' ')],
+    ['Username', choices.user_name.value],
+    ['Root', choices.root_account.value],
+    ['Hostname', choices.hostname.value],
+    ['Keyboard', choices.console_keymap.value],
+    ['Plan reference', digestPrefix(plan)],
   ];
-  if (disk.by_id !== undefined) lines.push(`- Identifier: ${escape(disk.by_id)}`);
+  return rows.map(([label, value]) => [label, oneLine(value)]);
+}
+
+// The destructive-action screen content: the disk to erase, its identity and current layout, and the plan
+// reference.
+export function confirmationLines(plan) {
+  const disk = plan.target.disk;
+  const lines = [`Disk: ${diskLabel(plan)}`];
+  if (disk.by_id !== undefined) lines.push(`Identifier: ${disk.by_id}`);
   lines.push(...layoutLines(disk.current_layout));
+  lines.push(`Plan reference: ${digestPrefix(plan)}`);
+  return lines.map(oneLine);
+}
 
-  lines.push('', '## Choices', '');
-  for (const [key, entry] of Object.entries(plan.choices)) {
-    lines.push(`- ${escape(key)}: ${escape(formatValue(entry.value))} (${escape(entry.provenance)}, ${escape(entry.source)})`);
-  }
-
-  const destructive = plan.operations.filter(operation => operation.destructive);
-  const others = plan.operations.filter(operation => !operation.destructive);
-  lines.push('', '## Operations', '');
-  for (const operation of destructive) lines.push(`- \`DESTRUCTIVE\` ${escape(operation.id)}: ${escape(operation.description)}`);
-  lines.push('', `Then, without erasing the disk: ${escape(others.map(operation => operation.id).join(', '))}`);
-
-  lines.push('', '## Secrets requested later', '');
-  for (const secret of plan.secret_requirements) {
-    lines.push(`- ${escape(secret.name)}: ${escape(secret.channel)}, required by ${escape(secret.required_by.join(', '))}`);
-  }
-
-  if (plan.warnings.length > 0) {
-    lines.push('', '## Warnings', '');
-    for (const warning of plan.warnings) lines.push(`- ${escape(warning.message)}`);
-  }
-  return `${lines.join('\n')}\n`;
+// The complete plan for inspection: the same text the plan component persists, followed by the plan
+// reference. It never asks for authorization.
+export function completePlanText(plan) {
+  return `${renderPlan(plan)}\nPlan reference: ${digestPrefix(plan)} (the first 12 characters of the digest above)\n`;
 }

@@ -141,9 +141,10 @@ test('graphics devices are classified by vendor id', () => {
 test('unknown, missing, and malformed target ids are rejected', () => {
   assert.deepEqual(codes(discover('reference-vm-empty', { targetId: 'no-such-target' }).validation.reasons), ['target_unknown']);
   assert.deepEqual(codes(discover('reference-vm-empty', { targetId: '../targets' }).validation.reasons), ['target_unknown']);
-  const missing = discover('reference-vm-empty', { targetId: '' });
-  assert.deepEqual(codes(missing.validation.reasons), ['target_missing']);
-  assert.equal(missing.source.target_id, undefined);
+  const empty = discover('reference-vm-empty', { targetId: '' });
+  assert.deepEqual(codes(empty.validation.reasons), ['target_unknown']);
+  assert.equal(empty.source.requested_profile_id, undefined);
+  assert.deepEqual(empty.profile, { status: 'unqualified' });
 });
 
 test('effective values carry the source of the winning layer', () => {

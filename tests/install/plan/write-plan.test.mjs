@@ -86,7 +86,7 @@ test('a plan that does not match the supplied facts is refused', () => {
 
 test('a rejected run writes only plan-run.json with the reasons and exit status 2', () => {
   const directory = join(scratch, 'rejected');
-  const reasons = generate({ choices: { locales: ['es_ES.UTF-8'] } }).reasons;
+  const reasons = generate({ choices: { swapfile_size: 65536 } }).reasons;
   const path = writeRejectedRun({ directory, runId: 'run-rejected', timestamp: rfc3339(), inputs, exitStatus: 2, reasons });
   assert.deepEqual(readdirSync(directory), [RUN_FILE]);
   assert.equal(mode(directory), 0o700);
@@ -94,7 +94,7 @@ test('a rejected run writes only plan-run.json with the reasons and exit status 
   const run = JSON.parse(readFileSync(path, 'utf8'));
   assert.equal(run.exit_status, 2);
   assert.equal(run.digest, undefined);
-  assert.deepEqual(run.reasons.map(item => item.code), ['lang_not_in_locales']);
+  assert.deepEqual(run.reasons.map(item => item.code), ['plan_size_does_not_fit']);
   assert.deepEqual(run.reasons[0], reasons[0]);
 });
 

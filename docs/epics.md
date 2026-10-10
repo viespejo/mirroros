@@ -503,6 +503,12 @@ So that no destructive or ambiguous operation occurs without current, informed a
 **Then** prior approval is invalidated and renewed review and confirmation are required
 **And** a missing interactive terminal cannot be bypassed by a generic non-interactive flag.
 
+**Given** the guided assistant inspects a machine
+**When** it identifies the machine
+**Then** known profiles are identified automatically and never selected by the user
+**And** an unqualified machine is admitted only through the explicitly experimental path with the same confirmation semantics
+**And** the colored interactive live console is the supported presentation.
+
 ### Story 2.5: Install the Approved Base System
 
 **Requirements:** FR17

@@ -1,10 +1,14 @@
 # Installation plan (`installation-plan.json`)
 
-`format_version: 1`. Produced by `operations/install plan` from a valid `target-facts.json`, the
-installation policy, an optional target override, and an optional choices file. It identifies the target
-disk, the ordered declarative operations, every value with its provenance and source, the secret
-requirements by name, and the hardware-derived selections. It is bound to its inputs by a digest.
-Unknown fields are rejected by `install/plan/validate-plan.mjs`.
+`format_version: 2`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
+(format 2), the installation policy, an optional override of a matched profile, and an optional choices file.
+It identifies the observed machine, its profile classification, and the target disk, plus the ordered
+declarative operations, every value with its provenance and source, the secret requirements by name, and the
+hardware-derived selections. It is bound to its inputs by a digest. Unknown fields are rejected by
+`install/plan/validate-plan.mjs`.
+
+A plan does not require a matched profile: an unqualified machine produces a plan bound to its observed
+identity, with a warning (see [Warnings](#validation)).
 
 The plan cannot express approval. Approval is an ephemeral, in-process confirmation bound to the digest (see
 [`installation-confirmation.md`](installation-confirmation.md)); only a non-authorizing evidence record
@@ -13,6 +17,22 @@ is persisted, so a plan with an `approved` or `approval` field is invalid like a
 Conventions: JSON fields use `snake_case`; fields that do not apply are omitted; sizes are integer bytes
 except `swapfile_size`, which is integer MiB; the document contains integers only, never fractional
 numbers.
+
+## Format versions
+
+Each document keeps its own constant; no constant is shared between unrelated documents.
+
+| Document | Constant | Value |
+| --- | --- | --- |
+| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `2` |
+| Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `2` |
+| Choices file (`--choices`) | `CHOICES_FORMAT_VERSION` | `2` |
+| Target facts | `FACTS_FORMAT_VERSION` | `2`, see [`target-facts.md`](target-facts.md) |
+| Plan override (`targets/<id>/overrides/plan.json`) | none: a flat object, unchanged | |
+
+A plan of format `1` is rejected with `plan_format_unsupported` and the instruction to regenerate it from new
+target facts. Plans, policy snapshots, choices files, and evidence of earlier versions are never migrated or
+reinterpreted; the new generator reads facts of format `2` only.
 
 ## Labels
 
@@ -24,28 +44,47 @@ Every value in `choices` carries three labels.
 | `source` | `policy`, `detected`, `override`, `choice` | The layer that set the final value. |
 | `editable` | `true`, `false` | Whether a choices file may change it. |
 
-Precedence: `policy` < `detected` < `override` (`targets/<id>/overrides/plan.json`) < `choice`
-(`--choices`). Secrets are outside this chain: the plan only names them.
+Precedence: `policy` < `detected` < `override` (`targets/<id>/overrides/plan.json`, only for a matched
+profile) < `choice` (`--choices`). Secrets are outside this chain: the plan only names them.
+
+A value the user advances past without changing keeps the `provenance`, `source`, and `editable` of its
+proposal. Only a changed value is recorded with source `choice` (and, because the user made it, provenance
+`personal_preference`). A choices file therefore lists only values that differ from their proposal.
 
 ## Top-level fields
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `1`. |
-| `target` | `target_id` and `disk`. |
+| `format_version` | Always `2`. |
+| `target` | `machine`, `profile`, and `disk`. |
 | `choices` | Every resolved policy value, keyed by name. |
 | `operations` | The ordered declarative operations. |
 | `secret_requirements` | Ordered secret names, never values. |
 | `hardware_selections` | `selections` and `detected_capabilities`. |
 | `warnings` | Entries with `code`, `message`, and `next_step`. May be empty. |
 | `facts_binding` | Where the facts came from. |
-| `policy_binding` | Which policy and override were applied. |
+| `policy_binding` | Which policy, matched-profile definition, and override were applied. |
 | `digest` | `algorithm` (`sha256`) and `value` (hex). |
 
 ### `target`
 
-`target_id` is taken from the facts document. `disk` copies the identity of the selected disk and its
-current layout:
+`machine` is the observed safety identity projection, copied from the detected layer of the facts. It exists so
+that approval is bound to the actual machine and never to a profile id:
+
+| Field | Description |
+| --- | --- |
+| `architecture` | Always present (`x86_64` in a valid plan). |
+| `virtualization` | The detected virtualization (`none` for physical hardware). Omitted when it was not observed. |
+| `dmi` | The allowlisted `sys_vendor` and `product_name`, each omitted when it was not observed. Omitted when neither was observed. |
+
+Whether a field is available is part of the projection: a field that was present and later is absent, or the
+reverse, is a change.
+
+`profile` is the facts' classification, copied without change: `status` is `matched` or `unqualified`, and
+`profile_id` is present only for `matched`. It records recognition, not individual-machine qualification, and
+it is not a substitute for `machine`.
+
+`disk` copies the identity of the selected disk and its current layout:
 
 | Field | Description |
 | --- | --- |
@@ -63,9 +102,11 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 | `target_disk` | yes | The `by_id` of the selected disk, or its `path` when it has no `by_id`. |
 | `storage_option` | yes | `ext4-systemd-boot`, `btrfs-rescue`, or `btrfs-limine`. The entry also carries `tier`, `filesystem`, `bootloader`, and `resume_offset_method` from the tier table. |
 | `swapfile_size` | yes | Integer MiB from 512 to 65536. |
-| `locales` | yes | Non-empty list of unique locales listed in `usr/share/i18n/SUPPORTED`. |
-| `lang` | yes | One of `locales`. |
-| `console_keymap` | yes | A keymap present under `usr/share/kbd/keymaps`. |
+| `lang` | yes | The system language: `en_US.UTF-8` (English, US) or `es_ES.UTF-8` (Spanish, Spain). |
+| `regional_format` | yes | The regional formats: `follow_language` (the default, which tracks `lang`), `en_US.UTF-8`, or `es_ES.UTF-8`. |
+| `locales` | no | Derived: the unique list of `lang` followed by the formats locale when it differs. Each is listed in `usr/share/i18n/SUPPORTED`. |
+| `locale_categories` | no | Derived: `LANG` (equal to `lang`) and `LC_TIME`, `LC_NUMERIC`, `LC_MONETARY`, and `LC_MEASUREMENT` (each equal to the formats locale). `LC_ALL` is never set and other categories inherit `LANG`. |
+| `console_keymap` | yes | The installed-system console keymap, independent of language and formats: a keymap present under `usr/share/kbd/keymaps`. |
 | `timezone` | yes | A zone present under `usr/share/zoneinfo`. |
 | `hostname` | yes | RFC 1123 hostname of at most 64 characters. |
 | `user_name` | yes | A `useradd` name: `[a-z_][a-z0-9_-]*` with an optional trailing `$`, at most 32 characters, not `root`. |
@@ -75,6 +116,15 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 The tier table of the policy reflects [ADR 0003](../docs/adr/0003-storage-and-recovery-baseline.md):
 `ext4-systemd-boot` is `default`, `btrfs-rescue` is `supported`, and `btrfs-limine` is `experimental`.
 Selecting an experimental option adds the warning `storage_option_experimental`.
+
+### Localization
+
+Language, regional formats, and keyboard are independent choices. With `regional_format` `follow_language` the
+formats locale equals `lang`, so a later change of `lang` moves the formats with it; an explicit region stays
+when `lang` changes. `locales` and `locale_categories` are always derived by the same resolver, with source
+`policy`, provenance `technical_necessity`, and `editable` `false`; a document in which they contradict
+`lang` and `regional_format` is invalid (`locale_derivation_mismatch`). Applications may use their own
+preferences or ignore these settings.
 
 ### Disk selection
 
@@ -112,10 +162,10 @@ engine must reject any `kind` it does not know.
 | `install_packages` | no | Install `packages`, the network package, and the option's additional packages. |
 | `generate_fstab` | no | Generate `/etc/fstab` by UUID. For Btrfs only subvolume paths are kept, never `subvolid=`. |
 | `create_swapfile` | no | Create `/swapfile` of `swapfile_size` MiB. Resolves `resume_offset`. |
-| `configure_locale_time_console` | no | Locales, `lang`, keymap, time zone, UTC hardware clock, and time sync. |
+| `configure_locale_time_console` | no | Locales, `lang`, the regional category values, keymap, time zone, UTC hardware clock, and time sync. |
 | `configure_hostname_network` | no | Hostname and NetworkManager without predefined connections. |
-| `create_user` | no | Create `user_name` in `user_groups` with `user_shell`. Consumes `user_password`. |
-| `configure_root_account` | no | Lock the root account, or set its password. Consumes `root_password` for `password`. |
+| `create_user` | no | Create `user_name` in `user_groups` with `user_shell`. Consumes `account_password`. |
+| `configure_root_account` | no | Lock the root account, or give it the same password as the user. Consumes `account_password` only for `password`. |
 | `configure_sudo_sysrq_pacman` | no | Sudoers drop-in, sysrq, and pacman options. |
 | `install_bootloader` | no | Install and configure the option's bootloader and kernel command line. Resolves `root_uuid` and `resume_offset`. |
 | `install_limine_snapshot_tools` | no | Build and install the pinned Limine snapshot tools. `btrfs-limine` only. |
@@ -164,11 +214,15 @@ Ordered list; each entry has exactly `name`, `purpose`, `required_by`, `channel`
 
 | Name | Present | `required_by` | `provenance` |
 | --- | --- | --- | --- |
-| `user_password` | always | `["create_user"]` | `technical_necessity` |
-| `root_password` | only when `root_account` is `password` | `["configure_root_account"]` | `personal_preference` |
+| `account_password` | always | `["create_user"]`, plus `"configure_root_account"` only when `root_account` is `password` | `technical_necessity` |
+
+There is one account-password requirement. With a locked root only the user operation consumes it; when root
+password access is enabled root receives the same password as the user, and no separate root password is
+requested. The shared password is not an independent recovery credential, and the interface says so.
 
 `channel` is always `protected_prompt`. Values, hashes, and length hints never appear, and secret-named
-keys are rejected everywhere else in the document.
+keys are rejected everywhere else in the document. The plan names the requirement only; no value is
+collected in this version (see [`installation-confirmation.md`](installation-confirmation.md#password-hand-over)).
 
 ### `hardware_selections`
 
@@ -186,11 +240,13 @@ and `next_story` (`"2.6"`) for `graphics_vendor`, `battery_present`, `virtualiza
 | Field | Description |
 | --- | --- |
 | `facts_binding.facts_sha256` | SHA-256 of the canonical `target-facts.json`. |
-| `facts_binding.run_id`, `target_id`, `commit`, `dirty` | Copied from the facts `source`. |
+| `facts_binding.run_id`, `commit`, `dirty` | Copied from the facts `source`. |
 | `policy_binding.policy_sha256` | SHA-256 of the canonical `install/plan/policy.json`. |
-| `policy_binding.override_sha256` | SHA-256 of the canonical applied `plan.json` override. Omitted when none applied. |
+| `policy_binding.profile_definition_sha256` | SHA-256 of the canonical `targets/<id>/target.json` of the matched profile. Present exactly when `target.profile.status` is `matched`. |
+| `policy_binding.override_sha256` | SHA-256 of the canonical applied `plan.json` override. Omitted when none applied; it can be present only for a matched profile. |
 
-The choices file is not hashed: its effect is already in `choices`.
+Every hash uses the existing canonical hashing implementation (`canonical-json.mjs` and `digest-plan.mjs`),
+not a second one. The choices file is not hashed: its effect is already in `choices`.
 
 ## Choices file
 
@@ -199,20 +255,50 @@ The choices file is not hashed: its effect is already in `choices`.
 
 ```json
 {
-  "format_version": 1,
+  "format_version": 2,
   "hostname": "laptop",
   "storage_option": "btrfs-rescue"
 }
 ```
 
-Allowed keys: `target_disk`, `storage_option`, `swapfile_size`, `locales`, `lang`, `console_keymap`,
-`timezone`, `hostname`, `user_name`, and `root_account`. Unknown keys, non-editable policy keys, invalid
-values, and secret-like keys (`password`, `*_password`) are invalid input.
+Allowed keys: `target_disk`, `storage_option`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`,
+`timezone`, `hostname`, `user_name`, and `root_account`. Unknown keys, non-editable policy keys (including the
+derived `locales` and `locale_categories`), invalid values, and secret-like keys (`password`, `*_password`)
+are invalid input. A choices file of `format_version` `1` is invalid input.
 
 ## Overrides
 
 `targets/<id>/overrides/plan.json` is a flat JSON object. Only `hostname` is allowed in this format
-version. Its value follows the same rules as the choices file and resolves with source `override`.
+version. Its value follows the same rules as the choices file and resolves with source `override`. It is read
+only when the facts classify the machine as `matched`; an unqualified machine applies none.
+
+## Choice helpers
+
+The assistant never duplicates policy resolution. The plan component publishes two read-only helpers on its
+Node CLI, reached through `install/plan/plan` as a first argument and used by process. Both reuse the resolver
+and the value validators of final generation, write no file, create no intermediate plan, and take the same
+facts as generation. Exit statuses are `0`, `2`, `5`, and `6` as below.
+
+```text
+install/plan/plan preview-choices --facts <file> [--choices <file>]
+install/plan/plan validate-choice --facts <file> [--choices <file>] --key <key> --value <value>
+```
+
+`preview-choices` prints one JSON object on stdout with `format_version` `2` and:
+
+| Field | Description |
+| --- | --- |
+| `choices` | Every editable key with its resolved `value`, `provenance`, `source`, and `editable`, as the plan would hold it for the given choices file. Defaults come from policy, detection, and a matched-profile override. |
+| `options` | The allowed values per key: the storage options with `tier`, `filesystem`, and `bootloader`; the eligible disks with `value`, `path`, `model`, and `size_bytes`; the languages and regional formats; the `swapfile_size` range; and the `root_account` values. Free-text keys (`hostname`, `user_name`, `timezone`, `console_keymap`) carry their validation rule rather than a list. |
+| `derived` | The `locales` and `locale_categories` for the previewed `lang` and `regional_format`. |
+| `warnings` | The warnings the plan would carry that do not depend on a combination failing. |
+
+`validate-choice` checks one value against its own rules and the facts, not the complete combination. The `--value`
+argument is a string: integers (`swapfile_size`) are parsed, and a secret-like key is rejected before its value
+is read. On success it prints `{ "valid": true, "key", "value", "derived" }`, with `derived` present for `lang`
+and `regional_format`. Otherwise it prints `{ "valid": false, "reasons" }` with the generation reasons of the
+plan contract (for example `choices_invalid_value`, `choices_not_editable`, or `choices_unknown_key`) and exits
+`2`. The complete combination, including layout fit, is validated only when the plan is generated.
 
 ## Canonicalization and digest
 
@@ -249,7 +335,7 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | Code | Condition |
 | --- | --- |
 | `plan_not_json`, `plan_invalid_type`, `plan_non_integer_number` | Malformed document. |
-| `plan_format_unsupported` | `format_version` is not `1`. |
+| `plan_format_unsupported` | `format_version` is not `2`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
 | `plan_field_missing`, `plan_label_missing` | A required field, or a `provenance`, `source`, or `editable` label, is missing. |
 | `plan_unknown_field` | A field outside this contract, including `approved` and `approval`. |
 | `plan_secret_value_present` | A secret-named key outside `secret_requirements`, or an extra field in a secret entry. |
@@ -257,9 +343,12 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | `operation_kind_unknown`, `operation_order_invalid` | Unknown kind, or disallowed order. |
 | `operation_id_invalid`, `operation_destructive_mismatch` | An operation id differs from its kind, or its `destructive` flag differs from the kind table. |
 | `destructive_without_target_disk` | A destructive operation exists without `target_disk`. |
-| `root_account_secret_mismatch` | `root_account` and `root_password` are inconsistent. |
-| `secret_consumer_mismatch` | A secret has no consumer, or an operation needs an undeclared secret. |
+| `root_account_secret_mismatch` | `root_account` and the root consumer of `account_password` are inconsistent. |
+| `secret_consumer_mismatch` | The single `account_password` requirement is missing or duplicated, has no consumer, or an operation needs an undeclared secret. |
 | `lang_not_in_locales` | `lang` is not one of `locales`. |
+| `locale_derivation_mismatch` | `locales` or `locale_categories` contradict `lang` and `regional_format`, or `LC_ALL` is present. |
+| `machine_identity_mismatch` | Given the facts document, `target.machine` differs from the observed identity, including a difference in field availability. |
+| `profile_binding_mismatch` | `target.profile` is inconsistent with its bindings: `matched` without `profile_definition_sha256` or `profile_id`, `unqualified` with a profile id, a profile hash, or an override hash, or, given the facts, a classification that differs from the facts. |
 | `disk_identity_mismatch`, `disk_not_eligible` | The disk does not match the `target_disk` choice or the bound facts, or is not eligible. |
 | `facts_binding_mismatch` | `facts_binding` contradicts `target`, or does not match the supplied facts document. |
 | `plan_size_does_not_fit` | ESP, `root_minimum_bytes`, and `swapfile_size` exceed the disk size. |
@@ -269,8 +358,8 @@ Generation reasons, reported with the same shape and exit `2` unless noted:
 
 | Code | Condition |
 | --- | --- |
-| `facts_invalid`, `facts_format_unknown` | The facts fail `validate-facts.mjs`, have `validation.status` `invalid`, or an unknown `format_version`. |
-| `choices_invalid_format`, `choices_unknown_key`, `choices_not_editable`, `choices_secret_key`, `choices_invalid_value` | The choices file is invalid. |
+| `facts_invalid`, `facts_format_unknown` | The facts fail `validate-facts.mjs`, have `validation.status` `invalid`, or a `format_version` other than `2` (facts of format `1` are not accepted). |
+| `choices_invalid_format`, `choices_unknown_key`, `choices_not_editable`, `choices_secret_key`, `choices_invalid_value` | The choices file is invalid, including one of `format_version` `1`. |
 | `override_invalid_format`, `override_unknown_key`, `override_invalid_value` | The target override is invalid. |
 | `disk_selection_required` | Several disks are eligible; the reason lists the candidates. |
 | `disk_unknown`, `disk_ineligible` | The named disk is unknown or ineligible; the reason lists the candidates. |
@@ -278,7 +367,10 @@ Generation reasons, reported with the same shape and exit `2` unless noted:
 | `lang_not_in_locales`, `plan_size_does_not_fit` | The choices contradict each other or the disk. The validator codes are reused. |
 | `output_exists` | `--output` already contains a plan. |
 
-Warnings: `disk_without_by_id` and `storage_option_experimental`.
+Warnings: `disk_without_by_id`, `storage_option_experimental`, and `machine_unqualified`. The last is present
+exactly when `target.profile.status` is `unqualified`; its `message` states that the machine matches no known
+profile and that installation is experimental, and its `next_step` states that no compatibility or support is
+promised.
 
 ## Exit statuses
 

@@ -19,6 +19,15 @@ test('Gum statuses map per phase', () => {
     [1, 'confirm', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
     [1, 'name', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
     [1, 'edit', { action: 'back' }],
+    [1, 'step', { action: 'back' }],
+    [1, 'review', { action: 'back' }],
+    [1, 'password', { action: 'back' }],
+    [1, 'pager', { action: 'back' }],
+    [130, 'step', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
+    [130, 'review', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
+    [130, 'password', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
+    [130, 'pager', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
+    [2, 'step', { action: 'stop', exit_status: 5, outcome: 'failed' }],
     [130, 'menu', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
     [130, 'edit', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
     [130, 'confirm', { action: 'stop', exit_status: 3, outcome: 'cancelled' }],
@@ -28,6 +37,12 @@ test('Gum statuses map per phase', () => {
   ];
   for (const [status, phase, expected] of table) {
     assert.deepEqual(mapGumStatus(status, phase), expected, `${status} in ${phase}`);
+  }
+});
+
+test('Esc at an authorization prompt cancels and never goes back', () => {
+  for (const phase of ['confirm', 'name']) {
+    assert.deepEqual(mapGumStatus(1, phase), { action: 'stop', exit_status: 3, outcome: 'cancelled' }, phase);
   }
 });
 

@@ -1,7 +1,18 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "target": {
-    "target_id": "reference-vm",
+    "machine": {
+      "architecture": "x86_64",
+      "virtualization": "kvm",
+      "dmi": {
+        "sys_vendor": "QEMU",
+        "product_name": "Standard PC (Q35 + ICH9, 2009)"
+      }
+    },
+    "profile": {
+      "status": "matched",
+      "profile_id": "reference-vm"
+    },
     "disk": {
       "path": "/dev/vda",
       "by_id": "virtio-SYNTH-VDA-0001",
@@ -133,17 +144,14 @@
       "source": "policy",
       "editable": false
     },
-    "locales": {
-      "value": [
-        "en_US.UTF-8",
-        "es_ES.UTF-8"
-      ],
+    "lang": {
+      "value": "en_US.UTF-8",
       "provenance": "personal_preference",
       "source": "policy",
       "editable": true
     },
-    "lang": {
-      "value": "en_US.UTF-8",
+    "regional_format": {
+      "value": "follow_language",
       "provenance": "personal_preference",
       "source": "policy",
       "editable": true
@@ -240,6 +248,26 @@
     "fstrim": {
       "value": "fstrim.timer",
       "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "locales": {
+      "value": [
+        "en_US.UTF-8"
+      ],
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "locale_categories": {
+      "value": {
+        "LANG": "en_US.UTF-8",
+        "LC_TIME": "en_US.UTF-8",
+        "LC_NUMERIC": "en_US.UTF-8",
+        "LC_MONETARY": "en_US.UTF-8",
+        "LC_MEASUREMENT": "en_US.UTF-8"
+      },
+      "provenance": "technical_necessity",
       "source": "policy",
       "editable": false
     },
@@ -356,10 +384,16 @@
       "destructive": false,
       "parameters": {
         "locales": [
-          "en_US.UTF-8",
-          "es_ES.UTF-8"
+          "en_US.UTF-8"
         ],
         "lang": "en_US.UTF-8",
+        "locale_categories": {
+          "LANG": "en_US.UTF-8",
+          "LC_TIME": "en_US.UTF-8",
+          "LC_NUMERIC": "en_US.UTF-8",
+          "LC_MONETARY": "en_US.UTF-8",
+          "LC_MEASUREMENT": "en_US.UTF-8"
+        },
         "console_keymap": "us",
         "timezone": "Europe/Madrid",
         "hardware_clock": "utc",
@@ -456,8 +490,8 @@
   ],
   "secret_requirements": [
     {
-      "name": "user_password",
-      "purpose": "Password of the created user account.",
+      "name": "account_password",
+      "purpose": "Password of the created user account, shared with the root account when root password access is enabled.",
       "required_by": [
         "create_user"
       ],
@@ -517,18 +551,18 @@
   },
   "warnings": [],
   "facts_binding": {
-    "facts_sha256": "7c712a7bf6ad182654e5401b3d266f75ebcd77bfb344a3a55f0eee8e55786b69",
+    "facts_sha256": "b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11",
     "run_id": "20261007T120000Z-11111111-2222-4333-8444-555555555555",
-    "target_id": "reference-vm",
     "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "d3acd01fc7e5567922ae3e6d68796c86e45949c0bd8c28b3ea2de7fc5f8c6d77",
+    "policy_sha256": "7c9ed6a64c08699421ce9aeb811381e6c5c412b918fb0a5bc1b5c2e8f0382ce4",
+    "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "f2033b1993d7dbed1cc2fca95b4460070a8ced3df5535dc1099d5cb9ac764b66"
+    "value": "a9ab5d4e9551c5ffe675c098ddde626240028aca11763188dc0e9c561d63736f"
   }
 }

@@ -1,7 +1,8 @@
 import { basename } from 'node:path';
 import { normalizeHardware } from '../../hardware/discovery/normalize-hardware.mjs';
+import { classifyProfile } from './identify-profile.mjs';
 import { resolveLayers, resolvePolicy } from './resolve-layers.mjs';
-import { FORMAT_VERSION, isRecord, reason, validateDiscovery } from './validate-facts.mjs';
+import { FACTS_FORMAT_VERSION, isRecord, reason, validateDiscovery } from './validate-facts.mjs';
 
 const DMI_FIELDS = ['sys_vendor', 'product_name', 'product_version', 'board_name', 'bios_vendor', 'bios_version', 'bios_date'];
 const NETWORK_STEPS = ['default_route', 'dns', 'https'];
@@ -203,12 +204,38 @@ function normalizeStorage(raw, minimumBytes) {
   return { facts, missing };
 }
 
-export function normalizeFacts({ raw, baseline, target = null, override = {}, loadReasons = [], source, runtimeNames = [] }) {
+// The detected facts that take part in profile identification; they do not depend on policy.
+export function detectIdentity(raw) {
+  return { firmware: normalizeFirmware(raw?.firmware), hardware: normalizeHardware(raw?.hardware) };
+}
+
+// "targets" are the defined profiles for automatic identification; "requested" is the loadTarget result
+// of an explicit --target assertion (null otherwise). An override is read only for a verified profile.
+export function normalizeFacts({
+  raw,
+  baseline,
+  targets = [],
+  requested = null,
+  loadOverride = () => ({ override: {}, reasons: [] }),
+  source,
+  runtimeNames = [],
+}) {
+  const { firmware, hardware } = detectIdentity(raw);
+  const classification = classifyProfile({
+    detected: { firmware: firmware.facts, hardware: hardware.facts },
+    targets,
+    requested,
+  });
+  const loadReasons = requested === null ? [] : [...requested.reasons];
+  let override = {};
+  if (classification.target !== null) {
+    const loadedOverride = loadOverride(classification.target.target_id);
+    override = loadedOverride.override;
+    loadReasons.push(...loadedOverride.reasons);
+  }
   const policy = resolvePolicy({ baseline, override });
-  const firmware = normalizeFirmware(raw?.firmware);
   const network = normalizeNetwork(raw?.network);
   const storage = normalizeStorage(raw?.storage, policy.values.minimum_disk_bytes);
-  const hardware = normalizeHardware(raw?.hardware);
   const detected = {
     firmware: firmware.facts,
     network: network.facts,
@@ -217,22 +244,24 @@ export function normalizeFacts({ raw, baseline, target = null, override = {}, lo
   };
   const missing = [...firmware.missing, ...network.missing, ...storage.missing, ...hardware.missing];
   const { layers, effective } = resolveLayers({ baseline, detected, accepted: policy.accepted, runtimeNames });
-  const discovery = validateDiscovery({ detected, target });
+  const discovery = validateDiscovery({ detected });
   const reasons = [
     ...loadReasons,
     ...policy.reasons,
     ...missing.map(missingFactReason),
     ...discovery.reasons,
+    ...classification.reasons,
   ];
-  const targetId = TARGET_ID_PATTERN.test(source.target_id ?? '') ? source.target_id : undefined;
+  const requestedId = TARGET_ID_PATTERN.test(source.requested_profile_id ?? '') ? source.requested_profile_id : undefined;
   return {
-    format_version: FORMAT_VERSION,
+    format_version: FACTS_FORMAT_VERSION,
     source: compact({
       run_id: source.run_id,
       commit: source.commit,
       dirty: source.dirty,
-      target_id: targetId,
+      requested_profile_id: requestedId,
     }),
+    profile: classification.profile,
     layers,
     effective,
     validation: {

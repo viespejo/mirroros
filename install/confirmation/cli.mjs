@@ -2,13 +2,22 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { PlanContractError } from '../plan/canonical-json.mjs';
 import { loadFacts } from '../plan/generate-plan.mjs';
-import { loadPlanOverride, loadPlanPolicy } from '../plan/resolve-choices.mjs';
-import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_UPSTREAM_FAILURE, EXIT_VALID, parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
+import { loadPlanOverride, loadPlanPolicy, loadProfileDefinition } from '../plan/resolve-choices.mjs';
+import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_UPSTREAM_FAILURE, EXIT_VALID, machineProjection, parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
 import { reason } from '../discovery/validate-facts.mjs';
 import { NEXT_STEP_REGENERATE, compareSafety } from './compare-safety.mjs';
 import { applyEdit, parseValue, startingChoices } from './edit-choices.mjs';
 import { standardReason, structuredReason } from './outcomes.mjs';
-import { confirmationPrompt, deviceName, digestPrefix, formatSize, reviewMarkdown } from './review-content.mjs';
+import {
+  compactReview,
+  completePlanText,
+  confirmationLines,
+  confirmationPrompt,
+  deviceName,
+  digestPrefix,
+  formatSize,
+  machineLabel,
+} from './review-content.mjs';
 import { RecordContractError } from './validate-records.mjs';
 import { buildApprovalRecord, buildRunRecord, writeApplyRecords, writeChoices } from './write-records.mjs';
 
@@ -34,7 +43,7 @@ function loadValidPlan(path) {
 
 function printReasons(reasons) {
   process.stdout.write(`${JSON.stringify(reasons, null, 2)}\n`);
-  for (const item of reasons) process.stderr.write(`MirrorOS install apply: ${item.message}\nNext step: ${item.next_step}\n`);
+  for (const item of reasons) process.stderr.write(`MirrorOS install: ${item.message}\nNext step: ${item.next_step}\n`);
 }
 
 // Every reason that reaches an invalidation tells the user the same next step (AC-5).
@@ -54,14 +63,19 @@ function compare([codeRoot, planPath, factsPath, baselinePath]) {
     baselineFacts = baseline.facts;
   }
   const policy = loadPlanPolicy(join(codeRoot, 'install/plan/policy.json'));
-  const override = loadPlanOverride(join(codeRoot, 'targets'), loaded.plan.target.target_id);
-  if (override.reasons.length > 0) return printReasonsAndFail(invalidating(override.reasons));
-  const reasons = compareSafety({
-    plan: loaded.plan,
-    facts: fresh.facts,
-    hashes: { policy_sha256: policy.sha256, override_sha256: override.sha256 },
-    baselineFacts,
-  });
+  const hashes = { policy_sha256: policy.sha256 };
+  // The definition and the override belong to the profile the fresh facts match; an unqualified machine has neither.
+  if (fresh.facts.profile.status === 'matched') {
+    const targets = join(codeRoot, 'targets');
+    const { profile_id: profileId } = fresh.facts.profile;
+    const definition = loadProfileDefinition(targets, profileId);
+    if (definition.reasons.length > 0) return printReasonsAndFail(invalidating(definition.reasons));
+    const override = loadPlanOverride(targets, profileId);
+    if (override.reasons.length > 0) return printReasonsAndFail(invalidating(override.reasons));
+    hashes.profile_definition_sha256 = definition.sha256;
+    hashes.override_sha256 = override.sha256;
+  }
+  const reasons = compareSafety({ plan: loaded.plan, facts: fresh.facts, hashes, baselineFacts });
   if (reasons.length > 0) return printReasonsAndFail(reasons);
   process.stdout.write('[]\n');
   return EXIT_VALID;
@@ -77,17 +91,23 @@ function review([field, planPath]) {
   if (loaded.plan === undefined) return printReasonsAndFail(invalidating(loaded.reasons));
   const { plan } = loaded;
   switch (field) {
-    case 'markdown':
-      process.stdout.write(reviewMarkdown(plan));
+    case 'compact':
+      for (const [label, value] of compactReview(plan)) process.stdout.write(`${label}\t${value}\n`);
+      return EXIT_VALID;
+    case 'confirmation':
+      process.stdout.write(`${confirmationLines(plan).join('\n')}\n`);
+      return EXIT_VALID;
+    case 'complete':
+      process.stdout.write(completePlanText(plan));
+      return EXIT_VALID;
+    case 'machine':
+      process.stdout.write(`${machineLabel(plan)}\n`);
       return EXIT_VALID;
     case 'prompt':
       process.stdout.write(`${confirmationPrompt(plan)}\n`);
       return EXIT_VALID;
     case 'digest-prefix':
       process.stdout.write(`${digestPrefix(plan)}\n`);
-      return EXIT_VALID;
-    case 'target-id':
-      process.stdout.write(`${plan.target.target_id}\n`);
       return EXIT_VALID;
     case 'device-name': {
       const name = deviceName(plan);
@@ -96,7 +116,7 @@ function review([field, planPath]) {
       return EXIT_VALID;
     }
     default:
-      process.stderr.write(`MirrorOS install apply: unknown review field: ${field}\n`);
+      process.stderr.write(`MirrorOS install: unknown review field: ${field}\n`);
       return EXIT_INTERNAL;
   }
 }
@@ -121,7 +141,7 @@ function edit([action, ...rest]) {
     writeChoicesFile(outPath, edited.choices);
     return EXIT_VALID;
   }
-  process.stderr.write(`MirrorOS install apply: unknown edit action: ${action}\n`);
+  process.stderr.write(`MirrorOS install: unknown edit action: ${action}\n`);
   return EXIT_INTERNAL;
 }
 
@@ -147,7 +167,7 @@ function options([kind, source]) {
     for (const locale of loaded.plan.choices.locales.value) process.stdout.write(`${locale}\n`);
     return EXIT_VALID;
   }
-  process.stderr.write(`MirrorOS install apply: unknown options kind: ${kind}\n`);
+  process.stderr.write(`MirrorOS install: unknown options kind: ${kind}\n`);
   return EXIT_INTERNAL;
 }
 
@@ -158,7 +178,7 @@ function reasons([kind, source]) {
   }
   const document = JSON.parse(readFileSync(source, 'utf8'));
   if (kind === 'text') {
-    for (const item of document) process.stderr.write(`MirrorOS install apply: ${item.message}\nNext step: ${item.next_step}\n`);
+    for (const item of document) process.stderr.write(`MirrorOS install: ${item.message}\nNext step: ${item.next_step}\n`);
     return EXIT_VALID;
   }
   if (kind === 'error') {
@@ -181,22 +201,36 @@ function planDigests(directory) {
   return { digests: plans.map(plan => plan.digest.value), last: plans.at(-1) };
 }
 
-function record([directory, runId, timestamp, targetId, gumVersion, exitStatus, outcome, operation, reasonsPath]) {
+// The machine and profile the run observed: from the valid facts of the first discovery when it produced
+// them, otherwise from the last plan, otherwise nothing (discovery was not reached or its facts are invalid).
+function observedMachine(directory, last) {
+  const initial = join(directory, 'discovery', 'initial', 'target-facts.json');
+  if (existsSync(initial)) {
+    const loaded = loadFacts(initial);
+    if (loaded.facts !== undefined) return { machine: machineProjection(loaded.facts), profile: structuredClone(loaded.facts.profile) };
+  }
+  if (last !== undefined) return { machine: structuredClone(last.target.machine), profile: structuredClone(last.target.profile) };
+  return {};
+}
+
+function record([directory, runId, timestamp, entry, gumVersion, exitStatus, outcome, operation, reasonsPath, stagesText]) {
   const list = reasonsPath === '' ? [] : JSON.parse(readFileSync(reasonsPath, 'utf8'));
   const shaped = list.map(item => structuredReason(item, { operation }));
   const { digests, last } = planDigests(directory);
   const optional = value => (value === '' ? undefined : value);
+  const stages = stagesText === undefined || stagesText === '' ? [] : stagesText.split(',');
+  const { machine, profile } = observedMachine(directory, last);
   let disk;
   if (last !== undefined) {
     const { eligible: _eligible, current_layout: _layout, ...identity } = last.target.disk;
     disk = identity;
   }
   const run = buildRunRecord({
-    runId, timestamp, targetId: optional(targetId), gumVersion: optional(gumVersion), digests,
+    runId, timestamp, entry, machine, profile, gumVersion: optional(gumVersion), stages, digests,
     exitStatus: Number(exitStatus), outcome, reasons: shaped,
   });
   const approval = buildApprovalRecord({
-    runId, timestamp, digest: digests.at(-1), targetId: optional(targetId), disk,
+    runId, timestamp, digest: digests.at(-1), machine, profile, disk,
     gumVersion: optional(gumVersion), outcome, reason: shaped[0]?.code,
   });
   writeApplyRecords({ directory, run, approval });
@@ -207,19 +241,19 @@ const COMMANDS = { compare, review, edit, options, reasons, record };
 
 try {
   if (COMMANDS[command] === undefined) {
-    process.stderr.write(`MirrorOS install apply: unknown helper command: ${command}\n`);
+    process.stderr.write(`MirrorOS install: unknown helper command: ${command}\n`);
     process.exitCode = EXIT_INTERNAL;
   } else {
     process.exitCode = COMMANDS[command](args);
   }
 } catch (error) {
   if (error instanceof PlanContractError || error instanceof RecordContractError) {
-    process.stderr.write(`MirrorOS install apply: an internal contract check failed: ${error.message}\n`);
-    process.stderr.write('Next step: rebuild or re-clone the installation medium and rerun apply.\n');
+    process.stderr.write(`MirrorOS install: an internal contract check failed: ${error.message}\n`);
+    process.stderr.write('Next step: rebuild or re-clone the installation medium and rerun mirroros-install.\n');
     process.exitCode = EXIT_INTERNAL;
   } else {
-    process.stderr.write(`MirrorOS install apply: an unexpected failure occurred (${error.code ?? error.name}).\n`);
-    process.stderr.write('Next step: check the output location and the installed Node.js, then rerun apply.\n');
+    process.stderr.write(`MirrorOS install: an unexpected failure occurred (${error.code ?? error.name}).\n`);
+    process.stderr.write('Next step: check the output location and the installed Node.js, then rerun mirroros-install.\n');
     process.exitCode = EXIT_UPSTREAM_FAILURE;
   }
 }

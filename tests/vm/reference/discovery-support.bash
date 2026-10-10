@@ -4,6 +4,9 @@ load vm-support
 # REFERENCE_DISCOVERY_TARGET: target id echoed in the guest report.
 # REFERENCE_DISCOVERY_EXIT: discovery exit status the guest reports (0, 2, 5, or 6).
 # REFERENCE_QEMU_MODE: pass (default) or exit (QEMU exits before a report).
+# REFERENCE_CONFIRMATION_REPORT: 1 adds a guided-installer case report whose profile follows the -smbios argument;
+# REFERENCE_CONFIRMATION_BAD_OUTCOME, REFERENCE_CONFIRMATION_MISSING_RECORD, REFERENCE_CONFIRMATION_BAD_PROFILE, and
+# REFERENCE_CONFIRMATION_MISSING_EVIDENCE make that report wrong in one way.
 # REFERENCE_PLAN_REPORT: 1 adds a plan section; REFERENCE_PLAN_SAME_DIGEST=1 gives both plans one digest,
 # REFERENCE_PLAN_TAMPER=1 changes the first plan checksum after the last run, and
 # REFERENCE_PLAN_INVALID_EXIT sets the exit of the invalid-choices run (default 2).
@@ -20,7 +23,11 @@ if [[ "${1:-}" == '--version' ]]; then
   exit 0
 fi
 serial=''
+smbios=''
+previous=''
 for argument in "$@"; do
+  [[ "$previous" == '-smbios' ]] && smbios="$argument"
+  previous="$argument"
   [[ "$argument" == '-S' ]] && exit 0
   [[ "$argument" == file:*guest-serial.log ]] && serial="${argument#file:}"
 done
@@ -35,7 +42,8 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
   exit) exit 3 ;;
   pass)
     if [[ "$exit_status" -eq 0 ]]; then validation='valid'; else validation='invalid'; fi
-    facts="{\"format_version\":1,\"validation\":{\"status\":\"${validation}\",\"reasons\":[{\"code\":\"identity_pending_capture\"}],\"warnings\":[]}}"
+    if [[ -n "$smbios" ]]; then profile='{"status":"unqualified"}'; else profile='{"status":"matched","profile_id":"reference-vm"}'; fi
+    facts="{\"format_version\":2,\"profile\":${profile},\"validation\":{\"status\":\"${validation}\",\"reasons\":[{\"code\":\"identity_pending_capture\"}],\"warnings\":[]}}"
     plan_section=''
     if [[ "${REFERENCE_PLAN_REPORT:-0}" == 1 ]]; then
       # shellcheck disable=SC2016 # The Node program is a literal; its arguments are passed explicitly.
@@ -63,15 +71,25 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
     if [[ "${REFERENCE_CONFIRMATION_REPORT:-0}" == 1 ]]; then
       # shellcheck disable=SC2016 # Literal Node program with explicit arguments.
       plan_section=",\"confirmation\":$(node -e '
-        const [name, bad, missing] = process.argv.slice(1);
+        const [name, bad, missing, smbios, badProfile, missingEvidence] = process.argv.slice(1);
         const expected = {approve: [2, "approved", "engine_not_available"], cancel: [3, "cancelled", undefined],
           mismatch: [3, "cancelled", "confirmation_mismatch"], "layout-change": [2, "invalidated", "target_layout_changed"]}[name];
-        const common = {run_id: "apply-run", outcome: bad === "1" ? "failed" : expected[1]};
-        const files = {"apply-run.json": JSON.stringify({...common, exit_status: expected[0]}),
-          "approval-record.json": JSON.stringify({...common, reason: expected[2]}), "apply.log": "plain log\n"};
+        const experimental = smbios !== "";
+        const profile = experimental ? {status: "unqualified"}
+          : {status: badProfile === "1" ? "unqualified" : "matched", ...(badProfile === "1" ? {} : {profile_id: "reference-vm"})};
+        const machine = {architecture: "x86_64", virtualization: "kvm", dmi: experimental
+          ? {sys_vendor: "MirrorOS Test", product_name: "Unqualified Test Machine"} : {sys_vendor: "QEMU"}};
+        const digest = "a".repeat(64);
+        const common = {run_id: "install-run", profile, machine, outcome: bad === "1" ? "failed" : expected[1]};
+        const files = {"install-run.json": JSON.stringify({...common, exit_status: expected[0], final_digest: digest}),
+          "approval-record.json": JSON.stringify({...common, digest, reason: expected[2]}), "install.log": "plain log\n",
+          "discovery/initial/target-facts.json": "{}", "plans/01/installation-plan.json": "{}"};
+        if (name === "approve" || name === "layout-change") files["discovery/final/target-facts.json"] = "{}";
         if (missing === "1") delete files["approval-record.json"];
+        if (missingEvidence === "1") delete files["plans/01/installation-plan.json"];
         process.stdout.write(JSON.stringify({name, exit_status: expected[0], files, private_permissions: true, layout_write_status: 0}));
-      ' "$case_name" "${REFERENCE_CONFIRMATION_BAD_OUTCOME:-0}" "${REFERENCE_CONFIRMATION_MISSING_RECORD:-0}")"
+      ' "$case_name" "${REFERENCE_CONFIRMATION_BAD_OUTCOME:-0}" "${REFERENCE_CONFIRMATION_MISSING_RECORD:-0}" \
+        "$smbios" "${REFERENCE_CONFIRMATION_BAD_PROFILE:-0}" "${REFERENCE_CONFIRMATION_MISSING_EVIDENCE:-0}")"
     fi
     printf 'MIRROROS-REPORT-BEGIN %s\r\n{"schema_version":1,"run_id":"%s","target":"%s","exit_status":%s,"facts":%s,"error":null,"stderr_tail":""%s}\r\nMIRROROS-REPORT-END %s\r\n' \
       "$run_id" "$run_id" "${REFERENCE_DISCOVERY_TARGET:?}" "$exit_status" "$facts" "$plan_section" "$run_id" >> "$serial"

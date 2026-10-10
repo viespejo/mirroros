@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NEXT_STEP_REGENERATE, compareSafety, selectedDisk } from '../../../install/confirmation/compare-safety.mjs';
-import { clone, currentHashes, facts, firstDisk, generate, withDisk } from './helpers.mjs';
+import {
+  clone, currentHashes, facts, firstDisk, generate, unqualifiedFacts, unqualifiedHashes, withDisk,
+} from './helpers.mjs';
 
 function compare({ plan = generate().plan, fresh = facts(), hashes = currentHashes(), baselineFacts } = {}) {
   return compareSafety({ plan, facts: fresh, hashes, baselineFacts });
@@ -31,10 +33,72 @@ test('every reason carries the regenerate next step', () => {
   }
 });
 
-test('a different target id is target_identity_changed', () => {
+test('no fabricated target id takes part in the comparison', () => {
   const fresh = clone(facts());
-  fresh.source.target_id = 'framework-13-pro-amd';
-  assert.deepEqual(codes(compare({ fresh })), ['target_identity_changed']);
+  delete fresh.source.requested_profile_id;
+  assert.deepEqual(compare({ fresh }), []);
+});
+
+test('each observed machine field is compared as machine_identity_changed', () => {
+  const changes = {
+    'architecture changed': detected => { detected.hardware.architecture = 'aarch64'; },
+    'virtualization changed': detected => { detected.hardware.virtualization = 'none'; },
+    'dmi.sys_vendor changed': detected => { detected.firmware.dmi.sys_vendor = 'Other Vendor'; },
+    'dmi.product_name changed': detected => { detected.firmware.dmi.product_name = 'Other Product'; },
+  };
+  for (const [expected, change] of Object.entries(changes)) {
+    const fresh = clone(facts());
+    change(fresh.layers.detected);
+    const reasons = compare({ fresh }).filter(item => item.code === 'machine_identity_changed');
+    assert.equal(reasons.length, 1, expected);
+    assert.ok(reasons[0].message.includes(expected.replace(/ changed$/, '')), expected);
+  }
+});
+
+test('a machine field that appeared or disappeared is machine_identity_changed', () => {
+  const gone = clone(facts());
+  delete gone.layers.detected.hardware.virtualization;
+  const missing = compare({ fresh: gone }).find(item => item.code === 'machine_identity_changed');
+  assert.match(missing.message, /virtualization is no longer observed/);
+
+  const noVendor = clone(facts());
+  delete noVendor.layers.detected.firmware.dmi.sys_vendor;
+  const { plan } = generate({ factsDocument: noVendor });
+  assert.equal(plan.target.machine.dmi.sys_vendor, undefined);
+  const appeared = compare({ plan, fresh: facts() }).find(item => item.code === 'machine_identity_changed');
+  assert.match(appeared.message, /dmi\.sys_vendor appeared/);
+});
+
+test('a recognized machine that is now unqualified is profile_binding_changed once', () => {
+  const reasons = compare({ fresh: unqualifiedFacts(), hashes: unqualifiedHashes() });
+  assert.equal(codes(reasons).filter(code => code === 'profile_binding_changed').length, 1);
+  assert.ok(!codes(reasons).includes('policy_changed'));
+});
+
+test('an unqualified plan on a machine that now matches a profile is profile_binding_changed', () => {
+  const { plan } = generate({ factsDocument: unqualifiedFacts() });
+  assert.equal(plan.target.profile.status, 'unqualified');
+  const fresh = clone(unqualifiedFacts());
+  fresh.profile = { status: 'matched', profile_id: 'reference-vm' };
+  assert.deepEqual(codes(compare({ plan, fresh, hashes: currentHashes() })).filter(code => code === 'profile_binding_changed'), ['profile_binding_changed']);
+});
+
+test('a different matched profile id is profile_binding_changed', () => {
+  const fresh = clone(facts());
+  fresh.profile = { status: 'matched', profile_id: 'framework-13-pro-amd' };
+  assert.deepEqual(codes(compare({ fresh })), ['profile_binding_changed']);
+});
+
+test('a changed profile definition hash is profile_binding_changed', () => {
+  const hashes = { ...currentHashes(), profile_definition_sha256: 'f'.repeat(64) };
+  assert.deepEqual(codes(compare({ hashes })), ['profile_binding_changed']);
+});
+
+test('an unqualified machine compares equal to an unqualified plan with only the policy bound', () => {
+  const { plan } = generate({ factsDocument: unqualifiedFacts() });
+  assert.equal(plan.policy_binding.override_sha256, undefined);
+  assert.equal(plan.policy_binding.profile_definition_sha256, undefined);
+  assert.deepEqual(compare({ plan, fresh: unqualifiedFacts(), hashes: unqualifiedHashes(), baselineFacts: unqualifiedFacts() }), []);
 });
 
 test('a different boot mode is target_identity_changed', () => {
@@ -119,7 +183,7 @@ test('a changed policy hash is policy_changed', () => {
 
 test('a changed, added, or removed override hash is policy_changed', () => {
   assert.deepEqual(codes(compare({ hashes: { ...currentHashes(), override_sha256: 'f'.repeat(64) } })), ['policy_changed']);
-  assert.deepEqual(codes(compare({ hashes: { policy_sha256: currentHashes().policy_sha256 } })), ['policy_changed']);
+  assert.deepEqual(codes(compare({ hashes: { ...currentHashes(), override_sha256: undefined } })), ['policy_changed']);
   const plan = clone(generate().plan);
   delete plan.policy_binding.override_sha256;
   assert.deepEqual(codes(compare({ plan })), ['policy_changed']);

@@ -9,6 +9,7 @@ import { discover } from '../discovery/helpers.mjs';
 const here = dirname(fileURLToPath(import.meta.url));
 export const planFixturesRoot = resolve(here, '../../fixtures/plan');
 const policyPath = resolve(here, '../../../install/plan/policy.json');
+const profileDefinitionPath = resolve(here, '../../../targets/reference-vm/target.json');
 
 export const STORAGE_OPTION_NAMES = ['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine'];
 export const ROOT_ACCOUNT_MODES = ['locked', 'password'];
@@ -46,6 +47,7 @@ function parametersFor(kind, context) {
       return {
         locales: values.locales,
         lang: values.lang,
+        locale_categories: values.locale_categories,
         console_keymap: values.console_keymap,
         timezone: values.timezone,
         hardware_clock: values.hardware_clock,
@@ -91,6 +93,17 @@ export function buildValidPlan(storageOption, rootAccount) {
     values[key] = entry.value;
     choices[key] = { value: entry.value, provenance: entry.provenance, source: 'policy', editable: entry.editable };
   }
+  const derivedLocale = { value: undefined, provenance: 'technical_necessity', source: 'policy', editable: false };
+  values.locales = ['en_US.UTF-8'];
+  values.locale_categories = {
+    LANG: 'en_US.UTF-8',
+    LC_TIME: 'en_US.UTF-8',
+    LC_NUMERIC: 'en_US.UTF-8',
+    LC_MONETARY: 'en_US.UTF-8',
+    LC_MEASUREMENT: 'en_US.UTF-8',
+  };
+  choices.locales = { ...derivedLocale, value: values.locales };
+  choices.locale_categories = { ...derivedLocale, value: values.locale_categories };
   values.storage_option = storageOption;
   values.root_account = rootAccount;
   values.hostname = 'mirroros-ref';
@@ -124,21 +137,12 @@ export function buildValidPlan(storageOption, rootAccount) {
   });
 
   const secrets = [{
-    name: 'user_password',
-    purpose: 'Password of the created user account.',
-    required_by: ['create_user'],
+    name: 'account_password',
+    purpose: 'Password of the created user account, shared with the root account when root password access is enabled.',
+    required_by: rootAccount === 'password' ? ['create_user', 'configure_root_account'] : ['create_user'],
     channel: 'protected_prompt',
     provenance: 'technical_necessity',
   }];
-  if (rootAccount === 'password') {
-    secrets.push({
-      name: 'root_password',
-      purpose: 'Password of the root account.',
-      required_by: ['configure_root_account'],
-      channel: 'protected_prompt',
-      provenance: 'personal_preference',
-    });
-  }
 
   const warnings = option.tier === 'experimental'
     ? [{
@@ -149,9 +153,14 @@ export function buildValidPlan(storageOption, rootAccount) {
     : [];
 
   const plan = {
-    format_version: 1,
+    format_version: 2,
     target: {
-      target_id: facts.source.target_id,
+      machine: {
+        architecture: 'x86_64',
+        virtualization: 'kvm',
+        dmi: { sys_vendor: 'QEMU', product_name: 'Standard PC (Q35 + ICH9, 2009)' },
+      },
+      profile: { status: 'matched', profile_id: 'reference-vm' },
       disk: {
         path: disk.identity.path,
         by_id: disk.identity.by_id,
@@ -192,12 +201,12 @@ export function buildValidPlan(storageOption, rootAccount) {
     facts_binding: {
       facts_sha256: sha256Canonical(facts),
       run_id: facts.source.run_id,
-      target_id: facts.source.target_id,
       commit: facts.source.commit,
       dirty: facts.source.dirty,
     },
     policy_binding: {
       policy_sha256: sha256Canonical(policy),
+      profile_definition_sha256: sha256Canonical(JSON.parse(readFileSync(profileDefinitionPath, 'utf8'))),
       override_sha256: sha256Canonical({ hostname: 'mirroros-ref' }),
     },
   };
@@ -213,7 +222,7 @@ function operationOf(plan, kind) {
 export const INVALID_CASES = [
   ['plan_invalid_type--choices-not-object', ['ext4-systemd-boot', 'locked'], plan => { plan.choices = []; }],
   ['plan_non_integer_number--swapfile', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.swapfile_size.value = 1.5; }, false],
-  ['plan_format_unsupported--version-2', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 2; }],
+  ['plan_format_unsupported--version-1', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 1; }],
   ['plan_field_missing--target', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target; }],
   ['plan_label_missing--source', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.hostname.source; }],
   ['plan_unknown_field--approved', ['ext4-systemd-boot', 'locked'], plan => { plan.approved = true; }],
@@ -232,14 +241,26 @@ export const INVALID_CASES = [
   ['destructive_without_target_disk--missing', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.target_disk; }],
   ['root_account_secret_mismatch--password-undeclared', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.root_account.value = 'password'; }],
   ['root_account_secret_mismatch--locked-declared', ['ext4-systemd-boot', 'password'], plan => { plan.choices.root_account.value = 'locked'; }],
-  ['secret_consumer_mismatch--wrong-operation', ['ext4-systemd-boot', 'locked'], plan => { plan.secret_requirements[0].required_by = ['configure_root_account']; }],
+  ['secret_consumer_mismatch--wrong-operation', ['ext4-systemd-boot', 'locked'], plan => { plan.secret_requirements[0].required_by = ['mount_target']; }],
   ['secret_consumer_mismatch--user-undeclared', ['ext4-systemd-boot', 'locked'], plan => { plan.secret_requirements = []; }],
-  ['lang_not_in_locales--lang', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.lang.value = 'fr_FR.UTF-8'; }],
+  ['secret_consumer_mismatch--duplicated', ['ext4-systemd-boot', 'locked'], plan => { plan.secret_requirements.push(structuredClone(plan.secret_requirements[0])); }],
+  ['lang_not_in_locales--lang', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.locales.value = ['es_ES.UTF-8']; }],
+  ['locale_derivation_mismatch--lc-all', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.locale_categories.value.LC_ALL = 'en_US.UTF-8'; }],
+  ['locale_derivation_mismatch--formats', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.regional_format.value = 'es_ES.UTF-8'; }],
+  ['machine_identity_mismatch--architecture', ['ext4-systemd-boot', 'locked'], plan => { plan.target.machine.architecture = 'aarch64'; }],
+  ['machine_identity_mismatch--dmi-availability', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target.machine.dmi; }],
+  ['profile_binding_mismatch--matched-without-hash', ['ext4-systemd-boot', 'locked'], plan => { delete plan.policy_binding.profile_definition_sha256; }],
+  ['profile_binding_mismatch--unqualified-with-id', ['ext4-systemd-boot', 'locked'], plan => { plan.target.profile = { status: 'unqualified', profile_id: 'reference-vm' }; }],
+  ['profile_binding_mismatch--facts-classification', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.target.profile = { status: 'unqualified' };
+    delete plan.policy_binding.profile_definition_sha256;
+    delete plan.policy_binding.override_sha256;
+  }],
   ['disk_identity_mismatch--target-disk', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.target_disk.value = 'virtio-OTHER'; }],
   ['disk_identity_mismatch--facts-serial', ['ext4-systemd-boot', 'locked'], plan => { plan.target.disk.serial = 'OTHER-SERIAL'; }],
   ['disk_not_eligible--flag', ['ext4-systemd-boot', 'locked'], plan => { plan.target.disk.eligible = false; }],
   ['plan_size_does_not_fit--swapfile', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.swapfile_size.value = 65536; }],
-  ['facts_binding_mismatch--target-id', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.target_id = 'other-target'; }],
+  ['facts_binding_mismatch--run-id', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.run_id = 'other-run'; }],
   ['facts_binding_mismatch--facts-hash', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.facts_sha256 = 'f'.repeat(64); }],
   ['digest_mismatch--edited-content', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.hostname.value = 'edited'; }, false],
 ];

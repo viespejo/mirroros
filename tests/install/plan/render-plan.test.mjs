@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { renderPlan, renderSummary } from '../../../install/plan/render-plan.mjs';
 import { planFixturesRoot, ROOT_ACCOUNT_MODES, STORAGE_OPTION_NAMES } from './build-fixtures.mjs';
-import { CANARY, generate } from './helpers.mjs';
+import { CANARY, generate, unqualifiedFacts } from './helpers.mjs';
 
 const HEADINGS = [
   '1. Target',
@@ -81,13 +81,34 @@ test('the render shows the digest of the plan and reflects an edit', () => {
   assert.notEqual(text, renderPlan(plan));
 });
 
-test('secrets are named without values and the root password only when chosen', () => {
-  assert.doesNotMatch(renderPlan(planFor('ext4-systemd-boot', 'locked')), /root_password/);
+test('the shared account password is named without values and root consumes it only when chosen', () => {
+  const locked = renderPlan(planFor('ext4-systemd-boot', 'locked'));
+  assert.match(locked, /\n  account_password\n/);
+  assert.match(locked, /Required by +create_user\n/);
+  assert.doesNotMatch(locked, /configure_root_account\n {6}Create|root account receives the same password/);
   const text = renderPlan(planFor('ext4-systemd-boot', 'password'));
-  assert.match(text, /\n  user_password\n/);
-  assert.match(text, /\n  root_password\n/);
+  assert.match(text, /\n  account_password\n/);
+  assert.match(text, /Required by +create_user, configure_root_account\n/);
+  assert.match(text, /root account receives the same password as the user; it is not an\s+independent recovery credential/);
+  assert.doesNotMatch(text, /user_password|root_password/);
   assert.match(text, /Values are never stored in the plan/);
   assert.doesNotMatch(text, new RegExp(CANARY));
+});
+
+test('the target section shows the observed machine and the profile without claiming qualification', () => {
+  const matched = renderPlan(planFor('ext4-systemd-boot', 'locked'));
+  assert.match(matched, /Architecture +x86_64\n/);
+  assert.match(matched, /Virtualization +kvm\n/);
+  assert.match(matched, /System vendor +QEMU\n/);
+  assert.match(matched, /Profile +matched reference-vm \(recognized profile; not a\s+qualification of this machine\)/);
+  assert.match(matched, /Profile sha256 +[0-9a-f]{64}\n/);
+  assert.doesNotMatch(matched, /Facts target/);
+  const unqualifiedPlan = generate({ factsDocument: unqualifiedFacts() }).plan;
+  const text = renderPlan(unqualifiedPlan);
+  assert.match(text, /Profile +unqualified \(matches no known profile; installation is\s+experimental\)/);
+  assert.match(text, /machine_unqualified: [\s\S]*no known profile/);
+  assert.match(text, /Next: No compatibility or support is\s+promised/);
+  assert.doesNotMatch(text, /Profile sha256|Override sha256/);
 });
 
 test('experimental options and detected capabilities are explained', () => {
@@ -121,11 +142,11 @@ test('the console summary lists the decision data and ends with the review sente
   const plan = planFor('btrfs-rescue', 'password');
   const lines = renderSummary(plan, 'evidence/install/run/installation-plan.json').trimEnd().split('\n');
   assert.deepEqual(lines, [
-    'Target: reference-vm',
+    'Profile: matched reference-vm',
     'Disk: virtio-SYNTH-VDA-0001 (34359738368 bytes (32.0 GiB))',
     'Storage option: btrfs-rescue (supported)',
     'Destructive operations: 4',
-    'Secrets required: user_password, root_password',
+    'Secrets required: account_password',
     `Digest: sha256 ${plan.digest.value}`,
     'Plan: evidence/install/run/installation-plan.json',
     'Review installation-plan.txt; approval is not part of this stage.',

@@ -1,9 +1,14 @@
-MirrorOS installation plan (format 1)
+MirrorOS installation plan (format 2)
 ================================================================================
 
 1. Target
 =========
-  Target            reference-vm
+  Architecture      x86_64
+  Virtualization    kvm
+  System vendor     QEMU
+  Product name      Standard PC (Q35 + ICH9, 2009)
+  Profile           matched reference-vm (recognized profile; not a
+                    qualification of this machine)
   Disk path         /dev/vda
   Disk by-id        virtio-SYNTH-VDA-0001
   Serial            SYNTH-VDA-0001
@@ -47,8 +52,12 @@ MirrorOS installation plan (format 1)
       provenance personal_preference; source policy
   lang: en_US.UTF-8
       provenance personal_preference; source policy [editable]
-  locales: en_US.UTF-8, es_ES.UTF-8
-      provenance personal_preference; source policy [editable]
+  locale_categories: LANG=en_US.UTF-8; LC_TIME=en_US.UTF-8;
+      LC_NUMERIC=en_US.UTF-8; LC_MONETARY=en_US.UTF-8;
+      LC_MEASUREMENT=en_US.UTF-8
+      provenance technical_necessity; source policy
+  locales: en_US.UTF-8
+      provenance technical_necessity; source policy
   mirrorlist: inherited_from_live_environment_and_recorded
       provenance technical_necessity; source policy
   network: manager=NetworkManager; package=networkmanager;
@@ -60,6 +69,8 @@ MirrorOS installation plan (format 1)
       provenance personal_preference; source policy
   partition_table: gpt
       provenance technical_necessity; source policy
+  regional_format: follow_language
+      provenance personal_preference; source policy [editable]
   root_account: locked
       provenance personal_preference; source policy [editable]
   root_minimum_bytes: 16106127360
@@ -136,8 +147,11 @@ MirrorOS installation plan (format 1)
   09. configure_locale_time_console
       Configure locales, language, console keymap, time zone, hardware clock,
       and time sync.
-      locales: en_US.UTF-8, es_ES.UTF-8
+      locales: en_US.UTF-8
       lang: en_US.UTF-8
+      locale_categories: LANG=en_US.UTF-8; LC_TIME=en_US.UTF-8;
+        LC_NUMERIC=en_US.UTF-8; LC_MONETARY=en_US.UTF-8;
+        LC_MEASUREMENT=en_US.UTF-8
       console_keymap: us
       timezone: Europe/Madrid
       hardware_clock: utc
@@ -176,8 +190,9 @@ MirrorOS installation plan (format 1)
 ======================
   Only names are recorded. Values are never stored in the plan.
 
-  user_password
-    Purpose           Password of the created user account.
+  account_password
+    Purpose           Password of the created user account, shared with the root
+                      account when root password access is enabled.
     Required by       create_user
     Channel           protected_prompt
     Provenance        technical_necessity
@@ -208,12 +223,12 @@ MirrorOS installation plan (format 1)
 
 8. Digest and bindings
 ======================
-  Digest (sha256)   1ccb58bd115e228bf19caefaa8300c29096b68302281f40730ed2fbb694613d2
-  Facts sha256      7c712a7bf6ad182654e5401b3d266f75ebcd77bfb344a3a55f0eee8e55786b69
+  Digest (sha256)   a746e6819540d6f28441e14ec44bae340f06cad91aceab961cad59b63cd06401
+  Facts sha256      b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11
   Facts run         20261007T120000Z-11111111-2222-4333-8444-555555555555
-  Facts target      reference-vm
   Code commit       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (dirty false)
-  Policy sha256     d3acd01fc7e5567922ae3e6d68796c86e45949c0bd8c28b3ea2de7fc5f8c6d77
+  Policy sha256     7c9ed6a64c08699421ce9aeb811381e6c5c412b918fb0a5bc1b5c2e8f0382ce4
+  Profile sha256    07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca
   Override sha256   0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242
 
   This plan is not approved. Approval is a separate step bound to this digest.

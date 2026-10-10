@@ -6,9 +6,13 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
 
 readonly COLLECTORS=(firmware hardware storage network)
+# The identity collectors run first: a verified profile may override the network probe policy.
+readonly IDENTITY_COLLECTORS=(firmware hardware)
+readonly REMAINING_COLLECTORS=(storage network)
 readonly REQUIRED_FILES=(
   install/discovery/lib/collect.sh
   install/discovery/policy.json
+  install/discovery/identify-profile.mjs
   install/discovery/normalize-facts.mjs
   install/discovery/resolve-layers.mjs
   install/discovery/validate-facts.mjs
@@ -23,11 +27,11 @@ OUTPUT_DIR=''
 print_help() {
   cat <<'EOF'
 MirrorOS install discover — read-only target discovery
-Usage: install discover --target <id> [--output <dir>]
+Usage: install discover [--target <id>] [--output <dir>]
        install discover --help
-Purpose: Inspect a supported target from the live environment without modifying it, record firmware, network, storage, and hardware facts, and normalize them into target-facts.json.
+Purpose: Inspect the machine from the live environment without modifying it, record firmware, network, storage, and hardware facts, identify a known machine profile when its identity is verifiable (otherwise record the machine as unqualified), and normalize them into target-facts.json.
 Prerequisites: UEFI boot of the live medium, a ready network, and at least one eligible disk. Run on the target; no elevation is used or needed beyond the live session.
-Inputs: --target names a supported target (reference-vm or framework-13-pro-amd). --output names an absent or empty directory; the default is evidence/install/<run-id>/.
+Inputs: --target optionally asserts a profile id (reference-vm or framework-13-pro-amd); the assertion is rejected if the observed identity contradicts it or its identity is not captured. --output names an absent or empty directory; the default is evidence/install/<run-id>/.
 Consequential effects: None on the target; no device is written and no elevation is invoked. The network probe creates outbound HTTPS traffic only. Evidence is written with 0700 directories and 0600 files.
 Evidence: target-facts.json, raw collector output under raw/, and error.json when discovery fails with status 5 or 6.
 Normalized exit outcomes:
@@ -41,7 +45,7 @@ EOF
 
 usage_error() {
   printf 'MirrorOS install discover: %s\n' "$1" >&2
-  printf '%s\n' 'Usage: install discover --target <id> [--output <dir>]; see install discover --help.' >&2
+  printf '%s\n' 'Usage: install discover [--target <id>] [--output <dir>]; see install discover --help.' >&2
   exit 2
 }
 
@@ -91,7 +95,7 @@ fi
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --target)
-      [[ "$#" -ge 2 && "$2" != --* ]] || usage_error '--target requires a value.'
+      [[ "$#" -ge 2 && -n "$2" && "$2" != --* ]] || usage_error '--target requires a value.'
       [[ -z "${target_seen:-}" ]] || usage_error '--target may be given only once.'
       target_seen=1
       target_id="$2"
@@ -196,9 +200,10 @@ const internal = message => {
 };
 const load = path => import(pathToFileURL(join(codeRoot, path)).href);
 
-let normalize, layers, writer, validator;
+let identify, normalize, layers, writer, validator;
 try {
-  [normalize, layers, writer, validator] = await Promise.all([
+  [identify, normalize, layers, writer, validator] = await Promise.all([
+    load('install/discovery/identify-profile.mjs'),
     load('install/discovery/normalize-facts.mjs'),
     load('install/discovery/resolve-layers.mjs'),
     load('install/discovery/write-facts.mjs'),
@@ -209,35 +214,41 @@ try {
 }
 
 const targetsRoot = join(codeRoot, 'targets');
+const readRaw = names => {
+  const raw = {};
+  for (const name of names) {
+    try {
+      raw[name] = JSON.parse(readFileSync(join(outputDir, 'raw', `${name}.json`), 'utf8'));
+    } catch (error) {
+      internal(`The ${name} collector produced output that is not valid JSON: ${error.message}`);
+    }
+  }
+  return raw;
+};
 try {
   const baseline = layers.loadBaselinePolicy(join(codeRoot, 'install/discovery/policy.json'));
-  const loaded = layers.loadTarget(targetsRoot, targetId);
-  const loadReasons = [...loaded.reasons];
-  let override = {};
-  if (loaded.target) {
-    const loadedOverride = layers.loadOverride(targetsRoot, targetId);
-    override = loadedOverride.override;
-    loadReasons.push(...loadedOverride.reasons);
-  }
+  // An explicit --target is an assertion; without it every defined profile is a candidate.
+  const requested = targetId === '' ? null : layers.loadTarget(targetsRoot, targetId);
+  const targets = requested === null ? layers.loadAllTargets(targetsRoot) : [];
+  const loadOverride = id => layers.loadOverride(targetsRoot, id);
   if (mode === 'policy') {
-    const { values } = layers.resolvePolicy({ baseline, override });
+    const { firmware, hardware } = normalize.detectIdentity(readRaw(['firmware', 'hardware']));
+    const { target } = identify.classifyProfile({
+      detected: { firmware: firmware.facts, hardware: hardware.facts },
+      targets,
+      requested,
+    });
+    const { values } = layers.resolvePolicy({ baseline, override: target === null ? {} : loadOverride(target.target_id).override });
     process.stdout.write(`${values.https_probe_url}\n${values.https_probe_timeout_seconds}\n`);
   } else {
-    const raw = {};
-    for (const name of ['firmware', 'network', 'storage', 'hardware']) {
-      try {
-        raw[name] = JSON.parse(readFileSync(join(outputDir, 'raw', `${name}.json`), 'utf8'));
-      } catch (error) {
-        internal(`The ${name} collector produced output that is not valid JSON: ${error.message}`);
-      }
-    }
+    const raw = readRaw(['firmware', 'network', 'storage', 'hardware']);
     const document = normalize.normalizeFacts({
       raw,
       baseline,
-      target: loaded.target,
-      override,
-      loadReasons,
-      source: { run_id: runId, commit, dirty: dirty === 'true', target_id: targetId },
+      targets,
+      requested,
+      loadOverride,
+      source: { run_id: runId, commit, dirty: dirty === 'true', requested_profile_id: targetId === '' ? undefined : targetId },
     });
     writer.writeFacts(document, outputDir);
     process.stdout.write(writer.renderSummary(document));
@@ -260,8 +271,34 @@ run_node() {
   return "$status"
 }
 
-# The probe policy is the effective baseline-plus-override view; an invalid override falls back to
-# the baseline here and is reported as invalid input by the final validation.
+run_collector() {
+  local collector="$1"
+  local collector_status=0
+  local child_status operation last_line
+
+  "${SCRIPT_DIR}/discover-${collector}" > "${RAW_DIR}/${collector}.json.tmp" 2> "${RAW_DIR}/${collector}.stderr" || collector_status=$?
+  mv -f -- "${RAW_DIR}/${collector}.json.tmp" "${RAW_DIR}/${collector}.json"
+  if [[ "$collector_status" -ne 0 ]]; then
+    child_status="$collector_status"
+    operation="discover-${collector}"
+    last_line="$(tail -n 1 "${RAW_DIR}/${collector}.stderr")"
+    if [[ "$collector_status" -eq 5 && "$last_line" =~ ^child_exit_status=([0-9]+)\ operation=([A-Za-z0-9_.-]+)$ ]]; then
+      child_status="${BASH_REMATCH[1]}"
+      operation="${BASH_REMATCH[2]}"
+    fi
+    cat "${RAW_DIR}/${collector}.stderr" >&2
+    abort 5 child_failed "$operation" \
+      "An external command failed unexpectedly during ${collector} discovery (exit status ${child_status})." \
+      "Inspect raw/${collector}.stderr in ${OUTPUT_DIR}, fix the reported cause, and rerun discovery." "$child_status"
+  fi
+}
+
+for collector in "${IDENTITY_COLLECTORS[@]}"; do
+  run_collector "$collector"
+done
+
+# The probe policy is the effective baseline-plus-override view of a verified profile; an invalid
+# override falls back to the baseline here and is reported as invalid input by the final validation.
 policy_status=0
 run_node policy "${RAW_DIR}/policy.out" "${RAW_DIR}/policy.stderr" || policy_status=$?
 if [[ "$policy_status" -eq 6 ]]; then
@@ -279,23 +316,8 @@ rm -f -- "${RAW_DIR}/policy.out" "${RAW_DIR}/policy.stderr"
 export MIRROROS_DISCOVERY_PROBE_URL="$probe_url"
 export MIRROROS_DISCOVERY_PROBE_TIMEOUT="$probe_timeout"
 
-for collector in "${COLLECTORS[@]}"; do
-  collector_status=0
-  "${SCRIPT_DIR}/discover-${collector}" > "${RAW_DIR}/${collector}.json.tmp" 2> "${RAW_DIR}/${collector}.stderr" || collector_status=$?
-  mv -f -- "${RAW_DIR}/${collector}.json.tmp" "${RAW_DIR}/${collector}.json"
-  if [[ "$collector_status" -ne 0 ]]; then
-    child_status="$collector_status"
-    operation="discover-${collector}"
-    last_line="$(tail -n 1 "${RAW_DIR}/${collector}.stderr")"
-    if [[ "$collector_status" -eq 5 && "$last_line" =~ ^child_exit_status=([0-9]+)\ operation=([A-Za-z0-9_.-]+)$ ]]; then
-      child_status="${BASH_REMATCH[1]}"
-      operation="${BASH_REMATCH[2]}"
-    fi
-    cat "${RAW_DIR}/${collector}.stderr" >&2
-    abort 5 child_failed "$operation" \
-      "An external command failed unexpectedly during ${collector} discovery (exit status ${child_status})." \
-      "Inspect raw/${collector}.stderr in ${OUTPUT_DIR}, fix the reported cause, and rerun discovery." "$child_status"
-  fi
+for collector in "${REMAINING_COLLECTORS[@]}"; do
+  run_collector "$collector"
 done
 
 facts_status=0

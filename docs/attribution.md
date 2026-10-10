@@ -27,3 +27,9 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **License (SPDX):** `GPL-3.0-or-later`
 - **Incorporated material:** Official `releng` profile at `image/archiso/`
 - **Detailed provenance:** [Archiso upstream record](../image/archiso/UPSTREAM.md)
+
+### Omarchy ISO configurator presentation
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Presentation function, palette, and layout adapted from the Omarchy ISO configurator, preserved as a reference at `prototypes/frontend/guided-installer/` (never sourced by production) and reimplemented at `install/confirmation/`
+- **Detailed provenance:** [Guided installer reference upstream record](../prototypes/frontend/guided-installer/UPSTREAM.md) and [Guided installer presentation upstream record](../install/confirmation/UPSTREAM.md)

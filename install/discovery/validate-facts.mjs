@@ -1,4 +1,6 @@
-export const FORMAT_VERSION = 1;
+export const FACTS_FORMAT_VERSION = 2;
+export const TARGET_DEFINITION_FORMAT_VERSION = 1;
+export const DISCOVERY_POLICY_FORMAT_VERSION = 1;
 export const EXIT_VALID = 0;
 export const EXIT_INVALID_INPUT = 2;
 export const EXIT_UPSTREAM_FAILURE = 5;
@@ -6,6 +8,8 @@ export const EXIT_INTERNAL = 6;
 
 export const SOURCES = ['baseline', 'detected', 'override', 'runtime'];
 export const PROVENANCE_CLASSES = ['personal_preference', 'hardware_detection', 'arch_guidance', 'technical_necessity'];
+export const PROFILE_STATUSES = ['matched', 'unqualified'];
+export const PROFILE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const INELIGIBLE_REASONS = [
   'loop',
   'rom',
@@ -132,48 +136,13 @@ function validateStorage(storage, reasons) {
   }
 }
 
-function validateIdentity(detected, target, reasons) {
-  if (!target) return;
-  const { identity } = target;
-  const mismatches = [];
-  if (identity.virtualization !== undefined) {
-    const actual = detected.hardware.virtualization;
-    if (actual !== undefined && actual !== identity.virtualization) {
-      mismatches.push(`virtualization is "${actual}", expected "${identity.virtualization}"`);
-    }
-  }
-  if (identity.status === 'defined') {
-    for (const field of Object.keys(identity.dmi)) {
-      const actual = detected.firmware.dmi?.[field];
-      if (actual !== identity.dmi[field]) {
-        mismatches.push(`DMI ${field} is ${actual === undefined ? 'unavailable' : `"${actual}"`}, expected "${identity.dmi[field]}"`);
-      }
-    }
-  }
-  if (mismatches.length > 0) {
-    reasons.push(reason(
-      'target_identity_mismatch',
-      `The detected facts contradict the identity of target "${target.target_id}": ${mismatches.join('; ')}.`,
-      'Select the target that matches this machine, or run discovery on the intended machine.',
-    ));
-  }
-  if (identity.status === 'pending_capture') {
-    reasons.push(reason(
-      'target_identity_pending_capture',
-      `The identity of target "${target.target_id}" has not been captured yet (${identity.dmi_fields_pending.join(', ')}).`,
-      `Record the DMI ${identity.dmi_fields_pending.join(' and ')} in targets/${target.target_id}/target.json after capturing them on the machine, then rerun discovery.`,
-    ));
-  }
-}
-
-export function validateDiscovery({ detected, target }) {
+export function validateDiscovery({ detected }) {
   const reasons = [];
   const warnings = [];
   validateFirmware(detected.firmware, reasons, warnings);
   validateArchitecture(detected.hardware, reasons);
   validateNetwork(detected.network, reasons);
   validateStorage(detected.storage, reasons);
-  validateIdentity(detected, target, reasons);
   return { reasons, warnings };
 }
 
@@ -260,12 +229,16 @@ const diskShape = shape({
 });
 
 const documentShape = shape({
-  format_version: required(oneOf([FORMAT_VERSION])),
+  format_version: required(oneOf([FACTS_FORMAT_VERSION])),
   source: required(shape({
     run_id: required(string),
     commit: required(string),
     dirty: required(boolean),
-    target_id: optional(string),
+    requested_profile_id: optional(string),
+  })),
+  profile: required(shape({
+    status: required(oneOf(PROFILE_STATUSES)),
+    profile_id: optional(string),
   })),
   layers: required(shape({
     portable_baseline: required(shape({
@@ -345,7 +318,20 @@ export function validateDocument(document) {
   const errors = [];
   documentShape(document, 'target-facts', errors);
   if (errors.length > 0) return errors;
-  const { validation, effective } = document;
+  const { validation, effective, profile, source } = document;
+  if (profile.status === 'matched' && !PROFILE_ID_PATTERN.test(profile.profile_id ?? '')) {
+    errors.push('target-facts.profile.profile_id is required for a matched profile');
+  }
+  if (profile.status === 'unqualified' && profile.profile_id !== undefined) {
+    errors.push('target-facts.profile.profile_id must be omitted for an unqualified machine');
+  }
+  if (source.requested_profile_id !== undefined && !PROFILE_ID_PATTERN.test(source.requested_profile_id)) {
+    errors.push('target-facts.source.requested_profile_id is not a valid profile id');
+  }
+  if (profile.status === 'matched' && source.requested_profile_id !== undefined
+    && source.requested_profile_id !== profile.profile_id) {
+    errors.push('target-facts.profile.profile_id must equal source.requested_profile_id when a profile was requested');
+  }
   if ((validation.status === 'valid') !== (validation.reasons.length === 0)) {
     errors.push('target-facts.validation.status must be "valid" exactly when there are no reasons');
   }

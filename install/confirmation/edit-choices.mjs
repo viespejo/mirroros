@@ -1,7 +1,7 @@
 import { reason } from '../discovery/validate-facts.mjs';
-import { CHOICE_SPECS } from '../plan/validate-plan.mjs';
+import { CHOICES_FORMAT_VERSION, CHOICE_SPECS } from '../plan/validate-plan.mjs';
 
-export const CHOICES_FORMAT_VERSION = 1;
+export { CHOICES_FORMAT_VERSION };
 
 const SECRET_LIKE_KEY = /password|passphrase|secret|token/i;
 
@@ -18,11 +18,10 @@ export function startingChoices(plan) {
   return choices;
 }
 
-// Widgets return text: `swapfile_size` is an integer count of MiB and `locales` is one locale per
-// line. A value that does not parse stays text so the plan generator rejects it with its own reason.
+// Widgets return text: `swapfile_size` is an integer count of MiB. A value that does not parse stays text
+// so the plan generator rejects it with its own reason.
 export function parseValue(key, text) {
   if (key === 'swapfile_size') return /^[0-9]+$/.test(text) ? Number(text) : text;
-  if (key === 'locales') return text.split('\n').map(line => line.trim()).filter(line => line !== '');
   return text;
 }
 

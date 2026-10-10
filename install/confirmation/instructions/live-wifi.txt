@@ -1,0 +1,92 @@
+CONNECT THE LIVE ENVIRONMENT TO WI-FI
+
+These instructions are for a normal home Wi-Fi network.
+
+1. Open another LIVE console
+
+   Press Alt+Right to switch to the next console.
+   Log in as root if the live console displays a login prompt.
+   Leave the guide running in its original console.
+
+2. Start the Wi-Fi client
+
+     iwctl
+
+   The following commands are entered inside its [iwd]# prompt.
+
+3. Find the wireless device
+
+     device list
+
+   Note its name. The examples below use wlan0; replace wlan0 with the
+   device name shown on your machine. If there is no device, check that
+   the machine has a supported wireless adapter before continuing.
+
+4. Scan and list networks
+
+     station wlan0 scan
+     station wlan0 get-networks
+
+   The scan command normally prints nothing. If no networks appear,
+   wait briefly and run get-networks again.
+
+5. Connect to your network
+
+     station wlan0 connect "Your network name"
+
+   Replace Your network name with the SSID from the list. Keep the quotes
+   if its name contains spaces. Enter the Wi-Fi password only when iwctl
+   prompts for it. Never put the password in a command or --passphrase.
+
+6. Check the connection and exit iwctl
+
+     station wlan0 show
+     exit
+
+   The connection should show as connected. IP address and DNS assignment
+   also require the live medium's DHCP and DNS services. Associating with
+   Wi-Fi alone does not prove internet access.
+
+7. Return to the guide and select Retry connection check
+
+   Press Alt+Left, if you switched once with Alt+Right.
+   The guide checks HTTPS access; if it fails, you remain on the Wi-Fi
+   screen and can correct the connection or choose Back.
+
+IF THE DEVICE IS BLOCKED OR POWERED OFF
+
+Outside iwctl, inspect radio blocks:
+
+  rfkill list
+
+A physical switch or firmware setting may need to be changed for a hard
+block. For a software block, unblock Wi-Fi in the live session:
+
+  rfkill unblock wifi
+
+Inside iwctl, a powered-off device can be enabled with:
+
+  device wlan0 set-property Powered on
+
+Use adapter list to find the adapter name if the adapter is powered off,
+then replace ADAPTER below with that name:
+
+  adapter ADAPTER set-property Powered on
+
+If iwctl cannot communicate with iwd, check its live-session service:
+
+  systemctl status iwd
+
+If the service is installed but inactive, start it in the live session:
+
+  systemctl start iwd
+
+PRIVACY AND SCOPE
+
+iwd may store credentials in /var/lib/iwd in the live environment. These
+profiles must not be copied to the installed system or included in
+MirrorOS plans, logs, or evidence. This guide does not read them.
+Connecting changes only the live session's network state; installed-system
+network settings are a separate responsibility.
+
+Reference: https://wiki.archlinux.org/title/Iwd#iwctl

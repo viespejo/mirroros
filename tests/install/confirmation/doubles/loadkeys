@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+# PATH double for loadkeys: logs the keymap; a loadkeys_status file makes it fail with that status.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'loadkeys %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+if [[ -f "${DOUBLE_STATE}/loadkeys_status" ]]; then exit "$(< "${DOUBLE_STATE}/loadkeys_status")"; fi
+exit 0

@@ -21,6 +21,8 @@ import {
   serializeFixture,
   STORAGE_OPTION_NAMES,
 } from './build-fixtures.mjs';
+import { discover } from '../discovery/helpers.mjs';
+import { generate, unqualifiedFacts } from './helpers.mjs';
 
 const facts = fixtureFacts();
 const codes = reasons => reasons.map(item => item.code);
@@ -70,6 +72,15 @@ test('single-rule fixtures raise only their rule', () => {
     'plan_unknown_field--approved': ['plan_unknown_field'],
     'plan_unknown_field--approval': ['plan_unknown_field'],
     'lang_not_in_locales--lang': ['lang_not_in_locales'],
+    'locale_derivation_mismatch--lc-all': ['locale_derivation_mismatch'],
+    'locale_derivation_mismatch--formats': ['locale_derivation_mismatch'],
+    'machine_identity_mismatch--architecture': ['machine_identity_mismatch'],
+    'machine_identity_mismatch--dmi-availability': ['machine_identity_mismatch'],
+    'profile_binding_mismatch--matched-without-hash': ['profile_binding_mismatch'],
+    'profile_binding_mismatch--unqualified-with-id': ['profile_binding_mismatch'],
+    'secret_consumer_mismatch--duplicated': ['secret_consumer_mismatch'],
+    'root_account_secret_mismatch--password-undeclared': ['root_account_secret_mismatch'],
+    'root_account_secret_mismatch--locked-declared': ['root_account_secret_mismatch'],
     'plan_size_does_not_fit--swapfile': ['plan_size_does_not_fit'],
     'operation_order_invalid--swapped': ['operation_order_invalid'],
     'operations_storage_mismatch--option': ['operations_storage_mismatch'],
@@ -106,7 +117,8 @@ test('approval can never be expressed, whatever its shape', () => {
 test('non-objects, bad JSON, and unsupported versions are rejected', () => {
   for (const value of [null, [], 'plan', 3, true]) assert.deepEqual(codes(validatePlan(value)), ['plan_invalid_type']);
   assert.deepEqual(codes(parsePlanText('{not json').reasons), ['plan_not_json']);
-  assert.deepEqual(codes(validatePlan({ format_version: 2 })), ['plan_format_unsupported']);
+  assert.deepEqual(codes(validatePlan({ format_version: 1 })), ['plan_format_unsupported']);
+  assert.deepEqual(codes(validatePlan({ format_version: 3 })), ['plan_format_unsupported']);
   assert.deepEqual(codes(validatePlan({})), ['plan_format_unsupported']);
 });
 
@@ -158,10 +170,132 @@ test('secret entries allow only their five fields and values never appear', () =
     const plan = resigned(candidate => { candidate.secret_requirements[0][extra] = 'x'; });
     assert.ok(codes(validatePlan(plan)).includes('plan_secret_value_present'), extra);
   }
-  for (const key of ['password', 'root_password', 'user_password', 'passphrase', 'api_token', 'secret']) {
+  for (const key of ['password', 'root_password', 'user_password', 'account_password', 'passphrase', 'api_token', 'secret']) {
     const plan = resigned(candidate => { candidate.operations[0].parameters[key] = 'x'; });
     assert.ok(codes(validatePlan(plan)).includes('plan_secret_value_present'), key);
   }
+});
+
+test('an installation plan of an earlier version is rejected with regeneration guidance and never migrated', () => {
+  const earlier = structuredClone(buildValidPlan('ext4-systemd-boot', 'locked'));
+  earlier.format_version = 1;
+  const snapshot = JSON.stringify(earlier);
+  const reasons = validatePlan(earlier, { facts });
+  assert.deepEqual(codes(reasons), ['plan_format_unsupported']);
+  assert.match(reasons[0].next_step, /not migrated/);
+  assert.match(reasons[0].next_step, /regenerate/i);
+  assert.match(reasons[0].next_step, /operations\/install plan/);
+  assert.equal(JSON.stringify(earlier), snapshot);
+});
+
+test('the target holds the observed machine, the profile classification, and the disk, and no target id', () => {
+  const plan = buildValidPlan('ext4-systemd-boot', 'locked');
+  assert.deepEqual(Object.keys(plan.target), ['machine', 'profile', 'disk']);
+  for (const section of ['machine', 'profile']) {
+    const missing = resigned(candidate => { delete candidate.target[section]; });
+    assert.ok(codes(validatePlan(missing)).includes('plan_field_missing'), section);
+  }
+  const targetId = resigned(candidate => { candidate.target.target_id = 'reference-vm'; });
+  assert.ok(codes(validatePlan(targetId)).includes('plan_unknown_field'));
+  const bindingTarget = resigned(candidate => { candidate.facts_binding.target_id = 'reference-vm'; });
+  assert.ok(codes(validatePlan(bindingTarget)).includes('plan_unknown_field'));
+  const mutations = [
+    candidate => { candidate.target.machine.serial = 'x'; },
+    candidate => { candidate.target.machine.dmi.product_serial = 'x'; },
+    candidate => { candidate.target.profile.compatibility = 'full'; },
+  ];
+  for (const [index, mutation] of mutations.entries()) {
+    assert.ok(codes(validatePlan(resigned(mutation))).includes('plan_unknown_field'), `mutation ${index}`);
+  }
+  const emptyDmi = resigned(candidate => { candidate.target.machine.dmi = {}; });
+  assert.ok(codes(validatePlan(emptyDmi)).includes('plan_invalid_type'));
+  const badStatus = resigned(candidate => { candidate.target.profile.status = 'qualified'; });
+  assert.ok(codes(validatePlan(badStatus)).includes('plan_invalid_type'));
+});
+
+test('a plan of an unqualified machine validates with and without its facts', () => {
+  const unqualified = unqualifiedFacts();
+  const { plan } = generate({ factsDocument: unqualified });
+  assert.deepEqual(validatePlan(plan), []);
+  assert.deepEqual(validatePlan(plan, { facts: unqualified }), []);
+  const matchedFacts = discover('reference-vm-layout');
+  assert.ok(codes(validatePlan(plan, { facts: matchedFacts })).includes('machine_identity_mismatch'));
+  assert.ok(codes(validatePlan(plan, { facts: matchedFacts })).includes('profile_binding_mismatch'));
+});
+
+test('an unqualified plan cannot carry a profile id, a profile hash, or an override hash', () => {
+  const { plan } = generate({ factsDocument: unqualifiedFacts() });
+  const variants = [
+    candidate => { candidate.target.profile.profile_id = 'reference-vm'; },
+    candidate => { candidate.policy_binding.profile_definition_sha256 = 'a'.repeat(64); },
+    candidate => { candidate.policy_binding.override_sha256 = 'a'.repeat(64); },
+  ];
+  for (const [index, mutation] of variants.entries()) {
+    const candidate = withDigest((() => { const copy = structuredClone(plan); mutation(copy); return copy; })());
+    assert.deepEqual([...new Set(codes(validatePlan(candidate)))], ['profile_binding_mismatch'], `variant ${index}`);
+  }
+});
+
+test('the machine projection is compared field by field, including whether a field was observed', () => {
+  const plan = buildValidPlan('ext4-systemd-boot', 'locked');
+  const variants = [
+    candidate => { candidate.target.machine.virtualization = 'none'; },
+    candidate => { delete candidate.target.machine.virtualization; },
+    candidate => { candidate.target.machine.dmi.sys_vendor = 'Other'; },
+    candidate => { delete candidate.target.machine.dmi.product_name; },
+  ];
+  for (const [index, mutation] of variants.entries()) {
+    const candidate = withDigest((() => { const copy = structuredClone(plan); mutation(copy); return copy; })());
+    assert.ok(codes(validatePlan(candidate, { facts })).includes('machine_identity_mismatch'), `variant ${index}`);
+  }
+  const sparse = structuredClone(facts);
+  delete sparse.layers.detected.hardware.virtualization;
+  const rebound = resigned(candidate => { candidate.facts_binding.facts_sha256 = sha256Canonical(sparse); });
+  assert.ok(codes(validatePlan(rebound, { facts: sparse })).includes('machine_identity_mismatch'));
+});
+
+test('locales and category values must be what the language and regional formats derive', () => {
+  const variants = [
+    candidate => { candidate.choices.locale_categories.value.LC_TIME = 'es_ES.UTF-8'; },
+    candidate => { delete candidate.choices.locale_categories.value.LC_MEASUREMENT; },
+    candidate => { candidate.choices.locale_categories.value.LC_ALL = 'en_US.UTF-8'; },
+    candidate => { candidate.choices.locales.value = ['en_US.UTF-8', 'es_ES.UTF-8']; },
+    candidate => { candidate.choices.regional_format.value = 'es_ES.UTF-8'; },
+  ];
+  for (const [index, mutation] of variants.entries()) {
+    assert.ok(codes(validatePlan(resigned(mutation))).includes('locale_derivation_mismatch'), `variant ${index}`);
+  }
+  const derivedChange = resigned(candidate => {
+    candidate.choices.lang.value = 'es_ES.UTF-8';
+    candidate.choices.locales.value = ['es_ES.UTF-8'];
+    candidate.choices.locale_categories.value = {
+      LANG: 'es_ES.UTF-8',
+      LC_TIME: 'es_ES.UTF-8',
+      LC_NUMERIC: 'es_ES.UTF-8',
+      LC_MONETARY: 'es_ES.UTF-8',
+      LC_MEASUREMENT: 'es_ES.UTF-8',
+    };
+  });
+  assert.deepEqual(validatePlan(derivedChange, { facts }), []);
+  const editable = resigned(candidate => { candidate.choices.locales.editable = true; });
+  assert.ok(codes(validatePlan(editable)).includes('plan_invalid_type'));
+  const unsupported = resigned(candidate => { candidate.choices.lang.value = 'de_DE.UTF-8'; });
+  assert.ok(codes(validatePlan(unsupported)).includes('plan_invalid_type'));
+});
+
+test('exactly one account_password requirement names its consumers from the root account mode', () => {
+  for (const secret of ['user_password', 'root_password']) {
+    const renamed = resigned(candidate => { candidate.secret_requirements[0].name = secret; });
+    assert.ok(codes(validatePlan(renamed)).includes('plan_invalid_type'), secret);
+  }
+  const twoConsumers = resigned(candidate => { candidate.secret_requirements[0].required_by = ['create_user', 'create_user']; });
+  assert.ok(codes(validatePlan(twoConsumers)).includes('secret_consumer_mismatch'));
+  const rootOnly = resigned(candidate => { candidate.secret_requirements[0].required_by = ['configure_root_account']; }, ['ext4-systemd-boot', 'password']);
+  assert.ok(codes(validatePlan(rootOnly)).includes('secret_consumer_mismatch'));
+  const rootMissing = resigned(candidate => { candidate.secret_requirements[0].required_by = ['create_user']; }, ['ext4-systemd-boot', 'password']);
+  assert.deepEqual([...new Set(codes(validatePlan(rootMissing)))], ['root_account_secret_mismatch']);
+  const channel = resigned(candidate => { candidate.secret_requirements[0].channel = 'file'; });
+  assert.ok(codes(validatePlan(channel)).includes('plan_invalid_type'));
 });
 
 test('operation sequences match the contract for each storage option', () => {

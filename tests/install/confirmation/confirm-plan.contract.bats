@@ -9,26 +9,53 @@ teardown() {
   confirm_teardown
 }
 
-# Scripted answers of the shortest approving run: target, menu, confirmation, device name.
+# The answers of the guided route up to the review, with every proposal accepted: welcome, machine check,
+# then the configuration screens (disk, storage, timezone, language, formats, keyboard, root policy) and the
+# inputs (swapfile, hostname, username).
+queue_to_review() {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
+  confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros'
+}
+
+# After a review that chose Back: Esc back to the swapfile screen, answer it, and walk forward again.
+queue_back_to_swapfile() {
+  confirm_queue choose '0|Back' '1' '1' '1' '1' '1'
+  confirm_queue input '1' '1' "0|$1"
+  confirm_queue choose '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
+  confirm_queue input '0|mirroros-ref' '0|mirroros'
+}
+
+# The shortest approving run: review, confirmation, device name, and the password explanation.
 approve_script() {
-  confirm_queue choose '0|reference-vm' '0|Continue to confirmation'
+  queue_to_review
+  confirm_queue choose '0|Continue to confirmation' '0|Continue'
   confirm_queue confirm 0
   confirm_queue input '0|vda'
 }
 
-@test "apply --help succeeds without a terminal and without touching anything" {
-  confirm_run_plain apply --help
-  [ "$CONFIRM_STATUS" -eq 0 ]
-  grep -qF 'Usage: install apply [--plan <file>] [--output <dir>]' "$STDOUT_PATH"
+# The approving run for an existing plan: welcome, machine check, review, and the password explanation.
+approve_plan_script() {
+  confirm_queue choose '0|Continue' '0|Continue' '0|Continue to confirmation' '0|Continue'
+  confirm_queue confirm 0
+  confirm_queue input '0|vda'
+}
+
+@test "the guided installer's own help succeeds without a terminal and without touching anything" {
+  "${CODE_ROOT}/install/confirmation/confirm-plan" --help > "$STDOUT_PATH" 2> "$STDERR_PATH"
+  grep -qF 'Usage: mirroros-install [--plan <file>] [--output <dir>]' "$STDOUT_PATH"
   grep -qF 'Normalized exit outcomes:' "$STDOUT_PATH"
   grep -qF 'Documentation: docs/procedures/install.md' "$STDOUT_PATH"
   [ ! -s "$STDERR_PATH" ]
   [ ! -s "${DOUBLE_STATE}/gum-calls.log" ]
 }
 
-@test "apply without an interactive terminal exits 2 before any prompt or discovery" {
+@test "the installer without an interactive terminal exits 2 before any prompt or discovery" {
   approve_script
-  confirm_run_plain apply --output "$RUN_DIR"
+  confirm_run_plain
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  grep -qF 'not an interactive terminal' "$STDERR_PATH"
+  confirm_run_plain --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   grep -qF 'not an interactive terminal' "$STDERR_PATH"
   [ ! -e "$RUN_DIR" ]
@@ -36,213 +63,325 @@ approve_script() {
   [ ! -s "${DOUBLE_STATE}/calls.log" ]
 }
 
-@test "apply refuses bypass options and unknown options before any prompt" {
+@test "bypass options, apply, and unknown options are refused before any prompt" {
   local option
 
   approve_script
-  for option in --yes --non-interactive --assume-yes --bogus; do
-    confirm_run_pty apply "$option" --output "$RUN_DIR"
+  for option in --yes --non-interactive --assume-yes --bogus apply; do
+    confirm_run_pty "$option"
+    [ "$CONFIRM_STATUS" -eq 2 ]
+    confirm_run_pty --output "$RUN_DIR" "$option"
     [ "$CONFIRM_STATUS" -eq 2 ]
     confirm_assert_output_contains "unsupported argument: ${option}"
     [ ! -e "$RUN_DIR" ]
   done
   [ ! -s "${DOUBLE_STATE}/gum-calls.log" ]
+  [ ! -s "${DOUBLE_STATE}/calls.log" ]
 }
 
-@test "apply rejects malformed arguments and an occupied output directory" {
-  confirm_run_pty apply --plan
+@test "malformed arguments and an occupied output directory are rejected" {
+  confirm_run_pty --plan
   [ "$CONFIRM_STATUS" -eq 2 ]
-  confirm_run_pty apply --plan "${TEST_ROOT}/missing.json"
+  confirm_run_pty --plan "${TEST_ROOT}/missing.json"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_output_contains '--plan is not a file'
   mkdir -p "${TEST_ROOT}/occupied"
   printf '%s\n' keep > "${TEST_ROOT}/occupied/previous.txt"
-  confirm_run_pty apply --output "${TEST_ROOT}/occupied"
+  confirm_run_pty --output "${TEST_ROOT}/occupied"
   [ "$CONFIRM_STATUS" -eq 2 ]
   [ "$(find "${TEST_ROOT}/occupied" -mindepth 1 | wc -l)" -eq 1 ]
   [ ! -s "${DOUBLE_STATE}/gum-calls.log" ]
 }
 
-@test "a valid approval stops at the engine boundary with 2 and outcome approved" {
+@test "a colorless request or an unsupported terminal type is rejected before discovery" {
+  local variable
+
+  approve_script
+  for variable in NO_COLOR=1 TERM=dumb; do
+    CONFIRM_ENV=("$variable")
+    confirm_run_pty --output "$RUN_DIR"
+    [ "$CONFIRM_STATUS" -eq 2 ]
+    confirm_assert_output_contains 'outside the supported colored live console'
+    [ ! -e "$RUN_DIR" ]
+  done
+  [ ! -s "${DOUBLE_STATE}/gum-calls.log" ]
+  [ ! -s "${DOUBLE_STATE}/calls.log" ]
+}
+
+@test "a valid approval follows the guided route and stops at the engine boundary with 2 and approved" {
   local before
 
   approve_script
+  mkdir -p "${CODE_ROOT}/install/engine"
+  printf '#!/usr/bin/bash\n: > %q\n' "${TEST_ROOT}/engine-ran" > "${CODE_ROOT}/install/engine/apply"
+  chmod +x "${CODE_ROOT}/install/engine/apply"
   before="$(confirm_root_manifest)"
-  confirm_run_pty apply --output "$RUN_DIR"
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 approved
   confirm_assert_reason engine_not_available
-  confirm_assert_output_contains 'installation engine is not part of this MirrorOS version'
+  confirm_assert_output_contains 'Installation was not started: the installation engine is not part of this version.'
   [ "$before" == "$(confirm_root_manifest)" ]
+  [ ! -e "${TEST_ROOT}/engine-ran" ]
   [ -f "${RUN_DIR}/discovery/initial/target-facts.json" ]
   [ -f "${RUN_DIR}/discovery/final/target-facts.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
-  [ -f "${RUN_DIR}/plans/01/choices.json" ]
-  confirm_json_assert "${RUN_DIR}/apply-run.json" "d.digests.length === 1 && d.target_id === 'reference-vm' && /2\\./.test(d.gum_version)"
+  [ -f "${RUN_DIR}/plans/01/installation-plan.txt" ]
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 2 && Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 2 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password_explanation,discovery_final'"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
+  confirm_json_assert "${RUN_DIR}/approval-record.json" "d.reason === 'engine_not_available' && /^[0-9a-f]{64}$/.test(d.digest)"
+  confirm_assert_gum_called 'confirm --default=false --affirmative Yes, erase --negative No Erase /dev/vda and apply plan '
+  confirm_assert_gum_called 'Recognized machine: reference-vm'
+  confirm_assert_gum_not_called '--password'
   confirm_assert_private
   confirm_assert_log_plain
-  [ ! -e "${CODE_ROOT}/install/engine/apply" ]
 }
 
-@test "choosing Cancel exits 3, rediscovers nothing, and still writes the records" {
-  confirm_queue choose '0|reference-vm' '0|Cancel'
-  confirm_run_pty apply --output "$RUN_DIR"
+@test "accepted proposals keep their provenance and only a changed value becomes a choice" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|8192' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 2 && d.swapfile_size === 8192 && Object.keys(d).length === 2"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.swapfile_size.source === 'choice' && d.choices.swapfile_size.value === 8192 && d.choices.lang.source === 'policy' && d.choices.hostname.source === 'override' && d.choices.hostname.value === 'mirroros-ref'"
+}
+
+@test "choosing Cancel at the machine check exits 3, rediscovers nothing, and still writes the records" {
+  confirm_queue choose '0|Continue' '0|Cancel'
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 3 ]
   confirm_assert_run 3 cancelled
   [ ! -e "${RUN_DIR}/discovery/final" ]
-  confirm_assert_output_contains 'No changes were made'
+  confirm_assert_output_contains 'No installation or disk operation was executed.'
   confirm_assert_private
 }
 
-@test "answering No or pressing Esc at the confirmation exits 3" {
-  confirm_queue choose '0|reference-vm' '0|Continue to confirmation'
-  confirm_queue confirm 1
-  confirm_run_pty apply --output "$RUN_DIR"
+@test "No, Esc, and Ctrl+C at the confirmation cancel with 3 and never ask for the device name" {
+  local answer
+
+  for answer in 1 130; do
+    rm -rf -- "$RUN_DIR"
+    : > "${DOUBLE_STATE}/gum-calls.log"
+    queue_to_review
+    confirm_queue choose '0|Continue to confirmation'
+    confirm_queue confirm "$answer"
+    confirm_run_pty --output "$RUN_DIR"
+    [ "$CONFIRM_STATUS" -eq 3 ]
+    confirm_assert_run 3 cancelled
+    [ ! -e "${RUN_DIR}/discovery/final" ]
+    [ "$(grep -c '^input ' "${DOUBLE_STATE}/gum-calls.log")" -eq 3 ]
+  done
+}
+
+@test "Esc at the device name cancels with 3" {
+  queue_to_review
+  confirm_queue choose '0|Continue to confirmation'
+  confirm_queue confirm 0
+  confirm_queue input '1'
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 3 ]
   confirm_assert_run 3 cancelled
   [ ! -e "${RUN_DIR}/discovery/final" ]
-  confirm_assert_gum_not_called '^input '
-}
-
-@test "Esc at the menu and Gum status 130 cancel with 3" {
-  confirm_queue choose '0|reference-vm' '1'
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 3 ]
-  confirm_assert_run 3 cancelled
-
-  rm -rf -- "$RUN_DIR"
-  confirm_queue choose '0|reference-vm' '0|Continue to confirmation'
-  confirm_queue confirm 130
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 3 ]
-  confirm_assert_run 3 cancelled
-}
-
-@test "a real Ctrl+C during the review exits 3 with the records written" {
-  confirm_queue choose '0|reference-vm' 'hang'
-  CONFIRM_KEYS=('\003')
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 3 ]
-  confirm_assert_run 3 cancelled
-}
-
-@test "a real Ctrl+C outside the interactive phase keeps 130 and writes no approval" {
-  confirm_queue spin hang
-  CONFIRM_KEYS=('\003')
-  confirm_queue choose '0|reference-vm'
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 130 ]
-  [ ! -e "${RUN_DIR}/approval-record.json" ]
 }
 
 @test "a mismatching device name exits 3 with confirmation_mismatch and no retry" {
-  confirm_queue choose '0|reference-vm' '0|Continue to confirmation'
+  queue_to_review
+  confirm_queue choose '0|Continue to confirmation'
   confirm_queue confirm 0
   confirm_queue input '0|sda' '0|vda'
-  confirm_run_pty apply --output "$RUN_DIR"
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 3 ]
   confirm_assert_run 3 cancelled
   confirm_assert_reason confirmation_mismatch
   confirm_json_assert "${RUN_DIR}/approval-record.json" "d.reason === 'confirmation_mismatch'"
   [ ! -e "${RUN_DIR}/discovery/final" ]
-  [ "$(grep -c '^input ' "${DOUBLE_STATE}/gum-calls.log")" -eq 1 ]
+  [ "$(grep -c '^input ' "${DOUBLE_STATE}/gum-calls.log")" -eq 4 ]
 }
 
-# Replaces one choice value inside a plan file without recomputing its digest.
-tamper_plan() {
+@test "a real Ctrl+C during the review exits 3 with the records written" {
+  queue_to_review
+  confirm_queue choose 'hang'
+  confirm_hook_call choose 10 "touch '${TEST_ROOT}/waiting'"
+  CONFIRM_WAIT_FOR="${TEST_ROOT}/waiting"
+  CONFIRM_KEYS=('\003')
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 3 ]
+  confirm_assert_run 3 cancelled
+}
+
+@test "a real Ctrl+C during read-only discovery keeps 130 and writes no approval" {
+  printf '#!/usr/bin/bash\n: > %q\nsleep 30\n' "${TEST_ROOT}/discovering" > "${CODE_ROOT}/install/discovery/discover"
+  confirm_queue choose '0|Continue'
+  CONFIRM_WAIT_FOR="${TEST_ROOT}/discovering"
+  CONFIRM_KEYS=('\003')
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 130 ]
+  [ ! -e "${RUN_DIR}/approval-record.json" ]
+}
+
+@test "Esc at a configuration screen goes back and keeps the confirmed answers" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '1' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  [ "$(grep -c 'Select install disk' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 1"
+}
+
+@test "an invalid value shows its reason and asks again without keeping it" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|100' '0|4096' '0|mirroros-ref' "0|${CONFIRM_CANARY}" '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_assert_gum_called 'Use a whole number from 512 to 65536 MiB.'
+  confirm_assert_gum_called 'Use 1-32 characters, starting with a lowercase letter or underscore.'
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
+  confirm_assert_no_canary
+}
+
+@test "answers changed after the review regenerate a new numbered plan before confirmation" {
+  queue_to_review
+  queue_back_to_swapfile 8192
+  confirm_queue choose '0|Continue to confirmation' '0|Continue'
+  confirm_queue confirm 0
+  confirm_queue input '0|vda'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 2 && new Set(d.digests).size === 2 && d.final_digest === d.digests[1]"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/plans/02/choices.json" "d.swapfile_size === 8192"
+  confirm_json_assert "${RUN_DIR}/plans/02/installation-plan.json" "d.choices.swapfile_size.value === 8192"
+  confirm_assert_private
+}
+
+@test "an invalid combination keeps the last valid plan, shows its reason, and grants no approval" {
+  queue_to_review
+  queue_back_to_swapfile 65536
+  confirm_queue choose '0|Cancel'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 3 ]
+  confirm_assert_run 3 cancelled
+  confirm_assert_gum_called 'Phase: Plan generation'
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 1"
+  [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
+  [ ! -e "${RUN_DIR}/plans/02" ]
+  [ ! -e "${RUN_DIR}/discovery/final" ]
+  confirm_assert_gum_not_called '^confirm '
+}
+
+@test "going back from the password explanation clears the approval and asks for confirmation again" {
+  queue_to_review
+  confirm_queue choose '0|Continue to confirmation' '0|Back' '0|Continue to confirmation' '0|Continue'
+  confirm_queue confirm 0 0
+  confirm_queue input '0|vda' '0|vda'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  [ "$(grep -c '^confirm ' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 1"
+}
+
+@test "inspecting the complete plan returns to the review and grants no authorization" {
+  queue_to_review
+  confirm_queue choose '0|Inspect complete plan' '130'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 3 ]
+  confirm_assert_run 3 cancelled
+  confirm_assert_gum_called 'pager'
+  confirm_assert_gum_not_called '^confirm '
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 1 && d.stages.indexOf('confirmation') < 0"
+}
+
+@test "a machine with several eligible disks lists them and records the chosen disk" {
+  confirm_scenario_two_disks
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vdb (32G)' '0|ext4 + systemd-boot - Default' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vdb'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_assert_gum_called '--header Select install disk /dev/vda (32G) /dev/vdb (32G)'
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.target_disk === '/dev/vdb'"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.target.disk.path === '/dev/vdb'"
+  confirm_json_assert "${RUN_DIR}/approval-record.json" "d.disk.path === '/dev/vdb'"
+}
+
+@test "an unqualified machine is admitted as experimental with the same confirmation" {
+  confirm_scenario_unqualified
+  approve_script
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_assert_gum_called 'Experimental: this machine matches no known profile.'
+  confirm_assert_gum_called 'Compatibility is not guaranteed and no support is promised.'
+  confirm_assert_gum_not_called 'Recognized machine'
+  [ "$(grep -c 'Experimental: this machine matches no known profile.' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'unqualified' && !('profile_id' in d.profile)"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.target.profile.status === 'unqualified' && d.warnings.some(w => w.code === 'machine_unqualified')"
+  confirm_assert_gum_called 'confirm --default=false'
+}
+
+@test "--plan reviews a copy of the plan, the original stays untouched, and confirmation is fresh" {
+  confirm_make_plan
+  cp -- "$PLAN_FILE" "${TEST_ROOT}/given.json"
+  approve_plan_script
+  confirm_run_pty --plan "${TEST_ROOT}/given.json" --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  cmp -- "$PLAN_FILE" "${TEST_ROOT}/given.json"
+  cmp -- "$PLAN_FILE" "${RUN_DIR}/plans/01/installation-plan.json"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 2 && Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.entry === 'plan_file' && d.digests.length === 1"
+  confirm_assert_gum_not_called 'Choose installation disk'
+  confirm_assert_gum_called 'confirm --default=false'
+}
+
+@test "a tampered plan given with --plan is invalidated before any prompt" {
+  confirm_make_plan
   node -e '
     const fs = require("node:fs");
     const plan = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     plan.choices.hostname.value = "tampered";
     fs.writeFileSync(process.argv[1], JSON.stringify(plan, null, 2) + "\n");
-  ' "$1"
-}
-
-# A hook that swaps the fixture root for another raw fixture, as if the disk changed under the run.
-swap_scenario_hook() {
-  confirm_hook "$1" "find '${FIXTURE_ROOT}' -mindepth 1 -delete; node '${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs' '${CONFIRM_FIXTURES}/${2}.json' '${FIXTURE_ROOT}' '${DOUBLE_STATE}'"
-}
-
-@test "the target menu lists every target definition" {
-  confirm_queue choose '0|reference-vm' '0|Cancel'
-  confirm_run_pty apply --output "$RUN_DIR"
-  confirm_assert_gum_called 'Choose the installation target (Esc cancels) framework-13-pro-amd reference-vm'
-}
-
-@test "editing regenerates the plan with a new digest and choices accumulate" {
-  confirm_queue choose '0|reference-vm' '0|Edit a choice' '0|hostname' '0|Edit a choice' '0|user_name' '0|Continue to confirmation'
-  confirm_queue input '0|laptop' '0|alice' '0|vda'
-  confirm_queue confirm 0
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 2 ]
-  confirm_assert_run 2 approved
-  confirm_json_assert "${RUN_DIR}/apply-run.json" "d.digests.length === 3 && new Set(d.digests).size === 3 && d.final_digest === d.digests[2]"
-  confirm_json_assert "${RUN_DIR}/plans/03/choices.json" "d.hostname === 'laptop' && d.user_name === 'alice' && d.format_version === 1"
-  confirm_json_assert "${RUN_DIR}/plans/02/choices.json" "d.hostname === 'laptop' && !('user_name' in d)"
-  confirm_json_assert "${RUN_DIR}/plans/03/installation-plan.json" "d.choices.hostname.value === 'laptop' && d.choices.user_name.value === 'alice'"
-  confirm_assert_output_contains 'Plan regenerated: user_name changed.'
-  confirm_assert_private
-}
-
-@test "an invalid edit shows the reason, keeps the previous plan, and discards the attempt" {
-  confirm_queue choose '0|reference-vm' '0|Edit a choice' '0|swapfile_size' '0|Cancel'
-  confirm_queue input '0|99999999'
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 3 ]
-  confirm_assert_output_contains 'Next step:'
-  confirm_assert_output_contains 'The edit was discarded; the previous plan stays.'
-  confirm_json_assert "${RUN_DIR}/apply-run.json" "d.digests.length === 1"
-  [ ! -e "${RUN_DIR}/plans/02" ]
-}
-
-@test "Esc inside an edit widget returns to the dashboard without cancelling" {
-  confirm_queue choose '0|reference-vm' '0|Edit a choice' '0|hostname' '0|Continue to confirmation'
-  confirm_queue input '1' '0|vda'
-  confirm_queue confirm 0
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 2 ]
-  confirm_assert_run 2 approved
-  confirm_json_assert "${RUN_DIR}/apply-run.json" "d.digests.length === 1"
-}
-
-@test "a target with several eligible disks asks for the disk before generating a plan" {
-  confirm_scenario_two_disks
-  confirm_queue choose '0|reference-vm' '0|/dev/vdb (32.0 GiB)' '0|Cancel'
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 3 ]
-  confirm_assert_gum_called 'Choose the target disk (Esc cancels)'
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.target_disk === '/dev/vdb'"
-  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.target.disk.path === '/dev/vdb'"
-}
-
-@test "apply --plan reviews a copy of the plan and the original stays untouched" {
-  confirm_make_plan
-  cp -- "$PLAN_FILE" "${TEST_ROOT}/given.json"
-  confirm_queue choose '0|Edit a choice' '0|hostname' '0|Continue to confirmation'
-  confirm_queue input '0|laptop' '0|vda'
-  confirm_queue confirm 0
-  confirm_run_pty apply --plan "${TEST_ROOT}/given.json" --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 2 ]
-  confirm_assert_run 2 approved
-  cmp -- "$PLAN_FILE" "${TEST_ROOT}/given.json"
-  cmp -- "$PLAN_FILE" "${RUN_DIR}/plans/01/installation-plan.json"
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 1"
-  confirm_json_assert "${RUN_DIR}/plans/02/choices.json" "d.hostname === 'laptop'"
-  confirm_assert_gum_not_called 'Choose the installation target'
-}
-
-@test "a tampered plan given with --plan is invalidated before any prompt" {
-  confirm_make_plan
-  tamper_plan "$PLAN_FILE"
+  ' "$PLAN_FILE"
   : > "${DOUBLE_STATE}/calls.log"
-  approve_script
-  confirm_run_pty apply --plan "$PLAN_FILE" --output "$RUN_DIR"
+  approve_plan_script
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason digest_mismatch
   confirm_assert_output_contains 'Next step: Regenerate and review the installation plan.'
   confirm_assert_gum_not_called '^(choose|confirm|input) '
   [ ! -s "${DOUBLE_STATE}/calls.log" ]
+}
+
+@test "a plan of an earlier format is rejected with regeneration guidance and is not migrated" {
+  cp -- "${CONFIRM_SOURCE_ROOT}/tests/fixtures/plan/invalid/plan_format_unsupported--version-1.json" "${TEST_ROOT}/old-plan.json"
+  cp -- "${TEST_ROOT}/old-plan.json" "${TEST_ROOT}/old-plan.before"
+  confirm_run_pty --plan "${TEST_ROOT}/old-plan.json" --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 invalidated
+  confirm_assert_reason plan_format_unsupported
+  confirm_assert_output_contains 'Next step: Regenerate and review the installation plan.'
+  cmp -- "${TEST_ROOT}/old-plan.json" "${TEST_ROOT}/old-plan.before"
+  confirm_assert_gum_not_called '^(choose|confirm|input) '
 }
 
 @test "a changed policy invalidates the plan before review" {
@@ -253,62 +392,81 @@ swap_scenario_hook() {
     policy.policy.swapfile_size.value = 2048;
     fs.writeFileSync(process.argv[1], JSON.stringify(policy, null, 2) + "\n");
   ' "${CODE_ROOT}/install/plan/policy.json"
-  confirm_run_pty apply --plan "$PLAN_FILE" --output "$RUN_DIR"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason policy_changed
-  confirm_assert_gum_not_called '^(choose|confirm|input) '
+  confirm_assert_gum_not_called '^(confirm|input) '
+  confirm_assert_gum_not_called 'Review navigation'
 }
 
 @test "a changed layout invalidates the plan before review" {
   confirm_make_plan
   confirm_scenario reference-vm-layout
-  confirm_run_pty apply --plan "$PLAN_FILE" --output "$RUN_DIR"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason target_layout_changed
-  confirm_assert_gum_not_called '^(choose|confirm|input) '
+  confirm_assert_gum_not_called 'Review navigation'
 }
 
-@test "a layout change after confirmation invalidates the approval" {
+@test "a changed machine identity invalidates the plan before review" {
+  confirm_make_plan
+  confirm_scenario_unqualified
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 invalidated
+  confirm_assert_reason machine_identity_changed
+  confirm_assert_reason profile_binding_changed
+  confirm_assert_gum_not_called 'Review navigation'
+}
+
+# A hook that swaps the fixture root for another raw fixture, as if the disk changed under the run.
+swap_scenario_hook() {
+  confirm_hook "$1" "find '${FIXTURE_ROOT}' -mindepth 1 -delete; node '${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs' '${CONFIRM_FIXTURES}/${2}.json' '${FIXTURE_ROOT}' '${DOUBLE_STATE}'"
+}
+
+@test "a layout change after confirmation invalidates the approval with 2 and target_layout_changed" {
   confirm_make_plan
   swap_scenario_hook input reference-vm-layout
-  confirm_queue choose '0|Continue to confirmation'
-  confirm_queue confirm 0
-  confirm_queue input '0|vda'
-  confirm_run_pty apply --plan "$PLAN_FILE" --output "$RUN_DIR"
+  approve_plan_script
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason target_layout_changed
   [ -f "${RUN_DIR}/discovery/final/target-facts.json" ]
   confirm_json_assert "${RUN_DIR}/approval-record.json" "d.reason === 'target_layout_changed'"
+  confirm_assert_output_contains 'Next step: Regenerate and review the installation plan.'
 }
 
 @test "a plan file changed after confirmation fails the digest re-check" {
   confirm_make_plan
   confirm_hook input "node -e 'const fs=require(\"node:fs\");const p=process.argv[1];const d=JSON.parse(fs.readFileSync(p,\"utf8\"));d.choices.hostname.value=\"tampered\";fs.writeFileSync(p,JSON.stringify(d,null,2)+\"\\n\")' '${RUN_DIR}/plans/01/installation-plan.json'"
-  confirm_queue choose '0|Continue to confirmation'
-  confirm_queue confirm 0
-  confirm_queue input '0|vda'
-  confirm_run_pty apply --plan "$PLAN_FILE" --output "$RUN_DIR"
+  approve_plan_script
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason digest_mismatch
 }
 
-@test "invalid facts block the run before any review" {
+@test "invalid facts block the run before any configuration screen" {
   confirm_scenario disks-none-eligible
-  confirm_queue choose '0|reference-vm'
-  confirm_run_pty apply --output "$RUN_DIR"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 blocked
-  confirm_assert_gum_not_called 'Choose how to proceed'
+  confirm_assert_gum_called 'Phase: discovery_initial'
+  confirm_assert_gum_not_called '--header Machine check'
+  [ ! -e "${RUN_DIR}/plans/01" ]
 }
 
 @test "a Gum major version other than 2 exits 6 and records that it is not qualified" {
   printf '%s\n' 'gum version 3.0.0 (double)' > "${DOUBLE_STATE}/version"
   approve_script
-  confirm_run_pty apply --output "$RUN_DIR"
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 6 ]
   confirm_assert_run 6 failed
   confirm_assert_reason gum_not_qualified
@@ -318,47 +476,118 @@ swap_scenario_hook() {
 
   rm -rf -- "$RUN_DIR"
   : > "${DOUBLE_STATE}/version"
-  confirm_run_pty apply --output "$RUN_DIR"
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 6 ]
-  confirm_json_assert "${RUN_DIR}/apply-run.json" "!('gum_version' in d)"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "!('gum_version' in d)"
 }
 
-@test "colored runs use gum confirm with the safe default" {
-  approve_script
-  confirm_run_pty apply --output "$RUN_DIR"
-  [ "$CONFIRM_STATUS" -eq 2 ]
-  confirm_assert_gum_called 'confirm --default=false --affirmative Yes, apply --negative No, cancel'
-  confirm_assert_gum_called 'format --theme '
-}
-
-@test "NO_COLOR and TERM=dumb use the gum choose variant with the safe answer first" {
-  local variable
-
-  for variable in NO_COLOR=1 TERM=dumb; do
-    rm -rf -- "$RUN_DIR"
-    : > "${DOUBLE_STATE}/gum-calls.log"
-    CONFIRM_ENV=("$variable")
-    confirm_queue choose '0|reference-vm' '0|Continue to confirmation' '0|Yes, apply'
-    confirm_queue input '0|vda'
-    confirm_run_pty apply --output "$RUN_DIR"
-    [ "$CONFIRM_STATUS" -eq 2 ]
-    confirm_assert_run 2 approved
-    confirm_assert_gum_not_called '^confirm '
-    confirm_assert_gum_called "--cursor >  No, cancel Yes, apply"
-  done
-
-  rm -rf -- "$RUN_DIR"
-  confirm_queue choose '0|reference-vm' '0|Continue to confirmation' '0|No, cancel'
-  confirm_run_pty apply --output "$RUN_DIR"
+@test "a failed network check offers help and retry without bypass, and never asks for credentials" {
+  cp -- "${DOUBLE_STATE}/route4" "${DOUBLE_STATE}/route4.saved"
+  rm -f -- "${DOUBLE_STATE}/route4" "${DOUBLE_STATE}/route6"
+  confirm_queue choose '0|Continue' '0|Wi-Fi' '0|Show connection instructions' '0|Retry connection check' '0|Back' '0|Cancel'
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 3 ]
   confirm_assert_run 3 cancelled
+  confirm_assert_gum_called 'Configure Wi-Fi with iwctl in another live console'
+  confirm_assert_gum_called 'pager'
+  confirm_assert_gum_not_called '^input '
+  grep -qF 'live_network_not_ready' "${RUN_DIR}/install.log"
+  ! grep -q '^curl ' "${DOUBLE_STATE}/calls.log"
+  [ ! -e "${RUN_DIR}/discovery/initial" ]
+}
+
+@test "a network that becomes ready lets the guided route continue" {
+  cp -- "${DOUBLE_STATE}/route4" "${DOUBLE_STATE}/route4.saved"
+  rm -f -- "${DOUBLE_STATE}/route4" "${DOUBLE_STATE}/route6"
+  confirm_hook_call choose 3 "cp '${DOUBLE_STATE}/route4.saved' '${DOUBLE_STATE}/route4'"
+  confirm_queue choose '0|Continue' '0|Ethernet' '0|Retry connection check' '0|Cancel'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 3 ]
+  confirm_assert_run 3 cancelled
+  confirm_assert_gum_called 'Connect a network cable, then retry the connection check.'
+  [ -d "${RUN_DIR}/discovery/initial" ]
+  grep -qF 'live_network_not_ready' "${RUN_DIR}/install.log"
+}
+
+@test "a clock that is not synchronized waits a bounded time, then offers retry or cancellation" {
+  local first_curl last_sleep
+
+  printf '%s\n' no > "${DOUBLE_STATE}/ntp"
+  confirm_hook_call choose 2 "printf '%s\n' yes > '${DOUBLE_STATE}/ntp'"
+  confirm_queue choose '0|Continue' '0|Retry clock check' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_assert_gum_called 'Accurate time is needed to verify secure connections and package signatures.'
+  confirm_assert_gum_not_called 'Ethernet'
+  [ "$(grep -c '^sleep 1$' "${DOUBLE_STATE}/calls.log")" -eq 60 ]
+  [ "$(grep -c '^timedatectl ' "${DOUBLE_STATE}/calls.log")" -eq 62 ]
+  grep -qF 'live_clock_not_ready' "${RUN_DIR}/install.log"
+  # The HTTPS check runs only after the clock was reported synchronized.
+  first_curl="$(grep -n '^curl ' "${DOUBLE_STATE}/calls.log" | head -n 1 | cut -d: -f1)"
+  last_sleep="$(grep -n '^sleep 1$' "${DOUBLE_STATE}/calls.log" | tail -n 1 | cut -d: -f1)"
+  [ "$first_curl" -gt "$last_sleep" ]
+}
+
+@test "cancelling at the clock screen exits 3 and never bypasses TLS" {
+  printf '%s\n' no > "${DOUBLE_STATE}/ntp"
+  confirm_queue choose '0|Continue' '0|Cancel'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 3 ]
+  confirm_assert_run 3 cancelled
+  [ "$(grep -c '^sleep 1$' "${DOUBLE_STATE}/calls.log")" -eq 60 ]
+  ! grep -q '^curl ' "${DOUBLE_STATE}/calls.log"
+  [ ! -e "${RUN_DIR}/discovery/initial" ]
+  ! grep -rqE -- '--insecure|-k ' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "an unreadable clock state is an unexpected failure with the original status retained" {
+  printf '%s\n' 1 > "${DOUBLE_STATE}/ntp_status"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 5 ]
+  confirm_assert_run 5 failed
+  confirm_assert_reason stage_failed
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.reasons[0].child_exit_status === 5"
+}
+
+@test "the live keyboard change stays in the live session and does not alter the installed choices" {
+  confirm_queue choose '0|Change installation keyboard layout' '0|Spanish (ES)' '0|Continue' '0|Continue' '0|/dev/vda (32G)' \
+    '0|ext4 + systemd-boot - Default' '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' \
+    '0|Locked (default)' '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  grep -qx 'loadkeys es' "${DOUBLE_STATE}/calls.log"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.console_keymap.value === 'us' && d.choices.console_keymap.source === 'policy'"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
+}
+
+@test "an unexpected phase failure stops with its status and retained diagnostics" {
+  printf '#!/usr/bin/bash\nprintf "boom diagnostic\\n" >&2\nexit 77\n' > "${CODE_ROOT}/install/discovery/discover"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 5 ]
+  confirm_assert_run 5 failed
+  confirm_assert_reason stage_failed
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.reasons[0].child_exit_status === 77"
+  grep -qF 'boom diagnostic' "${RUN_DIR}/install.log"
+  confirm_assert_gum_called 'Phase: discovery_initial'
+  confirm_assert_log_plain
+  confirm_assert_private
 }
 
 @test "no secret is requested or recorded and no color escapes reach the log" {
   # Exported, not passed in the command line: the typescript header records the command.
   export MIRROROS_ROOT_PASSWORD="$CONFIRM_CANARY" ROOT_PASSWORD="$CONFIRM_CANARY"
   approve_script
-  confirm_run_pty apply --output "$RUN_DIR"
+  confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_no_canary
   confirm_assert_gum_not_called '--password'

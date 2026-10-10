@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+# PATH double for timedatectl: "show --property=NTPSynchronized --value" prints the content of the ntp state
+# file ("yes" or "no"; "yes" when absent). A ntp_status file makes the call fail with that status.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'timedatectl %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+if [[ -f "${DOUBLE_STATE}/ntp_status" ]]; then
+  printf '%s\n' 'timedatectl: simulated failure' >&2
+  exit "$(< "${DOUBLE_STATE}/ntp_status")"
+fi
+if [[ "$*" == 'show --property=NTPSynchronized --value' ]]; then
+  if [[ -f "${DOUBLE_STATE}/ntp" ]]; then cat -- "${DOUBLE_STATE}/ntp"; else printf '%s\n' yes; fi
+  exit 0
+fi
+exit 64

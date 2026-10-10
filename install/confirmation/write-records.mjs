@@ -9,7 +9,7 @@ import {
   validateRunRecord,
 } from './validate-records.mjs';
 
-export const RUN_RECORD_FILE = 'apply-run.json';
+export const RUN_RECORD_FILE = 'install-run.json';
 export const APPROVAL_RECORD_FILE = 'approval-record.json';
 export const CHOICES_FILE = 'choices.json';
 
@@ -17,13 +17,16 @@ function present(entries) {
   return Object.fromEntries(entries.filter(([, value]) => value !== undefined));
 }
 
-export function buildRunRecord({ runId, timestamp, targetId, gumVersion, digests, exitStatus, outcome, reasons }) {
+export function buildRunRecord({ runId, timestamp, entry, machine, profile, gumVersion, stages, digests, exitStatus, outcome, reasons }) {
   return present([
     ['format_version', RECORD_FORMAT_VERSION],
     ['run_id', runId],
     ['timestamp', timestamp],
-    ['target_id', targetId],
+    ['entry', entry],
+    ['machine', machine],
+    ['profile', profile],
     ['gum_version', gumVersion],
+    ['stages', stages],
     ['digests', digests],
     ['final_digest', digests.at(-1)],
     ['exit_status', exitStatus],
@@ -32,13 +35,14 @@ export function buildRunRecord({ runId, timestamp, targetId, gumVersion, digests
   ]);
 }
 
-export function buildApprovalRecord({ runId, timestamp, digest, targetId, disk, gumVersion, outcome, reason }) {
+export function buildApprovalRecord({ runId, timestamp, digest, machine, profile, disk, gumVersion, outcome, reason }) {
   return present([
     ['format_version', RECORD_FORMAT_VERSION],
     ['run_id', runId],
     ['timestamp', timestamp],
     ['digest', digest],
-    ['target_id', targetId],
+    ['machine', machine],
+    ['profile', profile],
     ['disk', disk],
     ['gum_version', gumVersion],
     ['outcome', outcome],

@@ -1,6 +1,6 @@
 # Install lifecycle procedure
 
-**Availability:** `discover`, `plan`, and interactive `apply` confirmation are implemented; the installation engine remains pending. A valid approval executes nothing and returns `2` with `engine_not_available`.
+**Availability:** `discover`, `plan`, and the guided live installer (`mirroros-install` without a subcommand) are implemented; the installation engine remains pending. A valid approval executes nothing and returns `2` with `engine_not_available`.
 
 ## Current behavior
 
@@ -9,27 +9,26 @@ Invoke the command by path from any working directory; it does not need to be in
 | Invocation | Outcome |
 | --- | --- |
 | Sole `--help` argument | Returns `0`; writes help to stdout and nothing to stderr. |
-| No arguments | Returns `2`; writes a pending-operation diagnostic to stderr that names `install` and links to this procedure. |
-| Unsupported arguments, including `--help` with extra arguments | Returns `2`; writes a distinct unsupported-argument diagnostic to stderr. |
+| No arguments, or only `--plan <file>` and `--output <dir>` | Starts the guided installer; see [Guided live installer](#guided-live-installer). |
+| Unsupported arguments, including `apply`, bypass flags, and `--help` with extra arguments | Returns `2`; writes a distinct unsupported-argument diagnostic to stderr. |
 | Missing or unloadable `operations/lib/lifecycle-discovery.sh` helper | Returns `6`; reports an incomplete or damaged checkout and advises restoring the helper from Git or recloning. |
 | `discover …` | Delegates to `install/discovery/discover`; see [Target discovery](#target-discovery). A missing orchestrator returns `6`. |
 | `plan …` | Delegates to `install/plan/plan`; see [Installation plan](#installation-plan). A missing orchestrator returns `6`. |
-| `apply …` | Delegates to `install/confirmation/confirm-plan`; see [Interactive installation (apply)](#interactive-installation-apply). A missing orchestrator returns `6`. |
 
-Except for `discover`, `plan`, and `apply`, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
+Except for `discover`, `plan`, and the guided installer, these invocations make no changes, use no privilege, and invoke no domain tool. Help does not require ShellCheck, Bats, or Gitleaks. No success message is emitted for pending installation work.
 
 ## Target discovery
 
 ```text
-operations/install discover --target <id> [--output <dir>]
+operations/install discover [--target <id>] [--output <dir>]
 operations/install discover --help
 ```
 
-Discovery inspects a supported target from the live environment without modifying it, records firmware, network, storage, and hardware facts, and normalizes them into `target-facts.json`. The format is documented in [`contracts/target-facts.md`](../../contracts/target-facts.md). Discovery is non-interactive: it prompts for nothing, uses no Gum, and never selects a disk.
+Discovery inspects the machine from the live environment without modifying it, records firmware, network, storage, and hardware facts, and normalizes them into `target-facts.json` (format version 2). Without `--target` it identifies a known profile only from a verifiable defined identity; otherwise it records an unqualified machine and invents no generic profile. Recognizing a profile is not qualification of the individual machine. The format is documented in [`contracts/target-facts.md`](../../contracts/target-facts.md). Discovery is non-interactive: it prompts for nothing, uses no Gum, and never selects a disk.
 
 ### Inputs
 
-- `--target <id>` names the supported target: `reference-vm` or `framework-13-pro-amd`. A missing, unknown, or malformed id exits `2` with a `target_missing` or `target_unknown` reason.
+- `--target <id>` is optional and only asserts an expected profile: `reference-vm` or `framework-13-pro-amd`. An unknown or malformed id exits `2` with a `target_unknown` reason, and an assertion that the observed identity contradicts, or whose capture is pending, exits `2` with a specific reason.
 - `--output <dir>` names an absent or empty directory; otherwise the command returns `2` without writing. The default is `evidence/install/<run-id>/`, relative to the working directory.
 - Prerequisites on the target: a 64-bit UEFI boot of the live medium with Secure Boot disabled, a ready network (default route, DNS for the probe host, and a bounded HTTPS probe, all configured beforehand because discovery never configures the network), and at least one eligible disk.
 
@@ -64,7 +63,7 @@ The directory is local, ignored, and never committed. Stdout carries a plain-tex
 
 ### Pending Framework identity
 
-The DMI identity of the Framework Laptop 13 Pro is not recorded yet, so `--target framework-13-pro-amd` returns `2` with a `target_identity_pending_capture` reason until `targets/framework-13-pro-amd/target.json` is completed from a real capture.
+The DMI identity of the Framework Laptop 13 Pro is not recorded yet, so asserting `--target framework-13-pro-amd` returns `2` with a `target_identity_pending_capture` reason until `targets/framework-13-pro-amd/target.json` is completed from a real capture.
 
 ### Recovery
 
@@ -77,18 +76,18 @@ operations/install plan --facts <file> [--choices <file>] [--output <dir>]
 operations/install plan --help
 ```
 
-`plan` turns a valid `target-facts.json` and the installation policy into a validated installation plan bound to its inputs by a SHA-256 digest. The plan identifies the target disk, the ordered declarative operations with their `destructive` flags, every default with its provenance and source, the secret requirements by name, and the hardware selections. The format, the operation vocabulary, the validation codes, and the digest rules are documented in [`contracts/installation-plan.md`](../../contracts/installation-plan.md). Planning is non-interactive: it prompts for nothing, uses no Gum, executes no operation, and never approves the plan.
+`plan` turns a valid `target-facts.json` (version 2) and the installation policy into a validated installation plan (version 2; plans of earlier versions are rejected with regeneration guidance and never migrated) bound to its inputs by a SHA-256 digest. The plan identifies the target disk, the ordered declarative operations with their `destructive` flags, every default with its provenance and source, the secret requirements by name, and the hardware selections. The format, the operation vocabulary, the validation codes, and the digest rules are documented in [`contracts/installation-plan.md`](../../contracts/installation-plan.md). Planning is non-interactive: it prompts for nothing, uses no Gum, executes no operation, and never approves the plan.
 
 ### Inputs
 
-- `--facts <file>` names a `target-facts.json` produced by `discover`. Unreadable, malformed, unknown-format, or invalid facts exit `2`. The `target_id` is taken from the facts, and the facts file is never modified.
-- `--choices <file>` optionally names a flat JSON object with `format_version: 1` that sets editable keys (`target_disk`, `storage_option`, `swapfile_size`, `locales`, `lang`, `console_keymap`, `timezone`, `hostname`, `user_name`, `root_account`). Unknown, non-editable, invalid, and secret-like keys (for example `password` or `user_password`) exit `2` without writing a plan; secrets are never accepted through this file.
+- `--facts <file>` names a `target-facts.json` produced by `discover`. Unreadable, malformed, unknown-format, or invalid facts exit `2`. A profile is not required, and the facts file is never modified.
+- `--choices <file>` optionally names a flat JSON object with `format_version: 2` that sets editable keys (`target_disk`, `storage_option`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`, `timezone`, `hostname`, `user_name`, `root_account`). Language, regional formats (`follow_language`, `en_US.UTF-8`, or `es_ES.UTF-8`), and keyboard are independent; required locales and the `LC_*` category values are derived, and `LC_ALL` is never set. Unknown, non-editable, invalid, and secret-like keys (for example `password` or `user_password`) exit `2` without writing a plan; secrets are never accepted through this file.
 - `--output <dir>` names the run directory. A directory that already contains a plan exits `2` without writing. The default is `evidence/install/<run-id>/`, relative to the working directory.
 - With exactly one eligible disk, that disk is preselected. With several, `--choices` must name one through `target_disk`; otherwise the command exits `2` and lists the eligible candidates.
 
 ### Overrides and precedence
 
-Values resolve as policy, then detected, then target override, then choice, and each plan value records its source. A target may set only `hostname` in `targets/<id>/overrides/plan.json`; for `reference-vm` it is `mirroros-ref`.
+Values resolve as policy, then detected, then target override, then choice, and each plan value records its source. A target may set only `hostname` in `targets/<id>/overrides/plan.json`; for `reference-vm` it is `mirroros-ref`. An override applies only after an unambiguous verified profile match.
 
 ### Outputs
 
@@ -113,47 +112,49 @@ An invalid run writes only `plan-run.json` with its reasons. Stdout carries a su
 
 ### Regeneration and approval
 
-Changing a choice and rerunning `plan` creates a new run directory with a new plan and a different digest; the earlier plan stays byte-identical and unapproved. The plan has no approval field, and a plan carrying an `approved` or `approval` field is rejected by the validator. `apply` reviews and confirms the plan through ephemeral, single-use, in-process approval bound to the target and digest. Its `approval-record.json` is evidence only and cannot authorize a later run; every retry requires fresh confirmation. Executing the plan belongs to Story 2.5.
+Changing a choice and rerunning `plan` creates a new run directory with a new plan and a different digest; the earlier plan stays byte-identical and unapproved. The plan has no approval field, and a plan carrying an `approved` or `approval` field is rejected by the validator. The guided installer reviews and confirms the plan through ephemeral, single-use, in-process approval bound to the target and digest. Its `approval-record.json` is evidence only and cannot authorize a later run; every retry requires fresh confirmation. Executing the plan belongs to Story 2.5.
 
 ### Recovery
 
 Planning changes nothing on the target. Fix the reported cause, such as the choices file or the facts, and rerun it into a new output directory.
 
-## Interactive installation (apply)
+## Guided live installer
 
 ```text
-operations/install apply [--plan <file>] [--output <dir>]
-operations/install apply --help
+mirroros-install [--plan <file>] [--output <dir>]
+mirroros-install --help
 ```
 
-The command is available as `mirroros-install apply` on the live medium. It performs read-only discovery, review, and confirmation, not installation. The full format, safety projection, reason codes, and records are specified in [`contracts/installation-confirmation.md`](../../contracts/installation-confirmation.md).
+On the live ISO the same assistant opens automatically on tty1 as root (ADR 0006); cancelling or finishing returns to the shell, `mirroros-install` restarts it, and other consoles stay plain shells. A seeded qualification boot suppresses only the automatic start. The assistant performs preparation, read-only discovery, choice collection, review, and confirmation, not installation. The live-root decision does not change the installed system: installed-user configuration keeps its privilege separation. The full format, safety projection, reason codes, and records are specified in [`contracts/installation-confirmation.md`](../../contracts/installation-confirmation.md).
 
 ### Inputs and flow
 
-- Stdin and stdout must both be terminals. Missing TTY, `--yes`, `--non-interactive`, `--target`, and unknown options return `2` before any prompt or discovery; there is no bypass.
-- Gum must be installed with major version `2`; missing or unqualified Gum returns `6`. Node.js and the embedded discovery and plan components are also required. No path requests elevation or invokes `sudo`.
-- Without `--plan`, choose a definition from `targets/` with Gum; there is no automatic target detection. Discovery checks that selection. Framework remains blocked while its DMI identity is pending capture.
-- `--plan <file>` validates and copies an existing plan into `plans/01/`, preserving the original; the target comes from the plan. `--output <dir>` names an absent or empty run directory, defaulting to `evidence/install/<run-id>/`.
+- Stdin and stdout must both be terminals of the supported scope: a colored interactive console of the live ISO (`TERM` set and not `dumb`, `NO_COLOR` unset). Missing TTY, `NO_COLOR`, `TERM=dumb`, public `apply`, `--yes`, `--non-interactive`, `--target`, and unknown options return `2` before any prompt or discovery; there is no colorless variant and no bypass.
+- Gum must be installed with major version `2`; missing or unqualified Gum returns `6` with `gum_not_qualified`. Node.js and the embedded discovery and plan components are also required. No path requests elevation or invokes `sudo`, and no prototype or Omarchy configurator code is needed at runtime.
+- There is no profile selection: discovery identifies a known profile on its own, or reports an experimental, unqualified machine that meets the technical requirements. The assistant explains that admission without claiming compatibility or support.
+- `--plan <file>` validates and copies an existing version 2 plan into `plans/01/`, preserving the original; plans of earlier versions are rejected with regeneration guidance. `--output <dir>` names an absent or empty run directory, defaulting to `evidence/install/<run-id>/`.
 
-After the TTY and Gum checks, the flow chooses the target, runs `discovery/initial/`, generates or copies the plan, and checks its safety bindings before review. A single grayscale dashboard shows the digest, target, disk identity and layout, all choices with provenance and source, `DESTRUCTIVE` operations, and secret requirements by name, channel, and consumer. No secret value is requested.
+After the TTY and Gum checks, the screens follow the frozen reference in `prototypes/frontend/guided-installer/`, in this order: welcome with the live keyboard; live connectivity and clock preparation; automatic machine discovery; installation disk (always shown, with real eligible candidates); storage; swapfile; timezone; system language; regional formats; installed console keyboard; hostname; username; root policy; compact review; real confirmation; password explanation; final revalidation and ending. Defaults, per-value validation, and plan generation come from the plan component (`plan preview-choices` and `plan validate-choice`); the assistant holds no policy of its own.
 
-The safe-first menu offers Cancel, Edit a choice, and Continue to confirmation. Each valid edit regenerates a plan through the existing generator in a new `plans/NN/`; `choices.json` accumulates edits. Invalid combinations display `message` and `next_step`, discard the edit, and keep the previous plan. Esc in an edit widget returns unchanged to the dashboard. Policy-fixed keys are not editable.
+- **Live settings are not installed settings.** The live keyboard and the live connection affect only this session. Wi-Fi credentials are never requested or retained and live connections are not copied to the installed system. Preparation gives the ISO's enabled time synchronization a bounded readiness check (60 seconds per attempt, measured by counted one-second waits); a clock failure offers help, retry, or cancellation and never bypasses TLS or signature verification.
+- **Review and regeneration.** A validated plan is generated on entering review and regenerated whenever an answer changed, in a new `plans/NN/` with its `choices.json`. An invalid combination reports `message` and `next_step`, keeps the last valid plan, and grants no approval. Unchanged proposals keep their provenance and source. The compact review can open the complete plan (disk and layout, choices with provenance, operations, warnings, secret requirements, and the plan reference) in the `gum pager`; returning keeps the answers and authorizes nothing. The pager has no dedicated feature test, an accepted limitation.
+- **Password timing.** The root policy screen and the password explanation describe one account password that the user operation always needs and the root operation needs only when root password login is enabled. No password is requested in this version; it would be collected only after the bound confirmation and before any disk write, and never appears in the plan, review, or evidence.
 
-Confirmation starts focused on No and identifies the disk and digest prefix. Under `NO_COLOR` or `TERM=dumb`, it uses a safe-first Gum choice instead of buttons. After Yes, type the kernel device name shown by the prompt, such as `vda`; a mismatch cancels without retry. Final rediscovery then checks target identity, firmware, Secure Boot state, disk identity, eligibility and layout, policy and override hashes, and the plan file's digest. A change invalidates approval with a specific reason and the next step "Regenerate and review the installation plan." A valid approval stops at `engine_not_available`; no engine or destructive operation is executed.
+Confirmation starts focused on No and shows the disk, its path, and the plan reference. After Yes, type the kernel device name shown by the prompt, such as `vda` (not the plan reference); a mismatch cancels without retry. Backward navigation after authorization clears it. After the password explanation, final rediscovery checks the machine projection, profile binding, firmware, Secure Boot state, disk identity, eligibility and layout, policy and override hashes, and the plan file's digest. A change invalidates approval with a specific reason and the next step "Regenerate and review the installation plan." A valid approval stops at `engine_not_available`; no engine file is looked for or invoked and no destructive operation is executed.
 
 ### Evidence and exits
 
-Once the run starts, it writes `apply-run.json`, non-authorizing `approval-record.json`, and plain `apply.log` (no ANSI or secrets), plus `discovery/initial/`, `discovery/final/` when reached, and `plans/NN/` with the plan, render, plan-run record, and choices. Directories are `0700`, files `0600`; generated evidence is local and never committed. Argument and TTY failures before the run starts report on stderr without records.
+Once the run starts, it writes `install-run.json`, non-authorizing `approval-record.json`, and plain `install.log` (no ANSI or secrets), plus `discovery/initial/`, `discovery/final/` when reached, and `plans/NN/` with the plan, render, plan-run record, and choices. Directories are `0700`, files `0600`; generated evidence is local and never committed. Argument and TTY failures before the run starts report on stderr without records.
 
 | Status | Meaning |
 | --- | --- |
 | `2` | `approved` with `engine_not_available`, `invalidated` after a safety or digest change, or `blocked` by invalid input or discovery preconditions. |
-| `3` | `cancelled`: Cancel, No, Esc at confirmation, Ctrl+C during review or confirmation, or a wrong device name (`confirmation_mismatch`). |
+| `3` | `cancelled`: Cancel, No, Esc at confirmation, Ctrl+C during the interactive phase, or a wrong device name (`confirmation_mismatch`). |
 | `5` | `failed`: unexpected external operation failure. |
 | `6` | `failed`: damaged code, internal contract failure, or unqualified Gum. |
 | `128+n` | Signals outside the interactive phase; signals other than SIGINT retain this convention everywhere. |
 
-`apply` does not return `0` for any confirmation path; help alone returns `0`. Ctrl+C mapping belongs to the orchestrator, not the ADR 0004 wrapper.
+The guided installer does not return `0` for any confirmation path; help alone returns `0`. Ctrl+C mapping belongs to the orchestrator, not the ADR 0004 wrapper. Qualification boots exercise this route in [Confirmation qualification](test.md#confirmation-qualification): `confirmation` on the recognized reference VM and `confirmation-experimental` on an unmatched synthetic identity, each with approval, cancellation, mismatch, and layout-change cases.
 
 ### Recovery
 

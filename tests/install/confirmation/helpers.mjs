@@ -1,8 +1,8 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generate, facts, policy, referenceOverride } from '../plan/helpers.mjs';
+import { generate, facts, policy, referenceOverride, referenceProfileDefinition, unqualifiedFacts } from '../plan/helpers.mjs';
 
-export { facts, generate, policy, referenceOverride };
+export { facts, generate, policy, referenceOverride, referenceProfileDefinition, unqualifiedFacts };
 export { removeDirectory, repository, temporaryDirectory } from '../plan/helpers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -14,7 +14,16 @@ export function recordFixture(name) {
 }
 
 export function currentHashes() {
-  return { policy_sha256: policy.sha256, override_sha256: referenceOverride().sha256 };
+  return {
+    policy_sha256: policy.sha256,
+    profile_definition_sha256: referenceProfileDefinition().sha256,
+    override_sha256: referenceOverride().sha256,
+  };
+}
+
+// The hashes of an unqualified machine: only the policy applies.
+export function unqualifiedHashes() {
+  return { policy_sha256: policy.sha256 };
 }
 
 export function clone(value) {

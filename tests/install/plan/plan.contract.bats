@@ -28,16 +28,17 @@ teardown() {
   fi
 }
 
-# Writes a facts variant: default, two-disks, status-invalid, or format-2.
+# Writes a facts variant: default, unqualified, two-disks, status-invalid, or format-1.
 make_facts() {
   node --input-type=module -e '
     import { writeFileSync } from "node:fs";
     import { pathToFileURL } from "node:url";
     const helpers = await import(pathToFileURL(process.argv[1]).href);
     let document = helpers.facts();
+    if (process.argv[2] === "unqualified") document = helpers.unqualifiedFacts();
     if (process.argv[2] === "two-disks") document = helpers.secondEligibleDisk(document);
     if (process.argv[2] === "status-invalid") document.validation.status = "invalid";
-    if (process.argv[2] === "format-2") document.format_version = 2;
+    if (process.argv[2] === "format-1") document.format_version = 1;
     writeFileSync(process.argv[3], `${JSON.stringify(document)}\n`);
   ' "${PLAN_TESTS_DIR}/helpers.mjs" "$1" "$2"
 }
@@ -142,11 +143,11 @@ assert_private_permissions() {
 @test "plan prints the summary and ends with the review notice" {
   run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
-  grep -Fq 'Target: reference-vm' "$STDOUT_PATH"
+  grep -Fq 'Profile: matched reference-vm' "$STDOUT_PATH"
   grep -Fq 'Disk: virtio-SYNTH-VDA-0001' "$STDOUT_PATH"
   grep -Fq 'Storage option: ext4-systemd-boot (default)' "$STDOUT_PATH"
   grep -Fq 'Destructive operations: ' "$STDOUT_PATH"
-  grep -Fq 'Secrets required: user_password' "$STDOUT_PATH"
+  grep -Fq 'Secrets required: account_password' "$STDOUT_PATH"
   grep -Fq "Digest: sha256 $(plan_digest "${WORK_DIR}/out/installation-plan.json")" "$STDOUT_PATH"
   grep -Fq "Plan: ${WORK_DIR}/out/installation-plan.json" "$STDOUT_PATH"
   [ "$(tail -n 1 "$STDOUT_PATH")" == 'Review installation-plan.txt; approval is not part of this stage.' ]
@@ -167,7 +168,7 @@ assert_private_permissions() {
   first_sum="$(sha256sum "${WORK_DIR}"/first/*)"
   first_digest="$(plan_digest "${WORK_DIR}/first/installation-plan.json")"
 
-  write_choices '{"format_version":1,"hostname":"edited-host","storage_option":"btrfs-rescue"}'
+  write_choices '{"format_version":2,"hostname":"edited-host","storage_option":"btrfs-rescue"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/second"
   [ "$PLAN_STATUS" -eq 0 ]
   second_digest="$(plan_digest "${WORK_DIR}/second/installation-plan.json")"
@@ -185,30 +186,69 @@ assert_private_permissions() {
 }
 
 @test "an experimental storage option is accepted with its tier and a warning" {
-  write_choices '{"format_version":1,"storage_option":"btrfs-limine"}'
+  write_choices '{"format_version":2,"storage_option":"btrfs-limine"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.storage_option.tier === 'experimental'"
   assert_stderr_contains 'experimental'
 }
 
-@test "root_account password adds the root_password secret requirement by name only" {
-  write_choices '{"format_version":1,"root_account":"password"}'
+@test "root_account password adds the root consumer to the single account_password requirement" {
+  write_choices '{"format_version":2,"root_account":"password"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
-  json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements.map(s => s.name).join() === 'user_password,root_password'"
-  grep -Fq 'Secrets required: user_password, root_password' "$STDOUT_PATH"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements.length === 1 && d.secret_requirements[0].name === 'account_password'"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements[0].required_by.join() === 'create_user,configure_root_account'"
+  grep -Fq 'Secrets required: account_password' "$STDOUT_PATH"
+  ! grep -Eq 'root_password|user_password' "${WORK_DIR}/out/installation-plan.json"
+}
+
+@test "a locked root account names only the user operation as consumer" {
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements[0].required_by.join() === 'create_user'"
+}
+
+@test "an unqualified machine produces a plan with its warning and no profile bindings" {
+  make_facts unqualified "$FACTS"
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.target.profile.status === 'unqualified' && !('profile_id' in d.target.profile)"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "!('profile_definition_sha256' in d.policy_binding) && !('override_sha256' in d.policy_binding)"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.target.machine.dmi.sys_vendor === 'Synthetic Vendor' && d.choices.hostname.source === 'policy'"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.warnings.map(w => w.code).join() === 'machine_unqualified'"
+  assert_stderr_contains 'matches no known profile'
+  grep -Fq 'Profile: unqualified' "$STDOUT_PATH"
+}
+
+@test "a recognized machine binds its profile definition and override" {
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.target.profile.status === 'matched' && d.target.profile.profile_id === 'reference-vm'"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "/^[0-9a-f]{64}\$/.test(d.policy_binding.profile_definition_sha256) && /^[0-9a-f]{64}\$/.test(d.policy_binding.override_sha256)"
+}
+
+@test "a matched profile that the checkout does not define is rejected as invalid facts" {
+  rm -rf -- "${CODE_ROOT}/targets/reference-vm"
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  json_assert "${WORK_DIR}/out/plan-run.json" "d.reasons[0].code === 'facts_invalid'"
+  [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
 }
 
 @test "plan rejects invalid choices without writing a plan and records the reasons" {
   local body
   for body in \
-    '{"format_version":1,"bogus_key":"x"}' \
-    '{"format_version":1,"root_minimum_bytes":1}' \
-    '{"format_version":1,"storage_option":"zfs"}' \
-    '{"format_version":1,"hostname":"-bad-"}' \
-    '{"format_version":1,"target_disk":"/dev/nowhere"}' \
-    '{"format_version":2}' \
+    '{"format_version":2,"bogus_key":"x"}' \
+    '{"format_version":2,"root_minimum_bytes":1}' \
+    '{"format_version":2,"locales":["en_US.UTF-8"]}' \
+    '{"format_version":2,"locale_categories":{}}' \
+    '{"format_version":2,"lang":"de_DE.UTF-8"}' \
+    '{"format_version":2,"storage_option":"zfs"}' \
+    '{"format_version":2,"hostname":"-bad-"}' \
+    '{"format_version":2,"target_disk":"/dev/nowhere"}' \
+    '{"format_version":1,"hostname":"edited"}' \
+    '{"hostname":"edited"}' \
     'not json'; do
     write_choices "$body"
     rm -rf -- "${WORK_DIR}/out"
@@ -224,8 +264,8 @@ assert_private_permissions() {
 
 @test "a secret-like choice is refused and its value never appears anywhere" {
   local key
-  for key in password user_password root_password; do
-    write_choices "{\"format_version\":1,\"${key}\":\"${PLAN_CANARY}\"}"
+  for key in password user_password root_password account_password; do
+    write_choices "{\"format_version\":2,\"${key}\":\"${PLAN_CANARY}\"}"
     rm -rf -- "${WORK_DIR}/out"
     run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
     [ "$PLAN_STATUS" -eq 2 ]
@@ -237,7 +277,7 @@ assert_private_permissions() {
 }
 
 @test "a secret canary in an editable value is not echoed by any output" {
-  write_choices "{\"format_version\":1,\"hostname\":\"${PLAN_CANARY}\",\"user_name\":\"${PLAN_CANARY}\"}"
+  write_choices "{\"format_version\":2,\"hostname\":\"${PLAN_CANARY}\",\"user_name\":\"${PLAN_CANARY}\"}"
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 2 ]
   rm -f -- "${WORK_DIR}/choices.json"
@@ -245,7 +285,7 @@ assert_private_permissions() {
 }
 
 @test "a canary never reaches a successful plan, its render, or the console" {
-  write_choices '{"format_version":1,"root_account":"password"}'
+  write_choices '{"format_version":2,"root_account":"password"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
   assert_no_canary
@@ -260,7 +300,7 @@ assert_private_permissions() {
   [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
   json_assert "${WORK_DIR}/out/plan-run.json" "d.exit_status === 2"
 
-  write_choices '{"format_version":1,"target_disk":"virtio-SYNTH-VDB-0002"}'
+  write_choices '{"format_version":2,"target_disk":"virtio-SYNTH-VDB-0002"}'
   rm -rf -- "${WORK_DIR}/out"
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
@@ -277,9 +317,9 @@ assert_private_permissions() {
   run_plan --facts "${WORK_DIR}/bad.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 2 ]
 
-  make_facts format-2 "${WORK_DIR}/format2.json"
+  make_facts format-1 "${WORK_DIR}/format1.json"
   rm -rf -- "${WORK_DIR}/out"
-  run_plan --facts "${WORK_DIR}/format2.json" --output "${WORK_DIR}/out"
+  run_plan --facts "${WORK_DIR}/format1.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 2 ]
   json_assert "${WORK_DIR}/out/plan-run.json" "d.reasons[0].code === 'facts_format_unknown'"
 
@@ -288,6 +328,115 @@ assert_private_permissions() {
   run_plan --facts "${WORK_DIR}/invalid.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 2 ]
   [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
+}
+
+@test "preview-choices prints the defaults, options, and derived localization and writes nothing" {
+  local before
+  before="$(find "$WORK_DIR" | sort)"
+  run_plan preview-choices --facts "$FACTS"
+  [ "$PLAN_STATUS" -eq 0 ]
+  [ ! -s "$STDERR_PATH" ]
+  json_assert "$STDOUT_PATH" "d.format_version === 2 && d.choices.hostname.source === 'override' && d.choices.target_disk.source === 'detected'"
+  json_assert "$STDOUT_PATH" "d.derived.locales.join() === 'en_US.UTF-8' && !('LC_ALL' in d.derived.locale_categories)"
+  json_assert "$STDOUT_PATH" "d.options.storage_option.length === 3 && d.options.regional_format.join() === 'follow_language,en_US.UTF-8,es_ES.UTF-8'"
+  [ ! -e "${WORK_DIR}/evidence" ]
+  [ "$before" == "$(find "$WORK_DIR" | sort)" ]
+}
+
+@test "preview-choices follows the choices file and leaves the disk pending among several" {
+  write_choices '{"format_version":2,"lang":"es_ES.UTF-8"}'
+  run_plan preview-choices --facts "$FACTS" --choices "${WORK_DIR}/choices.json"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "$STDOUT_PATH" "d.derived.locales.join() === 'es_ES.UTF-8' && d.choices.lang.source === 'choice'"
+
+  make_facts two-disks "$FACTS"
+  run_plan preview-choices --facts "$FACTS"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "$STDOUT_PATH" "!('target_disk' in d.choices) && d.options.target_disk.length === 2"
+}
+
+@test "preview-choices reports an unqualified machine and rejects invalid inputs with exit 2" {
+  make_facts unqualified "$FACTS"
+  run_plan preview-choices --facts "$FACTS"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "$STDOUT_PATH" "d.warnings.map(w => w.code).join() === 'machine_unqualified' && d.choices.hostname.source === 'policy'"
+
+  write_choices '{"format_version":1,"hostname":"x"}'
+  run_plan preview-choices --facts "$FACTS" --choices "${WORK_DIR}/choices.json"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -s "$STDOUT_PATH" ]
+  assert_stderr_contains 'format_version 2'
+
+  run_plan preview-choices --facts "${WORK_DIR}/absent.json"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -e "${WORK_DIR}/evidence" ]
+}
+
+@test "validate-choice accepts a valid value and reports the derived localization" {
+  run_plan validate-choice --facts "$FACTS" --key lang --value es_ES.UTF-8
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "$STDOUT_PATH" "d.valid === true && d.key === 'lang' && d.derived.locales.join() === 'es_ES.UTF-8'"
+
+  run_plan validate-choice --facts "$FACTS" --key swapfile_size --value 8192
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "$STDOUT_PATH" "d.valid === true && d.value === 8192 && !('derived' in d)"
+  [ ! -e "${WORK_DIR}/evidence" ]
+}
+
+@test "validate-choice rejects invalid, fixed, derived, unknown, and secret-like keys with exit 2" {
+  local key value code
+  while read -r key value code; do
+    run_plan validate-choice --facts "$FACTS" --key "$key" --value "$value"
+    [ "$PLAN_STATUS" -eq 2 ]
+    json_assert "$STDOUT_PATH" "d.valid === false && d.reasons.length === 1 && d.reasons[0].code === '${code}'"
+  done <<EOF
+swapfile_size abc choices_invalid_value
+swapfile_size 100 choices_invalid_value
+hostname -bad- choices_invalid_value
+lang de_DE.UTF-8 choices_invalid_value
+kernel linux choices_not_editable
+locales en_US.UTF-8 choices_not_editable
+bogus x choices_unknown_key
+account_password ${PLAN_CANARY} choices_secret_key
+target_disk /dev/sr0 disk_ineligible
+EOF
+  assert_no_canary
+}
+
+@test "validate-choice reports an empty value as invalid instead of a usage error" {
+  run_plan validate-choice --facts "$FACTS" --key hostname --value ''
+  [ "$PLAN_STATUS" -eq 2 ]
+  json_assert "$STDOUT_PATH" "d.valid === false && d.reasons[0].code === 'choices_invalid_value'"
+}
+
+@test "the choice helpers reject malformed invocations before any work" {
+  run_plan validate-choice --facts "$FACTS" --key lang
+  [ "$PLAN_STATUS" -eq 2 ]
+  assert_stderr_contains 'validate-choice requires --key and --value.'
+
+  run_plan validate-choice --facts "$FACTS" --value x
+  [ "$PLAN_STATUS" -eq 2 ]
+  assert_stderr_contains 'validate-choice requires --key and --value.'
+
+  run_plan validate-choice --facts "$FACTS" --key lang --key lang --value x
+  [ "$PLAN_STATUS" -eq 2 ]
+  assert_stderr_contains '--key may be given only once.'
+
+  run_plan preview-choices --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  assert_stderr_contains '--output is not accepted by preview-choices.'
+
+  run_plan preview-choices --facts "$FACTS" --key lang
+  [ "$PLAN_STATUS" -eq 2 ]
+  assert_stderr_contains 'accepted only by validate-choice'
+
+  run_plan --facts "$FACTS" --key lang --value x
+  [ "$PLAN_STATUS" -eq 2 ]
+
+  run_plan preview-choices
+  [ "$PLAN_STATUS" -eq 2 ]
+  assert_stderr_contains '--facts is required.'
+  [ ! -e "${WORK_DIR}/evidence" ]
 }
 
 @test "plan refuses an output directory that already holds a plan without writing" {

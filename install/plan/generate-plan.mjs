@@ -1,9 +1,18 @@
 import { readFileSync } from 'node:fs';
-import { isRecord, reason, validateDocument } from '../discovery/validate-facts.mjs';
+import { FACTS_FORMAT_VERSION, isRecord, reason, validateDocument } from '../discovery/validate-facts.mjs';
 import { PlanContractError } from './canonical-json.mjs';
 import { sha256Canonical, withDigest } from './digest-plan.mjs';
 import { resolveValues } from './resolve-choices.mjs';
-import { FORMAT_VERSION, KINDS, SECRET_CHANNEL, operationSequence, validatePlan } from './validate-plan.mjs';
+import {
+  ACCOUNT_PASSWORD,
+  KINDS,
+  PLAN_FORMAT_VERSION,
+  SECRET_CHANNEL,
+  accountPasswordConsumers,
+  machineProjection,
+  operationSequence,
+  validatePlan,
+} from './validate-plan.mjs';
 
 const GIBIBYTE = 1024 ** 3;
 
@@ -45,10 +54,10 @@ export function loadFacts(path) {
       'Run operations/install discover and pass its target-facts.json.',
     );
   }
-  if (!isRecord(facts) || facts.format_version !== 1) {
+  if (!isRecord(facts) || facts.format_version !== FACTS_FORMAT_VERSION) {
     return fail(
       'facts_format_unknown',
-      'The facts file is not a target-facts document of a supported format_version.',
+      `The facts file is not a target-facts document of format_version ${FACTS_FORMAT_VERSION}; facts of earlier versions are not accepted.`,
       'Run operations/install discover with this version of MirrorOS and pass its target-facts.json.',
     );
   }
@@ -76,7 +85,7 @@ export function loadFacts(path) {
   return { facts, reasons: [] };
 }
 
-function diskIdentifier(disk) {
+export function diskIdentifier(disk) {
   return disk.identity.by_id ?? disk.identity.path;
 }
 
@@ -91,7 +100,7 @@ function candidatesText(disks) {
   return eligible.length === 0 ? 'none' : eligible.map(describeDisk).join('; ');
 }
 
-function selectDisk(disks, requested) {
+export function selectDisk(disks, requested) {
   const eligible = disks.filter(disk => disk.eligible);
   if (requested !== undefined) {
     const named = disks.find(disk => disk.identity.by_id === requested || disk.identity.path === requested);
@@ -146,6 +155,7 @@ function parametersFor(kind, { values, option, disk }) {
       return {
         locales: values.locales,
         lang: values.lang,
+        locale_categories: values.locale_categories,
         console_keymap: values.console_keymap,
         timezone: values.timezone,
         hardware_clock: values.hardware_clock,
@@ -196,23 +206,41 @@ function buildOperations(storageOption, context) {
 }
 
 function buildSecrets(rootAccount) {
-  const secrets = [{
-    name: 'user_password',
-    purpose: 'Password of the created user account.',
-    required_by: ['create_user'],
+  return [{
+    name: ACCOUNT_PASSWORD,
+    purpose: 'Password of the created user account, shared with the root account when root password access is enabled.',
+    required_by: accountPasswordConsumers(rootAccount),
     channel: SECRET_CHANNEL,
     provenance: 'technical_necessity',
   }];
-  if (rootAccount === 'password') {
-    secrets.push({
-      name: 'root_password',
-      purpose: 'Password of the root account.',
-      required_by: ['configure_root_account'],
-      channel: SECRET_CHANNEL,
-      provenance: 'personal_preference',
-    });
+}
+
+// The warnings that do not depend on a combination of choices failing. `disk` and `option` may be undefined
+// while a preview has not resolved them yet.
+export function buildWarnings({ facts, disk, storageOption, option }) {
+  const warnings = [];
+  if (facts.profile.status === 'unqualified') {
+    warnings.push(reason(
+      'machine_unqualified',
+      'This machine matches no known profile; installing on it is experimental.',
+      'No compatibility or support is promised; continue only if you accept that and have reviewed every step.',
+    ));
   }
-  return secrets;
+  if (disk !== undefined && disk.identity.by_id === undefined) {
+    warnings.push(reason(
+      'disk_without_by_id',
+      'The target disk has no stable by_id; it is addressed by its path, which can change between boots.',
+      'Review the disk model and size again before approving the plan.',
+    ));
+  }
+  if (option !== undefined && option.tier === 'experimental') {
+    warnings.push(reason(
+      'storage_option_experimental',
+      `The storage option ${storageOption} is experimental and has no support commitment.`,
+      'Select ext4-systemd-boot unless the experimental option is intended.',
+    ));
+  }
+  return warnings;
 }
 
 function effectiveValue(facts, path) {
@@ -251,18 +279,22 @@ function buildHardwareSelections(facts, identifier, preselected) {
   };
 }
 
-// facts: a valid target-facts document. policy: the result of loadPlanPolicy. choices and override:
-// `{ values }` results of loadChoices and loadPlanOverride (override may also carry `sha256`).
-// Returns { plan, reasons }: reasons are input problems (exit 2). A plan that fails its own validator for
-// any other reason is an invariant violation and throws a PlanContractError (exit 6).
-export function generatePlan({ facts, policy, choices = { values: {} }, override = { values: {} } }) {
-  const disks = facts.layers.detected.storage.disks;
-  const selected = selectDisk(disks, choices.values.target_disk);
-  if (selected.reasons.length > 0) return { plan: undefined, reasons: selected.reasons };
-  const { disk, preselected } = selected;
-  const identifier = diskIdentifier(disk);
-  if (identifier === undefined) {
-    return { plan: undefined, reasons: [reason(
+// The one resolution of disk and choice values, shared by plan generation and the published choice helpers.
+// With allowPendingDisk a missing disk selection (several eligible disks, none chosen) is not a failure: the
+// result then has no disk, identifier, or target_disk value.
+export function resolveSelection({ facts, policy, choices, override, allowPendingDisk = false }) {
+  const matched = facts.profile.status === 'matched';
+  const appliedOverride = matched ? override : { values: {} };
+  const selected = selectDisk(facts.layers.detected.storage.disks, choices.values.target_disk);
+  const pending = allowPendingDisk && selected.reasons.length > 0 && selected.reasons.every(item => item.code === 'disk_selection_required');
+  if (selected.reasons.length > 0 && !pending) return { reasons: selected.reasons };
+  const { disk } = selected;
+  // Naming the only eligible disk is an unchanged proposal: it stays a detected selection.
+  const eligible = facts.layers.detected.storage.disks.filter(candidate => candidate.eligible);
+  const preselected = disk !== undefined && eligible.length === 1 && eligible[0] === disk;
+  const identifier = disk === undefined ? undefined : diskIdentifier(disk);
+  if (disk !== undefined && identifier === undefined) {
+    return { reasons: [reason(
       'disk_unidentifiable',
       'The selected disk exposes neither a by_id nor a path, so it cannot be identified.',
       'Rerun operations/install discover; if the disk stays unidentifiable, it cannot be a target.',
@@ -275,7 +307,7 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
   const resolved = resolveValues({
     policy: policy.policy,
     detected,
-    override: override.values,
+    override: appliedOverride.values,
     choices: { ...choices.values, ...(choices.values.target_disk === undefined ? {} : { target_disk: identifier }) },
   });
   const values = Object.fromEntries(Object.entries(resolved).map(([key, entry]) => [key, entry.value]));
@@ -287,40 +319,38 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
     bootloader: option.bootloader,
     resume_offset_method: option.resume_offset_method,
   };
+  return { reasons: [], matched, appliedOverride, disk, preselected, identifier, resolved, values, option };
+}
 
-  const warnings = [];
-  if (disk.identity.by_id === undefined) {
-    warnings.push(reason(
-      'disk_without_by_id',
-      'The target disk has no stable by_id; it is addressed by its path, which can change between boots.',
-      'Review the disk model and size again before approving the plan.',
-    ));
-  }
-  if (option.tier === 'experimental') {
-    warnings.push(reason(
-      'storage_option_experimental',
-      `The storage option ${values.storage_option} is experimental and has no support commitment.`,
-      'Select ext4-systemd-boot unless the experimental option is intended.',
-    ));
-  }
+// facts: a valid target-facts document. policy: the result of loadPlanPolicy. choices and override:
+// `{ values }` results of loadChoices and loadPlanOverride (override may also carry `sha256`); the override
+// applies only to a matched profile. profileDefinition: `{ sha256 }` of the matched profile's definition.
+// Returns { plan, reasons }: reasons are input problems (exit 2). A plan that fails its own validator for
+// any other reason is an invariant violation and throws a PlanContractError (exit 6).
+export function generatePlan({ facts, policy, choices = { values: {} }, override = { values: {} }, profileDefinition }) {
+  const selection = resolveSelection({ facts, policy, choices, override });
+  if (selection.reasons.length > 0) return { plan: undefined, reasons: selection.reasons };
+  const { matched, appliedOverride, disk, preselected, identifier, resolved, values, option } = selection;
+
+  const warnings = buildWarnings({ facts, disk, storageOption: values.storage_option, option });
 
   const binding = {
     facts_sha256: sha256Canonical(facts),
     run_id: facts.source.run_id,
-    target_id: facts.source.target_id,
     commit: facts.source.commit,
     dirty: facts.source.dirty,
   };
   const policyBinding = { policy_sha256: policy.sha256 };
-  if (override.sha256 !== undefined) policyBinding.override_sha256 = override.sha256;
+  if (matched && profileDefinition?.sha256 !== undefined) policyBinding.profile_definition_sha256 = profileDefinition.sha256;
+  if (appliedOverride.sha256 !== undefined) policyBinding.override_sha256 = appliedOverride.sha256;
 
   const targetDisk = { eligible: disk.eligible, current_layout: disk.layout };
   for (const key of ['path', 'by_id', 'wwn', 'serial', 'model', 'size_bytes']) {
     if (disk.identity[key] !== undefined) targetDisk[key] = disk.identity[key];
   }
   const plan = withDigest({
-    format_version: FORMAT_VERSION,
-    target: { target_id: facts.source.target_id, disk: targetDisk },
+    format_version: PLAN_FORMAT_VERSION,
+    target: { machine: machineProjection(facts), profile: structuredClone(facts.profile), disk: targetDisk },
     choices: resolved,
     operations: buildOperations(values.storage_option, { values, option, disk: identifier }),
     secret_requirements: buildSecrets(values.root_account),

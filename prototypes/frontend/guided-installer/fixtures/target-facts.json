@@ -1,0 +1,440 @@
+{
+  "format_version": 1,
+  "source": {
+    "run_id": "ux-preview-synthetic",
+    "commit": "e273fd6298f21bd10174751c0020b25e973d270f",
+    "dirty": true,
+    "target_id": "reference-vm"
+  },
+  "layers": {
+    "portable_baseline": {
+      "policy": {
+        "minimum_disk_bytes": {
+          "value": 21474836480,
+          "provenance": "technical_necessity"
+        },
+        "https_probe_url": {
+          "value": "https://archlinux.org/",
+          "provenance": "arch_guidance"
+        },
+        "https_probe_timeout_seconds": {
+          "value": 30,
+          "provenance": "technical_necessity"
+        }
+      }
+    },
+    "detected": {
+      "firmware": {
+        "boot_mode": "uefi",
+        "platform_bits": 64,
+        "efivars_available": true,
+        "secure_boot": "disabled",
+        "dmi": {
+          "sys_vendor": "QEMU",
+          "product_name": "Standard PC (Q35 + ICH9, 2009)",
+          "product_version": "pc-q35-9.2",
+          "bios_vendor": "EDK II",
+          "bios_version": "unknown",
+          "bios_date": "02/02/2022"
+        }
+      },
+      "network": {
+        "ready": true,
+        "default_route": true,
+        "dns_resolved": true,
+        "https_reachable": true,
+        "wifi_present": false,
+        "interfaces": [
+          {
+            "name": "enp0s2",
+            "kind": "wired",
+            "state": "up",
+            "has_global_ipv4": true,
+            "has_global_ipv6": false
+          }
+        ]
+      },
+      "storage": {
+        "live_medium_device": "/dev/sr0",
+        "disks": [
+          {
+            "identity": {
+              "path": "/dev/loop0",
+              "size_bytes": 1114148864
+            },
+            "type": "loop",
+            "removable": false,
+            "read_only": true,
+            "layout": {
+              "partitions": []
+            },
+            "eligible": false,
+            "ineligible_reasons": [
+              "loop",
+              "read_only",
+              "mounted",
+              "below_minimum_size"
+            ]
+          },
+          {
+            "identity": {
+              "path": "/dev/sr0",
+              "by_id": "ata-QEMU_DVD-ROM_QM00001",
+              "serial": "QM00001",
+              "model": "QEMU DVD-ROM",
+              "size_bytes": 1662566400
+            },
+            "type": "rom",
+            "transport": "sata",
+            "removable": true,
+            "read_only": true,
+            "layout": {
+              "partition_table": {
+                "type": "dos",
+                "uuid": "fbbb1c71"
+              },
+              "partitions": []
+            },
+            "eligible": false,
+            "ineligible_reasons": [
+              "rom",
+              "removable",
+              "read_only",
+              "live_medium",
+              "mounted",
+              "below_minimum_size"
+            ]
+          },
+          {
+            "identity": {
+              "path": "/dev/sr1",
+              "by_id": "ata-QEMU_DVD-ROM_QM00003",
+              "serial": "QM00003",
+              "model": "QEMU DVD-ROM",
+              "size_bytes": 503808
+            },
+            "type": "rom",
+            "transport": "sata",
+            "removable": true,
+            "read_only": true,
+            "layout": {
+              "partitions": []
+            },
+            "eligible": false,
+            "ineligible_reasons": [
+              "rom",
+              "removable",
+              "read_only",
+              "below_minimum_size"
+            ]
+          },
+          {
+            "identity": {
+              "path": "/dev/vda",
+              "by_id": "virtio-SYNTH-VDA-0001",
+              "serial": "SYNTH-VDA-0001",
+              "model": "Example VirtIO Disk",
+              "size_bytes": 34359738368
+            },
+            "type": "disk",
+            "transport": "virtio",
+            "removable": false,
+            "read_only": false,
+            "layout": {
+              "partition_table": {
+                "type": "gpt",
+                "uuid": "00000000-0000-4000-8000-000000000001"
+              },
+              "partitions": [
+                {
+                  "path": "/dev/vda1",
+                  "size_bytes": 1073741824,
+                  "fstype": "vfat",
+                  "label": "SYNTH-ESP",
+                  "uuid": "ABCD-0001",
+                  "partuuid": "00000000-0000-4000-8000-0000000000a1"
+                },
+                {
+                  "path": "/dev/vda2",
+                  "size_bytes": 32212254720,
+                  "fstype": "ext4",
+                  "label": "SYNTH-ROOT",
+                  "uuid": "00000000-0000-4000-8000-0000000000b2",
+                  "partuuid": "00000000-0000-4000-8000-0000000000a2"
+                }
+              ]
+            },
+            "eligible": true
+          }
+        ]
+      },
+      "hardware": {
+        "architecture": "x86_64",
+        "cpu": {
+          "vendor": "AuthenticAMD",
+          "model": "AMD Ryzen 7 PRO 5850U with Radeon Graphics",
+          "cores": 2
+        },
+        "memory_total_bytes": 4090593280,
+        "graphics": [],
+        "battery_present": false,
+        "virtualization": "kvm",
+        "wifi_reference": "network.wifi_present"
+      }
+    },
+    "target_override": {
+      "policy": {}
+    },
+    "runtime_private": {
+      "required_inputs": []
+    }
+  },
+  "effective": {
+    "policy.minimum_disk_bytes": {
+      "value": 21474836480,
+      "provenance": "technical_necessity",
+      "source": "baseline"
+    },
+    "policy.https_probe_url": {
+      "value": "https://archlinux.org/",
+      "provenance": "arch_guidance",
+      "source": "baseline"
+    },
+    "policy.https_probe_timeout_seconds": {
+      "value": 30,
+      "provenance": "technical_necessity",
+      "source": "baseline"
+    },
+    "firmware.boot_mode": {
+      "value": "uefi",
+      "source": "detected"
+    },
+    "firmware.platform_bits": {
+      "value": 64,
+      "source": "detected"
+    },
+    "firmware.efivars_available": {
+      "value": true,
+      "source": "detected"
+    },
+    "firmware.secure_boot": {
+      "value": "disabled",
+      "source": "detected"
+    },
+    "firmware.dmi.sys_vendor": {
+      "value": "QEMU",
+      "source": "detected"
+    },
+    "firmware.dmi.product_name": {
+      "value": "Standard PC (Q35 + ICH9, 2009)",
+      "source": "detected"
+    },
+    "firmware.dmi.product_version": {
+      "value": "pc-q35-9.2",
+      "source": "detected"
+    },
+    "firmware.dmi.bios_vendor": {
+      "value": "EDK II",
+      "source": "detected"
+    },
+    "firmware.dmi.bios_version": {
+      "value": "unknown",
+      "source": "detected"
+    },
+    "firmware.dmi.bios_date": {
+      "value": "02/02/2022",
+      "source": "detected"
+    },
+    "network.ready": {
+      "value": true,
+      "source": "detected"
+    },
+    "network.default_route": {
+      "value": true,
+      "source": "detected"
+    },
+    "network.dns_resolved": {
+      "value": true,
+      "source": "detected"
+    },
+    "network.https_reachable": {
+      "value": true,
+      "source": "detected"
+    },
+    "network.wifi_present": {
+      "value": false,
+      "source": "detected"
+    },
+    "network.interfaces": {
+      "value": [
+        {
+          "name": "enp0s2",
+          "kind": "wired",
+          "state": "up",
+          "has_global_ipv4": true,
+          "has_global_ipv6": false
+        }
+      ],
+      "source": "detected"
+    },
+    "storage.live_medium_device": {
+      "value": "/dev/sr0",
+      "source": "detected"
+    },
+    "storage.disks": {
+      "value": [
+        {
+          "identity": {
+            "path": "/dev/loop0",
+            "size_bytes": 1114148864
+          },
+          "type": "loop",
+          "removable": false,
+          "read_only": true,
+          "layout": {
+            "partitions": []
+          },
+          "eligible": false,
+          "ineligible_reasons": [
+            "loop",
+            "read_only",
+            "mounted",
+            "below_minimum_size"
+          ]
+        },
+        {
+          "identity": {
+            "path": "/dev/sr0",
+            "by_id": "ata-QEMU_DVD-ROM_QM00001",
+            "serial": "QM00001",
+            "model": "QEMU DVD-ROM",
+            "size_bytes": 1662566400
+          },
+          "type": "rom",
+          "transport": "sata",
+          "removable": true,
+          "read_only": true,
+          "layout": {
+            "partition_table": {
+              "type": "dos",
+              "uuid": "fbbb1c71"
+            },
+            "partitions": []
+          },
+          "eligible": false,
+          "ineligible_reasons": [
+            "rom",
+            "removable",
+            "read_only",
+            "live_medium",
+            "mounted",
+            "below_minimum_size"
+          ]
+        },
+        {
+          "identity": {
+            "path": "/dev/sr1",
+            "by_id": "ata-QEMU_DVD-ROM_QM00003",
+            "serial": "QM00003",
+            "model": "QEMU DVD-ROM",
+            "size_bytes": 503808
+          },
+          "type": "rom",
+          "transport": "sata",
+          "removable": true,
+          "read_only": true,
+          "layout": {
+            "partitions": []
+          },
+          "eligible": false,
+          "ineligible_reasons": [
+            "rom",
+            "removable",
+            "read_only",
+            "below_minimum_size"
+          ]
+        },
+        {
+          "identity": {
+            "path": "/dev/vda",
+            "by_id": "virtio-SYNTH-VDA-0001",
+            "serial": "SYNTH-VDA-0001",
+            "model": "Example VirtIO Disk",
+            "size_bytes": 34359738368
+          },
+          "type": "disk",
+          "transport": "virtio",
+          "removable": false,
+          "read_only": false,
+          "layout": {
+            "partition_table": {
+              "type": "gpt",
+              "uuid": "00000000-0000-4000-8000-000000000001"
+            },
+            "partitions": [
+              {
+                "path": "/dev/vda1",
+                "size_bytes": 1073741824,
+                "fstype": "vfat",
+                "label": "SYNTH-ESP",
+                "uuid": "ABCD-0001",
+                "partuuid": "00000000-0000-4000-8000-0000000000a1"
+              },
+              {
+                "path": "/dev/vda2",
+                "size_bytes": 32212254720,
+                "fstype": "ext4",
+                "label": "SYNTH-ROOT",
+                "uuid": "00000000-0000-4000-8000-0000000000b2",
+                "partuuid": "00000000-0000-4000-8000-0000000000a2"
+              }
+            ]
+          },
+          "eligible": true
+        }
+      ],
+      "source": "detected"
+    },
+    "hardware.architecture": {
+      "value": "x86_64",
+      "source": "detected"
+    },
+    "hardware.cpu.vendor": {
+      "value": "AuthenticAMD",
+      "source": "detected"
+    },
+    "hardware.cpu.model": {
+      "value": "AMD Ryzen 7 PRO 5850U with Radeon Graphics",
+      "source": "detected"
+    },
+    "hardware.cpu.cores": {
+      "value": 2,
+      "source": "detected"
+    },
+    "hardware.memory_total_bytes": {
+      "value": 4090593280,
+      "source": "detected"
+    },
+    "hardware.graphics": {
+      "value": [],
+      "source": "detected"
+    },
+    "hardware.battery_present": {
+      "value": false,
+      "source": "detected"
+    },
+    "hardware.virtualization": {
+      "value": "kvm",
+      "source": "detected"
+    },
+    "hardware.wifi_reference": {
+      "value": "network.wifi_present",
+      "source": "detected"
+    }
+  },
+  "validation": {
+    "status": "valid",
+    "reasons": [],
+    "warnings": []
+  }
+}

@@ -11,7 +11,7 @@ export const SIGINT = 2;
 const STANDARD_REASONS = {
   confirmation_mismatch: {
     message: 'The typed device name does not match the selected disk.',
-    next_step: 'Run apply again and type the exact device name to confirm.',
+    next_step: 'Run mirroros-install again and type the exact device name to confirm.',
   },
   engine_not_available: {
     message: 'The installation engine is not part of this MirrorOS version and nothing was executed.',
@@ -58,13 +58,18 @@ export function resultFor(outcome, { exitStatus, reasons = [] } = {}) {
 
 const cancelled = () => ({ action: 'stop', exit_status: 3, outcome: 'cancelled' });
 
-// Maps a Gum status for one interactive prompt. Phases: `menu`, `edit`, `confirm`, `name`. Gum returns
-// 1 for decline and Esc, and 130 for Ctrl+C (ADR 0004). Esc inside an edit widget goes back to the
-// dashboard; everywhere else decline and Esc cancel. Ctrl+C cancels only inside the interactive phase.
+// Phases where Esc goes back without applying an incomplete answer: the configuration steps (`step`, and
+// `edit` as its earlier name), the review, the password explanation, and the pager.
+const BACK_PHASES = ['step', 'edit', 'review', 'password', 'pager'];
+
+// Maps a Gum status for one interactive prompt. Phases: `menu`, `step`, `review`, `password`, `pager`,
+// `confirm`, `name`. Gum returns 1 for decline and Esc, and 130 for Ctrl+C (ADR 0004). Esc in a back phase
+// returns to the previous screen; everywhere else, including both authorization prompts (`confirm`, `name`),
+// decline and Esc cancel. Ctrl+C cancels only inside the interactive phase.
 export function mapGumStatus(status, phase, { interactive = true } = {}) {
   if (status === 0) return { action: 'proceed' };
   if (status === 130) return interactive ? cancelled() : { action: 'stop', exit_status: 130, outcome: null };
-  if (status === 1) return phase === 'edit' ? { action: 'back' } : cancelled();
+  if (status === 1) return BACK_PHASES.includes(phase) ? { action: 'back' } : cancelled();
   return { action: 'stop', exit_status: 5, outcome: 'failed' };
 }
 

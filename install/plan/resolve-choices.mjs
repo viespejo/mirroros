@@ -1,9 +1,18 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { isRecord, reason } from '../discovery/validate-facts.mjs';
 import { PlanContractError } from './canonical-json.mjs';
 import { sha256Canonical } from './digest-plan.mjs';
-import { CHOICE_SPECS, FORMAT_VERSION, PROVENANCE_CLASSES, TIERS } from './validate-plan.mjs';
+import {
+  CHOICES_FORMAT_VERSION,
+  CHOICE_SPECS,
+  DERIVED_KEYS,
+  PLAN_POLICY_FORMAT_VERSION,
+  PROVENANCE_CLASSES,
+  TIERS,
+  deriveLocalization,
+} from './validate-plan.mjs';
 
 export class PlanUpstreamError extends Error {
   constructor(message) {
@@ -32,14 +41,16 @@ function readJson(path, label) {
 export function loadPlanPolicy(path) {
   const document = readJson(path, 'installation policy');
   const errors = [];
-  if (!isRecord(document) || document.format_version !== FORMAT_VERSION
+  if (!isRecord(document) || document.format_version !== PLAN_POLICY_FORMAT_VERSION
     || !isRecord(document.policy) || !isRecord(document.storage_options)
     || Object.keys(document).some(key => !['format_version', 'policy', 'storage_options'].includes(key))) {
-    throw new PlanContractError('installation policy must contain only format_version 1, policy, and storage_options');
+    throw new PlanContractError(`installation policy must contain only format_version ${PLAN_POLICY_FORMAT_VERSION}, policy, and storage_options`);
   }
   for (const [key, entry] of Object.entries(document.policy)) {
     const spec = CHOICE_SPECS[key];
-    if (spec === undefined || key === 'target_disk') {
+    if (DERIVED_KEYS.includes(key)) {
+      errors.push(`installation policy key "${key}" is derived and cannot be set by the policy`);
+    } else if (spec === undefined || key === 'target_disk') {
       errors.push(`installation policy key "${key}" is not a known policy key`);
     } else if (!isRecord(entry) || Object.keys(entry).some(field => !['value', 'provenance', 'editable'].includes(field))
       || !PROVENANCE_CLASSES.includes(entry.provenance) || entry.editable !== spec.editable || !spec.check(entry.value)) {
@@ -47,7 +58,7 @@ export function loadPlanPolicy(path) {
     }
   }
   for (const key of Object.keys(CHOICE_SPECS)) {
-    if (key !== 'target_disk' && !(key in document.policy)) errors.push(`installation policy key "${key}" is missing`);
+    if (key !== 'target_disk' && !DERIVED_KEYS.includes(key) && !(key in document.policy)) errors.push(`installation policy key "${key}" is missing`);
   }
   for (const [name, option] of Object.entries(document.storage_options)) {
     if (!isRecord(option) || !TIERS.includes(option.tier)
@@ -115,11 +126,10 @@ export function checkChoiceValue(key, value, { root = '/', storageOptions } = {}
   if (key === 'console_keymap' && !hasKeymap(referenceDirectory(root, 'usr/share/kbd/keymaps'), value)) {
     return 'console_keymap is not an installed keymap';
   }
-  if (key === 'locales') {
-    const supported = supportedLocales(root);
-    if (!value.every(locale => supported.has(locale))) return 'locales contains an unsupported locale';
-  }
   if (key === 'lang' && !supportedLocales(root).has(value)) return 'lang is not a supported locale';
+  if (key === 'regional_format' && value !== 'follow_language' && !supportedLocales(root).has(value)) {
+    return 'regional_format is not a supported locale';
+  }
   return undefined;
 }
 
@@ -143,14 +153,14 @@ export function loadChoices(path, { policy, storageOptions, root = '/' }) {
   const invalidFormat = message => reason(
     'choices_invalid_format',
     message,
-    'Provide a flat JSON object with format_version 1; see contracts/installation-plan.md.',
+    `Provide a flat JSON object with format_version ${CHOICES_FORMAT_VERSION}; choices files of earlier versions are not migrated. See contracts/installation-plan.md.`,
   );
   if (read.error !== undefined) {
     reasons.push(invalidFormat(read.error === 'not_json' ? 'The choices file is not valid JSON.' : 'The choices file cannot be read.'));
     return { values: {}, reasons };
   }
-  if (!isRecord(read.document) || read.document.format_version !== FORMAT_VERSION) {
-    reasons.push(invalidFormat('The choices file must be a JSON object with format_version 1.'));
+  if (!isRecord(read.document) || read.document.format_version !== CHOICES_FORMAT_VERSION) {
+    reasons.push(invalidFormat(`The choices file must be a JSON object with format_version ${CHOICES_FORMAT_VERSION}.`));
     return { values: {}, reasons };
   }
   const values = {};
@@ -163,7 +173,7 @@ export function loadChoices(path, { policy, storageOptions, root = '/' }) {
         'The choices file contains a secret-like key; secrets never travel through this file.',
         'Remove the key; secrets are requested by a protected prompt when the plan is approved and applied.',
       ));
-    } else if (key in policy && !policy[key].editable) {
+    } else if (DERIVED_KEYS.includes(key) || (key in policy && !policy[key].editable)) {
       reasons.push(reason('choices_not_editable', `${key} is fixed by the installation policy and cannot be chosen.`, `Remove ${key} from the choices file.`));
     } else if (!allowed.includes(key)) {
       reasons.push(reason('choices_unknown_key', `${key} is not a known choice.`, `Use only: ${allowed.join(', ')}.`));
@@ -174,6 +184,19 @@ export function loadChoices(path, { policy, storageOptions, root = '/' }) {
     }
   }
   return { values, reasons };
+}
+
+// The hash of the matched profile's definition (targets/<id>/target.json), by the canonical implementation.
+export function loadProfileDefinition(targetsRoot, profileId) {
+  const unavailable = () => ({ reasons: [reason(
+    'facts_invalid',
+    'The facts name a matched profile whose definition this MirrorOS checkout does not provide.',
+    'Rerun operations/install discover with this version of MirrorOS and pass its target-facts.json.',
+  )] });
+  if (typeof profileId !== 'string' || !TARGET_ID_PATTERN.test(profileId)) return unavailable();
+  const read = readOptionalJson(join(targetsRoot, profileId, 'target.json'));
+  if (read.error !== undefined || !isRecord(read.document)) return unavailable();
+  return { sha256: sha256Canonical(read.document), reasons: [] };
 }
 
 export function loadPlanOverride(targetsRoot, targetId, { root = '/' } = {}) {
@@ -210,6 +233,8 @@ export function loadPlanOverride(targetsRoot, targetId, { root = '/' } = {}) {
 }
 
 // Precedence: policy < detected < override < choice. `detected` maps a key to { value, provenance, editable }.
+// A choice equal to the value it would replace is an unchanged proposal and keeps that value's labels.
+// locales and locale_categories are derived here from the resolved lang and regional_format.
 export function resolveValues({ policy, detected = {}, override = {}, choices = {} }) {
   const resolved = {};
   for (const [key, entry] of Object.entries(policy)) {
@@ -222,12 +247,17 @@ export function resolveValues({ policy, detected = {}, override = {}, choices = 
     resolved[key] = { ...resolved[key], value: structuredClone(value), source: 'override' };
   }
   for (const [key, value] of Object.entries(choices)) {
+    if (resolved[key] !== undefined && isDeepStrictEqual(resolved[key].value, value)) continue;
     resolved[key] = {
       value: structuredClone(value),
       provenance: policy[key]?.provenance ?? 'personal_preference',
       source: 'choice',
       editable: policy[key]?.editable ?? true,
     };
+  }
+  const derived = deriveLocalization(resolved.lang.value, resolved.regional_format.value);
+  for (const key of DERIVED_KEYS) {
+    resolved[key] = { value: derived[key], provenance: 'technical_necessity', source: 'policy', editable: false };
   }
   return resolved;
 }

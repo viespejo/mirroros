@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# PATH double for sleep: "sleep 1" (the clock wait of the assistant) returns at once and is logged, so the
+# bounded wait is observable without waiting. Every other duration is delegated to the real sleep.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+if [[ "$*" == 1 ]]; then
+  printf 'sleep %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+  exit 0
+fi
+exec /usr/bin/sleep "$@"

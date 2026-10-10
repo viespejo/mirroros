@@ -13,6 +13,13 @@ DISCOVERY_OVERLAY_B64=''
 DISCOVERY_COMPARISON='not_run'
 DISCOVERY_VERDICT=''
 DISCOVERY_ACTUAL_EXIT=''
+DISCOVERY_AUTOMATIC=0
+DISCOVERY_EXPECTED_PROFILE_JSON='null'
+DISCOVERY_SMBIOS_JSON='null'
+# Synthetic identity of the experimental scenario. Only SMBIOS manufacturer and product change; the normal
+# reference-vm.conf stays as it is.
+DISCOVERY_EXPERIMENTAL_MANUFACTURER='MirrorOS Test'
+DISCOVERY_EXPERIMENTAL_PRODUCT='Unqualified Test Machine'
 DISCOVERY_GUEST_SCRIPT_NAME='discovery-guest.sh'
 DISCOVERY_DISK_BEFORE_NAME='disk-before.qcow2'
 DISCOVERY_LAYOUT_RAW_NAME='layout.raw'
@@ -25,10 +32,15 @@ DISCOVERY_OVERLAY_PATHS=(
   'targets'
 )
 
+# True for the two guided-installer scenarios, which run four isolated boots.
+discovery_is_confirmation() {
+  [[ "$DISCOVERY_SCENARIO" == 'confirmation' || "$DISCOVERY_SCENARIO" == 'confirmation-experimental' ]]
+}
+
 discovery_usage_error() {
   printf 'MirrorOS qualify-discovery: %s\n' "$1" >&2
   printf '%s\n' \
-    'Accepted forms: qualify-discovery --scenario empty|layout|framework-target|plan|confirmation [--development-overlay] BUNDLE_DIRECTORY, qualify-discovery --help.' >&2
+    'Accepted forms: qualify-discovery --scenario empty|layout|framework-target|plan|confirmation|confirmation-experimental [--development-overlay] BUNDLE_DIRECTORY, qualify-discovery --help.' >&2
   return 2
 }
 
@@ -39,6 +51,11 @@ discovery_parse_arguments() {
 
   DISCOVERY_SCENARIO=''
   DISCOVERY_OVERLAY=0
+  DISCOVERY_AUTOMATIC=0
+  DISCOVERY_EXPECTED_PROFILE_JSON='null'
+  DISCOVERY_SMBIOS_JSON='null'
+  LAUNCH_SMBIOS_MANUFACTURER=''
+  LAUNCH_SMBIOS_PRODUCT=''
   while [[ "$#" -gt 0 ]]; do
     case "$1" in
       --scenario)
@@ -63,9 +80,30 @@ discovery_parse_arguments() {
   done
 
   case "$DISCOVERY_SCENARIO" in
-    empty | layout | plan | confirmation)
+    empty | layout | plan)
       DISCOVERY_TARGET='reference-vm'
       DISCOVERY_EXPECTED_EXIT=0
+      ;;
+    confirmation)
+      # Automatic discovery: no --target assertion; the recognized reference VM must be identified.
+      DISCOVERY_TARGET='reference-vm'
+      DISCOVERY_EXPECTED_EXIT=0
+      DISCOVERY_AUTOMATIC=1
+      DISCOVERY_EXPECTED_PROFILE_JSON='{"status":"matched","profile_id":"reference-vm"}'
+      ;;
+    confirmation-experimental)
+      # Automatic discovery on a synthetic SMBIOS identity that matches no defined profile.
+      DISCOVERY_TARGET='none'
+      DISCOVERY_EXPECTED_EXIT=0
+      DISCOVERY_AUTOMATIC=1
+      # shellcheck disable=SC2034 # Read by launch_build_command.
+      LAUNCH_SMBIOS_MANUFACTURER="$DISCOVERY_EXPERIMENTAL_MANUFACTURER"
+      # shellcheck disable=SC2034 # Read by launch_build_command.
+      LAUNCH_SMBIOS_PRODUCT="$DISCOVERY_EXPERIMENTAL_PRODUCT"
+      DISCOVERY_EXPECTED_PROFILE_JSON="$(printf '{"status":"unqualified","sys_vendor":"%s","product_name":"%s"}' \
+        "$DISCOVERY_EXPERIMENTAL_MANUFACTURER" "$DISCOVERY_EXPERIMENTAL_PRODUCT")"
+      DISCOVERY_SMBIOS_JSON="$(printf '{"manufacturer":"%s","product":"%s"}' \
+        "$DISCOVERY_EXPERIMENTAL_MANUFACTURER" "$DISCOVERY_EXPERIMENTAL_PRODUCT")"
       ;;
     framework-target)
       DISCOVERY_TARGET='framework-13-pro-amd'
@@ -161,6 +199,12 @@ discovery_build_overlay() {
   if ! DISCOVERY_OVERLAY_B64="$(
     set -o pipefail
     git -C "$repository_root" ls-files -z --cached --others --exclude-standard -- "${DISCOVERY_OVERLAY_PATHS[@]}" | \
+      while IFS= read -r -d '' overlay_file; do
+        # A tracked file deleted in the working tree is not part of the overlay.
+        if [[ -e "${repository_root}/${overlay_file}" || -L "${repository_root}/${overlay_file}" ]]; then
+          printf '%s\0' "$overlay_file"
+        fi
+      done | \
       tar -C "$repository_root" --null -T - -c --owner=0 --group=0 | base64 -w0
   )" || [[ -z "$DISCOVERY_OVERLAY_B64" ]]; then
     printf '%s\n' 'MirrorOS qualify-discovery: could not archive the working-tree embedded code for the overlay.' >&2
@@ -185,6 +229,8 @@ discovery_write_guest_script() {
     printf "MIRROROS_DISCOVERY_TARGET='%s'\n" "$DISCOVERY_TARGET"
     printf "MIRROROS_DISCOVERY_SCENARIO='%s'\n" "$DISCOVERY_SCENARIO"
     printf "MIRROROS_CONFIRMATION_CASE='%s'\n" "$DISCOVERY_CONFIRMATION_CASE"
+    printf "MIRROROS_DISCOVERY_AUTOMATIC='%s'\n" "$DISCOVERY_AUTOMATIC"
+    printf "MIRROROS_EXPECTED_PROFILE='%s'\n" "$(node -e 'process.stdout.write(JSON.parse(process.argv[1])?.status ?? "")' "$DISCOVERY_EXPECTED_PROFILE_JSON")"
     if [[ "$DISCOVERY_OVERLAY" -eq 1 ]]; then
       printf "MIRROROS_DISCOVERY_OVERLAY_B64='%s'\n" "$DISCOVERY_OVERLAY_B64"
     fi
@@ -239,7 +285,7 @@ discovery_compare_disks() {
       return 5
       ;;
   esac
-  if [[ "$DISCOVERY_SCENARIO" == 'confirmation' && "$DISCOVERY_CONFIRMATION_CASE" == 'layout-change' && "$status" -eq 1 ]]; then
+  if discovery_is_confirmation && [[ "$DISCOVERY_CONFIRMATION_CASE" == 'layout-change' && "$status" -eq 1 ]]; then
     return 0
   fi
   return "$status"
@@ -282,11 +328,12 @@ discovery_evaluate_report() {
 
   # shellcheck disable=SC2034 # Read by discovery_write_result.
   DISCOVERY_VERDICT="$(node --input-type=module - "$report_path" "$run_id" "$evidence_run_dir" \
-    "$DISCOVERY_TARGET" "$DISCOVERY_EXPECTED_EXIT" "$DISCOVERY_SCENARIO" "$DISCOVERY_CONFIRMATION_CASE" <<'NODE'
+    "$DISCOVERY_TARGET" "$DISCOVERY_EXPECTED_EXIT" "$DISCOVERY_SCENARIO" "$DISCOVERY_CONFIRMATION_CASE" \
+    "$DISCOVERY_EXPECTED_PROFILE_JSON" <<'NODE'
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
 
-const [reportPath, runId, evidenceDir, target, expectedText, scenario, confirmationCase] = process.argv.slice(2);
+const [reportPath, runId, evidenceDir, target, expectedText, scenario, confirmationCase, expectedProfileText] = process.argv.slice(2);
 const errors = [];
 let report = null;
 try {
@@ -326,8 +373,9 @@ if (errors.length === 0) {
     errors.push('exit status 0 or 2 requires target-facts.json');
   }
 }
-if (errors.length === 0 && scenario === 'confirmation') {
+if (errors.length === 0 && scenario.startsWith('confirmation')) {
   const confirmation = report.confirmation;
+  const expectedProfile = JSON.parse(expectedProfileText);
   const expected = {
     approve: [2, 'approved', 'engine_not_available'],
     cancel: [3, 'cancelled', undefined],
@@ -341,28 +389,37 @@ if (errors.length === 0 && scenario === 'confirmation') {
     const parse = name => {
       try { return JSON.parse(confirmation.files[name]); } catch { return null; }
     };
-    const run = parse('apply-run.json');
+    const run = parse('install-run.json');
     const approval = parse('approval-record.json');
     const files = Object.entries(confirmation.files);
     if (files.some(([name, content]) => typeof content !== 'string'
       || name.split('/').some(part => !part || part === '.' || part === '..')
       || !/^[a-zA-Z0-9_./-]+$/.test(name))) errors.push('unsafe confirmation evidence path');
+    const sameProfile = profile => isRecord(profile) && profile.status === expectedProfile.status
+      && profile.profile_id === expectedProfile.profile_id;
+    const required = ['install.log', 'discovery/initial/target-facts.json', 'plans/01/installation-plan.json',
+      ...(confirmationCase === 'approve' || confirmationCase === 'layout-change' ? ['discovery/final/target-facts.json'] : [])];
     const checks = {
       exits_as_expected: confirmation.exit_status === expected[0] && run?.exit_status === expected[0],
+      profile_as_expected: sameProfile(run?.profile) && sameProfile(approval?.profile) && sameProfile(report.facts?.profile),
+      machine_identity_as_expected: expectedProfile.sys_vendor === undefined
+        || (run?.machine?.dmi?.sys_vendor === expectedProfile.sys_vendor
+          && run?.machine?.dmi?.product_name === expectedProfile.product_name),
+      evidence_complete: required.every(name => typeof confirmation.files[name] === 'string'),
       outcomes_as_expected: run?.outcome === expected[1] && approval?.outcome === expected[1],
       reason_as_expected: expected[2] === undefined || approval?.reason === expected[2],
       records_agree: run?.run_id === approval?.run_id && run?.final_digest === approval?.digest,
       private_permissions: confirmation.private_permissions === true,
-      plain_log: typeof confirmation.files['apply.log'] === 'string' && !confirmation.files['apply.log'].includes('\u001b'),
+      plain_log: typeof confirmation.files['install.log'] === 'string' && !confirmation.files['install.log'].includes('\u001b'),
       fixture_write: confirmationCase !== 'layout-change' || confirmation.layout_write_status === 0,
     };
     verdict.confirmation = { name: confirmationCase, exit_status: confirmation.exit_status,
-      outcome: approval?.outcome ?? null, reason: approval?.reason ?? null,
+      outcome: approval?.outcome ?? null, reason: approval?.reason ?? null, profile: run?.profile ?? null,
       driver_tail: typeof confirmation.driver_tail === 'string' ? confirmation.driver_tail.slice(-2000) : '', ...checks,
       ok: Object.values(checks).every(Boolean) };
     if (errors.length === 0) {
       for (const [name, content] of files) {
-        const path = `${evidenceDir}/apply/${name}`;
+        const path = `${evidenceDir}/install/${name}`;
         const directory = path.slice(0, path.lastIndexOf('/'));
         mkdirSync(directory, { recursive: true, mode: 0o700 });
         writeFileSync(path, content, { mode: 0o600 });
@@ -552,7 +609,7 @@ discovery_write_result() {
     "$OUTCOME_PRIMARY_STATUS" "$OUTCOME_FAILED_STAGE" "$(discovery_next_action)" "$duration" \
     "$OUTCOME_TEST_COMMIT" "$OUTCOME_TEST_DIRTY" "$QUALIFY_BUNDLE_ADMISSION" \
     "$LAUNCH_VM_CONFIGURATION_JSON" "$LAUNCH_QEMU_VERSION" "$LAUNCH_OVMF_VERSION" \
-    "$DISCOVERY_VERDICT" "$OUTCOME_CLEANUP_OUTCOME" "$OUTCOME_CLEANUP_GUIDANCE" \
+    "$DISCOVERY_VERDICT" "$OUTCOME_CLEANUP_OUTCOME" "$OUTCOME_CLEANUP_GUIDANCE" "$DISCOVERY_SMBIOS_JSON" \
     "${#tool_arguments[@]}" "${tool_arguments[@]}" \
     "${#scan_arguments[@]}" "${scan_arguments[@]}" \
     "${#OUTCOME_LEFTOVERS[@]}" "${OUTCOME_LEFTOVERS[@]}" <<'NODE' || generator_status=$?
@@ -562,9 +619,9 @@ const args = process.argv.slice(2);
 const [
   outputPath, runId, scenario, target, expectedText, comparison, counted, overlay,
   statusText, failedStage, nextAction, durationText, commit, dirtyText, admissionText,
-  vmText, qemuVersion, ovmfVersion, verdictText, cleanupOutcome, guidance,
+  vmText, qemuVersion, ovmfVersion, verdictText, cleanupOutcome, guidance, smbiosText,
 ] = args;
-let cursor = 21;
+let cursor = 22;
 const take = () => {
   const count = Number(args[cursor++]);
   const items = args.slice(cursor, cursor + count);
@@ -604,6 +661,7 @@ const document = {
   development_overlay: overlay === '1',
   counted: counted === 'true',
   vm_configuration: JSON.parse(vmText),
+  ...(smbiosText === 'null' ? {} : { smbios_identity_variation: JSON.parse(smbiosText) }),
   versions: { qemu: qemuVersion, ovmf: ovmfVersion },
   discovery: {
     expected_exit: Number(expectedText),
@@ -613,7 +671,7 @@ const document = {
     stderr_tail: accepted ? verdict.stderr_tail : '',
   },
   ...(scenario === 'plan' && accepted && verdict.plan !== undefined ? { plan: verdict.plan } : {}),
-  ...(scenario === 'confirmation' && accepted && verdict.confirmation !== undefined ? { confirmation: verdict.confirmation } : {}),
+  ...(scenario.startsWith('confirmation') && accepted && verdict.confirmation !== undefined ? { confirmation: verdict.confirmation } : {}),
   disk_identity: { method: 'qemu-img compare', comparison },
   duration_seconds: Number(durationText),
   failed_stage: failedStage || null,

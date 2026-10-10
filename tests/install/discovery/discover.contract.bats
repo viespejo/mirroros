@@ -17,10 +17,63 @@ teardown() {
   discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.network.ready === true"
   discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks.some(x => x.identity.path === '/dev/vda' && x.eligible)"
   discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.hardware.virtualization === 'kvm'"
-  discovery_json_assert "$(discovery_facts_path)" "d.source.commit === 'a'.repeat(40) && d.source.dirty === false && d.source.target_id === 'reference-vm'"
+  discovery_json_assert "$(discovery_facts_path)" "d.source.commit === 'a'.repeat(40) && d.source.dirty === false && d.source.requested_profile_id === 'reference-vm' && d.format_version === 2"
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm'"
   grep -Fq 'Validation: valid' "$STDOUT_PATH"
   [ ! -e "${OUTPUT_DIR}/error.json" ]
   discovery_assert_private_permissions
+}
+
+@test "discover recognizes the reference VM without --target" {
+  discovery_scenario reference-vm-empty
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.validation.status === 'valid'"
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm'"
+  discovery_json_assert "$(discovery_facts_path)" "d.source.requested_profile_id === undefined"
+  grep -Fq 'Profile: matched reference-vm' "$STDOUT_PATH"
+  discovery_assert_private_permissions
+}
+
+@test "discover records an unmatched machine as unqualified without a generic profile" {
+  discovery_scenario synthetic-laptop
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.validation.status === 'valid' && d.profile.status === 'unqualified' && d.profile.profile_id === undefined"
+  discovery_json_assert "$(discovery_facts_path)" "Object.keys(d.layers.target_override.policy).length === 0"
+  grep -Fq 'Profile: unqualified' "$STDOUT_PATH"
+  discovery_assert_no_planted_values
+}
+
+@test "discover does not infer a pending-capture profile for a machine without a defined identity" {
+  discovery_scenario synthetic-laptop
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.profile_id !== 'framework-13-pro-amd'"
+}
+
+@test "discover treats a missing identity field as no match rather than a missing fact" {
+  discovery_scenario reference-vm-empty
+  rm -f -- "${FIXTURE_ROOT}/sys/class/dmi/id/sys_vendor"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.status === 'unqualified' && d.validation.reasons.length === 0"
+  rm -rf -- "$OUTPUT_DIR"
+  discovery_run --target reference-vm --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 2 ]
+  discovery_reason_codes_include target_identity_unobserved
+}
+
+@test "discover rejects two matching profiles as ambiguous and applies no override" {
+  discovery_scenario reference-vm-empty
+  cp -a "${CODE_ROOT}/targets/reference-vm" "${CODE_ROOT}/targets/reference-vm-twin"
+  sed -i 's/"target_id": "reference-vm"/"target_id": "reference-vm-twin"/' "${CODE_ROOT}/targets/reference-vm-twin/target.json"
+  mkdir -p "${CODE_ROOT}/targets/reference-vm/overrides"
+  printf '%s\n' '{"minimum_disk_bytes": 1073741824}' > "${CODE_ROOT}/targets/reference-vm/overrides/discovery.json"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 2 ]
+  discovery_reason_codes_include profile_ambiguous
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.status === 'unqualified' && Object.keys(d.layers.target_override.policy).length === 0"
 }
 
 @test "discover keeps the four layers and tags effective values with their source" {
@@ -104,19 +157,15 @@ EOF
   discovery_run --target framework-13-pro-amd --output "$OUTPUT_DIR"
   [ "$DISCOVERY_STATUS" -eq 2 ]
   discovery_reason_codes_include target_identity_pending_capture
-  discovery_json_assert "$(discovery_facts_path)" "d.source.target_id === 'framework-13-pro-amd'"
+  discovery_json_assert "$(discovery_facts_path)" "d.source.requested_profile_id === 'framework-13-pro-amd' && d.profile.status === 'unqualified'"
 }
 
-@test "discover exits 2 for an unknown target and for a missing target" {
+@test "discover exits 2 for an unknown target" {
   discovery_scenario reference-vm-empty
   discovery_run --target no-such-target --output "$OUTPUT_DIR"
   [ "$DISCOVERY_STATUS" -eq 2 ]
   discovery_reason_codes_include target_unknown
-  rm -rf -- "$OUTPUT_DIR"
-  discovery_run --output "$OUTPUT_DIR"
-  [ "$DISCOVERY_STATUS" -eq 2 ]
-  discovery_reason_codes_include target_missing
-  discovery_json_assert "$(discovery_facts_path)" "d.source.target_id === undefined"
+  discovery_json_assert "$(discovery_facts_path)" "d.source.requested_profile_id === 'no-such-target' && d.profile.status === 'unqualified'"
 }
 
 @test "discover exits 2 for an unsafe target id without echoing it into the document" {
@@ -124,7 +173,7 @@ EOF
   discovery_run --target '../reference-vm' --output "$OUTPUT_DIR"
   [ "$DISCOVERY_STATUS" -eq 2 ]
   discovery_reason_codes_include target_unknown
-  discovery_json_assert "$(discovery_facts_path)" "d.source.target_id === undefined"
+  discovery_json_assert "$(discovery_facts_path)" "d.source.requested_profile_id === undefined"
 }
 
 @test "discover exits 2 for an override with an unknown key or a detected fact" {
@@ -149,6 +198,26 @@ EOF
   [ "$DISCOVERY_STATUS" -eq 0 ]
   discovery_json_assert "$(discovery_facts_path)" "d.effective['policy.https_probe_timeout_seconds'].source === 'override'"
   grep -Fq -- '--max-time 12' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "discover applies the override of an automatically recognized profile before probing the network" {
+  discovery_scenario reference-vm-empty
+  mkdir -p "${CODE_ROOT}/targets/reference-vm/overrides"
+  printf '%s\n' '{"https_probe_timeout_seconds": 12}' > "${CODE_ROOT}/targets/reference-vm/overrides/discovery.json"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.profile_id === 'reference-vm' && d.effective['policy.https_probe_timeout_seconds'].source === 'override'"
+  grep -Fq -- '--max-time 12' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "discover applies no profile override to an unqualified machine" {
+  discovery_scenario synthetic-laptop
+  mkdir -p "${CODE_ROOT}/targets/reference-vm/overrides"
+  printf '%s\n' '{"https_probe_timeout_seconds": 12}' > "${CODE_ROOT}/targets/reference-vm/overrides/discovery.json"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.status === 'unqualified' && d.effective['policy.https_probe_timeout_seconds'].source === 'baseline'"
+  ! grep -Fq -- '--max-time 12' "${DOUBLE_STATE}/calls.log"
 }
 
 @test "discover exits 5 and retains the child status and stderr when lsblk fails" {
@@ -295,6 +364,9 @@ EOF
   grep -Fq 'unsupported argument' "$STDERR_PATH"
   discovery_run --target
   [ "$DISCOVERY_STATUS" -eq 2 ]
+  discovery_run --target ''
+  [ "$DISCOVERY_STATUS" -eq 2 ]
+  grep -Fq -- '--target requires a value' "$STDERR_PATH"
   discovery_run --target reference-vm --target reference-vm
   [ "$DISCOVERY_STATUS" -eq 2 ]
   discovery_run --target reference-vm --output
@@ -306,7 +378,7 @@ EOF
 @test "discover --help prints help and exits 0 without touching the system" {
   discovery_run --help
   [ "$DISCOVERY_STATUS" -eq 0 ]
-  grep -Fq 'Usage: install discover --target <id> [--output <dir>]' "$STDOUT_PATH"
+  grep -Fq 'Usage: install discover [--target <id>] [--output <dir>]' "$STDOUT_PATH"
   grep -Fq 'Normalized exit outcomes:' "$STDOUT_PATH"
   [ ! -s "$STDERR_PATH" ]
   [ ! -s "${DOUBLE_STATE}/calls.log" ]

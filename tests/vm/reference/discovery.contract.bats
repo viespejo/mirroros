@@ -176,10 +176,33 @@ use_matching_bundle() {
   local evidence name
   evidence="$(reference_discovery_evidence_dir)"
   for name in approve cancel mismatch layout-change; do
-    [ -f "${evidence}/${name}/apply/apply-run.json" ]
-    [ -f "${evidence}/${name}/apply/approval-record.json" ]
+    [ -f "${evidence}/${name}/install/install-run.json" ]
+    [ -f "${evidence}/${name}/install/approval-record.json" ]
+    [ -f "${evidence}/${name}/install/install.log" ]
   done
   [ -z "$(find "$evidence" -perm /077)" ]
+  [ "$(reference_result_field confirmation.cases.0.disk_comparison)" == 'identical' ]
+  [ "$(reference_result_field confirmation.cases.3.disk_comparison)" == 'different' ]
+  [ "$(reference_result_field confirmation.cases.0.profile.status)" == 'matched' ]
+  [ "$(reference_result_field confirmation.cases.0.profile.profile_id)" == 'reference-vm' ]
+  [ "$(reference_result_field smbios_identity_variation)" == 'undefined' ]
+  ! grep -q -- '-smbios' "$REFERENCE_CALL_LOG"
+}
+
+@test "confirmation-experimental runs four cases on an unmatched synthetic identity" {
+  use_matching_bundle
+  export REFERENCE_CONFIRMATION_REPORT=1 REFERENCE_DISCOVERY_TARGET='none'
+
+  reference_invoke_discovery --scenario confirmation-experimental "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+  [ "$(reference_result_field confirmation.ok)" == 'true' ]
+  [ "$(reference_result_field counted)" == 'true' ]
+  [ "$(reference_result_field target)" == 'none' ]
+  [ "$(reference_result_field confirmation.cases.0.profile.status)" == 'unqualified' ]
+  [ "$(reference_result_field smbios_identity_variation.manufacturer)" == 'MirrorOS Test' ]
+  [ "$(reference_result_field smbios_identity_variation.product)" == 'Unqualified Test Machine' ]
+  [ "$(grep -c -- '-smbios type=1,manufacturer=MirrorOS Test,product=Unqualified Test Machine' "$REFERENCE_CALL_LOG")" -eq 4 ]
+  [ "$(grep -c 'qemu-img compare' "$REFERENCE_CALL_LOG")" -eq 4 ]
   [ "$(reference_result_field confirmation.cases.0.disk_comparison)" == 'identical' ]
   [ "$(reference_result_field confirmation.cases.3.disk_comparison)" == 'different' ]
 }
@@ -204,6 +227,20 @@ use_matching_bundle() {
   export REFERENCE_CONFIRMATION_MISSING_RECORD=1
   reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
   [ "$REFERENCE_COMMAND_STATUS" -ne 0 ]
+  [ "$(reference_result_field counted)" == 'false' ]
+}
+
+@test "confirmation rejects a misclassified profile and incomplete evidence" {
+  use_matching_bundle
+  export REFERENCE_CONFIRMATION_REPORT=1 REFERENCE_CONFIRMATION_BAD_PROFILE=1
+  reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
+  [ "$(reference_result_field counted)" == 'false' ]
+  unset REFERENCE_CONFIRMATION_BAD_PROFILE
+  rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence"
+  export REFERENCE_CONFIRMATION_MISSING_EVIDENCE=1
+  reference_invoke_discovery --scenario confirmation "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
   [ "$(reference_result_field counted)" == 'false' ]
 }
 
@@ -265,6 +302,19 @@ use_matching_bundle() {
   [ "$(reference_result_field development_overlay)" == 'true' ]
   [ "$(reference_result_field counted)" == 'false' ]
   [[ "$(<"$REFERENCE_STDOUT_PATH")" == *'development overlay (not counted)'* ]]
+}
+
+@test "the development overlay skips a tracked file deleted in the working tree" {
+  use_matching_bundle
+  local tracked
+  tracked="$(git -C "$REFERENCE_REPOSITORY_ROOT" ls-files -- install | head -n 1)"
+  [ -n "$tracked" ]
+  rm -- "${REFERENCE_REPOSITORY_ROOT}/${tracked}"
+
+  reference_invoke_discovery --scenario empty --development-overlay "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+  [ "$(reference_result_field development_overlay)" == 'true' ]
+  [ "$(reference_result_field counted)" == 'false' ]
 }
 
 @test "a dirty test checkout or a dirty or mismatched bundle is never counted" {

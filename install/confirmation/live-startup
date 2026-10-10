@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+# Automatic welcome for the MirrorOS live ISO. Run from the root login path; it only decides whether to
+# start the guided assistant on this login. It carries no confirmation or terminal bypass: the assistant
+# applies its own checks, and cancellation or any ending returns to the shell. mirroros-install restarts it.
+set -u
+
+# Only the first console starts the assistant automatically; other consoles stay plain shells.
+[[ "$(tty 2>/dev/null)" == /dev/tty1 ]] || exit 0
+[[ -t 0 && -t 1 ]] || exit 0
+
+# A qualification boot carries the read-only seed medium and its trigger drives the checks, so the automatic
+# assistant must not run concurrently. Explicit mirroros-install invocations are not affected.
+if blkid -L cidata >/dev/null 2>&1 || blkid -L CIDATA >/dev/null 2>&1; then
+  exit 0
+fi
+
+mirroros-install || true
+exit 0

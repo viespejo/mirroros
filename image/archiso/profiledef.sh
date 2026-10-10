@@ -30,4 +30,5 @@ file_permissions=(
   ["/usr/local/lib/mirroros/install/discovery/discover-storage"]="0:0:755"
   ["/usr/local/lib/mirroros/install/plan/plan"]="0:0:755"
   ["/usr/local/lib/mirroros/install/confirmation/confirm-plan"]="0:0:755"
+  ["/usr/local/lib/mirroros/install/confirmation/live-startup"]="0:0:755"
 )

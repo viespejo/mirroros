@@ -51,11 +51,14 @@ test('an invalid-validation document is still written so it can be inspected', t
 
 test('the summary shows key facts with their provenance and the reasons', () => {
   const summary = renderSummary(discover('secure-boot-unknown'));
-  assert.match(summary, /^Target: reference-vm \(commit a{40}, dirty false\)$/m);
+  assert.match(summary, /^Profile: matched reference-vm \(commit a{40}, dirty false\)$/m);
   assert.match(summary, /^Validation: valid$/m);
   assert.match(summary, /Firmware: uefi \[detected\]/);
   assert.match(summary, /Policy minimum_disk_bytes: 21474836480 \[baseline\]/);
   assert.match(summary, /^Warning secure_boot_unknown:/m);
+
+  const unqualified = renderSummary(discover('synthetic-laptop', { targetId: null }));
+  assert.match(unqualified, /^Profile: unqualified \(experimental; no compatibility or support is promised\) \(commit a{40}, dirty false\)$/m);
 
   const failing = renderSummary(discover('bios'));
   assert.match(failing, /^Validation: invalid$/m);

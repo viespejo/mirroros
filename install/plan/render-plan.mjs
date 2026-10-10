@@ -50,10 +50,20 @@ function orderedChoiceKeys(choices) {
   return [...first, ...rest];
 }
 
+function profileText(profile) {
+  return profile.status === 'matched'
+    ? `matched ${profile.profile_id} (recognized profile; not a qualification of this machine)`
+    : 'unqualified (matches no known profile; installation is experimental)';
+}
+
 function renderTarget(plan) {
-  const { disk } = plan.target;
+  const { disk, machine, profile } = plan.target;
   const lines = [...section('Target', 1)];
-  lines.push(...field('Target', plan.target.target_id));
+  lines.push(...field('Architecture', machine.architecture));
+  if (machine.virtualization !== undefined) lines.push(...field('Virtualization', machine.virtualization));
+  if (machine.dmi?.sys_vendor !== undefined) lines.push(...field('System vendor', machine.dmi.sys_vendor));
+  if (machine.dmi?.product_name !== undefined) lines.push(...field('Product name', machine.dmi.product_name));
+  lines.push(...field('Profile', profileText(profile)));
   for (const [label, key] of [['Disk path', 'path'], ['Disk by-id', 'by_id'], ['WWN', 'wwn'], ['Serial', 'serial'], ['Model', 'model']]) {
     if (disk[key] !== undefined) lines.push(...field(label, disk[key]));
   }
@@ -128,6 +138,9 @@ function renderOperations(plan) {
 function renderSecrets(plan) {
   const lines = [...section('Secret requirements', 5)];
   lines.push(...wrap('Only names are recorded. Values are never stored in the plan.', '  ', '  '));
+  if (plan.secret_requirements.some(secret => secret.required_by.includes('configure_root_account'))) {
+    lines.push(...wrap('The root account receives the same password as the user; it is not an independent recovery credential.', '  ', '  '));
+  }
   for (const secret of plan.secret_requirements) {
     lines.push('', `  ${secret.name}`);
     lines.push(...field('Purpose', secret.purpose, 4));
@@ -168,9 +181,11 @@ function renderDigest(plan) {
   lines.push(...field(`Digest (${plan.digest.algorithm})`, plan.digest.value));
   lines.push(...field('Facts sha256', plan.facts_binding.facts_sha256));
   lines.push(...field('Facts run', plan.facts_binding.run_id));
-  lines.push(...field('Facts target', plan.facts_binding.target_id));
   lines.push(...field('Code commit', `${plan.facts_binding.commit} (dirty ${plan.facts_binding.dirty})`));
   lines.push(...field('Policy sha256', plan.policy_binding.policy_sha256));
+  if (plan.policy_binding.profile_definition_sha256 !== undefined) {
+    lines.push(...field('Profile sha256', plan.policy_binding.profile_definition_sha256));
+  }
   if (plan.policy_binding.override_sha256 !== undefined) lines.push(...field('Override sha256', plan.policy_binding.override_sha256));
   lines.push('');
   lines.push(...wrap('This plan is not approved. Approval is a separate step bound to this digest.', '  ', '  '));
@@ -200,7 +215,7 @@ export function renderSummary(plan, planPath) {
   const option = plan.choices.storage_option;
   const secrets = plan.secret_requirements.map(secret => secret.name).join(', ');
   return [
-    `Target: ${plan.target.target_id}`,
+    `Profile: ${plan.target.profile.status}${plan.target.profile.profile_id === undefined ? '' : ` ${plan.target.profile.profile_id}`}`,
     `Disk: ${disk.by_id ?? disk.path} (${size(disk.size_bytes)})`,
     `Storage option: ${option.value} (${option.tier})`,
     `Destructive operations: ${destructive}`,

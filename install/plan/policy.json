@@ -1,5 +1,5 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "policy": {
     "firmware_mode": {
       "value": "uefi",
@@ -74,13 +74,13 @@
       "provenance": "technical_necessity",
       "editable": false
     },
-    "locales": {
-      "value": ["en_US.UTF-8", "es_ES.UTF-8"],
+    "lang": {
+      "value": "en_US.UTF-8",
       "provenance": "personal_preference",
       "editable": true
     },
-    "lang": {
-      "value": "en_US.UTF-8",
+    "regional_format": {
+      "value": "follow_language",
       "provenance": "personal_preference",
       "editable": true
     },

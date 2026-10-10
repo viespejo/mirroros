@@ -2,8 +2,9 @@
 # PATH double for gum. Every call is logged to gum-calls.log. The prompts (choose, confirm, input,
 # filter) pop the first line of <subcommand>.queue in the double state directory: "<status>" or
 # "<status>|<output>" (output escapes are expanded, so \n separates lines); the status "hang" waits so a
-# test can send a real signal. A <subcommand>.hook file is run once, before the answer. An empty queue is
-# a test failure (status 99). spin runs its command; a first spin.queue line "hang" waits instead.
+# test can send a real signal. A <subcommand>.hook file is run once, before the answer, and a
+# <subcommand>.hook.<n> file is run before the answer to the n-th call (1-based) of that subcommand. An empty
+# queue is a test failure (status 99). spin runs its command; a first spin.queue line "hang" waits instead.
 : "${DOUBLE_STATE:?}"
 subcommand="${1:-}"
 printf '%s\n' "$*" >> "${DOUBLE_STATE}/gum-calls.log"
@@ -21,7 +22,13 @@ pop() {
 
 hook() {
   local file="${DOUBLE_STATE}/${1}.hook"
+  local count
 
+  count="$(( $(cat "${DOUBLE_STATE}/${1}.count" 2> /dev/null || printf 0) + 1 ))"
+  printf '%s' "$count" > "${DOUBLE_STATE}/${1}.count"
+  if [[ -f "${file}.${count}" ]]; then
+    bash "${file}.${count}"
+  fi
   [[ -f "$file" ]] || return 0
   mv -f -- "$file" "${file}.done"
   bash "${file}.done"

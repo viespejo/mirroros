@@ -1,10 +1,31 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "run_id": "20261008T120000Z-11111111-2222-4333-8444-555555555555",
   "timestamp": "2026-10-08T12:00:00Z",
-  "target_id": "reference-vm",
+  "entry": "guided",
+  "machine": {
+    "architecture": "x86_64",
+    "virtualization": "kvm",
+    "dmi": {
+      "sys_vendor": "QEMU",
+      "product_name": "Standard PC (Q35 + ICH9, 2009)"
+    }
+  },
+  "profile": {
+    "status": "matched",
+    "profile_id": "reference-vm"
+  },
   "gum_version": "gum version 2.0.2 (879f048)",
   "approved": true,
+  "stages": [
+    "preparation",
+    "discovery_initial",
+    "plan",
+    "review",
+    "confirmation",
+    "password_explanation",
+    "discovery_final"
+  ],
   "digests": [
     "1ccb58bd115e228bf19caefaa8300c29096b68302281f40730ed2fbb694613d2"
   ],

@@ -6,15 +6,19 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 FLOW_CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
 
 readonly REQUIRED_FILES=(
+  install/confirmation/assistant.mjs
+  install/confirmation/banner.txt
   install/confirmation/cli.mjs
   install/confirmation/compare-safety.mjs
   install/confirmation/edit-choices.mjs
+  install/confirmation/instructions/live-wifi.txt
   install/confirmation/outcomes.mjs
   install/confirmation/review-content.mjs
-  install/confirmation/style.json
   install/confirmation/validate-records.mjs
   install/confirmation/write-records.mjs
   install/confirmation/lib/flow.sh
+  install/confirmation/lib/live.sh
+  install/confirmation/lib/screens.sh
   install/confirmation/lib/ui.sh
   install/discovery/discover
   install/plan/plan
@@ -22,17 +26,19 @@ readonly REQUIRED_FILES=(
 
 print_help() {
   cat <<'EOF'
-MirrorOS install apply — interactive, confirmed installation flow
-Usage: install apply [--plan <file>] [--output <dir>]
-       install apply --help
-Purpose: Choose a target, discover it read-only, generate and edit an installation plan, review it on one dashboard, and require a confirmation bound to the disk and the plan digest.
-Prerequisites: an interactive terminal, Gum 2.x, the prerequisites of install discover, and a ready network.
-Inputs: --plan reviews an existing installation plan instead of generating one; the target comes from the plan. --output names an absent or empty run directory; the default is evidence/install/<run-id>/. No option confirms anything, and none disables the prompts.
-Consequential effects: None in this version. The installation engine is not part of it, so even a valid confirmation changes nothing on the target. No elevation is invoked and no secret value is requested.
-Evidence: apply-run.json, approval-record.json, discovery/initial/, discovery/final/ when reached, plans/NN/ with choices.json, and apply.log.
+MirrorOS install — guided live installer
+Usage: mirroros-install [--plan <file>] [--output <dir>]
+       mirroros-install discover [--target <id>] [--output <dir>]
+       mirroros-install plan --facts <file> [--choices <file>] [--output <dir>]
+       mirroros-install --help
+Purpose: Prepare the live environment, discover the machine automatically, collect the installation choices, generate and review an installation plan, and require a confirmation bound to the machine, the disk, and the plan. The same assistant starts on tty1 of the live ISO.
+Prerequisites: a colored interactive console (TERM set and not dumb, NO_COLOR unset), Gum 2.x, and the prerequisites of discover. The live session runs as root; nothing is reachable without the confirmation.
+Inputs: --plan reviews an existing installation plan of the current format instead of the configuration screens; it is validated, copied, and compared with fresh discovery. --output names an absent or empty run directory; the default is evidence/install/<run-id>/. No option confirms anything, and none disables the prompts.
+Consequential effects: None in this version. The installation engine is not part of it, so even a valid confirmation changes no installation disk. No elevation is invoked and no password or Wi-Fi credential is requested. The live keyboard changes only this live session.
+Evidence: install-run.json, approval-record.json, install.log, discovery/initial/, discovery/final/ when reached, and plans/NN/ with choices.json. Evidence is written with 0700 directories and 0600 files.
 Normalized exit outcomes:
-  2: invalid input, no interactive terminal, or an approved, blocked, or invalidated run
-  3: explicit user cancellation or a confirmation that did not match
+  2: invalid input, no supported terminal, or an approved, blocked, or invalidated run
+  3: explicit user cancellation, including a confirmation that did not match
   5: an external tool failed unexpectedly
   6: damaged embedded code or Gum that is not qualified
 Documentation: docs/procedures/install.md
@@ -40,8 +46,8 @@ EOF
 }
 
 usage_error() {
-  printf 'MirrorOS install apply: %s\n' "$1" >&2
-  printf '%s\n' 'Usage: install apply [--plan <file>] [--output <dir>]; see install apply --help.' >&2
+  printf 'MirrorOS install: %s\n' "$1" >&2
+  printf '%s\n' 'Usage: mirroros-install [--plan <file>] [--output <dir>]; see mirroros-install --help.' >&2
   exit 2
 }
 
@@ -73,26 +79,28 @@ done
 [[ -z "$FLOW_PLAN_ARG" || -f "$FLOW_PLAN_ARG" ]] || usage_error "--plan is not a file: ${FLOW_PLAN_ARG}"
 
 damaged() {
-  printf 'MirrorOS install apply: the embedded MirrorOS code is incomplete or damaged: %s\n' "$1" >&2
-  printf '%s\n' 'Next step: rebuild or re-clone the installation medium and rerun apply.' >&2
+  printf 'MirrorOS install: the embedded MirrorOS code is incomplete or damaged: %s\n' "$1" >&2
+  printf '%s\n' 'Next step: rebuild or re-clone the installation medium and rerun mirroros-install.' >&2
   exit 6
 }
 
-# The terminal check comes first: without a terminal nothing is asked, discovered, or written.
+# The terminal gate comes first: without a supported terminal nothing is asked, discovered, or written.
 # shellcheck disable=SC1091 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
 source "${SCRIPT_DIR}/lib/ui.sh" 2> /dev/null || damaged 'install/confirmation/lib/ui.sh could not be loaded.'
-ui_tty_precheck || exit 2
+ui_terminal_gate || exit 2
 
 for required in "${REQUIRED_FILES[@]}"; do
   [[ -f "${FLOW_CODE_ROOT}/${required}" ]] || damaged "${required} is missing."
 done
 [[ -d "${FLOW_CODE_ROOT}/targets" ]] || damaged 'targets/ is missing.'
 if ! command -v node > /dev/null 2>&1; then
-  printf '%s\n' 'MirrorOS install apply: Node.js is not available.' >&2
-  printf '%s\n' 'Next step: check that nodejs is installed and rerun apply.' >&2
+  printf '%s\n' 'MirrorOS install: Node.js is not available.' >&2
+  printf '%s\n' 'Next step: check that nodejs is installed and rerun mirroros-install.' >&2
   exit 5
 fi
 
-# shellcheck disable=SC1091 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
-source "${SCRIPT_DIR}/lib/flow.sh" 2> /dev/null || damaged 'install/confirmation/lib/flow.sh could not be loaded.'
+for library in live screens flow; do
+  # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
+  source "${SCRIPT_DIR}/lib/${library}.sh" 2> /dev/null || damaged "install/confirmation/lib/${library}.sh could not be loaded."
+done
 flow_main

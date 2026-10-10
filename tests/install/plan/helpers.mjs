@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { loadPlanOverride, loadPlanPolicy } from '../../../install/plan/resolve-choices.mjs';
+import { loadPlanOverride, loadPlanPolicy, loadProfileDefinition } from '../../../install/plan/resolve-choices.mjs';
 import { generatePlan } from '../../../install/plan/generate-plan.mjs';
 import { discover, repository, targetsRoot } from '../discovery/helpers.mjs';
 
@@ -14,12 +14,30 @@ export function facts(name = 'reference-vm-layout') {
   return discover(name);
 }
 
+// The reference VM facts with a vendor that no defined profile declares: valid, but an unqualified machine.
+export function unqualifiedFacts() {
+  return discover('reference-vm-layout', {
+    targetId: null,
+    mutateRaw: raw => { raw.firmware.dmi.sys_vendor = 'Synthetic Vendor'; },
+  });
+}
+
 export function referenceOverride() {
   return loadPlanOverride(targetsRoot, 'reference-vm');
 }
 
-export function generate({ choices = {}, override = referenceOverride(), factsDocument = facts(), policyOverride = policy } = {}) {
-  return generatePlan({ facts: factsDocument, policy: policyOverride, choices: { values: choices }, override });
+export function referenceProfileDefinition() {
+  return loadProfileDefinition(targetsRoot, 'reference-vm');
+}
+
+export function generate({
+  choices = {},
+  override = referenceOverride(),
+  factsDocument = facts(),
+  policyOverride = policy,
+  profileDefinition = referenceProfileDefinition(),
+} = {}) {
+  return generatePlan({ facts: factsDocument, policy: policyOverride, choices: { values: choices }, override, profileDefinition });
 }
 
 export function secondEligibleDisk(document) {

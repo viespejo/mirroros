@@ -65,10 +65,10 @@ function gibibytes(bytes) {
 }
 
 export function renderSummary(document) {
-  const { effective, source, validation } = document;
+  const { effective, source, profile, validation } = document;
   const { firmware, network, storage, hardware } = document.layers.detected;
   const lines = [
-    `Target: ${source.target_id ?? 'unspecified'} (commit ${source.commit}, dirty ${source.dirty})`,
+    `Profile: ${profile.status === 'matched' ? `matched ${profile.profile_id}` : 'unqualified (experimental; no compatibility or support is promised)'} (commit ${source.commit}, dirty ${source.dirty})`,
     `Validation: ${validation.status}`,
     `Firmware: ${describe(effective['firmware.boot_mode'])}, platform ${describe(effective['firmware.platform_bits'])}, Secure Boot ${describe(effective['firmware.secure_boot'])}`,
     `Network: ${describe(effective['network.ready'])}${network.failing_step ? `, failing step ${network.failing_step}` : ''}`,

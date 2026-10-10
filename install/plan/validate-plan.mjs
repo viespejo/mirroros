@@ -2,7 +2,9 @@ import { isRecord, reason } from '../discovery/validate-facts.mjs';
 import { canonicalize } from './canonical-json.mjs';
 import { sha256Canonical, verifyDigest } from './digest-plan.mjs';
 
-export const FORMAT_VERSION = 1;
+export const PLAN_FORMAT_VERSION = 2;
+export const PLAN_POLICY_FORMAT_VERSION = 2;
+export const CHOICES_FORMAT_VERSION = 2;
 export const EXIT_VALID = 0;
 export const EXIT_INVALID_INPUT = 2;
 export const EXIT_UPSTREAM_FAILURE = 5;
@@ -13,10 +15,53 @@ export const SOURCES = ['policy', 'detected', 'override', 'choice'];
 export const STORAGE_OPTIONS = ['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine'];
 export const TIERS = ['default', 'supported', 'experimental'];
 export const ROOT_ACCOUNT_MODES = ['locked', 'password'];
-export const SECRET_NAMES = ['user_password', 'root_password'];
+export const ACCOUNT_PASSWORD = 'account_password';
+export const SECRET_NAMES = [ACCOUNT_PASSWORD];
 export const SECRET_CHANNEL = 'protected_prompt';
 export const MIBIBYTE = 1048576;
 export const SWAPFILE_MIB_RANGE = [512, 65536];
+export const PROFILE_STATUSES = ['matched', 'unqualified'];
+export const LANGUAGES = ['en_US.UTF-8', 'es_ES.UTF-8'];
+export const REGIONAL_FORMATS = ['follow_language', ...LANGUAGES];
+export const FORMAT_CATEGORIES = ['LC_TIME', 'LC_NUMERIC', 'LC_MONETARY', 'LC_MEASUREMENT'];
+export const DERIVED_KEYS = ['locales', 'locale_categories'];
+const MACHINE_DMI_KEYS = ['sys_vendor', 'product_name'];
+
+// The only place where locales and category values are derived from the language and the regional formats.
+export function deriveLocalization(lang, regionalFormat) {
+  const formats = regionalFormat === 'follow_language' ? lang : regionalFormat;
+  return {
+    locales: [...new Set([lang, formats])],
+    locale_categories: { LANG: lang, ...Object.fromEntries(FORMAT_CATEGORIES.map(category => [category, formats])) },
+  };
+}
+
+// The consumers of the single account_password requirement for a root account mode.
+export function accountPasswordConsumers(rootAccount) {
+  return rootAccount === 'password' ? ['create_user', 'configure_root_account'] : ['create_user'];
+}
+
+function projectMachine({ architecture, virtualization, dmi } = {}) {
+  const machine = { architecture };
+  if (virtualization !== undefined) machine.virtualization = virtualization;
+  const kept = {};
+  for (const key of MACHINE_DMI_KEYS) {
+    if (dmi?.[key] !== undefined) kept[key] = dmi[key];
+  }
+  if (Object.keys(kept).length > 0) machine.dmi = kept;
+  return machine;
+}
+
+// The observed safety identity projection of a facts document: architecture, virtualization, and the
+// allowlisted DMI sys_vendor and product_name, each omitted when it was not observed.
+export function machineProjection(facts) {
+  const detected = facts.layers?.detected ?? {};
+  return projectMachine({
+    architecture: detected.hardware?.architecture,
+    virtualization: detected.hardware?.virtualization,
+    dmi: detected.firmware?.dmi,
+  });
+}
 
 export const KINDS = {
   wipe_disk_signatures: true,
@@ -90,16 +135,11 @@ export function operationSequence(storageOption) {
   return sequence === undefined ? undefined : [...sequence];
 }
 
-const SECRET_CONSUMERS = {
-  user_password: 'create_user',
-  root_password: 'configure_root_account',
-};
-
 const NEXT_STEPS = {
   plan_not_json: 'Provide a plan produced by operations/install plan.',
   plan_invalid_type: 'Regenerate the plan with operations/install plan; do not edit it by hand.',
   plan_non_integer_number: 'Regenerate the plan; the format allows integers only.',
-  plan_format_unsupported: 'Regenerate the plan with a tool that supports format_version 1.',
+  plan_format_unsupported: 'Installation plans of earlier versions are not migrated; regenerate the plan from new target facts with operations/install plan.',
   plan_field_missing: 'Regenerate the plan with operations/install plan.',
   plan_label_missing: 'Regenerate the plan; every value needs provenance, source, and editable.',
   plan_unknown_field: 'Regenerate the plan; a plan can never express approval or extra fields.',
@@ -110,9 +150,12 @@ const NEXT_STEPS = {
   operation_id_invalid: 'Regenerate the plan; an operation id equals its kind.',
   operation_destructive_mismatch: 'Regenerate the plan; the destructive flag is fixed per kind.',
   destructive_without_target_disk: 'Choose a target disk and regenerate the plan.',
-  root_account_secret_mismatch: 'Regenerate the plan so root_account and the root_password requirement agree.',
-  secret_consumer_mismatch: 'Regenerate the plan so every secret has its consuming operation and vice versa.',
+  root_account_secret_mismatch: 'Regenerate the plan so root_account and the root consumer of account_password agree.',
+  secret_consumer_mismatch: 'Regenerate the plan so the single account_password requirement has its consuming operations.',
   lang_not_in_locales: 'Choose a lang that is one of the locales and regenerate the plan.',
+  locale_derivation_mismatch: 'Regenerate the plan; locales and locale_categories are derived from lang and regional_format.',
+  machine_identity_mismatch: 'Regenerate the plan from the current target-facts.json.',
+  profile_binding_mismatch: 'Regenerate the plan from the current target-facts.json; the profile classification and its bindings must agree.',
   disk_identity_mismatch: 'Regenerate the plan from the current target-facts.json.',
   disk_not_eligible: 'Choose an eligible disk and regenerate the plan.',
   plan_size_does_not_fit: 'Choose a smaller swapfile_size or a larger disk and regenerate the plan.',
@@ -150,12 +193,14 @@ export const CHOICE_SPECS = {
     value => isInteger(value) && value >= SWAPFILE_MIB_RANGE[0] && value <= SWAPFILE_MIB_RANGE[1],
     `an integer from ${SWAPFILE_MIB_RANGE[0]} to ${SWAPFILE_MIB_RANGE[1]} (MiB)`,
   ),
+  lang: choice(true, value => LANGUAGES.includes(value), `one of ${LANGUAGES.join(', ')}`),
+  regional_format: choice(true, value => REGIONAL_FORMATS.includes(value), `one of ${REGIONAL_FORMATS.join(', ')}`),
   locales: choice(
-    true,
+    false,
     value => isStringList(value) && value.length > 0 && new Set(value).size === value.length,
-    'a non-empty list of unique locales',
+    'a derived non-empty list of unique locales',
   ),
-  lang: choice(true, isString, 'a locale string'),
+  locale_categories: choice(false, value => isRecord(value) && Object.values(value).every(isString), 'a derived object of locale strings'),
   console_keymap: choice(true, isString, 'a keymap string'),
   timezone: choice(true, isString, 'a time zone string'),
   hostname: choice(true, isHostname, 'an RFC 1123 hostname of at most 64 characters'),
@@ -282,9 +327,31 @@ function checkLayout(layout, path, reasons) {
   });
 }
 
+function checkMachine(machine, reasons) {
+  const path = 'plan.target.machine';
+  if (!checkRecord(machine, path, ['architecture'], ['virtualization', 'dmi'], reasons)) return;
+  for (const key of ['architecture', 'virtualization']) {
+    if (machine[key] !== undefined) expect(isString(machine[key]), `${path}.${key}`, 'a non-empty string', reasons);
+  }
+  if (machine.dmi !== undefined && checkRecord(machine.dmi, `${path}.dmi`, [], MACHINE_DMI_KEYS, reasons)) {
+    for (const key of MACHINE_DMI_KEYS) {
+      if (machine.dmi[key] !== undefined) expect(isString(machine.dmi[key]), `${path}.dmi.${key}`, 'a non-empty string', reasons);
+    }
+    expect(Object.keys(machine.dmi).length > 0, `${path}.dmi`, 'omitted when no value was observed', reasons);
+  }
+}
+
+function checkProfile(profile, reasons) {
+  const path = 'plan.target.profile';
+  if (!checkRecord(profile, path, ['status'], ['profile_id'], reasons)) return;
+  if (profile.status !== undefined) expect(PROFILE_STATUSES.includes(profile.status), `${path}.status`, `one of ${PROFILE_STATUSES.join(', ')}`, reasons);
+  if (profile.profile_id !== undefined) expect(isString(profile.profile_id), `${path}.profile_id`, 'a non-empty string', reasons);
+}
+
 function checkTarget(target, reasons) {
-  if (!checkRecord(target, 'plan.target', ['target_id', 'disk'], [], reasons)) return;
-  if (target.target_id !== undefined) expect(isString(target.target_id), 'plan.target.target_id', 'a non-empty string', reasons);
+  if (!checkRecord(target, 'plan.target', ['machine', 'profile', 'disk'], [], reasons)) return;
+  if (target.machine !== undefined) checkMachine(target.machine, reasons);
+  if (target.profile !== undefined) checkProfile(target.profile, reasons);
   const path = 'plan.target.disk';
   if (target.disk === undefined) return;
   if (!checkRecord(target.disk, path, ['eligible', 'current_layout'], DISK_IDENTITY_KEYS, reasons)) return;
@@ -418,16 +485,16 @@ function checkHardware(hardware, reasons) {
 }
 
 function checkBindings(plan, reasons) {
-  if (checkRecord(plan.facts_binding, 'plan.facts_binding', ['facts_sha256', 'run_id', 'target_id', 'commit', 'dirty'], [], reasons)) {
+  if (checkRecord(plan.facts_binding, 'plan.facts_binding', ['facts_sha256', 'run_id', 'commit', 'dirty'], [], reasons)) {
     const binding = plan.facts_binding;
     if (binding.facts_sha256 !== undefined) expect(HEX_64.test(binding.facts_sha256), 'plan.facts_binding.facts_sha256', 'a SHA-256 hex string', reasons);
-    for (const key of ['run_id', 'target_id', 'commit']) {
+    for (const key of ['run_id', 'commit']) {
       if (binding[key] !== undefined) expect(isString(binding[key]), `plan.facts_binding.${key}`, 'a non-empty string', reasons);
     }
     if (binding.dirty !== undefined) expect(typeof binding.dirty === 'boolean', 'plan.facts_binding.dirty', 'a boolean', reasons);
   }
-  if (checkRecord(plan.policy_binding, 'plan.policy_binding', ['policy_sha256'], ['override_sha256'], reasons)) {
-    for (const key of ['policy_sha256', 'override_sha256']) {
+  if (checkRecord(plan.policy_binding, 'plan.policy_binding', ['policy_sha256'], ['profile_definition_sha256', 'override_sha256'], reasons)) {
+    for (const key of ['policy_sha256', 'profile_definition_sha256', 'override_sha256']) {
       if (plan.policy_binding[key] !== undefined) {
         expect(HEX_64.test(plan.policy_binding[key]), `plan.policy_binding.${key}`, 'a SHA-256 hex string', reasons);
       }
@@ -473,30 +540,62 @@ function checkOperationSet(plan, reasons) {
 function checkSecretConsistency(plan, reasons) {
   if (!Array.isArray(plan.secret_requirements) || !Array.isArray(plan.operations)) return;
   const secrets = plan.secret_requirements.filter(isRecord);
-  const names = secrets.map(secret => secret.name);
+  const accountSecrets = secrets.filter(secret => secret.name === ACCOUNT_PASSWORD);
   const ids = new Set(plan.operations.filter(isRecord).map(operation => operation.id));
   const rootAccount = plan.choices?.root_account?.value;
-  if (rootAccount === 'password' && !names.includes('root_password')) {
-    add(reasons, 'root_account_secret_mismatch', 'root_account is "password" but root_password is not a secret requirement.');
+  if (accountSecrets.length !== 1) {
+    add(reasons, 'secret_consumer_mismatch', `The plan must declare exactly one ${ACCOUNT_PASSWORD} requirement; it declares ${accountSecrets.length}.`);
+    return;
   }
-  if (rootAccount === 'locked' && names.includes('root_password')) {
-    add(reasons, 'root_account_secret_mismatch', 'root_account is "locked" but root_password is a secret requirement.');
+  const consumers = accountSecrets[0].required_by;
+  if (!Array.isArray(consumers)) return;
+  const rootExpected = rootAccount === 'password';
+  const rootListed = consumers.includes('configure_root_account');
+  if (rootListed !== rootExpected) {
+    add(reasons, 'root_account_secret_mismatch', rootExpected
+      ? `root_account is "password" but ${ACCOUNT_PASSWORD} is not required by configure_root_account.`
+      : `root_account is "${rootAccount}" but ${ACCOUNT_PASSWORD} is required by configure_root_account.`);
   }
-  if (new Set(names).size !== names.length) {
-    add(reasons, 'secret_consumer_mismatch', 'A secret requirement is declared more than once.');
+  const others = consumers.filter(consumer => consumer !== 'configure_root_account');
+  if (others.length !== 1 || others[0] !== 'create_user' || !ids.has('create_user') || consumers.length !== new Set(consumers).size) {
+    add(reasons, 'secret_consumer_mismatch', `${ACCOUNT_PASSWORD} must be required by the existing operation "create_user", and by configure_root_account only for a root password.`);
   }
-  for (const secret of secrets) {
-    const consumer = SECRET_CONSUMERS[secret.name];
-    if (consumer === undefined || !Array.isArray(secret.required_by)) continue;
-    if (secret.required_by.length !== 1 || secret.required_by[0] !== consumer || !ids.has(consumer)) {
-      add(reasons, 'secret_consumer_mismatch', `${secret.name} must be required by exactly the operation "${consumer}", and that operation must exist.`);
+  if (rootExpected && !ids.has('configure_root_account')) {
+    add(reasons, 'secret_consumer_mismatch', 'Operation "configure_root_account" needs account_password, but that operation does not exist.');
+  }
+}
+
+function sameEntries(left, right) {
+  return JSON.stringify(Object.entries(left).sort()) === JSON.stringify(Object.entries(right).sort());
+}
+
+function checkLocalization(plan, reasons) {
+  const { lang, regional_format: formats, locales, locale_categories: categories } = Object.fromEntries(
+    Object.entries(plan.choices ?? {}).map(([key, entry]) => [key, entry?.value]),
+  );
+  if (Array.isArray(locales) && typeof lang === 'string' && !locales.includes(lang)) {
+    add(reasons, 'lang_not_in_locales', `lang "${lang}" is not one of the locales.`);
+    return;
+  }
+  if (!LANGUAGES.includes(lang) || !REGIONAL_FORMATS.includes(formats) || !isStringList(locales) || !isRecord(categories)) return;
+  const derived = deriveLocalization(lang, formats);
+  if (JSON.stringify(locales) !== JSON.stringify(derived.locales) || !sameEntries(categories, derived.locale_categories)) {
+    add(reasons, 'locale_derivation_mismatch', 'locales and locale_categories do not match what lang and regional_format derive, or LC_ALL is set.');
+  }
+}
+
+function checkProfileBinding(plan, reasons) {
+  const profile = plan.target?.profile;
+  const binding = plan.policy_binding;
+  if (!isRecord(profile) || !isRecord(binding)) return;
+  if (profile.status === 'matched') {
+    if (!isString(profile.profile_id) || binding.profile_definition_sha256 === undefined) {
+      add(reasons, 'profile_binding_mismatch', 'A matched profile needs a profile_id and a profile_definition_sha256 binding.');
     }
-  }
-  if (ids.has('create_user') && !names.includes('user_password')) {
-    add(reasons, 'secret_consumer_mismatch', 'Operation "create_user" needs user_password, which is not declared.');
-  }
-  if (ids.has('configure_root_account') && rootAccount === 'password' && !names.includes('root_password')) {
-    add(reasons, 'secret_consumer_mismatch', 'Operation "configure_root_account" needs root_password, which is not declared.');
+  } else if (profile.status === 'unqualified') {
+    if (profile.profile_id !== undefined || binding.profile_definition_sha256 !== undefined || binding.override_sha256 !== undefined) {
+      add(reasons, 'profile_binding_mismatch', 'An unqualified machine has no profile id, profile definition hash, or override hash.');
+    }
   }
 }
 
@@ -532,9 +631,6 @@ function checkSizes(plan, reasons) {
 function checkFacts(plan, facts, reasons) {
   const binding = plan.facts_binding;
   const target = plan.target;
-  if (isRecord(binding) && isRecord(target) && binding.target_id !== undefined && binding.target_id !== target.target_id) {
-    add(reasons, 'facts_binding_mismatch', 'facts_binding.target_id differs from target.target_id.');
-  }
   if (facts === undefined || !isRecord(binding)) return;
   let hash;
   try {
@@ -546,10 +642,16 @@ function checkFacts(plan, facts, reasons) {
   const source = isRecord(facts.source) ? facts.source : {};
   if (binding.facts_sha256 !== hash
     || binding.run_id !== source.run_id
-    || binding.target_id !== source.target_id
     || binding.commit !== source.commit
     || binding.dirty !== source.dirty) {
     add(reasons, 'facts_binding_mismatch', 'facts_binding does not match the supplied facts document.');
+  }
+  if (isRecord(target?.machine) && JSON.stringify(projectMachine(target.machine)) !== JSON.stringify(machineProjection(facts))) {
+    add(reasons, 'machine_identity_mismatch', 'target.machine differs from the machine observed in the bound facts, including its field availability.');
+  }
+  if (isRecord(target?.profile) && isRecord(facts.profile)
+    && (target.profile.status !== facts.profile.status || target.profile.profile_id !== facts.profile.profile_id)) {
+    add(reasons, 'profile_binding_mismatch', 'target.profile differs from the profile classification of the bound facts.');
   }
   const disks = facts.layers?.detected?.storage?.disks;
   const disk = target?.disk;
@@ -570,8 +672,8 @@ export function validatePlan(plan, { facts } = {}) {
     return reasons;
   }
   walkNumbers(plan, 'plan', reasons);
-  if (plan.format_version !== FORMAT_VERSION) {
-    add(reasons, 'plan_format_unsupported', `format_version must be ${FORMAT_VERSION}.`);
+  if (plan.format_version !== PLAN_FORMAT_VERSION) {
+    add(reasons, 'plan_format_unsupported', `format_version must be ${PLAN_FORMAT_VERSION}.`);
     return reasons;
   }
   checkRecord(plan, 'plan', TOP_LEVEL, [], reasons);
@@ -586,11 +688,8 @@ export function validatePlan(plan, { facts } = {}) {
   checkSecretConsistency(plan, reasons);
   checkDisk(plan, reasons);
   checkSizes(plan, reasons);
-  const locales = plan.choices?.locales?.value;
-  const lang = plan.choices?.lang?.value;
-  if (Array.isArray(locales) && typeof lang === 'string' && !locales.includes(lang)) {
-    add(reasons, 'lang_not_in_locales', `lang "${lang}" is not one of the locales.`);
-  }
+  checkLocalization(plan, reasons);
+  checkProfileBinding(plan, reasons);
   checkFacts(plan, facts, reasons);
   if (isRecord(plan.digest) && HEX_64.test(plan.digest.value ?? '') && plan.digest.algorithm === 'sha256') {
     let matches = false;

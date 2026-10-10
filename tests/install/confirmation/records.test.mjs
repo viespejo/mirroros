@@ -2,7 +2,12 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { RecordContractError, validateApprovalRecord, validateRunRecord } from '../../../install/confirmation/validate-records.mjs';
+import {
+  RECORD_FORMAT_VERSION,
+  RecordContractError,
+  validateApprovalRecord,
+  validateRunRecord,
+} from '../../../install/confirmation/validate-records.mjs';
 import {
   APPROVAL_RECORD_FILE,
   RUN_RECORD_FILE,
@@ -23,6 +28,68 @@ const secretKeyApproval = () => ({ ...fixture('valid-approval.json'), root_passw
 test('the valid fixtures pass', () => {
   assert.deepEqual(validateRunRecord(fixture('valid-run.json')), []);
   assert.deepEqual(validateApprovalRecord(fixture('valid-approval.json')), []);
+});
+
+test('the records are version 2 and the run record is install-run.json', () => {
+  assert.equal(RECORD_FORMAT_VERSION, 2);
+  assert.equal(RUN_RECORD_FILE, 'install-run.json');
+  assert.equal(APPROVAL_RECORD_FILE, 'approval-record.json');
+});
+
+test('records of the earlier format and the fabricated target id are rejected', () => {
+  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), format_version: 1 }).some(item => item.includes('format_version')));
+  assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), format_version: 1 }).some(item => item.includes('format_version')));
+  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), target_id: 'reference-vm' }).some(item => item.includes('target_id')));
+  assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), target_id: 'reference-vm' }).some(item => item.includes('target_id')));
+});
+
+test('the approval record has no field that could grant permission', () => {
+  for (const key of ['approved', 'authorized', 'authorization', 'permit', 'valid_until']) {
+    assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), [key]: true }).some(item => item.includes(key)), key);
+  }
+});
+
+test('the entry is guided or plan_file', () => {
+  for (const entry of ['guided', 'plan_file']) assert.deepEqual(validateRunRecord({ ...fixture('valid-run.json'), entry }), []);
+  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), entry: 'apply' }).length > 0);
+});
+
+test('the stages are known, unique, and in flow order', () => {
+  const run = fixture('valid-run.json');
+  assert.deepEqual(validateRunRecord({ ...run, stages: [] }), []);
+  assert.deepEqual(validateRunRecord({ ...run, stages: ['preparation', 'plan'] }), []);
+  assert.ok(validateRunRecord({ ...run, stages: ['plan', 'preparation'] }).length > 0);
+  assert.ok(validateRunRecord({ ...run, stages: ['plan', 'plan'] }).length > 0);
+  assert.ok(validateRunRecord({ ...run, stages: ['apply'] }).length > 0);
+  assert.ok(validateRunRecord({ ...run, stages: 'plan' }).length > 0);
+});
+
+test('the machine projection is strict in both records', () => {
+  for (const [name, validate, document] of [
+    ['run', validateRunRecord, fixture('valid-run.json')],
+    ['approval', validateApprovalRecord, fixture('valid-approval.json')],
+  ]) {
+    const withMachine = machine => ({ ...document, machine });
+    assert.deepEqual(validate(withMachine({ architecture: 'x86_64' })), [], name);
+    assert.ok(validate(withMachine({})).length > 0, name);
+    assert.ok(validate(withMachine({ architecture: 'x86_64', serial: 'PLANTED' })).some(item => item.includes('serial')), name);
+    assert.ok(validate(withMachine({ architecture: 'x86_64', dmi: {} })).length > 0, name);
+    assert.ok(validate(withMachine({ architecture: 'x86_64', dmi: { product_serial: 'X' } })).length > 0, name);
+    assert.ok(validate(withMachine({ architecture: 'x86_64', dmi: { sys_vendor: '' } })).length > 0, name);
+  }
+});
+
+test('a matched profile needs its id and an unqualified profile has none', () => {
+  for (const [validate, document] of [
+    [validateRunRecord, fixture('valid-run.json')],
+    [validateApprovalRecord, fixture('valid-approval.json')],
+  ]) {
+    assert.deepEqual(validate({ ...document, profile: { status: 'unqualified' } }), []);
+    assert.ok(validate({ ...document, profile: { status: 'unqualified', profile_id: 'reference-vm' } }).length > 0);
+    assert.ok(validate({ ...document, profile: { status: 'matched' } }).length > 0);
+    assert.ok(validate({ ...document, profile: { status: 'pending', profile_id: 'x' } }).length > 0);
+    assert.ok(validate({ ...document, profile: { status: 'matched', profile_id: 'reference-vm', qualified: true } }).length > 0);
+  }
 });
 
 test('unknown fields are rejected', () => {
@@ -56,7 +123,7 @@ test('exit status must agree with the outcome and 0 is never valid', () => {
 
 test('required fields, formats, and the final digest are checked', () => {
   const run = fixture('valid-run.json');
-  for (const key of ['run_id', 'timestamp', 'digests', 'exit_status', 'outcome', 'reasons', 'format_version']) {
+  for (const key of ['run_id', 'timestamp', 'entry', 'stages', 'digests', 'exit_status', 'outcome', 'reasons', 'format_version']) {
     const copy = clone(run);
     delete copy[key];
     assert.ok(validateRunRecord(copy).length > 0, key);
@@ -74,10 +141,10 @@ test('required fields, formats, and the final digest are checked', () => {
 
 test('a run without a plan has no digest and no disk', () => {
   const run = buildRunRecord({
-    runId: 'r', timestamp: '2026-10-08T12:00:00Z', digests: [], exitStatus: 2, outcome: 'blocked', reasons: [],
+    runId: 'r', timestamp: '2026-10-08T12:00:00Z', entry: 'guided', stages: [], digests: [], exitStatus: 2, outcome: 'blocked', reasons: [],
   });
   assert.deepEqual(validateRunRecord(run), []);
-  assert.ok(!('final_digest' in run) && !('target_id' in run));
+  assert.ok(!('final_digest' in run) && !('machine' in run) && !('profile' in run) && !('gum_version' in run));
   const approval = buildApprovalRecord({ runId: 'r', timestamp: '2026-10-08T12:00:00Z', outcome: 'blocked' });
   assert.deepEqual(validateApprovalRecord(approval), []);
   assert.deepEqual(Object.keys(approval), ['format_version', 'run_id', 'timestamp', 'outcome']);
@@ -124,8 +191,9 @@ test('the canary never reaches disk through the records', () => {
 
 test('choices files are written 0600 and reject secret keys', () => {
   const directory = join(scratch, 'plans', '01');
-  const path = writeChoices(directory, { format_version: 1, hostname: 'laptop' });
+  const path = writeChoices(directory, { format_version: 2, hostname: 'laptop' });
   assert.equal(mode(path), 0o600);
-  assert.throws(() => writeChoices(directory, { format_version: 1, user_password: CANARY }, 'bad.json'), RecordContractError);
+  assert.throws(() => writeChoices(directory, { format_version: 2, user_password: CANARY }, 'bad.json'), RecordContractError);
+  assert.throws(() => writeChoices(directory, { format_version: 1, hostname: 'laptop' }, 'old.json'), RecordContractError);
   assert.ok(!existsSync(join(directory, 'bad.json')));
 });

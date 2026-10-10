@@ -140,7 +140,7 @@ MirrorOS is a personal product and has no revenue, acquisition, or public-adopti
 
 **Approach:** Complete-experience, problem-solving MVP.
 
-MirrorOS must validate its core promise end to end: a blank supported device becomes the user's verified daily working environment. The MVP limits breadth rather than removing lifecycle stages: one user, one reference VM, one target laptop, one provisional desktop stack, and one frozen daily-work capability inventory.
+MirrorOS must validate its core promise end to end: a blank supported device becomes the user's verified daily working environment. The MVP limits breadth rather than removing lifecycle stages: one user, one reference VM, one target laptop, one provisional desktop stack, and one frozen daily-work capability inventory. Technically admissible machines that match no known profile may attempt installation through an explicitly experimental path, without a compatibility guarantee or support commitment.
 
 Lifecycle stages remain independently invocable, but a unified CLI is not mandatory. Existing tools, task runners, or small scripts may provide the conceptual build, test, install, configure, and verify boundaries when they satisfy the requirements more simply.
 

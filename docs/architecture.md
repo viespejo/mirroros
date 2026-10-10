@@ -29,7 +29,7 @@ The PRD defines 65 functional requirements across seven capability areas:
 - **Lifecycle execution and artifact management (FR1–FR9):** MirrorOS must expose independently invocable build, test, install, configure, and verify stages while also supporting a documented end-to-end reconstruction journey. Each stage requires discoverable inputs, observable progress, useful outputs, and distinguishable exit outcomes.
 - **Installation planning and safety (FR10–FR19):** Installation must inspect the target, produce a reviewable and editable plan, explain the provenance of defaults, and require explicit confirmation for destructive, ambiguous, or secret-related operations. Cancellation and failed verification must never be represented as success.
 - **Environment declaration and configuration (FR20–FR31):** The environment must be represented as readable, modular, validatable, and repeatable declarations. Portable configuration, hardware-derived choices, privileged changes, secret references, and private state require explicit separation. Configuration must remain independently applicable and idempotent.
-- **Hardware adaptation (FR32–FR36):** Hardware decisions must be capability-based, inspectable, and isolated from portable workflow declarations. MVP support is limited to the reference VM and target laptop.
+- **Hardware adaptation (FR32–FR36):** Hardware decisions must be capability-based, inspectable, and isolated from portable workflow declarations. MVP support is limited to the reference VM and target laptop. Experimental admission of other machines is not qualification or a support commitment.
 - **Capability verification and reporting (FR37–FR45):** Every declared MVP capability requires readiness checks and an explicit passed, failed, or externally blocked state. Verification must be independently runnable and capable of producing concise human output, complete evidence, and an optional structured summary.
 - **Diagnostics and recovery (FR46–FR53):** Lifecycle failures require persistent evidence, bounded execution, safe retry semantics, renewed confirmation for destructive retries, documented recovery, and an independent rescue path.
 - **Ongoing evolution and maintainability (FR54–FR65):** The repository remains the authoritative environment definition. Changes must be reviewable, testable, modular, and organized around user capabilities rather than permanently coupled tool choices.
@@ -43,7 +43,7 @@ The PRD defines 52 non-functional requirements across six categories:
 - **Performance (NFR1–NFR5):** The provisional reconstruction target is under two hours, measured under documented conditions, with visible progress for long-running operations.
 - **Security and privacy (NFR6–NFR14):** The repository and generated artifacts must remain free of secrets and personal content. Privileges must be narrowly bounded, destructive targets explicitly confirmed, package provenance complete, and artifacts traceable to source state.
 - **Reliability and recoverability (NFR15–NFR26):** Clean-clone builds, VM qualification, configuration idempotency, explicit verification states, bounded failures, safe retries, persistent diagnostics, zero undocumented steps, and an independent rescue path are acceptance conditions.
-- **Portability and compatibility (NFR27–NFR33):** MVP compatibility is deliberately limited to one VM and one laptop. Hardware adaptation and Niri-specific configuration must remain isolated, while artifact metadata must preserve enough upstream state for diagnosis.
+- **Portability and compatibility (NFR27–NFR33):** MVP compatibility is deliberately limited to one VM and one laptop. Experimental admission of other machines is not qualification or a support commitment. Hardware adaptation and Niri-specific configuration must remain isolated, while artifact metadata must preserve enough upstream state for diagnosis.
 - **Maintainability and simplicity (NFR34–NFR40):** One maintainer must be able to understand and operate the complete lifecycle. Custom abstractions require demonstrated recurring value, and proprietary configuration formats are disfavored.
 - **Upstream integration and operational transparency (NFR41–NFR52):** Upstream failures must retain diagnostic fidelity, wrappers must preserve failure semantics, lifecycle outcomes require stable exit statuses, and architecture commitments remain gated by research and prototype evidence.
 
@@ -69,7 +69,7 @@ MirrorOS has a narrow product and organizational scope but significant systems-e
 - Archiso is the expected image-construction baseline, but final integration details remain subject to research.
 - Native Arch installation commands are the installation engine, selected by [ADR 0002](adr/0002-installation-engine-selection.md); Archinstall is not selected.
 - QEMU/KVM or an equivalent disposable virtualization environment is required for pre-hardware validation.
-- The MVP support boundary is one reference VM and one target laptop; broader hardware compatibility is explicitly excluded.
+- The MVP support boundary is one reference VM and one target laptop; broader hardware compatibility is explicitly excluded. Experimental admission of other machines is not qualification or a support commitment.
 - The installation medium must remain minimal, while personal environment configuration evolves independently.
 - Build, test, install, configure, and verify must remain independently invocable even if no unified executable is created.
 - Existing tools and supported configuration mechanisms take precedence over custom applications, services, formats, or control planes.
@@ -301,7 +301,7 @@ MirrorOS exposes no remote product API and introduces no application-specific au
 
 **Privilege model:**
 
-- Lifecycle orchestration begins unprivileged.
+- Lifecycle orchestration begins unprivileged. The live installer is the exception: it runs in the live ISO's root session ([ADR 0006](adr/0006-guided-live-installation-boundaries.md)). Root privilege does not authorize destructive operations, and installed-user configuration never inherits it.
 - Build, storage, installation, and system-configuration operations elevate independently at the narrowest viable boundary.
 - User configuration never inherits root privileges for convenience.
 - The complete workflow must not run under a single persistent privileged session.
@@ -451,6 +451,8 @@ Each command documents its purpose, prerequisites, inputs, consequential effects
 5. Permit cancellation without changes.
 6. Require confirmation bound to the target and plan digest.
 
+Machine profiles are identified internally and never selected by the user; an unqualified machine proceeds through an explicitly experimental path ([ADR 0006](adr/0006-guided-live-installation-boundaries.md)).
+
 MirrorOS introduces no custom TUI. [Gum](https://github.com/charmbracelet/gum) is the interactive presentation layer ([ADR 0004](adr/0004-interactive-presentation-with-gum.md)): it only presents and collects input, and the plan, its digest, and `install/engine/apply` do not depend on it. The native installation engine ([ADR 0002](adr/0002-installation-engine-selection.md)) provides no interaction model of its own; the wrappers required by ADR 0004 keep this contract when Gum is used.
 
 **Terminal output:**
@@ -462,7 +464,8 @@ MirrorOS introduces no custom TUI. [Gum](https://github.com/charmbracelet/gum) i
 - Progress does not depend on animation.
 - Color never carries meaning alone.
 - Commands respect non-interactive terminals and `NO_COLOR`.
-- A styled header or welcome is allowed only in interactive TTY sessions of `install` and `configure`; it is suppressed in non-interactive mode, without a TTY, and in logs. MirrorOS adds no persistent healthy-state notifications.
+- The guided live installer supports only the colored interactive live console and rejects `NO_COLOR`, `TERM=dumb`, and non-interactive terminals ([ADR 0006](adr/0006-guided-live-installation-boundaries.md)).
+- A styled header or welcome is allowed only in interactive TTY sessions of `install` and `configure`; it is suppressed in non-interactive mode, without a TTY, and in logs. The live ISO opens the guided installer's welcome on tty1 automatically; this grants no authorization. MirrorOS adds no persistent healthy-state notifications.
 
 **Desktop boundary:**
 

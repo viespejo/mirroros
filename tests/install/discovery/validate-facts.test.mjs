@@ -24,9 +24,24 @@ test('unknown fields are rejected at every level', () => {
 });
 
 test('format version and required sections are enforced', () => {
-  assert.match(mutated(d => { d.format_version = 2; }).join('\n'), /format_version must be one of/);
+  assert.match(mutated(d => { d.format_version = 1; }).join('\n'), /format_version must be one of: 2/);
+  assert.match(mutated(d => { delete d.profile; }).join('\n'), /profile is required/);
   assert.match(mutated(d => { delete d.layers.runtime_private; }).join('\n'), /runtime_private is required/);
   assert.match(mutated(d => { delete d.validation; }).join('\n'), /validation is required/);
+});
+
+test('the profile classification is consistent with its identifier', () => {
+  assert.deepEqual(mutated(d => { d.profile = { status: 'matched', profile_id: 'reference-vm' }; }), []);
+  assert.match(mutated(d => { d.profile = { status: 'matched' }; }).join('\n'), /profile_id is required for a matched profile/);
+  assert.match(mutated(d => { d.profile = { status: 'unqualified', profile_id: 'reference-vm' }; }).join('\n'), /must be omitted for an unqualified machine/);
+  assert.match(mutated(d => { d.profile = { status: 'generic' }; }).join('\n'), /profile\.status must be one of/);
+  assert.match(mutated(d => { d.profile = { status: 'unqualified', name: 'x' }; }).join('\n'), /profile\.name is not an allowed field/);
+  assert.match(mutated(d => { d.source.requested_profile_id = '../x'; }).join('\n'), /not a valid profile id/);
+  assert.match(mutated(d => {
+    d.source.requested_profile_id = 'framework-13-pro-amd';
+    d.profile = { status: 'matched', profile_id: 'reference-vm' };
+  }).join('\n'), /must equal source\.requested_profile_id/);
+  assert.match(mutated(d => { d.source.target_id = 'reference-vm'; }).join('\n'), /source\.target_id is not an allowed field/);
 });
 
 test('status must agree with the reasons', () => {

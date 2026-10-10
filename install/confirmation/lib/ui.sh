@@ -1,176 +1,113 @@
 #!/usr/bin/bash
-# shellcheck disable=SC2034 # State variables are read by the flow library that sources this file.
-# Gum presentation layer of the interactive installation flow (ADR 0004).
+# shellcheck disable=SC2034 # Presentation state is read by the screen and flow libraries that source this file.
+# Presentation layer of the guided live installer (ADR 0006, contracts/installation-confirmation.md).
 #
-# Gum only presents and collects input here; nothing in this file plans, digests, or applies anything.
-# Each ui_* wrapper is a named adaptation of native Gum behavior recorded in ADR 0004. Confirmations
-# never default to yes. Styling uses the grayscale palette of the frontend contract check: titles and
-# selection 255, accents 250, explanatory text 248, borders and idle items 245; no hue.
+# Reproduces the frozen reference in prototypes/frontend/guided-installer/: the two-tone logo, the Tokyo Night
+# console palette, the centering, the Gum widget settings, and the step() screen. Presentation text and
+# behavior adapted from omacom/omarchy-iso; see install/confirmation/UPSTREAM.md and docs/attribution.md.
+# Nothing here plans, digests, or applies anything, and nothing sources the prototype or any Omarchy code.
 #
-# Statuses follow the normalized exit statuses. Ctrl+C (Gum status 130) is returned unmapped by the
-# wrappers; the orchestrator maps it to cancellation only inside the interactive phase.
+# Gum only presents and collects input. Statuses follow Gum: 0 accepted, 1 Esc or decline, 130 Ctrl+C.
 
-UI_ACTION=''
-UI_VALUE=''
-UI_NATIVE_STATUS=''
+LOGO_PATH=''
+LOGO_WIDTH=0
+TERM_WIDTH=80
+PADDING_LEFT=0
+PADDING_LEFT_SPACES=''
+LOGO_PADDING_LEFT=0
+PADDING='0 0 0 0'
 
 ui_interactive() {
   [[ -t 0 && -t 1 ]]
 }
 
-# NO_COLOR (non-empty) and TERM=dumb select the colorless profile.
-ui_colorless() {
-  [[ -n "${NO_COLOR:-}" || "${TERM:-}" == dumb ]]
-}
-
-# Wrapper tty_precheck: native gum confirm and gum choose return 1 without a terminal, which looks like
-# a decline. A missing terminal fails with 2 before anything is asked.
-ui_tty_precheck() {
+# The supported presentation is the colored interactive console of the live ISO. There is no colorless
+# variant, and no variable or option fakes a terminal (ADR 0006). Exits 2 with a message and no side effects.
+ui_terminal_gate() {
   if ! ui_interactive; then
     printf '%s\n' \
-      'MirrorOS install apply: stdin or stdout is not an interactive terminal.' \
-      'Next step: run apply from an interactive terminal; nothing was confirmed.' >&2
+      'MirrorOS install: stdin or stdout is not an interactive terminal.' \
+      'Next step: run mirroros-install from an interactive console; nothing was asked or changed.' >&2
+    return 2
+  fi
+  if [[ -z "${TERM:-}" || "${TERM:-}" == dumb ]]; then
+    printf '%s\n' \
+      'MirrorOS install: the terminal type is unset or dumb, which is outside the supported colored live console.' \
+      'Next step: run mirroros-install from a colored live console (for example TERM=linux); nothing was asked or changed.' >&2
+    return 2
+  fi
+  if [[ -n "${NO_COLOR:-}" ]]; then
+    printf '%s\n' \
+      'MirrorOS install: NO_COLOR requests a colorless interface, which is outside the supported colored live console.' \
+      'Next step: unset NO_COLOR and rerun mirroros-install; nothing was asked or changed.' >&2
     return 2
   fi
 }
 
-# Wrapper tty_gate: styled decoration exists only with an interactive terminal.
-ui_tty_gate() {
-  ui_interactive
+# Centers the logo and the guide as one block with a shared left edge.
+measure_terminal() {
+  TERM_WIDTH=$(stty size 2> /dev/null < /dev/tty | awk '{print $2}') || TERM_WIDTH=''
+  [[ "$TERM_WIDTH" =~ ^[0-9]+$ ]] && (( TERM_WIDTH > 0 )) || TERM_WIDTH=${COLUMNS:-80}
+
+  local guide_width=$LOGO_WIDTH
+  if (( guide_width > TERM_WIDTH )); then guide_width=$TERM_WIDTH; fi
+  PADDING_LEFT=$(((TERM_WIDTH - guide_width) / 2))
+  PADDING_LEFT_SPACES=$(printf '%*s' "$PADDING_LEFT" '')
+  LOGO_PADDING_LEFT=$PADDING_LEFT
+
+  PADDING="0 0 0 $PADDING_LEFT"
+  export GUM_CHOOSE_PADDING="$PADDING"
+  export GUM_FILTER_PADDING="$PADDING"
+  export GUM_INPUT_PADDING="$PADDING"
+  export GUM_SPIN_PADDING="$PADDING"
+  export GUM_TABLE_PADDING="$PADDING"
+  export GUM_CONFIRM_PADDING="$PADDING"
 }
 
-# Wrapper confirm_status_map: native gum confirm returns 1 for both a decline and Esc. Both map to 3.
-# The Ctrl+C status is returned unmapped.
-ui_confirm_status_map() {
-  case "$1" in
-    0) return 0 ;;
-    1) return 3 ;;
-    130) return 130 ;;
-    *) return 5 ;;
-  esac
+clear_logo() {
+  measure_terminal
+  printf '\033[H\033[2J'
+  local row white=$'\033[97m' blue=$'\033[34m'
+  printf '\n\n'
+  while IFS= read -r row || [[ -n $row ]]; do
+    printf '%*s%s%s%s%s\033[0m\n' "$LOGO_PADDING_LEFT" '' "$blue" "${row:0:60}" "$white" "${row:60}"
+  done < "$LOGO_PATH"
 }
 
-# Wrapper colorless_confirm: with NO_COLOR or TERM=dumb, gum confirm shows no cue for the focused
-# button. The confirmation is asked with gum choose, whose cursor is the text "> ", and the safe answer
-# is first. The native status is left in UI_NATIVE_STATUS.
-ui_colorless_confirm() {
-  local prompt="$1"
-  local answer
-  local status=0
+# One screen: the logo, a blank line, the title, and a blank line.
+step() {
+  clear_logo
+  echo
+  gum style --padding "0 0 0 $PADDING_LEFT" "$1"
+  echo
+}
 
-  answer="$(gum choose --header "$prompt" --cursor '> ' 'No, cancel' 'Yes, apply')" || status=$?
-  if [[ "$status" -eq 0 && "$answer" != 'Yes, apply' ]]; then
-    status=1
+# Sets up the colored presentation. Arguments: the directory that holds banner.txt.
+ui_setup() {
+  LOGO_PATH="$1/banner.txt"
+  [[ -r "$LOGO_PATH" ]] || return 6
+  LOGO_WIDTH=$(awk '{ if (length > max) max = length } END { print max+0 }' "$LOGO_PATH")
+  export LOGO_PATH LOGO_WIDTH
+  export GUM_CONFIRM_PROMPT_FOREGROUND=6
+  export GUM_CONFIRM_SELECTED_FOREGROUND=0
+  export GUM_CONFIRM_SELECTED_BACKGROUND=2
+  export GUM_CONFIRM_UNSELECTED_FOREGROUND=7
+  export GUM_CONFIRM_UNSELECTED_BACKGROUND=0
+  export GUM_INPUT_PROMPT_FOREGROUND="${GUM_CHOOSE_HEADER_FOREGROUND:-99}"
+  export GUM_INPUT_CURSOR_FOREGROUND="${GUM_CHOOSE_CURSOR_FOREGROUND:-212}"
+  export CLICOLOR_FORCE=1 FORCE_COLOR=1
+  COLUMNS=$(tput cols 2> /dev/null) || COLUMNS=80
+  LINES=$(tput lines 2> /dev/null) || LINES=24
+  export COLUMNS LINES
+  measure_terminal
+  # The Tokyo Night VT palette. It changes only a real virtual console.
+  if [[ $(tty) == /dev/tty* ]]; then
+    printf '\e]P01a1b26\e]P1f7768e\e]P29ece6a\e]P3e0af68\e]P47aa2f7\e]P5bb9af7\e]P67dcfff\e]P7a9b1d6'
+    printf '\e]P8414868\e]P9f7768e\e]PA9ece6a\e]PBe0af68\e]PC7aa2f7\e]PDbb9af7\e]PE7dcfff\e]PFc0caf5\033[0m'
   fi
-  UI_NATIVE_STATUS=$status
 }
 
-# Wrapper spin_plain_fallback: without an interactive terminal a stage is announced as plain text and
-# run directly.
-ui_spin_plain_fallback() {
-  local title="$1"
-  local status=0
-
-  shift
-  printf 'Stage: %s\n' "$title"
-  "$@" > /dev/null || status=$?
-  return "$status"
-}
-
-# Wrapper stage_status_normalization: an unexpected status of a stage is reported with its stage, reason,
-# and next action, and normalized to 5. The original status is shown.
-ui_stage_status_normalization() {
-  local title="$1"
-  local original="$2"
-  local next_action="$3"
-
-  printf '%s\n' \
-    "Stage failed: ${title}" \
-    "Reason: the operation exited with status ${original} (normalized to 5)." \
-    "Next action: ${next_action}" >&2
-  return 5
-}
-
-# Maps the status of a Gum prompt for one phase (menu, edit, confirm, name) to UI_ACTION. Gum returns 1
-# for decline and Esc, and 130 for Ctrl+C. Esc inside an edit widget goes back to the dashboard; every
-# other decline or Esc cancels.
-ui_map_status() {
-  case "$1" in
-    0) UI_ACTION=proceed ;;
-    130) UI_ACTION=cancel ;;
-    1)
-      if [[ "$2" == edit ]]; then
-        UI_ACTION=back
-      else
-        UI_ACTION=cancel
-      fi
-      ;;
-    *) UI_ACTION=fail ;;
-  esac
-}
-
-ui_header() {
-  ui_tty_gate || return 0
-  gum style --border rounded --border-foreground 245 --bold --padding '0 2' 'MirrorOS installation'
-}
-
-ui_note() {
-  gum style --foreground 248 "$1"
-}
-
-# Renders Markdown with the project grayscale glamour style.
-ui_format() {
-  gum format --theme "$1"
-}
-
-# Arguments: header, then the items. Leaves the selection in UI_VALUE and returns the Gum status.
-ui_choose() {
-  local header="$1"
-  local status=0
-
-  shift
-  UI_VALUE="$(gum choose --cursor '> ' --header.foreground 255 --cursor.foreground 255 \
-    --selected.foreground 255 --item.foreground 245 --header "$header" "$@")" || status=$?
-  return "$status"
-}
-
-# Arguments: header, the newline-separated list, then extra Gum options (for example --no-limit).
-ui_filter() {
-  local header="$1"
-  local list="$2"
-  local status=0
-
-  shift 2
-  UI_VALUE="$(gum filter --header "$header" --header.foreground 255 --indicator.foreground 255 \
-    --match.foreground 255 --prompt.foreground 250 --text.foreground 248 \
-    --placeholder 'Type to filter...' --placeholder.foreground 245 "$@" <<< "$list")" || status=$?
-  return "$status"
-}
-
-# Arguments: header, placeholder. Never used for secrets: no password input exists in this flow.
-ui_input() {
-  local status=0
-
-  UI_VALUE="$(gum input --header "$1" --placeholder "$2" --header.foreground 255 \
-    --prompt.foreground 250 --cursor.foreground 255 --placeholder.foreground 245)" || status=$?
-  return "$status"
-}
-
-# Arguments: prompt. Returns 0 yes, 3 decline or Esc, 2 without an interactive terminal, 130 unmapped.
-ui_confirm() {
-  local prompt="$1"
-  local native=0
-
-  UI_NATIVE_STATUS=''
-  ui_tty_precheck || return 2
-  if ui_colorless; then
-    ui_colorless_confirm "$prompt"
-    native=$UI_NATIVE_STATUS
-  else
-    gum confirm --default=false --affirmative 'Yes, apply' --negative 'No, cancel' \
-      --prompt.foreground 248 --selected.foreground 0 --selected.background 255 \
-      --unselected.foreground 250 --unselected.background 236 "$prompt" || native=$?
-    UI_NATIVE_STATUS=$native
-  fi
-  ui_confirm_status_map "$native"
+# A failed phase is reported with its phase, cause, and next action. Arguments: phase, cause, next action.
+ui_failure() {
+  gum style --foreground 1 --padding "$PADDING" "Phase: $1" "Cause: $2" "Next: $3"
 }

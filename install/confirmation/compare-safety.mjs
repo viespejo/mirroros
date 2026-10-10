@@ -1,4 +1,5 @@
 import { canonicalize } from '../plan/canonical-json.mjs';
+import { machineProjection } from '../plan/validate-plan.mjs';
 
 export const NEXT_STEP_REGENERATE = 'Regenerate and review the installation plan.';
 
@@ -26,17 +27,50 @@ function sameValue(left, right) {
   return canonicalize(left) === canonicalize(right);
 }
 
+const MACHINE_FIELDS = [
+  ['architecture', machine => machine.architecture],
+  ['virtualization', machine => machine.virtualization],
+  ['dmi.sys_vendor', machine => machine.dmi?.sys_vendor],
+  ['dmi.product_name', machine => machine.dmi?.product_name],
+];
+
+// Compares two machine projections by value and by availability: a field that appeared or disappeared differs.
+function machineDifferences(planned, observed) {
+  const differences = [];
+  for (const [name, read] of MACHINE_FIELDS) {
+    const before = read(planned);
+    const after = read(observed);
+    if (before === after) continue;
+    if (before === undefined) differences.push(`${name} appeared`);
+    else if (after === undefined) differences.push(`${name} is no longer observed`);
+    else differences.push(`${name} changed`);
+  }
+  return differences;
+}
+
 // Pure comparison of a valid plan with fresh facts (DEC-005). `hashes` holds the recomputed
-// `policy_sha256` and `override_sha256` (undefined when no override applies). `baselineFacts` is the
-// facts document of the first discovery of the run; the plan does not record Secure Boot, so that state
-// is compared between the two discoveries. Returns an empty list when nothing differs.
+// `policy_sha256`, `profile_definition_sha256`, and `override_sha256` (each undefined when it does not
+// apply, that is, without a matched profile or without an override). `baselineFacts` is the facts document
+// of the first discovery of the run; the plan does not record Secure Boot, so that state is compared
+// between the two discoveries. Returns an empty list when nothing differs.
 export function compareSafety({ plan, facts, hashes, baselineFacts }) {
   const reasons = [];
 
-  if (facts.source?.target_id !== plan.target.target_id) {
+  const machine = machineDifferences(plan.target.machine, machineProjection(facts));
+  if (machine.length > 0) {
     reasons.push(invalidation(
-      'target_identity_changed',
-      `The rediscovered target is not ${plan.target.target_id}, the target of the plan.`,
+      'machine_identity_changed',
+      `The machine differs from the one the plan was generated for (${machine.join('; ')}).`,
+    ));
+  }
+
+  const plannedProfile = plan.target.profile;
+  const observedProfile = facts.profile ?? {};
+  const sameProfile = plannedProfile.status === observedProfile.status && plannedProfile.profile_id === observedProfile.profile_id;
+  if (!sameProfile) {
+    reasons.push(invalidation(
+      'profile_binding_changed',
+      'The machine profile classification differs from the one the plan was generated for.',
     ));
   }
 
@@ -90,7 +124,11 @@ export function compareSafety({ plan, facts, hashes, baselineFacts }) {
   if (binding.policy_sha256 !== hashes.policy_sha256) {
     reasons.push(invalidation('policy_changed', 'The installation policy differs from the one the plan was generated with.'));
   }
-  if (binding.override_sha256 !== hashes.override_sha256) {
+  // With a different classification the profile reason above already invalidates the plan.
+  if (sameProfile && binding.profile_definition_sha256 !== hashes.profile_definition_sha256) {
+    reasons.push(invalidation('profile_binding_changed', 'The definition of the matched profile differs from the one the plan was generated with.'));
+  }
+  if (sameProfile && binding.override_sha256 !== hashes.override_sha256) {
     reasons.push(invalidation('policy_changed', 'The target override differs from the one the plan was generated with.'));
   }
   return reasons;

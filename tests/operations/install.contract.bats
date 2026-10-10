@@ -27,11 +27,11 @@ teardown() {
   done
 }
 
-@test "install without arguments refuses pending work without success wording" {
+@test "install without arguments starts the guided installer, which refuses a missing terminal" {
   lifecycle_invoke install
   lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'MirrorOS install is pending'
-  lifecycle_assert_stderr_contains 'docs/procedures/install.md'
+  lifecycle_assert_stderr_contains 'not an interactive terminal'
+  lifecycle_assert_stderr_does_not_contain 'is pending'
   lifecycle_assert_no_success_output
 }
 
@@ -77,7 +77,7 @@ teardown() {
   lifecycle_invoke install discover --help
   lifecycle_assert_status 0
   lifecycle_assert_stderr_empty
-  lifecycle_assert_stdout_contains 'Usage: install discover --target <id> [--output <dir>]'
+  lifecycle_assert_stdout_contains 'Usage: install discover [--target <id>] [--output <dir>]'
   lifecycle_assert_stdout_contains 'Normalized exit outcomes:'
   lifecycle_assert_stdout_contains 'Documentation: docs/procedures/install.md'
 }
@@ -153,41 +153,53 @@ teardown() {
   lifecycle_assert_stderr_contains 'Restore install/plan from Git or re-clone the repository.'
 }
 
-@test "install apply --help prints its own help on stdout without touching the system" {
-  lifecycle_invoke install apply --help
+@test "install help describes the guided installer and starts nothing" {
+  lifecycle_invoke install --help
   lifecycle_assert_status 0
   lifecycle_assert_stderr_empty
-  lifecycle_assert_stdout_contains 'Usage: install apply [--plan <file>] [--output <dir>]'
-  lifecycle_assert_stdout_contains 'Normalized exit outcomes:'
-  lifecycle_assert_stdout_contains '3: explicit user cancellation'
-  lifecycle_assert_stdout_contains 'Documentation: docs/procedures/install.md'
+  lifecycle_assert_stdout_contains 'guided live installer'
+  lifecycle_assert_stdout_contains '--plan <file>'
+  lifecycle_assert_stdout_contains 'install-run.json'
 }
 
-@test "install apply rejects bypass and unsupported options before any prompt or discovery" {
-  lifecycle_invoke install apply --yes
+@test "install apply is not a public command" {
+  lifecycle_invoke install apply
   lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'unsupported argument: --yes'
+  lifecycle_assert_stderr_contains 'unsupported argument(s)'
   lifecycle_assert_no_success_output
 
-  lifecycle_invoke install apply --non-interactive
+  lifecycle_invoke install apply --help
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument(s)'
+}
+
+@test "install rejects bypass and unsupported options before any prompt or discovery" {
+  lifecycle_invoke install --yes
+  lifecycle_assert_status 2
+  lifecycle_assert_stderr_contains 'unsupported argument(s)'
+  lifecycle_assert_no_success_output
+
+  lifecycle_invoke install --output "$LIFECYCLE_TEST_ROOT/run" --non-interactive
   lifecycle_assert_status 2
   lifecycle_assert_stderr_contains 'unsupported argument: --non-interactive'
+  [ ! -e "$LIFECYCLE_TEST_ROOT/run" ]
 
-  lifecycle_invoke install apply --plan
+  lifecycle_invoke install --plan
   lifecycle_assert_status 2
   lifecycle_assert_stderr_contains '--plan requires a file.'
 }
 
-@test "install apply without a terminal exits 2 and confirms nothing" {
-  lifecycle_invoke install apply
+@test "install --plan and --output without a terminal exit 2 and confirm nothing" {
+  lifecycle_invoke install --output "$LIFECYCLE_TEST_ROOT/run"
   lifecycle_assert_status 2
   lifecycle_assert_stderr_contains 'not an interactive terminal'
   lifecycle_assert_no_success_output
+  [ ! -e "$LIFECYCLE_TEST_ROOT/run" ]
 }
 
-@test "install apply reports a missing orchestrator as a damaged checkout" {
+@test "install reports a missing guided installer as a damaged checkout" {
   rm -f -- "$LIFECYCLE_COPY_ROOT/install/confirmation/confirm-plan"
-  lifecycle_invoke install apply --help
+  lifecycle_invoke install
   lifecycle_assert_status 6
   lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
   lifecycle_assert_stderr_contains 'Restore install/confirmation from Git or re-clone the repository.'

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  loadAllTargets,
   loadBaselinePolicy,
   loadOverride,
   loadTarget,
@@ -11,7 +12,12 @@ import {
   resolveLayers,
   resolvePolicy,
 } from '../../../install/discovery/resolve-layers.mjs';
-import { DiscoveryContractError } from '../../../install/discovery/validate-facts.mjs';
+import {
+  DISCOVERY_POLICY_FORMAT_VERSION,
+  DiscoveryContractError,
+  FACTS_FORMAT_VERSION,
+  TARGET_DEFINITION_FORMAT_VERSION,
+} from '../../../install/discovery/validate-facts.mjs';
 import { baseline, codes, targetsRoot } from './helpers.mjs';
 
 function temporaryRoot(t) {
@@ -100,6 +106,35 @@ test('a damaged target definition is a contract failure', t => {
     identity: { status: 'pending_capture', dmi_fields_pending: ['sys_vendor'] },
   }));
   assert.throws(() => loadTarget(root, 'mismatch'), DiscoveryContractError);
+});
+
+test('facts, target definitions, and discovery policy version independently', () => {
+  assert.deepEqual(
+    [FACTS_FORMAT_VERSION, TARGET_DEFINITION_FORMAT_VERSION, DISCOVERY_POLICY_FORMAT_VERSION],
+    [2, 1, 1],
+  );
+});
+
+test('every defined profile loads in order, skipping directories without a definition', t => {
+  const root = temporaryRoot(t);
+  mkdirSync(join(root, 'zeta'));
+  writeFileSync(join(root, 'zeta', 'target.json'), JSON.stringify({
+    format_version: 1,
+    target_id: 'zeta',
+    identity: { status: 'defined', dmi: { sys_vendor: 'Z' } },
+  }));
+  mkdirSync(join(root, 'alpha'));
+  writeFileSync(join(root, 'alpha', 'target.json'), JSON.stringify({
+    format_version: 1,
+    target_id: 'alpha',
+    identity: { status: 'pending_capture', dmi_fields_pending: ['sys_vendor'] },
+  }));
+  mkdirSync(join(root, 'no-definition'));
+  writeFileSync(join(root, 'README.md'), 'not a profile\n');
+  assert.deepEqual(loadAllTargets(root).map(target => target.target_id), ['alpha', 'zeta']);
+  mkdirSync(join(root, 'broken'));
+  writeFileSync(join(root, 'broken', 'target.json'), '{ not json');
+  assert.throws(() => loadAllTargets(root), DiscoveryContractError);
 });
 
 test('override files are optional and must be JSON objects', t => {

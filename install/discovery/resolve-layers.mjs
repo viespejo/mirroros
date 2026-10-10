@@ -1,9 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  DISCOVERY_POLICY_FORMAT_VERSION,
   DiscoveryContractError,
-  FORMAT_VERSION,
   PROVENANCE_CLASSES,
+  TARGET_DEFINITION_FORMAT_VERSION,
   isRecord,
   reason,
 } from './validate-facts.mjs';
@@ -32,7 +33,7 @@ function hasOnlyKeys(value, allowed) {
 export function loadBaselinePolicy(path) {
   const document = readJson(path, 'discovery policy');
   const errors = [];
-  if (!isRecord(document) || !hasOnlyKeys(document, ['format_version', 'policy']) || document.format_version !== FORMAT_VERSION) {
+  if (!isRecord(document) || !hasOnlyKeys(document, ['format_version', 'policy']) || document.format_version !== DISCOVERY_POLICY_FORMAT_VERSION) {
     errors.push('discovery policy must contain only format_version 1 and policy');
   } else if (!isRecord(document.policy)) {
     errors.push('discovery policy.policy must be an object');
@@ -58,7 +59,7 @@ function loadTargetDocument(path, targetId) {
   const errors = [];
   const identity = document?.identity;
   if (!isRecord(document) || !hasOnlyKeys(document, ['format_version', 'target_id', 'identity'])
-    || document.format_version !== FORMAT_VERSION || document.target_id !== targetId || !isRecord(identity)) {
+    || document.format_version !== TARGET_DEFINITION_FORMAT_VERSION || document.target_id !== targetId || !isRecord(identity)) {
     errors.push('target definition must contain format_version 1, its own target_id, and identity');
   } else if (!hasOnlyKeys(identity, ['status', 'virtualization', 'dmi', 'dmi_fields_pending'])
     || (identity.virtualization !== undefined && typeof identity.virtualization !== 'string')) {
@@ -84,16 +85,6 @@ function loadTargetDocument(path, targetId) {
 }
 
 export function loadTarget(targetsRoot, targetId) {
-  if (targetId === undefined || targetId === '') {
-    return {
-      target: null,
-      reasons: [reason(
-        'target_missing',
-        'No target was specified.',
-        'Pass --target with a supported target id, such as reference-vm.',
-      )],
-    };
-  }
   const definition = typeof targetId === 'string' && TARGET_ID_PATTERN.test(targetId)
     ? join(targetsRoot, targetId, 'target.json')
     : null;
@@ -108,6 +99,16 @@ export function loadTarget(targetsRoot, targetId) {
     };
   }
   return { target: loadTargetDocument(definition, targetId), reasons: [] };
+}
+
+// Every defined profile, for automatic identification. A damaged definition is a contract failure.
+export function loadAllTargets(targetsRoot) {
+  return readdirSync(targetsRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && TARGET_ID_PATTERN.test(entry.name)
+      && existsSync(join(targetsRoot, entry.name, 'target.json')))
+    .map(entry => entry.name)
+    .sort()
+    .map(targetId => loadTargetDocument(join(targetsRoot, targetId, 'target.json'), targetId));
 }
 
 export function loadOverride(targetsRoot, targetId) {

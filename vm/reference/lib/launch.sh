@@ -13,6 +13,10 @@ LAUNCH_VARS_PATH=''
 LAUNCH_QEMU_VERSION=''
 LAUNCH_OVMF_VERSION=''
 LAUNCH_VM_CONFIGURATION_JSON=''
+# Fixed synthetic SMBIOS identity, set only by a qualification scenario that needs an unmatched machine.
+# Both must be set; there is no other QEMU argument pass-through.
+LAUNCH_SMBIOS_MANUFACTURER=''
+LAUNCH_SMBIOS_PRODUCT=''
 
 launch_load_configuration() {
   local config_path="$1"
@@ -99,6 +103,11 @@ launch_build_command() {
     -netdev "$REFERENCE_VM_NETDEV"
     -device "$REFERENCE_VM_NIC"
   )
+  if [[ -n "$LAUNCH_SMBIOS_MANUFACTURER" && -n "$LAUNCH_SMBIOS_PRODUCT" ]]; then
+    LAUNCH_QEMU_COMMAND+=(
+      -smbios "type=1,manufacturer=$(launch_escape_option_value "$LAUNCH_SMBIOS_MANUFACTURER"),product=$(launch_escape_option_value "$LAUNCH_SMBIOS_PRODUCT")"
+    )
+  fi
 }
 
 launch_describe_configuration() {
