@@ -1,11 +1,11 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateApprovalRecord, validateRunRecord } from '../../../install/confirmation/validate-records.mjs';
 import {
-  CANARY, clone, facts, generate, removeDirectory, repository, temporaryDirectory, unqualifiedFacts, withDisk,
+  CANARY, clone, facts, generate, removeDirectory, repository, temporaryDirectory, unqualifiedFacts, withDisk, withMemory,
 } from './helpers.mjs';
 
 const scratch = temporaryDirectory();
@@ -55,6 +55,62 @@ test('compare reports a machine that changed its identity', () => {
   assert.ok(JSON.parse(result.stdout).some(item => item.code === 'machine_identity_changed'));
 });
 
+// A copy of what compare reads from the code root: the policy, its configuration assets, and the targets.
+function codeRootCopy(name) {
+  const root = join(scratch, name);
+  mkdirSync(join(root, 'install/plan'), { recursive: true });
+  cpSync(join(repository, 'install/plan/policy.json'), join(root, 'install/plan/policy.json'));
+  cpSync(join(repository, 'install/plan/assets'), join(root, 'install/plan/assets'), { recursive: true });
+  cpSync(join(repository, 'targets'), join(root, 'targets'), { recursive: true });
+  return root;
+}
+
+const ZRAM_ASSET = 'install/plan/assets/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf';
+const SYSCTL_ASSET = 'install/plan/assets/usr/lib/sysctl.d/60-mirroros-memory.conf';
+
+test('compare passes with a copy of the code root and invalidates a changed, missing, or damaged asset', () => {
+  const root = codeRootCopy('assets-unchanged');
+  assert.equal(run('compare', root, planPath, factsPath).status, 0);
+  const changed = codeRootCopy('assets-changed');
+  writeFileSync(join(changed, ZRAM_ASSET), `${readFileSync(join(changed, ZRAM_ASSET), 'utf8')}# edited\n`);
+  const missing = codeRootCopy('assets-missing');
+  rmSync(join(missing, SYSCTL_ASSET));
+  const damaged = codeRootCopy('assets-damaged');
+  writeFileSync(join(damaged, ZRAM_ASSET), 'not a configuration\n');
+  const diverged = codeRootCopy('assets-diverged');
+  writeFileSync(join(diverged, ZRAM_ASSET), readFileSync(join(diverged, ZRAM_ASSET), 'utf8').replace('= 100', '= 10'));
+  for (const [name, directory] of Object.entries({ changed, missing, damaged, diverged })) {
+    const result = run('compare', directory, planPath, factsPath);
+    assert.equal(result.status, 2, `${name}: ${result.stderr}`);
+    assert.deepEqual(JSON.parse(result.stdout).map(item => item.code), ['configuration_assets_changed'], name);
+    assert.match(result.stderr, /Next step: Regenerate and review the installation plan\./, name);
+  }
+});
+
+test('compare invalidates changed or missing memory with and without hibernation', () => {
+  for (const hibernation of [true, false]) {
+    const subject = write(`memory-plan-${hibernation}.json`, generate({ choices: { hibernation } }).plan);
+    assert.equal(run('compare', repository, subject, factsPath).status, 0);
+    for (const bytes of [8589934592, undefined]) {
+      const result = run('compare', repository, subject, write(`memory-${hibernation}-${bytes}.json`, withMemory(facts(), bytes)));
+      assert.equal(result.status, 2, `${hibernation} ${bytes}`);
+      assert.deepEqual(JSON.parse(result.stdout).map(item => item.code), ['machine_identity_changed'], `${hibernation} ${bytes}`);
+    }
+  }
+});
+
+test('compare and review reject a plan of an earlier version with regeneration guidance', () => {
+  for (const version of [1, 2]) {
+    const earlier = write(`earlier-plan-${version}.json`, { ...clone(plan), format_version: version });
+    for (const result of [run('compare', repository, earlier, factsPath), run('review', 'compact', earlier)]) {
+      assert.equal(result.status, 2);
+      const [first] = JSON.parse(result.stdout);
+      assert.equal(first.code, 'plan_format_unsupported');
+      assert.equal(first.next_step, 'Regenerate and review the installation plan.');
+    }
+  }
+});
+
 test('compare reports a layout change with exit 2 and the next step', () => {
   const changed = write('changed.json', withDisk(facts(), disk => {
     disk.layout.partitions = [];
@@ -96,9 +152,11 @@ test('compare reports an unreadable plan and invalid facts', () => {
 test('review prints the fields the orchestrator needs', () => {
   const compact = run('review', 'compact', planPath).stdout.trimEnd().split('\n').map(line => line.split('\t'));
   assert.deepEqual(compact[0], ['Machine', 'Recognized (reference-vm)']);
+  assert.deepEqual(compact.find(([label]) => label === 'Hibernation'), ['Hibernation', 'Enabled (swapfile 4096 MiB)']);
+  assert.equal(compact.some(([label]) => label === 'Swapfile'), false);
   assert.deepEqual(compact.at(-1), ['Plan reference', plan.digest.value.slice(0, 12)]);
   assert.match(run('review', 'confirmation', planPath).stdout, /^Disk: \/dev\/vda 32\.0 GiB\n[\s\S]*Plan reference: [0-9a-f]{12}\n$/);
-  assert.match(run('review', 'complete', planPath).stdout, /^MirrorOS installation plan \(format 2\)\n[\s\S]*Plan reference: [0-9a-f]{12} /);
+  assert.match(run('review', 'complete', planPath).stdout, /^MirrorOS installation plan \(format 3\)\n[\s\S]*Plan reference: [0-9a-f]{12} /);
   assert.equal(run('review', 'machine', planPath).stdout, 'Recognized (reference-vm)\n');
   assert.equal(run('review', 'device-name', planPath).stdout, 'vda\n');
   assert.equal(run('review', 'digest-prefix', planPath).stdout, `${plan.digest.value.slice(0, 12)}\n`);
@@ -122,7 +180,7 @@ test('edit start and set write accumulating private choices files', () => {
   const third = join(scratch, 'choices-3.json');
   assert.equal(run('edit', 'set', second, 'regional_format', 'es_ES.UTF-8', third).status, 0);
   assert.deepEqual(JSON.parse(readFileSync(third, 'utf8')), {
-    format_version: 2, hostname: 'laptop', regional_format: 'es_ES.UTF-8',
+    format_version: 3, hostname: 'laptop', regional_format: 'es_ES.UTF-8',
   });
   assert.equal(mode(third), 0o600);
 });
@@ -176,7 +234,7 @@ test('record writes both records from the run directory', () => {
   const approval = JSON.parse(readFileSync(join(directory, 'approval-record.json'), 'utf8'));
   assert.deepEqual(validateRunRecord(runRecord), []);
   assert.deepEqual(validateApprovalRecord(approval), []);
-  assert.equal(runRecord.format_version, 2);
+  assert.equal(runRecord.format_version, 3);
   assert.equal(runRecord.entry, 'guided');
   assert.deepEqual(runRecord.stages, ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation']);
   assert.deepEqual(runRecord.machine, plan.target.machine);

@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { reason } from '../discovery/validate-facts.mjs';
 import { PlanContractError } from './canonical-json.mjs';
-import { generatePlan, loadFacts } from './generate-plan.mjs';
+import { loadConfigurationAssets } from './configuration-assets.mjs';
+import { detectedMemoryBytes, generatePlan, loadFacts } from './generate-plan.mjs';
 import { previewChoices, validateChoice } from './preview-choices.mjs';
 import { renderSummary } from './render-plan.mjs';
 import { loadChoices, loadPlanOverride, loadPlanPolicy, loadProfileDefinition } from './resolve-choices.mjs';
@@ -25,17 +26,23 @@ function report(items, stream = process.stderr) {
   }
 }
 
-// Loads the inputs every mode shares: the policy, the facts, the optional choices file, and, for a matched
-// profile, its override and definition hash. Returns { reasons } when an input is invalid.
+// Loads the inputs every mode shares: the policy, its configuration assets, the facts, the optional choices
+// file, and, for a matched profile, its override and definition hash. Returns { reasons } when an input is
+// invalid. A missing or damaged asset is a contract failure (exit 6), not an input problem.
 function prepare() {
   const policy = loadPlanPolicy(join(codeRoot, 'install/plan/policy.json'));
+  const assets = loadConfigurationAssets(codeRoot, policy);
   const loaded = loadFacts(factsPath);
   if (loaded.facts === undefined) return { reasons: loaded.reasons };
   const { facts } = loaded;
   const reasons = [];
   let choices = { values: {} };
   if (choicesPath !== '') {
-    choices = loadChoices(choicesPath, { policy: policy.policy, storageOptions: policy.storageOptions });
+    choices = loadChoices(choicesPath, {
+      policy: policy.policy,
+      storageOptions: policy.storageOptions,
+      memoryTotalBytes: detectedMemoryBytes(facts),
+    });
     reasons.push(...choices.reasons);
   }
   let override = { values: {} };
@@ -47,7 +54,7 @@ function prepare() {
     reasons.push(...profileDefinition.reasons);
   }
   if (reasons.length > 0) return { reasons };
-  return { reasons, policy, facts, choices, override, profileDefinition };
+  return { reasons, policy, assets, facts, choices, override, profileDefinition };
 }
 
 function runPlan() {
@@ -70,9 +77,9 @@ function runPlan() {
 
   const prepared = prepare();
   if (prepared.reasons.length > 0) return rejected(prepared.reasons);
-  const { policy, facts, choices, override, profileDefinition } = prepared;
+  const { policy, assets, facts, choices, override, profileDefinition } = prepared;
 
-  const generated = generatePlan({ facts, policy, choices, override, profileDefinition });
+  const generated = generatePlan({ facts, policy, choices, override, profileDefinition, assets });
   if (generated.plan === undefined) return rejected(generated.reasons);
 
   const paths = writePlan({ plan: generated.plan, facts, directory, runId, timestamp, inputs });

@@ -428,6 +428,18 @@ flow_discover_initial() {
     flow_reached plan
     flow_compare "$FLOW_FACTS_INITIAL" '' safety_check_initial
   fi
+  # Detected memory bounds the swapfile; without it no choice can be resolved, so the run is blocked.
+  status=0
+  flow_assistant memory "$FLOW_FACTS_INITIAL" > "$reasons" 2> "$FLOW_STDERR" || status=$?
+  case "$status" in
+    0) ;;
+    2)
+      if [[ ! -s "$reasons" ]]; then flow_unexpected memory_check 2 'Machine memory'; fi
+      flow_report_reasons 'Machine memory' "$reasons"
+      flow_finish_reasons 2 blocked memory_check "$reasons"
+      ;;
+    *) flow_unexpected memory_check "$status" 'Machine memory' ;;
+  esac
   flow_preview
   if [[ -z "$FLOW_PLAN_ARG" ]]; then
     # The initial choices carry only the format version the plan component publishes.
@@ -526,7 +538,7 @@ flow_screens() {
   local status
   local -a titles=(
     'Welcome to MirrorOS' 'Connect to the internet' 'Machine check' 'Choose installation disk'
-    'Choose storage layout' 'Choose swapfile size' 'Select your timezone' 'Choose system language'
+    'Choose storage layout' 'Choose hibernation' 'Select your timezone' 'Choose system language'
     'Choose regional formats' 'Choose installed console keyboard' 'Name your machine'
     "Let's setup your user account..." 'Choose root account policy' 'Review your choices'
     'Confirm installation' 'Password'
@@ -546,7 +558,7 @@ flow_screens() {
       2) machine_check_form || status=$? ;;
       3) disk_selection_form || status=$? ;;
       4) storage_layout_form || status=$? ;;
-      5) swapfile_size_form || status=$? ;;
+      5) hibernation_form || status=$? ;;
       6) timezone_form || status=$? ;;
       7) system_language_form || status=$? ;;
       8) regional_formats_form || status=$? ;;

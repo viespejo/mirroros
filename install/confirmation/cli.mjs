@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { PlanContractError } from '../plan/canonical-json.mjs';
+import { loadConfigurationAssets } from '../plan/configuration-assets.mjs';
 import { loadFacts } from '../plan/generate-plan.mjs';
 import { loadPlanOverride, loadPlanPolicy, loadProfileDefinition } from '../plan/resolve-choices.mjs';
 import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_UPSTREAM_FAILURE, EXIT_VALID, machineProjection, parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
@@ -75,7 +76,14 @@ function compare([codeRoot, planPath, factsPath, baselinePath]) {
     hashes.profile_definition_sha256 = definition.sha256;
     hashes.override_sha256 = override.sha256;
   }
-  const reasons = compareSafety({ plan: loaded.plan, facts: fresh.facts, hashes, baselineFacts });
+  // A missing or damaged configuration asset invalidates the approval rather than failing the run.
+  let assets;
+  try {
+    assets = loadConfigurationAssets(codeRoot, policy);
+  } catch (error) {
+    if (!(error instanceof PlanContractError)) throw error;
+  }
+  const reasons = compareSafety({ plan: loaded.plan, facts: fresh.facts, hashes, baselineFacts, assets });
   if (reasons.length > 0) return printReasonsAndFail(reasons);
   process.stdout.write('[]\n');
   return EXIT_VALID;

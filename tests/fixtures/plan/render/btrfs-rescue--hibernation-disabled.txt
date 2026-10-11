@@ -1,0 +1,264 @@
+MirrorOS installation plan (format 3)
+================================================================================
+
+1. Target
+=========
+  Architecture      x86_64
+  Memory            4294967296 bytes (4.0 GiB)
+  Virtualization    kvm
+  System vendor     QEMU
+  Product name      Standard PC (Q35 + ICH9, 2009)
+  Profile           matched reference-vm (recognized profile; not a
+                    qualification of this machine)
+  Disk path         /dev/vda
+  Disk by-id        virtio-SYNTH-VDA-0001
+  Serial            SYNTH-VDA-0001
+  Size              34359738368 bytes (32.0 GiB)
+
+  DESTRUCTIVE: every partition and all data on this disk will be erased.
+
+  Current layout (this content will be destroyed):
+    Partition table   gpt 00000000-0000-4000-8000-000000000001
+    /dev/vda1  536870912 bytes (512.0 MiB); vfat; label SYNTH-ESP
+    /dev/vda2  32212254720 bytes (30.0 GiB); ext4; label SYNTH-DATA
+
+2. Choices and defaults
+=======================
+  target_disk: virtio-SYNTH-VDA-0001
+      provenance hardware_detection; source detected [editable]
+  storage_option: btrfs-rescue
+      provenance personal_preference; source choice [editable]
+      tier supported; filesystem btrfs; boot loader systemd-boot
+      resume offset method: btrfs inspect-internal map-swapfile -r
+  bootloader_options: timeout=3; editor=false; fallback_entry=true
+      provenance personal_preference; source policy
+  console_keymap: us
+      provenance personal_preference; source policy [editable]
+  esp: size_bytes=1073741824; filesystem=vfat; mount_point=/boot
+      provenance arch_guidance; source policy
+  firmware_mode: uefi
+      provenance technical_necessity; source policy
+  fstrim: fstrim.timer
+      provenance personal_preference; source policy
+  hardware_clock: utc
+      provenance arch_guidance; source policy
+  hibernation: false
+      provenance personal_preference; source choice [editable]
+      Hibernation is disabled: no swapfile will be created.
+  hostname: mirroros-ref
+      provenance personal_preference; source override [editable]
+  initramfs: mkinitcpio-default-hooks-no-uki
+      provenance arch_guidance; source policy
+  kernel: linux
+      provenance technical_necessity; source policy
+  kernel_cmdline: root=UUID=<root> rw zswap.enabled=0
+      provenance personal_preference; source policy
+  lang: en_US.UTF-8
+      provenance personal_preference; source policy [editable]
+  locale_categories: LANG=en_US.UTF-8; LC_TIME=en_US.UTF-8;
+      LC_NUMERIC=en_US.UTF-8; LC_MONETARY=en_US.UTF-8;
+      LC_MEASUREMENT=en_US.UTF-8
+      provenance technical_necessity; source policy
+  locales: en_US.UTF-8
+      provenance technical_necessity; source policy
+  memory_reclaim: destination=/usr/lib/sysctl.d/60-mirroros-memory.conf;
+      settings=vm.swappiness=180; vm.page-cluster=0;
+      vm.watermark_scale_factor=125; vm.watermark_boost_factor=0
+      provenance personal_preference; source policy
+  mirrorlist: inherited_from_live_environment_and_recorded
+      provenance technical_necessity; source policy
+  network: manager=NetworkManager; package=networkmanager;
+      predefined_connections=false
+      provenance personal_preference; source policy
+  packages: base, linux, linux-firmware, zram-generator, sudo, neovim, man-db,
+      man-pages
+      provenance personal_preference; source policy
+  pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
+      provenance personal_preference; source policy
+  partition_table: gpt
+      provenance technical_necessity; source policy
+  regional_format: follow_language
+      provenance personal_preference; source policy [editable]
+  root_account: locked
+      provenance personal_preference; source policy [editable]
+  root_minimum_bytes: 16106127360
+      provenance technical_necessity; source policy
+  sudoers: %wheel ALL=(ALL:ALL) ALL
+      provenance personal_preference; source policy
+  sysrq: kernel.sysrq = 1
+      provenance personal_preference; source policy
+  time_sync: systemd-timesyncd
+      provenance personal_preference; source policy
+  timezone: Europe/Madrid
+      provenance personal_preference; source policy [editable]
+  user_groups: wheel
+      provenance personal_preference; source policy
+  user_name: mirroros
+      provenance personal_preference; source policy [editable]
+  user_shell: bash
+      provenance personal_preference; source policy
+  zram: package=zram-generator; package_source=arch_official_repository;
+      destination=/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf;
+      zram_size=ram; compression_algorithm=zstd; swap_priority=100
+      provenance personal_preference; source policy
+
+3. Destructive operations
+=========================
+  DESTRUCTIVE wipe_disk_signatures
+      Remove existing filesystem and partition-table signatures from the target
+      disk.
+  DESTRUCTIVE create_partition_table
+      Write an empty GPT on the target disk.
+  DESTRUCTIVE create_partitions
+      Create the ESP and a root partition on the remaining space.
+  DESTRUCTIVE format_filesystems
+      Format the ESP as FAT32 and the root partition with the selected
+      filesystem.
+
+4. Operations in order
+======================
+  01. wipe_disk_signatures DESTRUCTIVE
+      Remove existing filesystem and partition-table signatures from the target
+      disk.
+      disk: virtio-SYNTH-VDA-0001
+  02. create_partition_table DESTRUCTIVE
+      Write an empty GPT on the target disk.
+      disk: virtio-SYNTH-VDA-0001
+      table: gpt
+  03. create_partitions DESTRUCTIVE
+      Create the ESP and a root partition on the remaining space.
+      disk: virtio-SYNTH-VDA-0001
+      esp_size_bytes: 1073741824
+      esp_mount_point: /boot
+      root: remaining_space
+  04. format_filesystems DESTRUCTIVE
+      Format the ESP as FAT32 and the root partition with the selected
+      filesystem.
+      esp_filesystem: vfat
+      root_filesystem: btrfs
+      resolved at apply: partition_uuids (blkid)
+  05. create_btrfs_subvolumes
+      Create the flat Btrfs subvolumes on the new filesystem.
+      subvolumes: @, @home, @log, @pkg, @snapshots
+      mount_options: compress=zstd:1,relatime
+  06. mount_target
+      Mount the root filesystem and the ESP under the target root.
+      esp_mount_point: /boot
+      subvolumes: @, @home, @log, @pkg, @snapshots
+  07. install_packages
+      Install the base package set, zram-generator, and the packages of the
+      storage option.
+      packages: base, linux, linux-firmware, zram-generator, sudo, neovim,
+        man-db, man-pages, networkmanager, btrfs-progs, snapper, snap-pac,
+        compsize
+  08. configure_zram
+      Deliver the zram-generator drop-in: one zram device sized to memory,
+      compressed with zstd, as preferred swap.
+      destination: /usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf
+      source_sha256:
+        b6aa35ad3b4ee26a9296a50a45f215fd7e008fff05ad2fdbde67ba2a7f55f9cd
+      zram_size: ram
+      compression_algorithm: zstd
+      swap_priority: 100
+  09. configure_memory_reclaim
+      Deliver the sysctl drop-in with the memory reclaim settings.
+      destination: /usr/lib/sysctl.d/60-mirroros-memory.conf
+      source_sha256:
+        efa0ad6cc81d44518d21a8c9eca61635ca7dbacc55463d01ae74cded970ac678
+      vm.swappiness: 180
+      vm.page-cluster: 0
+      vm.watermark_scale_factor: 125
+      vm.watermark_boost_factor: 0
+  10. generate_fstab
+      Generate /etc/fstab by UUID.
+      identifier: uuid
+  11. configure_locale_time_console
+      Configure locales, language, console keymap, time zone, hardware clock,
+      and time sync.
+      locales: en_US.UTF-8
+      lang: en_US.UTF-8
+      locale_categories: LANG=en_US.UTF-8; LC_TIME=en_US.UTF-8;
+        LC_NUMERIC=en_US.UTF-8; LC_MONETARY=en_US.UTF-8;
+        LC_MEASUREMENT=en_US.UTF-8
+      console_keymap: us
+      timezone: Europe/Madrid
+      hardware_clock: utc
+      time_sync: systemd-timesyncd
+  12. configure_hostname_network
+      Set the hostname and configure NetworkManager without predefined
+      connections.
+      hostname: mirroros-ref
+      network_manager: NetworkManager
+  13. create_user
+      Create the user account and set its password from a protected prompt.
+      user_name: mirroros
+      groups: wheel
+      shell: bash
+  14. configure_root_account
+      Configure the root account as selected.
+      mode: locked
+  15. configure_sudo_sysrq_pacman
+      Install the sudoers drop-in, the sysrq setting, and the pacman options.
+      sudoers: %wheel ALL=(ALL:ALL) ALL
+      sysrq: kernel.sysrq = 1
+      pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
+  16. install_bootloader
+      Install and configure the boot loader and the kernel command line.
+      bootloader: systemd-boot
+      kernel_cmdline: root=UUID=<root> rw zswap.enabled=0
+      options: timeout=3; editor=false; fallback_entry=true
+      resolved at apply: root_uuid (blkid)
+  17. configure_snapper
+      Create the Snapper root configuration for the root subvolume only.
+  18. enable_services
+      Enable the network, time sync, trim, and storage option services.
+      services: NetworkManager, systemd-timesyncd, fstrim.timer
+  19. create_baseline_snapshot
+      Take the post-install baseline snapshot.
+
+5. Secret requirements
+======================
+  Only names are recorded. Values are never stored in the plan.
+
+  account_password
+    Purpose           Password of the created user account, shared with the root
+                      account when root password access is enabled.
+    Required by       create_user
+    Channel           protected_prompt
+    Provenance        technical_necessity
+
+6. Hardware-derived selections
+==============================
+  Selections:
+    target_disk: virtio-SYNTH-VDA-0001
+        fact storage.disks; rule single_eligible_disk; provenance
+        hardware_detection
+    boot_mode: uefi
+        fact firmware.boot_mode; rule uefi_boot_mode_check; provenance
+        hardware_detection
+
+  Detected capabilities (not evaluated in this stage):
+    graphics_vendor: qemu_virtual
+        fact hardware.graphics; rule not_evaluated; next story 2.6
+    battery_present: false
+        fact hardware.battery_present; rule not_evaluated; next story 2.6
+    virtualization: kvm
+        fact hardware.virtualization; rule not_evaluated; next story 2.6
+    cpu_vendor: AuthenticAMD
+        fact hardware.cpu.vendor; rule not_evaluated; next story 2.6
+
+7. Warnings
+===========
+  None.
+
+8. Digest and bindings
+======================
+  Digest (sha256)   7c744d85bbe93bd1f6ff1427224ada09e3c04154b6694b1b08581c5f3941dbe1
+  Facts sha256      b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11
+  Facts run         20261007T120000Z-11111111-2222-4333-8444-555555555555
+  Code commit       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (dirty false)
+  Policy sha256     d2791b38a77a55fba8e665e7100ef1811c96db5b64ff15009fe7a5c440414b98
+  Profile sha256    07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca
+  Override sha256   0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242
+
+  This plan is not approved. Approval is a separate step bound to this digest.

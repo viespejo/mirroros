@@ -1,6 +1,14 @@
 import { reason } from '../discovery/validate-facts.mjs';
-import { buildWarnings, diskIdentifier, resolveSelection, selectDisk } from './generate-plan.mjs';
-import { checkChoiceValue } from './resolve-choices.mjs';
+import {
+  buildWarnings,
+  detectedMemoryBytes,
+  diskIdentifier,
+  memoryUnavailableReason,
+  resolveSelection,
+  selectDisk,
+} from './generate-plan.mjs';
+import { CHOICE_ONLY_KEYS, checkChoiceValue, parseChoiceText } from './resolve-choices.mjs';
+import { swapfileRange } from './swap-policy.mjs';
 import {
   CHOICES_FORMAT_VERSION,
   CHOICE_SPECS,
@@ -8,13 +16,12 @@ import {
   LANGUAGES,
   REGIONAL_FORMATS,
   ROOT_ACCOUNT_MODES,
-  SWAPFILE_MIB_RANGE,
 } from './validate-plan.mjs';
 
 const SECRET_LIKE_KEY = /password|passphrase|secret|token/i;
 const FREE_TEXT_KEYS = ['hostname', 'user_name', 'timezone', 'console_keymap'];
 
-function optionsFor({ facts, policy }) {
+function optionsFor({ facts, policy, hibernation, memoryTotalBytes }) {
   const disks = facts.layers.detected.storage.disks.filter(disk => disk.eligible).map(disk => {
     const entry = { value: diskIdentifier(disk) };
     for (const key of ['path', 'model', 'size_bytes']) {
@@ -30,7 +37,9 @@ function optionsFor({ facts, policy }) {
       filesystem: option.filesystem,
       bootloader: option.bootloader,
     })),
-    swapfile_size: { minimum: SWAPFILE_MIB_RANGE[0], maximum: SWAPFILE_MIB_RANGE[1], unit: 'MiB' },
+    hibernation: [true, false],
+    // The range is derived from the detected memory; the size is editable only while hibernation is enabled.
+    swapfile_size: { ...swapfileRange(memoryTotalBytes), editable: hibernation },
     lang: [...LANGUAGES],
     regional_format: [...REGIONAL_FORMATS],
     root_account: [...ROOT_ACCOUNT_MODES],
@@ -45,7 +54,7 @@ function optionsFor({ facts, policy }) {
 export function previewChoices({ facts, policy, choices = { values: {} }, override = { values: {} } }) {
   const selection = resolveSelection({ facts, policy, choices, override, allowPendingDisk: true });
   if (selection.reasons.length > 0) return { reasons: selection.reasons };
-  const { resolved, values, disk, option } = selection;
+  const { resolved, values, disk, option, memoryTotalBytes } = selection;
   const editable = {};
   for (const [key, entry] of Object.entries(resolved)) {
     if (entry.editable) {
@@ -56,9 +65,11 @@ export function previewChoices({ facts, policy, choices = { values: {} }, overri
     document: {
       format_version: CHOICES_FORMAT_VERSION,
       choices: editable,
-      options: optionsFor({ facts, policy }),
+      options: optionsFor({ facts, policy, hibernation: values.hibernation, memoryTotalBytes }),
       derived: { locales: resolved.locales.value, locale_categories: resolved.locale_categories.value },
-      warnings: buildWarnings({ facts, disk, storageOption: values.storage_option, option }),
+      warnings: buildWarnings({
+        facts, disk, storageOption: values.storage_option, option, swapfileSize: values.swapfile_size, memoryTotalBytes,
+      }),
     },
   };
 }
@@ -68,7 +79,8 @@ function invalid(...reasons) {
 }
 
 // Checks one value against its own rules and the facts, not the complete combination. `value` is the raw
-// string argument: swapfile_size is parsed as an integer. A secret-like key is rejected before its value is read.
+// string argument: swapfile_size is parsed as an integer and hibernation as a boolean by the shared parser. A
+// secret-like key is rejected before its value is read.
 export function validateChoice({ facts, policy, choices = { values: {} }, override = { values: {} }, key, value, root = '/' }) {
   if (SECRET_LIKE_KEY.test(key)) {
     return invalid(reason(
@@ -77,15 +89,20 @@ export function validateChoice({ facts, policy, choices = { values: {} }, overri
       'Use a choice key from the preview; secrets are requested by a protected prompt when the plan is approved and applied.',
     ));
   }
-  const editableKeys = [...Object.keys(policy.policy).filter(name => policy.policy[name].editable), 'target_disk'];
+  const editableKeys = [...Object.keys(policy.policy).filter(name => policy.policy[name].editable), ...CHOICE_ONLY_KEYS];
   if (DERIVED_KEYS.includes(key) || (key in policy.policy && !policy.policy[key].editable)) {
     return invalid(reason('choices_not_editable', `${key} is fixed or derived and cannot be chosen.`, `Choose only: ${editableKeys.join(', ')}.`));
   }
   if (!editableKeys.includes(key)) {
     return invalid(reason('choices_unknown_key', `${key} is not a known choice.`, `Choose only: ${editableKeys.join(', ')}.`));
   }
-  const parsed = key === 'swapfile_size' && /^[0-9]+$/.test(value) ? Number(value) : value;
-  const problem = checkChoiceValue(key, parsed, { root, storageOptions: policy.storageOptions });
+  const parsed = parseChoiceText(key, value);
+  let memoryTotalBytes;
+  if (key === 'swapfile_size') {
+    memoryTotalBytes = detectedMemoryBytes(facts);
+    if (memoryTotalBytes === undefined) return invalid(memoryUnavailableReason());
+  }
+  const problem = checkChoiceValue(key, parsed, { root, storageOptions: policy.storageOptions, memoryTotalBytes });
   if (problem !== undefined) {
     return invalid(reason('choices_invalid_value', `${problem}.`, `Provide a value that satisfies ${key}; see the choice preview.`));
   }

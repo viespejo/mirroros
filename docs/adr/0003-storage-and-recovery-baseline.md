@@ -112,4 +112,4 @@ Revisit this decision if any of the following occurs:
 
 ## Superseded by
 
-`None`
+Partially superseded by [ADR 0007](0007-zram-and-hibernation-policy.md), which amends only the swap, `@swap`, and resume clauses: `@swap` and the resume parameters of the installation plan apply only when hibernation is enabled. The rest of this decision is unchanged.

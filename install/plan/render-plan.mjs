@@ -60,6 +60,7 @@ function renderTarget(plan) {
   const { disk, machine, profile } = plan.target;
   const lines = [...section('Target', 1)];
   lines.push(...field('Architecture', machine.architecture));
+  lines.push(...field('Memory', size(machine.memory_total_bytes)));
   if (machine.virtualization !== undefined) lines.push(...field('Virtualization', machine.virtualization));
   if (machine.dmi?.sys_vendor !== undefined) lines.push(...field('System vendor', machine.dmi.sys_vendor));
   if (machine.dmi?.product_name !== undefined) lines.push(...field('Product name', machine.dmi.product_name));
@@ -95,6 +96,9 @@ function renderChoices(plan) {
     lines.push(...wrap(`${key}: ${format(entry.value)}`, '  ', '      '));
     const labels = `provenance ${entry.provenance}; source ${entry.source}${entry.editable ? ' [editable]' : ''}`;
     lines.push(...wrap(labels, '      ', '      '));
+    if (key === 'hibernation' && entry.value === false) {
+      lines.push(...wrap('Hibernation is disabled: no swapfile will be created.', '      ', '      '));
+    }
     if (key === 'storage_option') {
       lines.push(...wrap(
         `tier ${entry.tier}; filesystem ${entry.filesystem}; boot loader ${entry.bootloader}`,
@@ -214,10 +218,14 @@ export function renderSummary(plan, planPath) {
   const disk = plan.target.disk;
   const option = plan.choices.storage_option;
   const secrets = plan.secret_requirements.map(secret => secret.name).join(', ');
+  const hibernation = plan.choices.hibernation.value
+    ? `enabled (swapfile ${plan.choices.swapfile_size.value} MiB)`
+    : 'disabled (no swapfile)';
   return [
     `Profile: ${plan.target.profile.status}${plan.target.profile.profile_id === undefined ? '' : ` ${plan.target.profile.profile_id}`}`,
     `Disk: ${disk.by_id ?? disk.path} (${size(disk.size_bytes)})`,
     `Storage option: ${option.value} (${option.tier})`,
+    `Hibernation: ${hibernation}`,
     `Destructive operations: ${destructive}`,
     `Secrets required: ${secrets}`,
     `Digest: ${plan.digest.algorithm} ${plan.digest.value}`,

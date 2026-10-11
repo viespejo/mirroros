@@ -39,6 +39,8 @@ make_facts() {
     if (process.argv[2] === "two-disks") document = helpers.secondEligibleDisk(document);
     if (process.argv[2] === "status-invalid") document.validation.status = "invalid";
     if (process.argv[2] === "format-1") document.format_version = 1;
+    if (process.argv[2] === "no-memory") document = helpers.withMemory(document, undefined);
+    if (process.argv[2] === "memory-80g") document = helpers.withMemory(document, 80 * 1073741824);
     writeFileSync(process.argv[3], `${JSON.stringify(document)}\n`);
   ' "${PLAN_TESTS_DIR}/helpers.mjs" "$1" "$2"
 }
@@ -168,7 +170,7 @@ assert_private_permissions() {
   first_sum="$(sha256sum "${WORK_DIR}"/first/*)"
   first_digest="$(plan_digest "${WORK_DIR}/first/installation-plan.json")"
 
-  write_choices '{"format_version":2,"hostname":"edited-host","storage_option":"btrfs-rescue"}'
+  write_choices '{"format_version":3,"hostname":"edited-host","storage_option":"btrfs-rescue"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/second"
   [ "$PLAN_STATUS" -eq 0 ]
   second_digest="$(plan_digest "${WORK_DIR}/second/installation-plan.json")"
@@ -179,6 +181,53 @@ assert_private_permissions() {
   [ "$first_sum" == "$(sha256sum "${WORK_DIR}"/first/*)" ]
 }
 
+@test "disabled hibernation plans zram without a swapfile, @swap, or resume parameters" {
+  write_choices '{"format_version":3,"hibernation":false}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.hibernation.value === false && !('swapfile_size' in d.choices)"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "!d.operations.some(o => o.kind === 'create_swapfile') && d.operations.some(o => o.kind === 'configure_zram')"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "!JSON.stringify(d).includes('resume=') && !JSON.stringify(d).includes('@swap') && !d.operations.some(o => JSON.stringify(o.resolved_at_apply ?? []).includes('resume_offset'))"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.kernel_cmdline.value.includes('zswap.enabled=0')"
+  grep -Fq 'no swapfile will be created' "${WORK_DIR}/out/installation-plan.txt"
+}
+
+@test "disabled hibernation with an explicit swapfile size is rejected, not ignored" {
+  write_choices '{"format_version":3,"hibernation":false,"swapfile_size":2048}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
+  json_assert "${WORK_DIR}/out/plan-run.json" "d.reasons.some(r => r.code === 'choices_conflict')"
+}
+
+@test "a swapfile below detected memory warns and a default that exceeds the disk is refused, not shrunk" {
+  write_choices '{"format_version":3,"swapfile_size":2048}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.swapfile_size.value === 2048 && d.warnings.some(w => w.code === 'swapfile_below_ram')"
+  rm -rf -- "${WORK_DIR}/out"
+  make_facts memory-80g "$FACTS"
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  json_assert "${WORK_DIR}/out/plan-run.json" "d.reasons.some(r => r.code === 'plan_size_does_not_fit')"
+}
+
+@test "missing detected memory exits 2 asking for repeated discovery" {
+  make_facts no-memory "$FACTS"
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
+  json_assert "${WORK_DIR}/out/plan-run.json" "d.reasons.some(r => r.code === 'memory_unavailable')"
+}
+
+@test "choices of version 2 are rejected with regeneration guidance and are not migrated" {
+  write_choices '{"format_version":2,"hostname":"edited"}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
+  assert_stderr_contains 'not migrated'
+}
+
 @test "the same inputs yield the same digest" {
   run_plan --facts "$FACTS" --output "${WORK_DIR}/one"
   run_plan --facts "$FACTS" --output "${WORK_DIR}/two"
@@ -186,7 +235,7 @@ assert_private_permissions() {
 }
 
 @test "an experimental storage option is accepted with its tier and a warning" {
-  write_choices '{"format_version":2,"storage_option":"btrfs-limine"}'
+  write_choices '{"format_version":3,"storage_option":"btrfs-limine"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.storage_option.tier === 'experimental'"
@@ -194,7 +243,7 @@ assert_private_permissions() {
 }
 
 @test "root_account password adds the root consumer to the single account_password requirement" {
-  write_choices '{"format_version":2,"root_account":"password"}'
+  write_choices '{"format_version":3,"root_account":"password"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements.length === 1 && d.secret_requirements[0].name === 'account_password'"
@@ -239,14 +288,14 @@ assert_private_permissions() {
 @test "plan rejects invalid choices without writing a plan and records the reasons" {
   local body
   for body in \
-    '{"format_version":2,"bogus_key":"x"}' \
-    '{"format_version":2,"root_minimum_bytes":1}' \
-    '{"format_version":2,"locales":["en_US.UTF-8"]}' \
-    '{"format_version":2,"locale_categories":{}}' \
-    '{"format_version":2,"lang":"de_DE.UTF-8"}' \
-    '{"format_version":2,"storage_option":"zfs"}' \
-    '{"format_version":2,"hostname":"-bad-"}' \
-    '{"format_version":2,"target_disk":"/dev/nowhere"}' \
+    '{"format_version":3,"bogus_key":"x"}' \
+    '{"format_version":3,"root_minimum_bytes":1}' \
+    '{"format_version":3,"locales":["en_US.UTF-8"]}' \
+    '{"format_version":3,"locale_categories":{}}' \
+    '{"format_version":3,"lang":"de_DE.UTF-8"}' \
+    '{"format_version":3,"storage_option":"zfs"}' \
+    '{"format_version":3,"hostname":"-bad-"}' \
+    '{"format_version":3,"target_disk":"/dev/nowhere"}' \
     '{"format_version":1,"hostname":"edited"}' \
     '{"hostname":"edited"}' \
     'not json'; do
@@ -265,7 +314,7 @@ assert_private_permissions() {
 @test "a secret-like choice is refused and its value never appears anywhere" {
   local key
   for key in password user_password root_password account_password; do
-    write_choices "{\"format_version\":2,\"${key}\":\"${PLAN_CANARY}\"}"
+    write_choices "{\"format_version\":3,\"${key}\":\"${PLAN_CANARY}\"}"
     rm -rf -- "${WORK_DIR}/out"
     run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
     [ "$PLAN_STATUS" -eq 2 ]
@@ -277,7 +326,7 @@ assert_private_permissions() {
 }
 
 @test "a secret canary in an editable value is not echoed by any output" {
-  write_choices "{\"format_version\":2,\"hostname\":\"${PLAN_CANARY}\",\"user_name\":\"${PLAN_CANARY}\"}"
+  write_choices "{\"format_version\":3,\"hostname\":\"${PLAN_CANARY}\",\"user_name\":\"${PLAN_CANARY}\"}"
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 2 ]
   rm -f -- "${WORK_DIR}/choices.json"
@@ -285,7 +334,7 @@ assert_private_permissions() {
 }
 
 @test "a canary never reaches a successful plan, its render, or the console" {
-  write_choices '{"format_version":2,"root_account":"password"}'
+  write_choices '{"format_version":3,"root_account":"password"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
   assert_no_canary
@@ -300,7 +349,7 @@ assert_private_permissions() {
   [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
   json_assert "${WORK_DIR}/out/plan-run.json" "d.exit_status === 2"
 
-  write_choices '{"format_version":2,"target_disk":"virtio-SYNTH-VDB-0002"}'
+  write_choices '{"format_version":3,"target_disk":"virtio-SYNTH-VDB-0002"}'
   rm -rf -- "${WORK_DIR}/out"
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
@@ -336,7 +385,7 @@ assert_private_permissions() {
   run_plan preview-choices --facts "$FACTS"
   [ "$PLAN_STATUS" -eq 0 ]
   [ ! -s "$STDERR_PATH" ]
-  json_assert "$STDOUT_PATH" "d.format_version === 2 && d.choices.hostname.source === 'override' && d.choices.target_disk.source === 'detected'"
+  json_assert "$STDOUT_PATH" "d.format_version === 3 && d.choices.hostname.source === 'override' && d.choices.target_disk.source === 'detected'"
   json_assert "$STDOUT_PATH" "d.derived.locales.join() === 'en_US.UTF-8' && !('LC_ALL' in d.derived.locale_categories)"
   json_assert "$STDOUT_PATH" "d.options.storage_option.length === 3 && d.options.regional_format.join() === 'follow_language,en_US.UTF-8,es_ES.UTF-8'"
   [ ! -e "${WORK_DIR}/evidence" ]
@@ -344,7 +393,7 @@ assert_private_permissions() {
 }
 
 @test "preview-choices follows the choices file and leaves the disk pending among several" {
-  write_choices '{"format_version":2,"lang":"es_ES.UTF-8"}'
+  write_choices '{"format_version":3,"lang":"es_ES.UTF-8"}'
   run_plan preview-choices --facts "$FACTS" --choices "${WORK_DIR}/choices.json"
   [ "$PLAN_STATUS" -eq 0 ]
   json_assert "$STDOUT_PATH" "d.derived.locales.join() === 'es_ES.UTF-8' && d.choices.lang.source === 'choice'"
@@ -365,7 +414,7 @@ assert_private_permissions() {
   run_plan preview-choices --facts "$FACTS" --choices "${WORK_DIR}/choices.json"
   [ "$PLAN_STATUS" -eq 2 ]
   [ ! -s "$STDOUT_PATH" ]
-  assert_stderr_contains 'format_version 2'
+  assert_stderr_contains 'format_version 3'
 
   run_plan preview-choices --facts "${WORK_DIR}/absent.json"
   [ "$PLAN_STATUS" -eq 2 ]
@@ -377,9 +426,9 @@ assert_private_permissions() {
   [ "$PLAN_STATUS" -eq 0 ]
   json_assert "$STDOUT_PATH" "d.valid === true && d.key === 'lang' && d.derived.locales.join() === 'es_ES.UTF-8'"
 
-  run_plan validate-choice --facts "$FACTS" --key swapfile_size --value 8192
+  run_plan validate-choice --facts "$FACTS" --key swapfile_size --value 2048
   [ "$PLAN_STATUS" -eq 0 ]
-  json_assert "$STDOUT_PATH" "d.valid === true && d.value === 8192 && !('derived' in d)"
+  json_assert "$STDOUT_PATH" "d.valid === true && d.value === 2048 && !('derived' in d)"
   [ ! -e "${WORK_DIR}/evidence" ]
 }
 

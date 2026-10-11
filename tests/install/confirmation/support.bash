@@ -81,6 +81,21 @@ confirm_scenario_two_disks() {
   node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
 }
 
+# Like confirm_scenario with reference-vm-empty, but with the given detected memory in KiB (absent when empty).
+confirm_scenario_memory() {
+  local raw="${TEST_ROOT}/memory.json"
+
+  node -e '
+    const fs = require("node:fs");
+    const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (process.argv[3] === "") delete raw.hardware.memory_total_kib;
+    else raw.hardware.memory_total_kib = Number(process.argv[3]);
+    fs.writeFileSync(process.argv[2], JSON.stringify(raw));
+  ' "${CONFIRM_FIXTURES}/reference-vm-empty.json" "$raw" "$1"
+  find "$FIXTURE_ROOT" -mindepth 1 -delete
+  node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
+}
+
 # Like confirm_scenario with reference-vm-empty, but with a DMI vendor that no defined profile declares: a valid
 # machine that matches no profile.
 confirm_scenario_unqualified() {

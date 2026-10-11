@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NEXT_STEP_REGENERATE, compareSafety, selectedDisk } from '../../../install/confirmation/compare-safety.mjs';
 import {
-  clone, currentHashes, facts, firstDisk, generate, unqualifiedFacts, unqualifiedHashes, withDisk,
+  assets, clone, currentHashes, facts, firstDisk, generate, unqualifiedFacts, unqualifiedHashes, withDisk, withMemory,
 } from './helpers.mjs';
 
-function compare({ plan = generate().plan, fresh = facts(), hashes = currentHashes(), baselineFacts } = {}) {
-  return compareSafety({ plan, facts: fresh, hashes, baselineFacts });
+function compare({ plan = generate().plan, fresh = facts(), hashes = currentHashes(), baselineFacts, currentAssets = assets } = {}) {
+  return compareSafety({ plan, facts: fresh, hashes, baselineFacts, assets: currentAssets });
 }
 
 const codes = reasons => reasons.map(item => item.code);
@@ -42,6 +42,7 @@ test('no fabricated target id takes part in the comparison', () => {
 test('each observed machine field is compared as machine_identity_changed', () => {
   const changes = {
     'architecture changed': detected => { detected.hardware.architecture = 'aarch64'; },
+    'memory_total_bytes changed': detected => { detected.hardware.memory_total_bytes += 1048576; },
     'virtualization changed': detected => { detected.hardware.virtualization = 'none'; },
     'dmi.sys_vendor changed': detected => { detected.firmware.dmi.sys_vendor = 'Other Vendor'; },
     'dmi.product_name changed': detected => { detected.firmware.dmi.product_name = 'Other Product'; },
@@ -215,4 +216,56 @@ test('the comparison does not modify its inputs', () => {
   compare({ plan, fresh });
   assert.equal(JSON.stringify([plan, fresh]), before);
   assert.equal(firstDisk(fresh).eligible, true);
+});
+
+test('changed or missing detected memory invalidates the plan, with or without hibernation', () => {
+  for (const hibernation of [true, false]) {
+    const { plan } = generate({ choices: { hibernation } });
+    assert.deepEqual(compare({ plan }), [], String(hibernation));
+    for (const bytes of [plan.target.machine.memory_total_bytes + 1, plan.target.machine.memory_total_bytes - 1, 8589934592]) {
+      const reasons = compare({ plan, fresh: withMemory(facts(), bytes) });
+      assert.deepEqual(codes(reasons), ['machine_identity_changed'], `${hibernation} ${bytes}`);
+      assert.match(reasons[0].message, /memory_total_bytes changed/);
+      assert.equal(reasons[0].next_step, NEXT_STEP_REGENERATE);
+    }
+    const missing = compare({ plan, fresh: withMemory(facts(), undefined) });
+    assert.deepEqual(codes(missing), ['machine_identity_changed'], `${hibernation} missing`);
+    assert.match(missing[0].message, /memory_total_bytes is no longer observed/);
+  }
+});
+
+test('a changed, moved, missing, or damaged configuration asset is configuration_assets_changed', () => {
+  const { plan } = generate();
+  assert.deepEqual(compare({ plan }), []);
+  const variants = {
+    'zram hash': { ...assets, configure_zram: { ...assets.configure_zram, sha256: 'a'.repeat(64) } },
+    'reclaim hash': { ...assets, configure_memory_reclaim: { ...assets.configure_memory_reclaim, sha256: 'b'.repeat(64) } },
+    'zram destination': { ...assets, configure_zram: { ...assets.configure_zram, destination: '/etc/zram.conf' } },
+    'reclaim destination': { ...assets, configure_memory_reclaim: { ...assets.configure_memory_reclaim, destination: '/etc/sysctl.conf' } },
+    'zram entry gone': { configure_memory_reclaim: assets.configure_memory_reclaim },
+    'reclaim entry gone': { configure_zram: assets.configure_zram },
+  };
+  for (const [name, currentAssets] of Object.entries(variants)) {
+    const reasons = compare({ plan, currentAssets });
+    assert.deepEqual(codes(reasons), ['configuration_assets_changed'], name);
+    assert.equal(reasons[0].next_step, NEXT_STEP_REGENERATE, name);
+  }
+  // Both assets changed: both are reported.
+  const both = compare({ plan, currentAssets: {
+    configure_zram: { ...assets.configure_zram, sha256: 'a'.repeat(64) },
+    configure_memory_reclaim: { ...assets.configure_memory_reclaim, sha256: 'b'.repeat(64) },
+  } });
+  assert.equal(codes(both).filter(code => code === 'configuration_assets_changed').length, 2);
+  // Unreadable or damaged assets are passed as undefined: the approval is invalidated, never accepted.
+  const reasons = compareSafety({ plan, facts: facts(), hashes: currentHashes(), assets: undefined });
+  assert.deepEqual(codes(reasons), ['configuration_assets_changed']);
+  assert.match(reasons[0].message, /missing or damaged/);
+  assert.equal(reasons[0].next_step, NEXT_STEP_REGENERATE);
+});
+
+test('a plan with hibernation disabled is still bound to the same assets', () => {
+  const { plan } = generate({ choices: { hibernation: false } });
+  assert.deepEqual(compare({ plan }), []);
+  const changed = { ...assets, configure_zram: { ...assets.configure_zram, sha256: 'c'.repeat(64) } };
+  assert.deepEqual(codes(compare({ plan, currentAssets: changed })), ['configuration_assets_changed']);
 });

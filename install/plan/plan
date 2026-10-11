@@ -9,13 +9,17 @@ readonly REQUIRED_FILES=(
   install/plan/cli.mjs
   install/plan/policy.json
   install/plan/canonical-json.mjs
+  install/plan/configuration-assets.mjs
   install/plan/digest-plan.mjs
   install/plan/generate-plan.mjs
   install/plan/preview-choices.mjs
   install/plan/render-plan.mjs
   install/plan/resolve-choices.mjs
+  install/plan/swap-policy.mjs
   install/plan/validate-plan.mjs
   install/plan/write-plan.mjs
+  install/plan/assets/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf
+  install/plan/assets/usr/lib/sysctl.d/60-mirroros-memory.conf
   install/discovery/validate-facts.mjs
   install/discovery/write-facts.mjs
 )

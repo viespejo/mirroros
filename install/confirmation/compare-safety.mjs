@@ -29,6 +29,7 @@ function sameValue(left, right) {
 
 const MACHINE_FIELDS = [
   ['architecture', machine => machine.architecture],
+  ['memory_total_bytes', machine => machine.memory_total_bytes],
   ['virtualization', machine => machine.virtualization],
   ['dmi.sys_vendor', machine => machine.dmi?.sys_vendor],
   ['dmi.product_name', machine => machine.dmi?.product_name],
@@ -48,12 +49,39 @@ function machineDifferences(planned, observed) {
   return differences;
 }
 
+const ASSET_OPERATIONS = ['configure_zram', 'configure_memory_reclaim'];
+
+// The configuration operations of the plan against the current source assets: destination and SHA-256.
+function assetDifferences(plan, assets) {
+  if (assets === undefined) {
+    return [invalidation(
+      'configuration_assets_changed',
+      'A configuration asset is missing or damaged, so the reviewed configuration cannot be confirmed.',
+    )];
+  }
+  const reasons = [];
+  for (const kind of ASSET_OPERATIONS) {
+    const parameters = plan.operations.find(operation => operation.kind === kind)?.parameters;
+    const current = assets[kind];
+    if (parameters === undefined || current === undefined
+      || parameters.destination !== current.destination || parameters.source_sha256 !== current.sha256) {
+      reasons.push(invalidation(
+        'configuration_assets_changed',
+        `The configuration asset of ${kind} differs from the one the plan was generated with.`,
+      ));
+    }
+  }
+  return reasons;
+}
+
 // Pure comparison of a valid plan with fresh facts (DEC-005). `hashes` holds the recomputed
 // `policy_sha256`, `profile_definition_sha256`, and `override_sha256` (each undefined when it does not
 // apply, that is, without a matched profile or without an override). `baselineFacts` is the facts document
 // of the first discovery of the run; the plan does not record Secure Boot, so that state is compared
-// between the two discoveries. Returns an empty list when nothing differs.
-export function compareSafety({ plan, facts, hashes, baselineFacts }) {
+// between the two discoveries. `assets` holds the destination and SHA-256 recomputed from the current
+// configuration assets (loadConfigurationAssets), or is undefined when they are missing or damaged, which
+// invalidates the plan. Returns an empty list when nothing differs.
+export function compareSafety({ plan, facts, hashes, baselineFacts, assets }) {
   const reasons = [];
 
   const machine = machineDifferences(plan.target.machine, machineProjection(facts));
@@ -131,5 +159,6 @@ export function compareSafety({ plan, facts, hashes, baselineFacts }) {
   if (sameProfile && binding.override_sha256 !== hashes.override_sha256) {
     reasons.push(invalidation('policy_changed', 'The target override differs from the one the plan was generated with.'));
   }
+  reasons.push(...assetDifferences(plan, assets));
   return reasons;
 }

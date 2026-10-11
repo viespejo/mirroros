@@ -1,4 +1,5 @@
 import { reason } from '../discovery/validate-facts.mjs';
+import { parseChoiceText } from '../plan/resolve-choices.mjs';
 import { CHOICES_FORMAT_VERSION, CHOICE_SPECS } from '../plan/validate-plan.mjs';
 
 export { CHOICES_FORMAT_VERSION };
@@ -18,11 +19,11 @@ export function startingChoices(plan) {
   return choices;
 }
 
-// Widgets return text: `swapfile_size` is an integer count of MiB. A value that does not parse stays text
-// so the plan generator rejects it with its own reason.
+// Widgets return text: `swapfile_size` is an integer count of MiB and `hibernation` is `true` or `false`,
+// parsed by the same parser as the choice helpers. A value that does not parse stays text so the plan
+// generator rejects it with its own reason.
 export function parseValue(key, text) {
-  if (key === 'swapfile_size') return /^[0-9]+$/.test(text) ? Number(text) : text;
-  return text;
+  return parseChoiceText(key, text);
 }
 
 // Applies one edit to an accumulated choices object. Returns `{ choices }`, or `{ reason }` when the key
@@ -38,5 +39,10 @@ export function applyEdit(choices, key, value) {
     return { reason: reason('choices_not_editable', `${key} is fixed by the installation policy and cannot be chosen.`, `Edit one of: ${editableKeys().join(', ')}.`) };
   }
   const { format_version: _version, ...rest } = choices;
+  if (key === 'swapfile_size' && rest.hibernation === false) {
+    return { reason: reason('choices_conflict', 'hibernation is disabled, so no swapfile size can be chosen.', 'Enable hibernation before choosing a swapfile size.') };
+  }
+  // Toggling hibernation drops any explicit size: re-enabling proposes the RAM-derived default again.
+  if (key === 'hibernation') delete rest.swapfile_size;
   return { choices: { format_version: CHOICES_FORMAT_VERSION, ...rest, [key]: value } };
 }

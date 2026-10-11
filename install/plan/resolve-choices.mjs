@@ -13,6 +13,7 @@ import {
   TIERS,
   deriveLocalization,
 } from './validate-plan.mjs';
+import { checkSwapfileSize } from './swap-policy.mjs';
 
 export class PlanUpstreamError extends Error {
   constructor(message) {
@@ -22,7 +23,9 @@ export class PlanUpstreamError extends Error {
 }
 
 export const OVERRIDE_ALLOWED_KEYS = ['hostname'];
-export const CHOICE_ONLY_KEYS = ['target_disk'];
+// Editable choices that are not policy keys: the disk, and the swapfile size, which exists only while
+// hibernation is enabled and whose default is derived from the detected memory.
+export const CHOICE_ONLY_KEYS = ['target_disk', 'swapfile_size'];
 export const TARGET_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const SECRET_LIKE_KEY = /password|passphrase|secret|token/i;
@@ -50,7 +53,7 @@ export function loadPlanPolicy(path) {
     const spec = CHOICE_SPECS[key];
     if (DERIVED_KEYS.includes(key)) {
       errors.push(`installation policy key "${key}" is derived and cannot be set by the policy`);
-    } else if (spec === undefined || key === 'target_disk') {
+    } else if (spec === undefined || CHOICE_ONLY_KEYS.includes(key)) {
       errors.push(`installation policy key "${key}" is not a known policy key`);
     } else if (!isRecord(entry) || Object.keys(entry).some(field => !['value', 'provenance', 'editable'].includes(field))
       || !PROVENANCE_CLASSES.includes(entry.provenance) || entry.editable !== spec.editable || !spec.check(entry.value)) {
@@ -58,7 +61,7 @@ export function loadPlanPolicy(path) {
     }
   }
   for (const key of Object.keys(CHOICE_SPECS)) {
-    if (key !== 'target_disk' && !DERIVED_KEYS.includes(key) && !(key in document.policy)) errors.push(`installation policy key "${key}" is missing`);
+    if (!CHOICE_ONLY_KEYS.includes(key) && !DERIVED_KEYS.includes(key) && !(key in document.policy)) errors.push(`installation policy key "${key}" is missing`);
   }
   for (const [name, option] of Object.entries(document.storage_options)) {
     if (!isRecord(option) || !TIERS.includes(option.tier)
@@ -115,10 +118,25 @@ function supportedLocales(root) {
   return new Set(readFileSync(path, 'utf8').split('\n').map(line => line.split(/\s+/)[0]).filter(Boolean));
 }
 
+// Parses the text form of a choice value, as the choice helpers and the assistant receive it: a boolean is
+// exactly `true` or `false`, and an integer is a plain digit string. Anything else stays text, so the value
+// checks reject it with their own reason.
+export function parseChoiceText(key, text) {
+  if (key === 'hibernation') {
+    if (text === 'true') return true;
+    if (text === 'false') return false;
+    return text;
+  }
+  if (key === 'swapfile_size') return /^[0-9]+$/.test(text) ? Number(text) : text;
+  return text;
+}
+
 // Returns an error description, or undefined when the value is acceptable. Messages never echo the value.
-export function checkChoiceValue(key, value, { root = '/', storageOptions } = {}) {
+// `memoryTotalBytes` bounds swapfile_size from above; without it only the minimum is checked here.
+export function checkChoiceValue(key, value, { root = '/', storageOptions, memoryTotalBytes } = {}) {
   const spec = CHOICE_SPECS[key];
   if (spec === undefined || !spec.check(value)) return `${key} must be ${spec?.description ?? 'a supported value'}`;
+  if (key === 'swapfile_size' && memoryTotalBytes !== undefined) return checkSwapfileSize(value, memoryTotalBytes);
   if (key === 'storage_option' && storageOptions !== undefined && !(value in storageOptions)) {
     return `storage_option must be one of ${Object.keys(storageOptions).join(', ')}`;
   }
@@ -147,7 +165,19 @@ function readOptionalJson(path) {
   }
 }
 
-export function loadChoices(path, { policy, storageOptions, root = '/' }) {
+// hibernation: false cannot carry a swapfile size: the size is rejected rather than silently ignored.
+export function choicesConflicts(values) {
+  if (values.hibernation === false && values.swapfile_size !== undefined) {
+    return [reason(
+      'choices_conflict',
+      'hibernation is disabled but swapfile_size is set; a disabled plan has no swapfile.',
+      'Remove swapfile_size from the choices, or enable hibernation.',
+    )];
+  }
+  return [];
+}
+
+export function loadChoices(path, { policy, storageOptions, root = '/', memoryTotalBytes }) {
   const reasons = [];
   const read = readOptionalJson(path);
   const invalidFormat = message => reason(
@@ -178,11 +208,12 @@ export function loadChoices(path, { policy, storageOptions, root = '/' }) {
     } else if (!allowed.includes(key)) {
       reasons.push(reason('choices_unknown_key', `${key} is not a known choice.`, `Use only: ${allowed.join(', ')}.`));
     } else {
-      const problem = checkChoiceValue(key, value, { root, storageOptions });
+      const problem = checkChoiceValue(key, value, { root, storageOptions, memoryTotalBytes });
       if (problem !== undefined) reasons.push(reason('choices_invalid_value', `${problem}.`, `Fix ${key} in the choices file.`));
       else values[key] = value;
     }
   }
+  if (reasons.length === 0) reasons.push(...choicesConflicts(values));
   return { values, reasons };
 }
 

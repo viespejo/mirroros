@@ -98,6 +98,7 @@ test('the shared account password is named without values and root consumes it o
 test('the target section shows the observed machine and the profile without claiming qualification', () => {
   const matched = renderPlan(planFor('ext4-systemd-boot', 'locked'));
   assert.match(matched, /Architecture +x86_64\n/);
+  assert.match(matched, /Memory +4294967296 bytes \(4\.0 GiB\)\n/);
   assert.match(matched, /Virtualization +kvm\n/);
   assert.match(matched, /System vendor +QEMU\n/);
   assert.match(matched, /Profile +matched reference-vm \(recognized profile; not a\s+qualification of this machine\)/);
@@ -127,9 +128,14 @@ test('the render is a pure function of the plan', () => {
 });
 
 test('the render matches the committed snapshots', () => {
-  for (const [storageOption, rootAccount] of [['ext4-systemd-boot', 'locked'], ['btrfs-limine', 'password']]) {
-    const path = join(planFixturesRoot, 'render', `${storageOption}--${rootAccount}.txt`);
-    const text = renderPlan(planFor(storageOption, rootAccount));
+  const cases = [
+    ['ext4-systemd-boot', 'locked', {}, 'locked'],
+    ['btrfs-limine', 'password', {}, 'password'],
+    ['btrfs-rescue', 'locked', { hibernation: false }, 'hibernation-disabled'],
+  ];
+  for (const [storageOption, rootAccount, extra, name] of cases) {
+    const path = join(planFixturesRoot, 'render', `${storageOption}--${name}.txt`);
+    const text = renderPlan(planFor(storageOption, rootAccount, extra));
     if (process.env.UPDATE_SNAPSHOTS === '1') {
       mkdirSync(dirname(path), { recursive: true });
       writeFileSync(path, text);
@@ -145,10 +151,26 @@ test('the console summary lists the decision data and ends with the review sente
     'Profile: matched reference-vm',
     'Disk: virtio-SYNTH-VDA-0001 (34359738368 bytes (32.0 GiB))',
     'Storage option: btrfs-rescue (supported)',
+    'Hibernation: enabled (swapfile 4096 MiB)',
     'Destructive operations: 4',
     'Secrets required: account_password',
     `Digest: sha256 ${plan.digest.value}`,
     'Plan: evidence/install/run/installation-plan.json',
     'Review installation-plan.txt; approval is not part of this stage.',
   ]);
+});
+
+test('a disabled hibernation plan states that no swapfile will be created, and an enabled one lists it', () => {
+  const disabled = planFor('btrfs-rescue', 'locked', { hibernation: false });
+  const text = renderPlan(disabled);
+  assert.match(text, /hibernation: false\n\s+provenance personal_preference; source choice \[editable\]\n\s+Hibernation is disabled: no swapfile will be created\./);
+  assert.doesNotMatch(text, /swapfile_size|create_swapfile|@swap|resume_offset/);
+  assert.match(text, /configure_zram/);
+  assert.match(renderSummary(disabled, 'plan.json'), /Hibernation: disabled \(no swapfile\)\n/);
+  const enabled = renderPlan(planFor('btrfs-rescue', 'locked'));
+  assert.match(enabled, /swapfile_size: 4096\n\s+provenance hardware_detection; source detected \[editable\]/);
+  assert.match(enabled, /create_swapfile\n[\s\S]*priority: 0/);
+  assert.doesNotMatch(enabled, /Hibernation is disabled/);
+  assert.match(planFor('ext4-systemd-boot', 'locked', { swapfile_size: 2048 }).warnings.map(item => item.code).join(), /swapfile_below_ram/);
+  assert.match(renderPlan(planFor('ext4-systemd-boot', 'locked', { swapfile_size: 2048 })), /swapfile_below_ram:[\s\S]*may be unavailable under large\s+memory/);
 });

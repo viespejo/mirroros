@@ -1,11 +1,13 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PlanContractError } from '../../../install/plan/canonical-json.mjs';
+import { withDigest } from '../../../install/plan/digest-plan.mjs';
 import { generatePlan, loadFacts } from '../../../install/plan/generate-plan.mjs';
 import { machineProjection, validatePlan } from '../../../install/plan/validate-plan.mjs';
-import { buildValidPlan, ROOT_ACCOUNT_MODES, STORAGE_OPTION_NAMES } from './build-fixtures.mjs';
+import { buildValidPlan, REFERENCE_MEMORY_BYTES, ROOT_ACCOUNT_MODES, STORAGE_OPTION_NAMES } from './build-fixtures.mjs';
 import {
   CANARY,
+  assets,
   facts,
   generate,
   policy,
@@ -15,10 +17,12 @@ import {
   secondEligibleDisk,
   temporaryDirectory,
   unqualifiedFacts,
+  withMemory,
   writeJson,
 } from './helpers.mjs';
 
 const scratch = temporaryDirectory();
+const withDigestOf = plan => withDigest(plan);
 after(() => removeDirectory(scratch));
 const codes = result => result.reasons.map(item => item.code);
 
@@ -164,6 +168,7 @@ test('a recognized profile is recorded with the observed machine and its definit
   assert.deepEqual(plan.target.profile, { status: 'matched', profile_id: 'reference-vm' });
   assert.deepEqual(plan.target.machine, {
     architecture: 'x86_64',
+    memory_total_bytes: 4294967296,
     virtualization: 'kvm',
     dmi: { sys_vendor: 'QEMU', product_name: 'Standard PC (Q35 + ICH9, 2009)' },
   });
@@ -194,7 +199,7 @@ test('the machine projection omits what was not observed and plans keep the fiel
   delete sparse.layers.detected.hardware.virtualization;
   delete sparse.layers.detected.firmware.dmi.product_name;
   const { plan } = generate({ factsDocument: sparse });
-  assert.deepEqual(plan.target.machine, { architecture: 'x86_64', dmi: { sys_vendor: 'QEMU' } });
+  assert.deepEqual(plan.target.machine, { architecture: 'x86_64', memory_total_bytes: 4294967296, dmi: { sys_vendor: 'QEMU' } });
   assert.deepEqual(validatePlan(plan, { facts: sparse }), []);
   const none = facts();
   delete none.layers.detected.firmware.dmi;
@@ -237,7 +242,7 @@ test('an unchanged proposal keeps its provenance and source, and only a changed 
   assert.deepEqual(same, generate().plan);
   assert.equal(same.choices.hostname.source, 'override');
   assert.equal(same.choices.target_disk.source, 'detected');
-  const changed = generate({ choices: { swapfile_size: 8192 } }).plan;
+  const changed = generate({ choices: { swapfile_size: 2048 } }).plan;
   assert.deepEqual(
     [changed.choices.swapfile_size.provenance, changed.choices.swapfile_size.source],
     ['personal_preference', 'choice'],
@@ -255,9 +260,14 @@ test('identical inputs give an identical digest and no run-specific content', ()
 
 test('the digest binds the facts, the policy, the override, and the choices', () => {
   const base = generate().plan.digest.value;
-  const changedFacts = facts();
-  changedFacts.layers.detected.hardware.memory_total_bytes += 1;
-  assert.notEqual(generate({ factsDocument: changedFacts }).plan.digest.value, base);
+  assert.notEqual(generate({ factsDocument: withMemory(facts(), REFERENCE_MEMORY_BYTES + 1) }).plan.digest.value, base);
+  const changedAssets = structuredClone(assets);
+  changedAssets.configure_zram.sha256 = 'f'.repeat(64);
+  assert.notEqual(generate({ assetsOverride: changedAssets }).plan.digest.value, base);
+  const movedAsset = structuredClone(assets);
+  movedAsset.configure_memory_reclaim.destination = '/usr/lib/sysctl.d/70-other.conf';
+  // A destination that differs from the policy declaration is an internal contract failure, never a plan.
+  assert.throws(() => generate({ assetsOverride: movedAsset }), PlanContractError);
   const changedPolicy = structuredClone(policy);
   changedPolicy.sha256 = 'f'.repeat(64);
   assert.notEqual(generate({ policyOverride: changedPolicy }).plan.digest.value, base);
@@ -286,8 +296,29 @@ test('an edited regeneration is a new plan and leaves the original untouched', (
   }
 });
 
+function withDiskSize(document, bytes) {
+  const copy = structuredClone(document);
+  copy.layers.detected.storage.disks[0].identity.size_bytes = bytes;
+  copy.effective['storage.disks'].value = copy.layers.detected.storage.disks;
+  return copy;
+}
+
 test('choices that contradict the disk are input errors', () => {
-  assert.deepEqual(codes(generate({ choices: { swapfile_size: 65536 } })), ['plan_size_does_not_fit']);
+  // The ESP, the root minimum, and the default swapfile need 21474836480 bytes; the root minimum and ESP alone need 17179869184.
+  const small = withDiskSize(facts(), 18000000000);
+  const tooSmall = generate({ factsDocument: small });
+  assert.deepEqual(codes(tooSmall), ['plan_size_does_not_fit']);
+  assert.match(tooSmall.reasons[0].next_step, /disable hibernation/);
+  assert.deepEqual(codes(generate({ factsDocument: small, choices: { swapfile_size: 4096 } })), ['plan_size_does_not_fit']);
+  // The size is never reduced and hibernation is never disabled silently; the user decides.
+  const disabled = generate({ factsDocument: small, choices: { hibernation: false } });
+  assert.deepEqual(disabled.reasons, []);
+  assert.equal(disabled.plan.choices.hibernation.value, false);
+  const tinyDisk = withDiskSize(facts(), 17000000000);
+  assert.deepEqual(codes(generate({ factsDocument: tinyDisk, choices: { hibernation: false } })), ['plan_size_does_not_fit']);
+  const fits = withDiskSize(facts(), 21474836480);
+  assert.deepEqual(generate({ factsDocument: fits }).reasons, []);
+  assert.deepEqual(codes(generate({ factsDocument: withDiskSize(facts(), 21474836479) })), ['plan_size_does_not_fit']);
 });
 
 test('a generated plan that fails its own validator is an invariant violation', () => {
@@ -302,7 +333,7 @@ test('a generated plan that fails its own validator is an invariant violation', 
 test('planted secrets never reach the plan', () => {
   const { plan } = generate({ choices: { root_account: 'password' } });
   assert.doesNotMatch(JSON.stringify(plan), new RegExp(CANARY));
-  assert.deepEqual(generatePlan({ facts: facts(), policy, profileDefinition: referenceProfileDefinition() }).reasons, []);
+  assert.deepEqual(generatePlan({ facts: facts(), policy, profileDefinition: referenceProfileDefinition(), assets }).reasons, []);
 });
 
 test('facts that are missing, invalid, or of an unknown format exit as input errors', () => {
@@ -322,4 +353,177 @@ test('facts that are missing, invalid, or of an unknown format exit as input err
   const result = load(invalid);
   assert.deepEqual(codes(result), ['facts_invalid']);
   assert.match(result.reasons[0].message, /boot_mode_not_uefi/);
+});
+
+const hasSwap = plan => plan.operations.some(operation => operation.kind === 'create_swapfile');
+const resumeTokens = plan => plan.choices.kernel_cmdline.value.split(' ').filter(token => /^resume(_offset)?=/.test(token));
+const offsetResolutions = plan => plan.operations.flatMap(operation => operation.resolved_at_apply ?? []).filter(item => item.name === 'resume_offset');
+const kinds = plan => plan.operations.map(operation => operation.kind);
+
+test('hibernation defaults to enabled with the RAM-derived swapfile for every storage option', () => {
+  for (const storageOption of STORAGE_OPTION_NAMES) {
+    const { plan, reasons } = generate({ choices: { storage_option: storageOption } });
+    assert.deepEqual(reasons, [], storageOption);
+    assert.deepEqual(plan.choices.hibernation, { value: true, provenance: 'personal_preference', source: 'policy', editable: true });
+    assert.deepEqual(plan.choices.swapfile_size, { value: 4096, provenance: 'hardware_detection', source: 'detected', editable: true });
+    assert.deepEqual(plan, buildValidPlan(storageOption, 'locked'), storageOption);
+    const swapfile = plan.operations.find(operation => operation.kind === 'create_swapfile');
+    assert.deepEqual(swapfile.parameters, { path: '/swapfile', size_mib: 4096, priority: 0 });
+    assert.deepEqual(swapfile.resolved_at_apply.map(item => item.name), ['resume_offset']);
+    assert.equal(resumeTokens(plan).length, 2);
+    assert.equal(offsetResolutions(plan).length, 2);
+    if (storageOption !== 'ext4-systemd-boot') {
+      for (const kind of ['create_btrfs_subvolumes', 'mount_target']) {
+        assert.ok(plan.operations.find(operation => operation.kind === kind).parameters.subvolumes.includes('@swap'), `${storageOption} ${kind}`);
+      }
+    }
+    assert.deepEqual(plan.warnings.filter(warning => warning.code === 'swapfile_below_ram'), []);
+  }
+});
+
+test('disabled hibernation removes the swapfile, @swap, and every resume setting but keeps zram', () => {
+  for (const storageOption of STORAGE_OPTION_NAMES) {
+    const enabled = generate({ choices: { storage_option: storageOption } }).plan;
+    const { plan, reasons } = generate({ choices: { storage_option: storageOption, hibernation: false } });
+    assert.deepEqual(reasons, [], storageOption);
+    assert.deepEqual(plan, buildValidPlan(storageOption, 'locked', false), storageOption);
+    assert.deepEqual(plan.choices.hibernation, { value: false, provenance: 'personal_preference', source: 'choice', editable: true });
+    assert.equal('swapfile_size' in plan.choices, false);
+    assert.equal(hasSwap(plan), false);
+    assert.deepEqual(resumeTokens(plan), []);
+    assert.deepEqual(offsetResolutions(plan), []);
+    assert.ok(plan.choices.kernel_cmdline.value.split(' ').includes('zswap.enabled=0'));
+    assert.ok(plan.choices.kernel_cmdline.value.startsWith('root=UUID=<root> rw'));
+    assert.deepEqual(plan.operations.find(operation => operation.kind === 'install_bootloader').resolved_at_apply, [{ name: 'root_uuid', method: 'blkid' }]);
+    assert.ok(kinds(plan).includes('configure_zram') && kinds(plan).includes('configure_memory_reclaim'));
+    assert.deepEqual(kinds(plan), kinds(enabled).filter(kind => kind !== 'create_swapfile'));
+    assert.doesNotMatch(JSON.stringify(plan), /@swap|swapfile_size|create_swapfile|resume_offset=|resume=/);
+    assert.equal(plan.warnings.some(warning => warning.code === 'swapfile_below_ram'), false);
+    if (storageOption !== 'ext4-systemd-boot') {
+      const subvolumes = plan.operations.find(operation => operation.kind === 'create_btrfs_subvolumes').parameters.subvolumes;
+      assert.deepEqual(subvolumes, ['@', '@home', '@log', '@pkg', '@snapshots']);
+      assert.deepEqual(plan.operations.find(operation => operation.kind === 'mount_target').parameters.subvolumes, subvolumes);
+      assert.ok(kinds(plan).includes('configure_snapper'));
+    }
+    assert.deepEqual(validatePlan(plan, { facts: facts(), assets }), []);
+  }
+});
+
+test('zram and memory reclaim follow the packages, in order, with asset digests, and zswap is disabled', () => {
+  for (const storageOption of STORAGE_OPTION_NAMES) {
+    for (const hibernation of [true, false]) {
+      const { plan } = generate({ choices: { storage_option: storageOption, hibernation } });
+      const order = kinds(plan);
+      const packages = order.indexOf('install_packages');
+      assert.equal(order[packages + 1], 'configure_zram');
+      assert.equal(order[packages + 2], 'configure_memory_reclaim');
+      assert.equal(order[packages + 3], 'generate_fstab');
+      assert.deepEqual(plan.operations[packages].parameters.packages.filter(name => name === 'zram-generator'), ['zram-generator']);
+      assert.equal(plan.choices.zram.value.package_source, 'arch_official_repository');
+      assert.deepEqual(plan.operations[packages + 1].parameters, {
+        destination: '/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf',
+        source_sha256: assets.configure_zram.sha256,
+        zram_size: 'ram',
+        compression_algorithm: 'zstd',
+        swap_priority: 100,
+      });
+      assert.deepEqual(plan.operations[packages + 2].parameters, {
+        destination: '/usr/lib/sysctl.d/60-mirroros-memory.conf',
+        source_sha256: assets.configure_memory_reclaim.sha256,
+        'vm.swappiness': 180,
+        'vm.page-cluster': 0,
+        'vm.watermark_scale_factor': 125,
+        'vm.watermark_boost_factor': 0,
+      });
+      assert.ok(plan.choices.kernel_cmdline.value.split(' ').includes('zswap.enabled=0'));
+      assert.equal(plan.operations.filter(operation => operation.destructive).length, 4);
+    }
+  }
+});
+
+test('detected memory rounds up to whole GiB for the maximum, including fractional and very large memory', () => {
+  const cases = [
+    [4090589184, 4096], // 3.81 GiB, the memory of the reference VM evidence
+    [REFERENCE_MEMORY_BYTES, 4096],
+    [REFERENCE_MEMORY_BYTES + 1, 5120],
+    [1073741824, 1024],
+    [1073741825, 2048],
+    [536870912, 1024], // 0.5 GiB still rounds up to one GiB
+    [8589934592, 8192],
+    [103079215104, 98304], // 96 GiB, above the old fixed 64 GiB ceiling
+    [103079215105, 99328],
+  ];
+  const roomy = withDiskSize(facts(), 1024 ** 4);
+  for (const [bytes, maximum] of cases) {
+    const { plan, reasons } = generate({ factsDocument: withMemory(roomy, bytes) });
+    assert.deepEqual(reasons, [], String(bytes));
+    assert.equal(plan.choices.swapfile_size.value, maximum, String(bytes));
+    assert.equal(plan.target.machine.memory_total_bytes, bytes);
+    assert.equal(plan.operations.find(operation => operation.kind === 'create_swapfile').parameters.size_mib, maximum);
+    const above = generate({ factsDocument: withMemory(roomy, bytes), choices: { swapfile_size: maximum + 1 } });
+    assert.deepEqual(codes(above), ['choices_invalid_value'], `${bytes} above`);
+  }
+});
+
+test('sizes inside the range are accepted, the minimum is not a claim, and sizes below raw RAM warn', () => {
+  const warning = plan => plan.warnings.filter(item => item.code === 'swapfile_below_ram');
+  const minimum = generate({ choices: { swapfile_size: 512 } });
+  assert.deepEqual(minimum.reasons, []);
+  assert.equal(minimum.plan.choices.swapfile_size.source, 'choice');
+  assert.equal(warning(minimum.plan).length, 1);
+  assert.match(warning(minimum.plan)[0].message, /may be unavailable under large memory workloads/);
+  assert.match(warning(minimum.plan)[0].message, /used memory and free swapfile space/);
+  assert.match(warning(minimum.plan)[0].next_step, /not a guarantee/);
+  assert.deepEqual(codes(generate({ choices: { swapfile_size: 511 } })), ['choices_invalid_value']);
+  assert.deepEqual(codes(generate({ choices: { swapfile_size: 0 } })), ['choices_invalid_value']);
+  assert.deepEqual(codes(generate({ choices: { swapfile_size: -1 } })), ['choices_invalid_value']);
+  assert.deepEqual(codes(generate({ choices: { swapfile_size: 1.5 } })), ['choices_invalid_value']);
+  assert.deepEqual(codes(generate({ choices: { swapfile_size: '2048' } })), ['choices_invalid_value']);
+  // 4096 MiB equals the 4 GiB of the fixture: no warning. One byte more memory makes the same size smaller than raw RAM.
+  assert.equal(warning(generate({ choices: { swapfile_size: 4096 } }).plan).length, 0);
+  assert.equal(warning(generate({ choices: { swapfile_size: 4095 } }).plan).length, 1);
+  const justAbove = withMemory(facts(), REFERENCE_MEMORY_BYTES + 1);
+  assert.equal(warning(generate({ factsDocument: justAbove, choices: { swapfile_size: 4096 } }).plan).length, 1);
+  assert.equal(warning(generate({ factsDocument: justAbove }).plan).length, 0);
+  const justBelow = withMemory(facts(), REFERENCE_MEMORY_BYTES - 1);
+  assert.equal(warning(generate({ factsDocument: justBelow, choices: { swapfile_size: 4096 } }).plan).length, 0);
+  assert.deepEqual(generate({ choices: { swapfile_size: 2048 } }).plan.choices.swapfile_size.value, 2048);
+});
+
+test('missing or unusable detected memory fails generation with repeated discovery guidance', () => {
+  for (const bytes of [undefined, 0, -1, 1.5, 2 ** 53, 'unknown', null]) {
+    const document = facts();
+    if (bytes === undefined) {
+      delete document.effective['hardware.memory_total_bytes'];
+    } else {
+      document.effective['hardware.memory_total_bytes'] = { value: bytes, source: 'detected' };
+    }
+    for (const hibernation of [true, false]) {
+      const result = generate({ factsDocument: document, choices: { hibernation } });
+      assert.equal(result.plan, undefined);
+      assert.deepEqual(codes(result), ['memory_unavailable'], `${String(bytes)} ${hibernation}`);
+      assert.match(result.reasons[0].next_step, /discover/);
+    }
+  }
+  assert.deepEqual(codes(generate({ factsDocument: withMemory(facts(), undefined) })), ['memory_unavailable']);
+});
+
+test('contradictory explicit choices are rejected rather than ignored', () => {
+  const result = generate({ choices: { hibernation: false, swapfile_size: 2048 } });
+  assert.equal(result.plan, undefined);
+  assert.deepEqual(codes(result), ['choices_conflict']);
+  assert.match(result.reasons[0].next_step, /Remove swapfile_size/);
+  assert.deepEqual(codes(generate({ choices: { hibernation: false, swapfile_size: 99999 } })), ['choices_conflict']);
+  assert.deepEqual(generate({ choices: { hibernation: true, swapfile_size: 2048 } }).reasons, []);
+});
+
+test('generation requires the configuration assets and binds their destinations and digests', () => {
+  assert.throws(() => generatePlan({ facts: facts(), policy, profileDefinition: referenceProfileDefinition() }), PlanContractError);
+  const { plan } = generate();
+  const zram = plan.operations.find(operation => operation.kind === 'configure_zram').parameters;
+  assert.equal(zram.source_sha256, assets.configure_zram.sha256);
+  assert.match(zram.source_sha256, /^[0-9a-f]{64}$/);
+  const stale = structuredClone(plan);
+  stale.operations.find(operation => operation.kind === 'configure_zram').parameters.source_sha256 = 'a'.repeat(64);
+  assert.ok(codes({ reasons: validatePlan(withDigestOf(stale), { facts: facts(), assets }) }).includes('configuration_asset_mismatch'));
 });

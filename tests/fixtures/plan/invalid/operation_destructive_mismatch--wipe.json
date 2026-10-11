@@ -1,8 +1,9 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "target": {
     "machine": {
       "architecture": "x86_64",
+      "memory_total_bytes": 4294967296,
       "virtualization": "kvm",
       "dmi": {
         "sys_vendor": "QEMU",
@@ -97,7 +98,7 @@
       "editable": false
     },
     "kernel_cmdline": {
-      "value": "root=UUID=<root> rw resume=UUID=<root> resume_offset=<resume_offset>",
+      "value": "root=UUID=<root> rw zswap.enabled=0 resume=UUID=<root> resume_offset=<resume_offset>",
       "provenance": "personal_preference",
       "source": "policy",
       "editable": false
@@ -112,14 +113,35 @@
       "source": "policy",
       "editable": false
     },
-    "swapfile_size": {
-      "value": 4096,
+    "hibernation": {
+      "value": true,
       "provenance": "personal_preference",
       "source": "policy",
       "editable": true
     },
     "zram": {
-      "value": false,
+      "value": {
+        "package": "zram-generator",
+        "package_source": "arch_official_repository",
+        "destination": "/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf",
+        "zram_size": "ram",
+        "compression_algorithm": "zstd",
+        "swap_priority": 100
+      },
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "memory_reclaim": {
+      "value": {
+        "destination": "/usr/lib/sysctl.d/60-mirroros-memory.conf",
+        "settings": {
+          "vm.swappiness": 180,
+          "vm.page-cluster": 0,
+          "vm.watermark_scale_factor": 125,
+          "vm.watermark_boost_factor": 0
+        }
+      },
       "provenance": "personal_preference",
       "source": "policy",
       "editable": false
@@ -129,6 +151,7 @@
         "base",
         "linux",
         "linux-firmware",
+        "zram-generator",
         "sudo",
         "neovim",
         "man-db",
@@ -251,6 +274,12 @@
       "source": "policy",
       "editable": false
     },
+    "swapfile_size": {
+      "value": 4096,
+      "provenance": "hardware_detection",
+      "source": "detected",
+      "editable": true
+    },
     "locales": {
       "value": [
         "en_US.UTF-8"
@@ -344,6 +373,7 @@
           "base",
           "linux",
           "linux-firmware",
+          "zram-generator",
           "sudo",
           "neovim",
           "man-db",
@@ -351,7 +381,34 @@
           "networkmanager"
         ]
       },
-      "description": "Install the base package set and the packages of the storage option."
+      "description": "Install the base package set, zram-generator, and the packages of the storage option."
+    },
+    {
+      "id": "configure_zram",
+      "kind": "configure_zram",
+      "destructive": false,
+      "parameters": {
+        "destination": "/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf",
+        "source_sha256": "b6aa35ad3b4ee26a9296a50a45f215fd7e008fff05ad2fdbde67ba2a7f55f9cd",
+        "zram_size": "ram",
+        "compression_algorithm": "zstd",
+        "swap_priority": 100
+      },
+      "description": "Deliver the zram-generator drop-in: one zram device sized to memory, compressed with zstd, as preferred swap."
+    },
+    {
+      "id": "configure_memory_reclaim",
+      "kind": "configure_memory_reclaim",
+      "destructive": false,
+      "parameters": {
+        "destination": "/usr/lib/sysctl.d/60-mirroros-memory.conf",
+        "source_sha256": "efa0ad6cc81d44518d21a8c9eca61635ca7dbacc55463d01ae74cded970ac678",
+        "vm.swappiness": 180,
+        "vm.page-cluster": 0,
+        "vm.watermark_scale_factor": 125,
+        "vm.watermark_boost_factor": 0
+      },
+      "description": "Deliver the sysctl drop-in with the memory reclaim settings."
     },
     {
       "id": "generate_fstab",
@@ -368,9 +425,10 @@
       "destructive": false,
       "parameters": {
         "path": "/swapfile",
-        "size_mib": 4096
+        "size_mib": 4096,
+        "priority": 0
       },
-      "description": "Create the swapfile and list it in fstab.",
+      "description": "Create the swapfile with fallback swap priority 0 and list it in fstab; it also holds the hibernation image.",
       "resolved_at_apply": [
         {
           "name": "resume_offset",
@@ -455,7 +513,7 @@
       "destructive": false,
       "parameters": {
         "bootloader": "systemd-boot",
-        "kernel_cmdline": "root=UUID=<root> rw resume=UUID=<root> resume_offset=<resume_offset>",
+        "kernel_cmdline": "root=UUID=<root> rw zswap.enabled=0 resume=UUID=<root> resume_offset=<resume_offset>",
         "options": {
           "timeout": 3,
           "editor": false,
@@ -557,12 +615,12 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "7c9ed6a64c08699421ce9aeb811381e6c5c412b918fb0a5bc1b5c2e8f0382ce4",
+    "policy_sha256": "d2791b38a77a55fba8e665e7100ef1811c96db5b64ff15009fe7a5c440414b98",
     "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "d9156bfc6c58684206eaae029f9167fb9de11b400f9b0a7a8af77777cd95a57c"
+    "value": "51adf830d8f242f8ce4557bb6b71c8316d5a28945e63d2881a53fdd574579c13"
   }
 }

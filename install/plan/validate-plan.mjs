@@ -1,10 +1,18 @@
 import { isRecord, reason } from '../discovery/validate-facts.mjs';
 import { canonicalize } from './canonical-json.mjs';
 import { sha256Canonical, verifyDigest } from './digest-plan.mjs';
+import {
+  SWAPFILE_MINIMUM_MIB,
+  SWAPFILE_PRIORITY,
+  hasResumeParameters,
+  isMemoryBytes,
+  isSwapfileSizeInRange,
+  requiredDiskBytes,
+} from './swap-policy.mjs';
 
-export const PLAN_FORMAT_VERSION = 2;
-export const PLAN_POLICY_FORMAT_VERSION = 2;
-export const CHOICES_FORMAT_VERSION = 2;
+export const PLAN_FORMAT_VERSION = 3;
+export const PLAN_POLICY_FORMAT_VERSION = 3;
+export const CHOICES_FORMAT_VERSION = 3;
 export const EXIT_VALID = 0;
 export const EXIT_INVALID_INPUT = 2;
 export const EXIT_UPSTREAM_FAILURE = 5;
@@ -19,7 +27,6 @@ export const ACCOUNT_PASSWORD = 'account_password';
 export const SECRET_NAMES = [ACCOUNT_PASSWORD];
 export const SECRET_CHANNEL = 'protected_prompt';
 export const MIBIBYTE = 1048576;
-export const SWAPFILE_MIB_RANGE = [512, 65536];
 export const PROFILE_STATUSES = ['matched', 'unqualified'];
 export const LANGUAGES = ['en_US.UTF-8', 'es_ES.UTF-8'];
 export const REGIONAL_FORMATS = ['follow_language', ...LANGUAGES];
@@ -41,8 +48,9 @@ export function accountPasswordConsumers(rootAccount) {
   return rootAccount === 'password' ? ['create_user', 'configure_root_account'] : ['create_user'];
 }
 
-function projectMachine({ architecture, virtualization, dmi } = {}) {
+function projectMachine({ architecture, memory_total_bytes: memoryTotalBytes, virtualization, dmi } = {}) {
   const machine = { architecture };
+  if (memoryTotalBytes !== undefined) machine.memory_total_bytes = memoryTotalBytes;
   if (virtualization !== undefined) machine.virtualization = virtualization;
   const kept = {};
   for (const key of MACHINE_DMI_KEYS) {
@@ -52,12 +60,13 @@ function projectMachine({ architecture, virtualization, dmi } = {}) {
   return machine;
 }
 
-// The observed safety identity projection of a facts document: architecture, virtualization, and the
-// allowlisted DMI sys_vendor and product_name, each omitted when it was not observed.
+// The observed safety identity projection of a facts document: architecture, detected memory, virtualization,
+// and the allowlisted DMI sys_vendor and product_name, each omitted when it was not observed.
 export function machineProjection(facts) {
   const detected = facts.layers?.detected ?? {};
   return projectMachine({
     architecture: detected.hardware?.architecture,
+    memory_total_bytes: detected.hardware?.memory_total_bytes,
     virtualization: detected.hardware?.virtualization,
     dmi: detected.firmware?.dmi,
   });
@@ -72,6 +81,8 @@ export const KINDS = {
   mount_target: false,
   install_packages: false,
   generate_fstab: false,
+  configure_zram: false,
+  configure_memory_reclaim: false,
   create_swapfile: false,
   configure_locale_time_console: false,
   configure_hostname_network: false,
@@ -93,6 +104,8 @@ const EXT4_SEQUENCE = [
   'format_filesystems',
   'mount_target',
   'install_packages',
+  'configure_zram',
+  'configure_memory_reclaim',
   'generate_fstab',
   'create_swapfile',
   'configure_locale_time_console',
@@ -130,9 +143,12 @@ const SEQUENCES = {
   'btrfs-limine': LIMINE_SEQUENCE,
 };
 
-export function operationSequence(storageOption) {
+// The fixed operation order of a storage option. create_swapfile exists only when hibernation is enabled;
+// omitting it does not change the relative order of the other operations.
+export function operationSequence(storageOption, hibernation = true) {
   const sequence = SEQUENCES[storageOption];
-  return sequence === undefined ? undefined : [...sequence];
+  if (sequence === undefined) return undefined;
+  return sequence.filter(kind => hibernation || kind !== 'create_swapfile');
 }
 
 const NEXT_STEPS = {
@@ -158,7 +174,9 @@ const NEXT_STEPS = {
   profile_binding_mismatch: 'Regenerate the plan from the current target-facts.json; the profile classification and its bindings must agree.',
   disk_identity_mismatch: 'Regenerate the plan from the current target-facts.json.',
   disk_not_eligible: 'Choose an eligible disk and regenerate the plan.',
-  plan_size_does_not_fit: 'Choose a smaller swapfile_size or a larger disk and regenerate the plan.',
+  plan_size_does_not_fit: 'Choose a smaller swapfile_size, disable hibernation, or use a larger disk, and regenerate the plan.',
+  hibernation_plan_mismatch: 'Regenerate the plan; the swapfile, @swap, and resume settings follow the hibernation choice and the detected memory.',
+  configuration_asset_mismatch: 'Regenerate the plan from this MirrorOS checkout; the zram, memory reclaim, package, and zswap settings must agree with the policy and its assets.',
   facts_binding_mismatch: 'Regenerate the plan from the current target-facts.json.',
   digest_mismatch: 'Regenerate the plan; its content changed after the digest was computed.',
 };
@@ -181,6 +199,19 @@ export function isUserName(value) {
 const isString = value => typeof value === 'string' && value.length > 0;
 const isInteger = value => Number.isSafeInteger(value);
 const isStringList = value => Array.isArray(value) && value.every(isString);
+const isBoolean = value => typeof value === 'boolean';
+
+const hasExactKeys = (value, keys) => isRecord(value)
+  && Object.keys(value).length === keys.length
+  && keys.every(key => key in value);
+const isZramPolicy = value => hasExactKeys(value, ['package', 'package_source', 'destination', 'zram_size', 'compression_algorithm', 'swap_priority'])
+  && ['package', 'package_source', 'destination', 'zram_size', 'compression_algorithm'].every(key => isString(value[key]))
+  && isInteger(value.swap_priority);
+const isMemoryReclaimPolicy = value => hasExactKeys(value, ['destination', 'settings'])
+  && isString(value.destination)
+  && isRecord(value.settings)
+  && Object.keys(value.settings).length > 0
+  && Object.values(value.settings).every(isInteger);
 
 const choice = (editable, check, description) => ({ editable, check, description });
 const fixed = description => choice(false, () => true, description);
@@ -188,10 +219,12 @@ const fixed = description => choice(false, () => true, description);
 export const CHOICE_SPECS = {
   target_disk: choice(true, isString, 'a disk identifier string'),
   storage_option: choice(true, value => STORAGE_OPTIONS.includes(value), `one of ${STORAGE_OPTIONS.join(', ')}`),
+  hibernation: choice(true, isBoolean, 'a boolean'),
+  // The upper bound depends on the detected memory; see swap-policy.mjs. Present only when hibernation is true.
   swapfile_size: choice(
     true,
-    value => isInteger(value) && value >= SWAPFILE_MIB_RANGE[0] && value <= SWAPFILE_MIB_RANGE[1],
-    `an integer from ${SWAPFILE_MIB_RANGE[0]} to ${SWAPFILE_MIB_RANGE[1]} (MiB)`,
+    value => isInteger(value) && value >= SWAPFILE_MINIMUM_MIB,
+    `an integer count of MiB, at least ${SWAPFILE_MINIMUM_MIB}`,
   ),
   lang: choice(true, value => LANGUAGES.includes(value), `one of ${LANGUAGES.join(', ')}`),
   regional_format: choice(true, value => REGIONAL_FORMATS.includes(value), `one of ${REGIONAL_FORMATS.join(', ')}`),
@@ -214,7 +247,8 @@ export const CHOICE_SPECS = {
   initramfs: fixed('a fixed policy value'),
   kernel_cmdline: fixed('a fixed policy value'),
   bootloader_options: fixed('a fixed policy value'),
-  zram: fixed('a fixed policy value'),
+  zram: choice(false, isZramPolicy, 'the fixed zram policy object'),
+  memory_reclaim: choice(false, isMemoryReclaimPolicy, 'the fixed memory reclaim policy object'),
   packages: fixed('a fixed policy value'),
   mirrorlist: fixed('a fixed policy value'),
   hardware_clock: fixed('a fixed policy value'),
@@ -329,9 +363,12 @@ function checkLayout(layout, path, reasons) {
 
 function checkMachine(machine, reasons) {
   const path = 'plan.target.machine';
-  if (!checkRecord(machine, path, ['architecture'], ['virtualization', 'dmi'], reasons)) return;
+  if (!checkRecord(machine, path, ['architecture', 'memory_total_bytes'], ['virtualization', 'dmi'], reasons)) return;
   for (const key of ['architecture', 'virtualization']) {
     if (machine[key] !== undefined) expect(isString(machine[key]), `${path}.${key}`, 'a non-empty string', reasons);
+  }
+  if (machine.memory_total_bytes !== undefined) {
+    expect(isMemoryBytes(machine.memory_total_bytes), `${path}.memory_total_bytes`, 'a positive integer', reasons);
   }
   if (machine.dmi !== undefined && checkRecord(machine.dmi, `${path}.dmi`, [], MACHINE_DMI_KEYS, reasons)) {
     for (const key of MACHINE_DMI_KEYS) {
@@ -373,8 +410,11 @@ function checkChoices(choices, reasons) {
     add(reasons, 'plan_invalid_type', 'plan.choices must be an object.');
     return;
   }
+  // swapfile_size exists only while hibernation is enabled; checkHibernation owns its presence rules.
   for (const key of Object.keys(CHOICE_SPECS)) {
-    if (key !== 'target_disk' && choices[key] === undefined) add(reasons, 'plan_field_missing', `plan.choices.${key} is required.`);
+    if (key !== 'target_disk' && key !== 'swapfile_size' && choices[key] === undefined) {
+      add(reasons, 'plan_field_missing', `plan.choices.${key} is required.`);
+    }
   }
   for (const [key, entry] of Object.entries(choices)) {
     const path = `plan.choices.${key}`;
@@ -525,10 +565,22 @@ function checkOperationSet(plan, reasons) {
     }
   }
   const option = plan.choices?.storage_option?.value;
-  const expected = operationSequence(option);
-  if (!kindsKnown || expected === undefined) return;
-  const kinds = operations.map(operation => operation.kind);
-  if (kinds.length === expected.length && kinds.every((kind, index) => kind === expected[index])) return;
+  const hibernation = plan.choices?.hibernation?.value;
+  const full = operationSequence(option);
+  if (!kindsKnown || full === undefined) return;
+  const allKinds = operations.map(operation => operation.kind);
+  // With a boolean hibernation choice, the presence of create_swapfile is a hibernation consistency rule
+  // (checkHibernation); here only its position is checked and the other operations keep their fixed order.
+  const swapfileRule = typeof hibernation === 'boolean';
+  const kinds = swapfileRule ? allKinds.filter(kind => kind !== 'create_swapfile') : allKinds;
+  const expected = swapfileRule ? full.filter(kind => kind !== 'create_swapfile') : full;
+  if (kinds.length === expected.length && kinds.every((kind, index) => kind === expected[index])) {
+    const swapfiles = allKinds.filter(kind => kind === 'create_swapfile').length;
+    const positioned = swapfiles === 0 || (swapfiles === 1 && allKinds[allKinds.indexOf('generate_fstab') + 1] === 'create_swapfile');
+    if (!swapfileRule || positioned) return;
+    add(reasons, 'operation_order_invalid', `The operations are not in the order required by ${option}.`);
+    return;
+  }
   const sameSet = kinds.length === expected.length && [...kinds].sort().join() === [...expected].sort().join();
   if (sameSet) {
     add(reasons, 'operation_order_invalid', `The operations are not in the order required by ${option}.`);
@@ -620,12 +672,120 @@ function checkSizes(plan, reasons) {
   const disk = plan.target?.disk;
   const esp = plan.choices?.esp?.value?.size_bytes;
   const root = plan.choices?.root_minimum_bytes?.value;
-  const swap = plan.choices?.swapfile_size?.value;
-  if (![esp, root, swap].every(isInteger) || !isRecord(disk) || !isInteger(disk.size_bytes)) return;
-  const required = esp + root + swap * MIBIBYTE;
-  if (required > disk.size_bytes) {
-    add(reasons, 'plan_size_does_not_fit', `The ESP, the root minimum, and the swapfile need ${required} bytes, but the disk has ${disk.size_bytes}.`);
+  const swap = plan.choices?.hibernation?.value === true ? plan.choices?.swapfile_size?.value : undefined;
+  if (![esp, root].every(isInteger) || (swap !== undefined && !isInteger(swap)) || !isRecord(disk) || !isInteger(disk.size_bytes)) return;
+  const required = requiredDiskBytes({ espBytes: esp, rootMinimumBytes: root, swapfileMib: swap });
+  if (required === undefined || required > disk.size_bytes) {
+    const parts = swap === undefined ? 'The ESP and the root minimum' : 'The ESP, the root minimum, and the swapfile';
+    add(reasons, 'plan_size_does_not_fit', `${parts} need ${required ?? 'more than the safe integer range of'} bytes, but the disk has ${disk.size_bytes}.`);
   }
+}
+
+function operationKinds(plan) {
+  return Array.isArray(plan.operations) ? plan.operations.filter(isRecord) : [];
+}
+
+function subvolumeLists(operations) {
+  return operations
+    .filter(operation => ['create_btrfs_subvolumes', 'mount_target'].includes(operation.kind))
+    .map(operation => [operation.kind, operation.parameters?.subvolumes])
+    .filter(([, list]) => Array.isArray(list));
+}
+
+// Hibernation, the swapfile, @swap, and the resume settings follow one boolean choice and the detected memory
+// (ADR 0007). Anything present without it, or missing with it, is a contradiction.
+function checkHibernation(plan, reasons) {
+  const hibernation = plan.choices?.hibernation?.value;
+  if (typeof hibernation !== 'boolean') return;
+  const problems = [];
+  const operations = operationKinds(plan);
+  const swapfile = operations.find(operation => operation.kind === 'create_swapfile');
+  const bootloader = operations.find(operation => operation.kind === 'install_bootloader');
+  const size = plan.choices.swapfile_size?.value;
+  const memory = plan.target?.machine?.memory_total_bytes;
+  const commandLine = plan.choices.kernel_cmdline?.value;
+  const [hasResume, hasOffset] = typeof commandLine === 'string' ? hasResumeParameters(commandLine) : [false, false];
+  const resolvesOffset = operations.some(operation => Array.isArray(operation.resolved_at_apply)
+    && operation.resolved_at_apply.some(item => isRecord(item) && item.name === 'resume_offset'));
+  const swapLists = subvolumeLists(operations);
+  if (hibernation) {
+    if (plan.choices.swapfile_size === undefined) problems.push('hibernation is enabled but swapfile_size is missing');
+    else if (isInteger(size) && isMemoryBytes(memory) && !isSwapfileSizeInRange(size, memory)) {
+      problems.push('swapfile_size is outside the range derived from the detected memory');
+    }
+    if (swapfile === undefined) problems.push('hibernation is enabled but create_swapfile is missing');
+    else {
+      if (isRecord(swapfile.parameters) && swapfile.parameters.size_mib !== size) problems.push('create_swapfile does not use swapfile_size');
+      if (isRecord(swapfile.parameters) && swapfile.parameters.priority !== SWAPFILE_PRIORITY) {
+        problems.push(`create_swapfile must have swap priority ${SWAPFILE_PRIORITY}`);
+      }
+      const offsets = Array.isArray(swapfile.resolved_at_apply) ? swapfile.resolved_at_apply : [];
+      if (!offsets.some(item => isRecord(item) && item.name === 'resume_offset')) problems.push('create_swapfile does not resolve resume_offset');
+    }
+    if (!hasResume || !hasOffset) problems.push('the kernel command line lacks the resume parameters');
+    const bootOffsets = Array.isArray(bootloader?.resolved_at_apply) ? bootloader.resolved_at_apply : [];
+    if (bootloader !== undefined && !bootOffsets.some(item => isRecord(item) && item.name === 'resume_offset')) {
+      problems.push('install_bootloader does not resolve resume_offset');
+    }
+    for (const [kind, list] of swapLists) {
+      if (!list.includes('@swap')) problems.push(`${kind} lacks the @swap subvolume`);
+    }
+  } else {
+    if (plan.choices.swapfile_size !== undefined) problems.push('hibernation is disabled but swapfile_size is present');
+    if (swapfile !== undefined) problems.push('hibernation is disabled but create_swapfile is present');
+    if (hasResume || hasOffset) problems.push('hibernation is disabled but the kernel command line has resume parameters');
+    if (resolvesOffset) problems.push('hibernation is disabled but a resume_offset resolution is present');
+    for (const [kind, list] of swapLists) {
+      if (list.includes('@swap')) problems.push(`hibernation is disabled but ${kind} has the @swap subvolume`);
+    }
+  }
+  for (const problem of problems) add(reasons, 'hibernation_plan_mismatch', `${problem[0].toUpperCase()}${problem.slice(1)}.`);
+}
+
+const SOURCE_HASH_KEY = 'source_sha256';
+
+// The zram package, zswap policy, and both configuration operations must agree with the declared policy values
+// of the plan; with the allowlisted source assets they must also agree with their destination and hash.
+function checkConfiguration(plan, reasons, assets) {
+  const zram = plan.choices?.zram?.value;
+  const reclaim = plan.choices?.memory_reclaim?.value;
+  if (!isZramPolicy(zram) || !isMemoryReclaimPolicy(reclaim)) return;
+  const operations = operationKinds(plan);
+  const problems = [];
+  const packages = operations.find(operation => operation.kind === 'install_packages')?.parameters?.packages;
+  if (!Array.isArray(packages) || !packages.includes(zram.package)) problems.push(`install_packages does not include ${zram.package}`);
+  const commandLine = plan.choices.kernel_cmdline?.value;
+  if (typeof commandLine !== 'string' || !commandLine.split(' ').includes('zswap.enabled=0')) {
+    problems.push('the kernel command line lacks zswap.enabled=0');
+  }
+  const expectations = {
+    configure_zram: {
+      destination: zram.destination,
+      zram_size: zram.zram_size,
+      compression_algorithm: zram.compression_algorithm,
+      swap_priority: zram.swap_priority,
+    },
+    configure_memory_reclaim: { destination: reclaim.destination, ...reclaim.settings },
+  };
+  for (const [kind, expected] of Object.entries(expectations)) {
+    const operation = operations.find(item => item.kind === kind);
+    if (operation === undefined) {
+      problems.push(`${kind} is missing`);
+      continue;
+    }
+    const parameters = operation.parameters;
+    if (!isRecord(parameters) || !HEX_64.test(parameters[SOURCE_HASH_KEY] ?? '')) {
+      problems.push(`${kind} has no valid ${SOURCE_HASH_KEY}`);
+      continue;
+    }
+    const { [SOURCE_HASH_KEY]: hash, ...settings } = parameters;
+    if (sha256Canonical(settings) !== sha256Canonical(expected)) problems.push(`${kind} parameters differ from the declared policy values`);
+    const asset = assets?.[kind];
+    if (asset !== undefined && (settings.destination !== asset.destination || hash !== asset.sha256)) {
+      problems.push(`${kind} differs from its source asset`);
+    }
+  }
+  for (const problem of problems) add(reasons, 'configuration_asset_mismatch', `${problem[0].toUpperCase()}${problem.slice(1)}.`);
 }
 
 function checkFacts(plan, facts, reasons) {
@@ -665,7 +825,9 @@ function checkFacts(plan, facts, reasons) {
   if (found.eligible !== true) add(reasons, 'disk_not_eligible', 'The target disk is not eligible in the bound facts.');
 }
 
-export function validatePlan(plan, { facts } = {}) {
+// `facts` binds the plan to its discovery; `assets` (the result of loadConfigurationAssets) binds the
+// configuration operations to the source assets they were generated from.
+export function validatePlan(plan, { facts, assets } = {}) {
   const reasons = [];
   if (!isRecord(plan)) {
     add(reasons, 'plan_invalid_type', 'The plan must be a JSON object.');
@@ -688,6 +850,8 @@ export function validatePlan(plan, { facts } = {}) {
   checkSecretConsistency(plan, reasons);
   checkDisk(plan, reasons);
   checkSizes(plan, reasons);
+  checkHibernation(plan, reasons);
+  checkConfiguration(plan, reasons, assets);
   checkLocalization(plan, reasons);
   checkProfileBinding(plan, reasons);
   checkFacts(plan, facts, reasons);

@@ -1,7 +1,7 @@
 import { CHOICES_FORMAT_VERSION, PROFILE_STATUSES } from '../plan/validate-plan.mjs';
 import { OUTCOMES } from './outcomes.mjs';
 
-export const RECORD_FORMAT_VERSION = 2;
+export const RECORD_FORMAT_VERSION = 3;
 export const ENTRIES = ['guided', 'plan_file'];
 export const STAGES = ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation', 'password_explanation', 'discovery_final'];
 
@@ -48,8 +48,11 @@ function checkFields(value, path, required, optional, problems) {
 }
 
 function checkMachine(machine, path, problems) {
-  if (!checkFields(machine, path, ['architecture'], ['virtualization', 'dmi'], problems)) return;
+  if (!checkFields(machine, path, ['architecture'], ['memory_total_bytes', 'virtualization', 'dmi'], problems)) return;
   if (!isText(machine.architecture)) problems.push(`${path}.architecture must be a non-empty string`);
+  if ('memory_total_bytes' in machine && !(Number.isSafeInteger(machine.memory_total_bytes) && machine.memory_total_bytes > 0)) {
+    problems.push(`${path}.memory_total_bytes must be a positive integer`);
+  }
   if ('virtualization' in machine && !isText(machine.virtualization)) problems.push(`${path}.virtualization must be a non-empty string`);
   if ('dmi' in machine && checkFields(machine.dmi, `${path}.dmi`, [], MACHINE_DMI_KEYS, problems)) {
     if (Object.keys(machine.dmi).length === 0) problems.push(`${path}.dmi must not be empty`);

@@ -11,13 +11,14 @@ import {
   removeDirectory,
   secondEligibleDisk,
   unqualifiedFacts,
+  withMemory,
 } from './helpers.mjs';
 
 const root = referenceRoot();
 after(() => removeDirectory(root));
 
 const EDITABLE_KEYS = [
-  'storage_option', 'swapfile_size', 'lang', 'regional_format', 'console_keymap', 'timezone', 'hostname',
+  'storage_option', 'hibernation', 'swapfile_size', 'lang', 'regional_format', 'console_keymap', 'timezone', 'hostname',
   'user_name', 'root_account', 'target_disk',
 ];
 
@@ -42,7 +43,7 @@ const codes = result => result.reasons.map(item => item.code);
 test('the preview holds exactly the editable choices with their labels, and no derived or fixed value', () => {
   const { document, reasons } = preview();
   assert.equal(reasons, undefined);
-  assert.equal(document.format_version, 2);
+  assert.equal(document.format_version, 3);
   assert.deepEqual(Object.keys(document.choices).sort(), [...EDITABLE_KEYS].sort());
   for (const entry of Object.values(document.choices)) {
     assert.deepEqual(Object.keys(entry), ['value', 'provenance', 'source', 'editable']);
@@ -68,7 +69,10 @@ test('the preview lists the allowed values and the rule of each free-text key', 
     ['btrfs-rescue', 'supported', 'btrfs', 'systemd-boot'],
     ['btrfs-limine', 'experimental', 'btrfs', 'limine'],
   ]);
-  assert.deepEqual(options.swapfile_size, { minimum: 512, maximum: 65536, unit: 'MiB' });
+  assert.deepEqual(options.swapfile_size, {
+    minimum: 512, maximum: 4096, default: 4096, unit: 'MiB', memory_total_bytes: 4294967296, editable: true,
+  });
+  assert.deepEqual(options.hibernation, [true, false]);
   assert.deepEqual(options.lang, ['en_US.UTF-8', 'es_ES.UTF-8']);
   assert.deepEqual(options.regional_format, ['follow_language', 'en_US.UTF-8', 'es_ES.UTF-8']);
   assert.deepEqual(options.root_account, ['locked', 'password']);
@@ -131,7 +135,9 @@ test('warnings cover the unqualified machine, the experimental option, and a dis
 test('the preview is exactly what generation resolves for the same choices', () => {
   for (const choices of [
     {},
-    { storage_option: 'btrfs-rescue', swapfile_size: 8192, hostname: 'laptop' },
+    { storage_option: 'btrfs-rescue', swapfile_size: 2048, hostname: 'laptop' },
+    { hibernation: false },
+    { hibernation: true, swapfile_size: 512 },
     { lang: 'es_ES.UTF-8', regional_format: 'en_US.UTF-8', console_keymap: 'es', root_account: 'password' },
   ]) {
     const { document } = preview({ choices });
@@ -158,7 +164,8 @@ test('previewing and validating change no input and need no plan', () => {
 test('each editable key accepts a valid value and reports it', () => {
   const valid = {
     storage_option: 'btrfs-rescue',
-    swapfile_size: '8192',
+    hibernation: 'false',
+    swapfile_size: '2048',
     lang: 'es_ES.UTF-8',
     regional_format: 'follow_language',
     console_keymap: 'dvorak',
@@ -173,7 +180,8 @@ test('each editable key accepts a valid value and reports it', () => {
     const result = check(key, value);
     assert.equal(result.valid, true, key);
     assert.equal(result.key, key);
-    assert.equal(result.value, key === 'swapfile_size' ? 8192 : value, key);
+    const expected = { swapfile_size: 2048, hibernation: false }[key] ?? value;
+    assert.equal(result.value, expected, key);
   }
   assert.equal(check('target_disk', '/dev/vda').valid, true);
 });
@@ -182,6 +190,7 @@ test('invalid values are reported with the generation reasons and never echoed',
   const invalid = {
     storage_option: 'zfs',
     swapfile_size: '100',
+    hibernation: 'yes',
     lang: 'de_DE.UTF-8',
     regional_format: 'de_DE.UTF-8',
     console_keymap: 'nope',
@@ -204,8 +213,8 @@ test('invalid values are reported with the generation reasons and never echoed',
 
 test('an integer value is parsed from its string and nothing else passes for one', () => {
   assert.equal(check('swapfile_size', '512').value, 512);
-  assert.equal(check('swapfile_size', '65536').value, 65536);
-  for (const value of ['511', '65537', '1e3', '4096.0', ' 4096', '+4096', '-1', 'abc', '', '99999999999999999999999']) {
+  assert.equal(check('swapfile_size', '4096').value, 4096);
+  for (const value of ['511', '4097', '65536', '1e3', '4096.0', ' 4096', '+4096', '-1', 'abc', '', '99999999999999999999999']) {
     assert.deepEqual(codes(check('swapfile_size', value)), ['choices_invalid_value'], JSON.stringify(value));
   }
   assert.equal(check('hostname', '4096').valid, true);
@@ -242,6 +251,64 @@ test('validating the language or the regional formats reports the derived locali
 });
 
 test('a single value is validated without the complete combination', () => {
-  assert.equal(check('swapfile_size', '65536').valid, true);
-  assert.deepEqual(codes(generate({ choices: { swapfile_size: 65536 } })), ['plan_size_does_not_fit']);
+  const small = structuredClone(facts());
+  small.layers.detected.storage.disks[0].identity.size_bytes = 18000000000;
+  small.effective['storage.disks'].value = small.layers.detected.storage.disks;
+  assert.equal(check('swapfile_size', '4096', { factsDocument: small }).valid, true);
+  assert.deepEqual(codes(generate({ factsDocument: small, choices: { swapfile_size: 4096 } })), ['plan_size_does_not_fit']);
+  // Hibernation false is a valid value on its own; the size/hibernation contradiction belongs to the combination.
+  assert.equal(check('swapfile_size', '2048', { choices: { hibernation: false } }).valid, true);
+  assert.deepEqual(codes(generate({ choices: { hibernation: false, swapfile_size: 2048 } })), ['choices_conflict']);
+});
+
+test('hibernation is a boolean parsed from exactly true or false by the shared parser', () => {
+  assert.deepEqual(check('hibernation', 'true'), { valid: true, key: 'hibernation', value: true });
+  assert.deepEqual(check('hibernation', 'false'), { valid: true, key: 'hibernation', value: false });
+  for (const value of ['TRUE', 'False', '1', '0', 'yes', 'on', '', ' true']) {
+    assert.deepEqual(codes(check('hibernation', value)), ['choices_invalid_value'], JSON.stringify(value));
+  }
+});
+
+test('the preview follows the hibernation choice: no size while disabled, and the default again when re-enabled', () => {
+  const enabled = preview().document;
+  assert.equal(enabled.choices.hibernation.value, true);
+  assert.equal(enabled.choices.swapfile_size.value, 4096);
+  assert.equal(enabled.options.swapfile_size.editable, true);
+  const disabled = preview({ choices: { hibernation: false } }).document;
+  assert.deepEqual(disabled.choices.hibernation, { value: false, provenance: 'personal_preference', source: 'choice', editable: true });
+  assert.equal('swapfile_size' in disabled.choices, false);
+  assert.equal(disabled.options.swapfile_size.editable, false);
+  assert.equal(disabled.options.swapfile_size.maximum, 4096);
+  assert.deepEqual(disabled.warnings, []);
+  // The same choices without the explicit size give the RAM-derived default again.
+  const reenabled = preview({ choices: { hibernation: true } }).document;
+  assert.deepEqual(reenabled.choices.swapfile_size, enabled.choices.swapfile_size);
+  assert.equal(reenabled.choices.hibernation.source, 'policy');
+});
+
+test('the preview range and warning follow the detected memory', () => {
+  const smaller = preview({ factsDocument: withMemory(facts(), 1073741824), choices: { swapfile_size: 512 } }).document;
+  assert.deepEqual(
+    [smaller.options.swapfile_size.maximum, smaller.options.swapfile_size.default, smaller.options.swapfile_size.memory_total_bytes],
+    [1024, 1024, 1073741824],
+  );
+  assert.deepEqual(smaller.warnings.map(warning => warning.code), ['swapfile_below_ram']);
+  const exact = preview({ choices: { swapfile_size: 4096 } }).document;
+  assert.deepEqual(exact.warnings, []);
+  const fractional = preview({ factsDocument: withMemory(facts(), 4090589184) }).document;
+  assert.equal(fractional.options.swapfile_size.maximum, 4096);
+  assert.deepEqual(fractional.warnings, []);
+  assert.deepEqual(codes(check('swapfile_size', '1025', { factsDocument: withMemory(facts(), 1073741824) })), ['choices_invalid_value']);
+  assert.equal(check('swapfile_size', '1024', { factsDocument: withMemory(facts(), 1073741824) }).valid, true);
+});
+
+test('missing memory fails the preview and the size check with repeated discovery guidance', () => {
+  const noMemory = withMemory(facts(), undefined);
+  const result = preview({ factsDocument: noMemory });
+  assert.equal(result.document, undefined);
+  assert.deepEqual(codes(result), ['memory_unavailable']);
+  const size = check('swapfile_size', '2048', { factsDocument: noMemory });
+  assert.deepEqual(codes(size), ['memory_unavailable']);
+  assert.match(size.reasons[0].next_step, /discover/);
+  assert.equal(check('hibernation', 'false', { factsDocument: noMemory }).valid, true);
 });

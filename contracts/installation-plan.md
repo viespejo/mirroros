@@ -1,6 +1,6 @@
 # Installation plan (`installation-plan.json`)
 
-`format_version: 2`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
+`format_version: 3`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
 (format 2), the installation policy, an optional override of a matched profile, and an optional choices file.
 It identifies the observed machine, its profile classification, and the target disk, plus the ordered
 declarative operations, every value with its provenance and source, the secret requirements by name, and the
@@ -15,8 +15,8 @@ The plan cannot express approval. Approval is an ephemeral, in-process confirmat
 is persisted, so a plan with an `approved` or `approval` field is invalid like any other unknown field.
 
 Conventions: JSON fields use `snake_case`; fields that do not apply are omitted; sizes are integer bytes
-except `swapfile_size`, which is integer MiB; the document contains integers only, never fractional
-numbers.
+except `swapfile_size` and the swap operation's `size_mib`, which are integer MiB; the document contains integers
+only, never fractional numbers.
 
 ## Format versions
 
@@ -24,15 +24,19 @@ Each document keeps its own constant; no constant is shared between unrelated do
 
 | Document | Constant | Value |
 | --- | --- | --- |
-| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `2` |
-| Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `2` |
-| Choices file (`--choices`) | `CHOICES_FORMAT_VERSION` | `2` |
+| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `3` |
+| Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `3` |
+| Choices file (`--choices`) | `CHOICES_FORMAT_VERSION` | `3` |
 | Target facts | `FACTS_FORMAT_VERSION` | `2`, see [`target-facts.md`](target-facts.md) |
 | Plan override (`targets/<id>/overrides/plan.json`) | none: a flat object, unchanged | |
 
-A plan of format `1` is rejected with `plan_format_unsupported` and the instruction to regenerate it from new
-target facts. Plans, policy snapshots, choices files, and evidence of earlier versions are never migrated or
-reinterpreted; the new generator reads facts of format `2` only.
+The confirmation records have their own constant, see [`installation-confirmation.md`](installation-confirmation.md).
+Version `3` follows [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md): conditional hibernation fields,
+RAM-derived sizing, new operations, and a changed operation set must not reinterpret older documents.
+
+A plan of format `1` or `2` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
+new target facts. Plans, policy snapshots, choices files, and evidence of earlier versions are never migrated or
+reinterpreted; the generator reads facts of format `2` only, and the facts format is unchanged.
 
 ## Labels
 
@@ -55,7 +59,7 @@ proposal. Only a changed value is recorded with source `choice` (and, because th
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `2`. |
+| `format_version` | Always `3`. |
 | `target` | `machine`, `profile`, and `disk`. |
 | `choices` | Every resolved policy value, keyed by name. |
 | `operations` | The ordered declarative operations. |
@@ -74,6 +78,7 @@ that approval is bound to the actual machine and never to a profile id:
 | Field | Description |
 | --- | --- |
 | `architecture` | Always present (`x86_64` in a valid plan). |
+| `memory_total_bytes` | Always present: the detected total memory in bytes, a positive safe integer. Planning requires it (see [Memory prerequisite](#memory-prerequisite)). |
 | `virtualization` | The detected virtualization (`none` for physical hardware). Omitted when it was not observed. |
 | `dmi` | The allowlisted `sys_vendor` and `product_name`, each omitted when it was not observed. Omitted when neither was observed. |
 
@@ -101,7 +106,8 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 | --- | --- | --- |
 | `target_disk` | yes | The `by_id` of the selected disk, or its `path` when it has no `by_id`. |
 | `storage_option` | yes | `ext4-systemd-boot`, `btrfs-rescue`, or `btrfs-limine`. The entry also carries `tier`, `filesystem`, `bootloader`, and `resume_offset_method` from the tier table. |
-| `swapfile_size` | yes | Integer MiB from 512 to 65536. |
+| `hibernation` | yes | Boolean, initially `true`. Enables the hibernation swapfile and resume configuration; see [Hibernation and swapfile](#hibernation-and-swapfile). |
+| `swapfile_size` | yes | Present only when `hibernation` is `true`. Integer MiB from 512 to the RAM-derived maximum; the maximum is also the default. |
 | `lang` | yes | The system language: `en_US.UTF-8` (English, US) or `es_ES.UTF-8` (Spanish, Spain). |
 | `regional_format` | yes | The regional formats: `follow_language` (the default, which tracks `lang`), `en_US.UTF-8`, or `es_ES.UTF-8`. |
 | `locales` | no | Derived: the unique list of `lang` followed by the formats locale when it differs. Each is listed in `usr/share/i18n/SUPPORTED`. |
@@ -111,11 +117,72 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 | `hostname` | yes | RFC 1123 hostname of at most 64 characters. |
 | `user_name` | yes | A `useradd` name: `[a-z_][a-z0-9_-]*` with an optional trailing `$`, at most 32 characters, not `root`. |
 | `root_account` | yes | `locked` or `password`. |
-| `firmware_mode`, `partition_table`, `esp`, `root_minimum_bytes`, `kernel`, `initramfs`, `kernel_cmdline`, `bootloader_options`, `zram`, `packages`, `mirrorlist`, `hardware_clock`, `time_sync`, `network`, `user_groups`, `user_shell`, `sudoers`, `sysrq`, `pacman_options`, `fstrim` | no | Fixed by policy. |
+| `firmware_mode`, `partition_table`, `esp`, `root_minimum_bytes`, `kernel`, `initramfs`, `kernel_cmdline`, `bootloader_options`, `zram`, `memory_reclaim`, `packages`, `mirrorlist`, `hardware_clock`, `time_sync`, `network`, `user_groups`, `user_shell`, `sudoers`, `sysrq`, `pacman_options`, `fstrim` | no | Fixed by policy. |
 
 The tier table of the policy reflects [ADR 0003](../docs/adr/0003-storage-and-recovery-baseline.md):
 `ext4-systemd-boot` is `default`, `btrfs-rescue` is `supported`, and `btrfs-limine` is `experimental`.
 Selecting an experimental option adds the warning `storage_option_experimental`.
+
+### Hibernation and swapfile
+
+Hibernation remains an essential capability that MirrorOS must support and qualify, enabled by default and
+disableable per installation. The swapfile is hibernation-sized storage that also serves as lower-priority
+fallback swap; it is not exclusively used for hibernation, and fallback use consumes free hibernation capacity.
+
+When `hibernation` is `true`:
+
+- `swapfile_size` is an integer MiB from `512` to `maximum`, where
+  `maximum = ceil(memory_total_bytes / 1073741824) * 1024`. The default equals `maximum`, with provenance
+  `hardware_detection` and source `detected`; an explicit size is a choice. The minimum is an input limit and no
+  claim of sufficient hibernation capacity. Computation uses safe integers only.
+- A size whose bytes (`swapfile_size * 1048576`) are less than `memory_total_bytes` is valid and adds the warning
+  `swapfile_below_ram`. Equality does not warn. The default is above or equal to raw RAM and never warns.
+- `create_swapfile` is present, the Btrfs options keep `@swap`, and the resume parameters are present.
+- The layout must fit: the ESP, `root_minimum_bytes`, and `swapfile_size` must not exceed the disk
+  (`plan_size_does_not_fit`). The size is never silently reduced and hibernation is never silently disabled.
+
+When `hibernation` is `false`, the plan has no `swapfile_size` choice, no `create_swapfile`, no `resume=` or
+`resume_offset=` kernel parameters, no `resume_offset` entry in any `resolved_at_apply`, and, for both Btrfs
+options, no `@swap` subvolume and no `@swap` mount. Root UUID resolution, the other subvolumes, Snapper policy,
+bootloader selection, tiers, and the relative order of the other operations are unchanged. Zram is still
+planned. A disabled plan never implies swapfile creation.
+
+No custom hibernation image-size setting exists. The warning and the sizing screen state that success depends on
+used memory and free swapfile space and never claim that the default guarantees a successful resume.
+
+### Memory prerequisite
+
+Planning requires `memory_total_bytes` in the facts' effective view, as a positive safe integer, even when
+`hibernation` is `false`, because zram sizing also depends on memory. A missing, zero, negative, fractional, or
+unsafe value fails generation with `memory_unavailable`, whose `next_step` asks for repeated discovery. No memory
+value or swap size is assumed. The facts format is unchanged.
+
+### Zram, zswap, and memory reclaim
+
+These values are fixed by policy, not editable, and apply to every storage option. Nothing here changes the live
+ISO.
+
+| Policy key | Value |
+| --- | --- |
+| `zram` | The official Arch package `zram-generator`; destination `/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf`; one `[zram0]` section with `zram-size = ram`, `compression-algorithm = zstd`, and `swap-priority = 100`. No resident-memory limit, recompression, writeback device, or algorithm fallback. |
+| `memory_reclaim` | Destination `/usr/lib/sysctl.d/60-mirroros-memory.conf` with `vm.swappiness = 180`, `vm.page-cluster = 0`, `vm.watermark_scale_factor = 125`, and `vm.watermark_boost_factor = 0`. |
+| `kernel_cmdline` | Always includes `zswap.enabled=0`. Includes `resume=UUID=<root>` and `resume_offset=<resume_offset>` only when `hibernation` is `true`. |
+| `packages` | The installed package list explicitly includes `zram-generator`, with official-repository provenance. It is never added to the live package list. |
+
+Zram logical capacity is not an immediate reservation of that much memory and does not guarantee doubled usable
+memory. The settings are global rather than per device, are an initial baseline and not a claim of optimality, and
+remain modifiable by the administrator through native overrides in `/etc`. No adaptive tuning, daemon, or
+project-owned service exists. Installed activation, effective values, and pressure behavior are not asserted by a
+plan; they are verified by later qualification.
+
+### Configuration assets
+
+The two drop-ins are owned under `install/plan/assets/`, mirroring their destinations:
+`usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf` and `usr/lib/sysctl.d/60-mirroros-memory.conf`. The
+generator reads only these fixed allowlisted source paths, computes the SHA-256 of the raw bytes of each, and
+refuses a missing or damaged asset (exit `6`). The settings declared in the policy and in the operation
+parameters must agree with the source content; a mismatch is a contract failure. Source assets are embedded with
+the installer code and are never installed into the live system's configuration locations.
 
 ### Localization
 
@@ -157,17 +224,19 @@ engine must reject any `kind` it does not know.
 | `create_partition_table` | yes | Write an empty GPT. |
 | `create_partitions` | yes | Create the ESP and the root partition on the remaining space. |
 | `format_filesystems` | yes | Format the ESP as FAT32 and the root partition with the option's filesystem. Resolves `partition_uuids` (`blkid`). |
-| `create_btrfs_subvolumes` | no | Create the flat subvolumes of the option on the new filesystem. |
-| `mount_target` | no | Mount the root (with the subvolumes for Btrfs) and the ESP under the target root. |
-| `install_packages` | no | Install `packages`, the network package, and the option's additional packages. |
+| `create_btrfs_subvolumes` | no | Create the flat subvolumes of the option on the new filesystem, without `@swap` when `hibernation` is `false`. |
+| `mount_target` | no | Mount the root (with the subvolumes for Btrfs, and `@swap` only when `hibernation` is `true`) and the ESP under the target root. |
+| `install_packages` | no | Install `packages` (including `zram-generator`), the network package, and the option's additional packages. |
 | `generate_fstab` | no | Generate `/etc/fstab` by UUID. For Btrfs only subvolume paths are kept, never `subvolid=`. |
-| `create_swapfile` | no | Create `/swapfile` of `swapfile_size` MiB. Resolves `resume_offset`. |
+| `configure_zram` | no | Deliver the zram-generator drop-in. Parameters: `destination`, `source_sha256`, `zram_size` (`ram`), `compression_algorithm` (`zstd`), and `swap_priority` (`100`). |
+| `configure_memory_reclaim` | no | Deliver the sysctl drop-in. Parameters: `destination`, `source_sha256`, and the four `vm.*` values. |
+| `create_swapfile` | no | Only when `hibernation` is `true`: create `/swapfile` of `swapfile_size` MiB with swap priority `0` (`priority`) and list it in fstab. Resolves `resume_offset`. |
 | `configure_locale_time_console` | no | Locales, `lang`, the regional category values, keymap, time zone, UTC hardware clock, and time sync. |
 | `configure_hostname_network` | no | Hostname and NetworkManager without predefined connections. |
 | `create_user` | no | Create `user_name` in `user_groups` with `user_shell`. Consumes `account_password`. |
 | `configure_root_account` | no | Lock the root account, or give it the same password as the user. Consumes `account_password` only for `password`. |
 | `configure_sudo_sysrq_pacman` | no | Sudoers drop-in, sysrq, and pacman options. |
-| `install_bootloader` | no | Install and configure the option's bootloader and kernel command line. Resolves `root_uuid` and `resume_offset`. |
+| `install_bootloader` | no | Install and configure the option's bootloader and kernel command line, including `zswap.enabled=0`. Resolves `root_uuid`, and `resume_offset` only when `hibernation` is `true`. |
 | `install_limine_snapshot_tools` | no | Build and install the pinned Limine snapshot tools. `btrfs-limine` only. |
 | `configure_snapper` | no | Snapper root configuration for `@` only, with `snap-pac`. Btrfs only. |
 | `enable_services` | no | Enable NetworkManager, the time sync service, `fstrim.timer`, and the option's services. |
@@ -176,7 +245,8 @@ engine must reject any `kind` it does not know.
 
 #### Order per storage option
 
-The sequence is fixed; the validator rejects a different set or a different order.
+The sequence is fixed; the validator rejects a different set or a different order. Operation 10 exists only when
+`hibernation` is `true`; omitting it does not change the relative order of the others.
 
 `ext4-systemd-boot`:
 
@@ -186,15 +256,17 @@ The sequence is fixed; the validator rejects a different set or a different orde
 4. `format_filesystems`
 5. `mount_target`
 6. `install_packages`
-7. `generate_fstab`
-8. `create_swapfile`
-9. `configure_locale_time_console`
-10. `configure_hostname_network`
-11. `create_user`
-12. `configure_root_account`
-13. `configure_sudo_sysrq_pacman`
-14. `install_bootloader`
-15. `enable_services`
+7. `configure_zram`
+8. `configure_memory_reclaim`
+9. `generate_fstab`
+10. `create_swapfile` (only with hibernation)
+11. `configure_locale_time_console`
+12. `configure_hostname_network`
+13. `create_user`
+14. `configure_root_account`
+15. `configure_sudo_sysrq_pacman`
+16. `install_bootloader`
+17. `enable_services`
 
 `btrfs-rescue`: the same sequence with `create_btrfs_subvolumes` inserted after `format_filesystems`,
 `configure_snapper` after `install_bootloader`, and `create_baseline_snapshot` after `enable_services`.
@@ -204,8 +276,9 @@ The sequence is fixed; the validator rejects a different set or a different orde
 `create_baseline_snapshot`.
 
 The resume offset method comes from the tier table: `filefrag` for ext4 and
-`btrfs inspect-internal map-swapfile -r` for Btrfs. The Btrfs subvolume, Snapper, baseline, and Limine
-steps derive from ADR 0003; the prototypes under `prototypes/storage/` are reference only and never
+`btrfs inspect-internal map-swapfile -r` for Btrfs, and applies only when hibernation is enabled. The Btrfs
+subvolume, Snapper, baseline, and Limine steps derive from ADR 0003, amended for `@swap` and resume by
+[ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md); the prototypes under `prototypes/storage/` are reference only and never
 sourced.
 
 ### `secret_requirements`
@@ -255,16 +328,19 @@ not a second one. The choices file is not hashed: its effect is already in `choi
 
 ```json
 {
-  "format_version": 2,
+  "format_version": 3,
   "hostname": "laptop",
   "storage_option": "btrfs-rescue"
 }
 ```
 
-Allowed keys: `target_disk`, `storage_option`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`,
+Allowed keys: `target_disk`, `storage_option`, `hibernation`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`,
 `timezone`, `hostname`, `user_name`, and `root_account`. Unknown keys, non-editable policy keys (including the
 derived `locales` and `locale_categories`), invalid values, and secret-like keys (`password`, `*_password`)
-are invalid input. A choices file of `format_version` `1` is invalid input.
+are invalid input. A choices file of `format_version` `1` or `2` is invalid input, with regeneration guidance.
+`hibernation` must be a JSON boolean. `hibernation: false` together with `swapfile_size` is contradictory and is
+rejected (`choices_conflict`) rather than ignoring the size; `swapfile_size` is otherwise validated against the
+RAM-derived range.
 
 ## Overrides
 
@@ -284,17 +360,17 @@ install/plan/plan preview-choices --facts <file> [--choices <file>]
 install/plan/plan validate-choice --facts <file> [--choices <file>] --key <key> --value <value>
 ```
 
-`preview-choices` prints one JSON object on stdout with `format_version` `2` and:
+`preview-choices` prints one JSON object on stdout with `format_version` `3` and:
 
 | Field | Description |
 | --- | --- |
 | `choices` | Every editable key with its resolved `value`, `provenance`, `source`, and `editable`, as the plan would hold it for the given choices file. Defaults come from policy, detection, and a matched-profile override. |
-| `options` | The allowed values per key: the storage options with `tier`, `filesystem`, and `bootloader`; the eligible disks with `value`, `path`, `model`, and `size_bytes`; the languages and regional formats; the `swapfile_size` range; and the `root_account` values. Free-text keys (`hostname`, `user_name`, `timezone`, `console_keymap`) carry their validation rule rather than a list. |
+| `options` | The allowed values per key: the storage options with `tier`, `filesystem`, and `bootloader`; the eligible disks with `value`, `path`, `model`, and `size_bytes`; the languages and regional formats; `hibernation` (boolean); the `swapfile_size` range with `minimum`, `maximum`, `default`, `unit`, and `memory_total_bytes`, derived from the facts' RAM, and whether it is editable (only while `hibernation` is `true`); and the `root_account` values. Free-text keys (`hostname`, `user_name`, `timezone`, `console_keymap`) carry their validation rule rather than a list. |
 | `derived` | The `locales` and `locale_categories` for the previewed `lang` and `regional_format`. |
 | `warnings` | The warnings the plan would carry that do not depend on a combination failing. |
 
 `validate-choice` checks one value against its own rules and the facts, not the complete combination. The `--value`
-argument is a string: integers (`swapfile_size`) are parsed, and a secret-like key is rejected before its value
+argument is a string: integers (`swapfile_size`) and booleans (`hibernation`, exactly `true` or `false`) are parsed by the same shared parser as the choices file, and a secret-like key is rejected before its value
 is read. On success it prints `{ "valid": true, "key", "value", "derived" }`, with `derived` present for `lang`
 and `regional_format`. Otherwise it prints `{ "valid": false, "reasons" }` with the generation reasons of the
 plan contract (for example `choices_invalid_value`, `choices_not_editable`, or `choices_unknown_key`) and exits
@@ -335,7 +411,7 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | Code | Condition |
 | --- | --- |
 | `plan_not_json`, `plan_invalid_type`, `plan_non_integer_number` | Malformed document. |
-| `plan_format_unsupported` | `format_version` is not `2`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
+| `plan_format_unsupported` | `format_version` is not `3`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
 | `plan_field_missing`, `plan_label_missing` | A required field, or a `provenance`, `source`, or `editable` label, is missing. |
 | `plan_unknown_field` | A field outside this contract, including `approved` and `approval`. |
 | `plan_secret_value_present` | A secret-named key outside `secret_requirements`, or an extra field in a secret entry. |
@@ -347,19 +423,23 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | `secret_consumer_mismatch` | The single `account_password` requirement is missing or duplicated, has no consumer, or an operation needs an undeclared secret. |
 | `lang_not_in_locales` | `lang` is not one of `locales`. |
 | `locale_derivation_mismatch` | `locales` or `locale_categories` contradict `lang` and `regional_format`, or `LC_ALL` is present. |
-| `machine_identity_mismatch` | Given the facts document, `target.machine` differs from the observed identity, including a difference in field availability. |
+| `machine_identity_mismatch` | Given the facts document, `target.machine` (including `memory_total_bytes`) differs from the observed identity, including a difference in field availability. |
 | `profile_binding_mismatch` | `target.profile` is inconsistent with its bindings: `matched` without `profile_definition_sha256` or `profile_id`, `unqualified` with a profile id, a profile hash, or an override hash, or, given the facts, a classification that differs from the facts. |
 | `disk_identity_mismatch`, `disk_not_eligible` | The disk does not match the `target_disk` choice or the bound facts, or is not eligible. |
 | `facts_binding_mismatch` | `facts_binding` contradicts `target`, or does not match the supplied facts document. |
-| `plan_size_does_not_fit` | ESP, `root_minimum_bytes`, and `swapfile_size` exceed the disk size. |
+| `hibernation_plan_mismatch` | The hibernation choice and the plan contradict each other: a `swapfile_size`, `create_swapfile`, `@swap` subvolume or mount, `resume` kernel parameter, or `resume_offset` resolution with hibernation disabled, or any of them missing or inconsistent with hibernation enabled, or a swapfile size outside the RAM-derived range. |
+| `configuration_asset_mismatch` | A configuration operation's destination, `source_sha256`, or declared settings differ from the policy or the allowlisted source asset, or the zram package or `zswap.enabled=0` is missing. |
+| `plan_size_does_not_fit` | ESP, `root_minimum_bytes`, and `swapfile_size` (when present) exceed the disk size. |
 | `digest_mismatch` | The digest does not match the content. |
 
 Generation reasons, reported with the same shape and exit `2` unless noted:
 
 | Code | Condition |
 | --- | --- |
+| `memory_unavailable` | The facts' effective view has no positive safe-integer `memory_total_bytes`. The `next_step` asks the user to repeat discovery. |
 | `facts_invalid`, `facts_format_unknown` | The facts fail `validate-facts.mjs`, have `validation.status` `invalid`, or a `format_version` other than `2` (facts of format `1` are not accepted). |
-| `choices_invalid_format`, `choices_unknown_key`, `choices_not_editable`, `choices_secret_key`, `choices_invalid_value` | The choices file is invalid, including one of `format_version` `1`. |
+| `choices_invalid_format`, `choices_unknown_key`, `choices_not_editable`, `choices_secret_key`, `choices_invalid_value` | The choices file is invalid, including one of `format_version` `1` or `2`, a non-boolean `hibernation`, or an out-of-range or non-integer `swapfile_size`. |
+| `choices_conflict` | The choices contradict each other: `hibernation: false` with `swapfile_size`. |
 | `override_invalid_format`, `override_unknown_key`, `override_invalid_value` | The target override is invalid. |
 | `disk_selection_required` | Several disks are eligible; the reason lists the candidates. |
 | `disk_unknown`, `disk_ineligible` | The named disk is unknown or ineligible; the reason lists the candidates. |
@@ -367,7 +447,10 @@ Generation reasons, reported with the same shape and exit `2` unless noted:
 | `lang_not_in_locales`, `plan_size_does_not_fit` | The choices contradict each other or the disk. The validator codes are reused. |
 | `output_exists` | `--output` already contains a plan. |
 
-Warnings: `disk_without_by_id`, `storage_option_experimental`, and `machine_unqualified`. The last is present
+Warnings: `disk_without_by_id`, `storage_option_experimental`, `swapfile_below_ram`, and `machine_unqualified`.
+`swapfile_below_ram` is present exactly when hibernation is enabled and the size is below raw RAM; its `message`
+states that hibernation may be unavailable under large memory workloads and depends on used memory and free
+swapfile space, and its `next_step` states that the default size is not a guarantee either. `machine_unqualified` is present
 exactly when `target.profile.status` is `unqualified`; its `message` states that the machine matches no known
 profile and that installation is experimental, and its `next_step` states that no compatibility or support is
 promised.

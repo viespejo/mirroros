@@ -9,7 +9,9 @@ import {
   digestPrefix,
   diskLabel,
   formatSize,
+  hibernationLabel,
   machineLabel,
+  swapfileWarning,
 } from '../../../install/confirmation/review-content.mjs';
 import { renderPlan } from '../../../install/plan/render-plan.mjs';
 import { clone, facts, generate, unqualifiedFacts, withoutById } from './helpers.mjs';
@@ -18,16 +20,16 @@ const plan = (choices = {}, factsDocument = facts()) => generate({ choices, fact
 const rows = subject => Object.fromEntries(compactReview(subject));
 
 test('the compact review shows the machine, disk, answers, and the plan reference', () => {
-  const subject = plan({ hostname: 'laptop', swapfile_size: 8192 });
+  const subject = plan({ hostname: 'laptop', swapfile_size: 2048 });
   assert.deepEqual(compactReview(subject).map(([label]) => label), [
-    'Machine', 'Disk', 'Storage', 'Swapfile', 'Timezone', 'Language', 'Formats', 'Locales',
+    'Machine', 'Disk', 'Storage', 'Hibernation', 'Timezone', 'Language', 'Formats', 'Locales',
     'Username', 'Root', 'Hostname', 'Keyboard', 'Plan reference',
   ]);
   const shown = rows(subject);
   assert.equal(shown.Machine, 'Recognized (reference-vm)');
   assert.equal(shown.Disk, '/dev/vda 32.0 GiB');
   assert.equal(shown.Storage, 'ext4-systemd-boot (default)');
-  assert.equal(shown.Swapfile, '8192 MiB');
+  assert.equal(shown.Hibernation, 'Enabled (swapfile 2048 MiB)');
   assert.equal(shown.Hostname, 'laptop');
   assert.equal(shown['Plan reference'], subject.digest.value.slice(0, 12));
   assert.ok(!Object.values(shown).includes(subject.digest.value));
@@ -159,4 +161,24 @@ test('sizes are formatted in binary units', () => {
   assert.equal(formatSize(536870912), '512.0 MiB');
   assert.equal(formatSize(34359738368), '32.0 GiB');
   assert.equal(formatSize(undefined), 'unknown size');
+});
+
+test('the hibernation row shows the swapfile size when enabled and no swapfile when disabled', () => {
+  assert.equal(rows(plan()).Hibernation, 'Enabled (swapfile 4096 MiB)');
+  assert.equal(rows(plan({ hibernation: false })).Hibernation, 'Disabled (no swapfile)');
+  assert.equal(hibernationLabel(plan({ swapfile_size: 512 })), 'Enabled (swapfile 512 MiB)');
+  for (const subject of [plan(), plan({ hibernation: false })]) {
+    assert.equal(Object.keys(rows(subject)).includes('Swapfile'), false);
+    assert.doesNotMatch(JSON.stringify(compactReview(subject)), /guarantee/i);
+  }
+});
+
+test('the below-memory warning persists in the review content only for a reduced size', () => {
+  assert.equal(swapfileWarning(plan()), undefined);
+  assert.equal(swapfileWarning(plan({ swapfile_size: 4096 })), undefined);
+  assert.equal(swapfileWarning(plan({ hibernation: false })), undefined);
+  const reduced = plan({ swapfile_size: 2048 });
+  assert.equal(swapfileWarning(reduced).code, 'swapfile_below_ram');
+  assert.match(completePlanText(reduced), /swapfile_below_ram:/);
+  assert.match(completePlanText(plan({ hibernation: false })), /Hibernation is disabled: no swapfile will be created\./);
 });

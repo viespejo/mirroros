@@ -71,8 +71,8 @@ run_plan() {
 
 if [[ "${MIRROROS_DISCOVERY_SCENARIO:-}" == 'plan' && "$discover_status" -eq 0 ]]; then
   mkdir -m 700 -- "$PLAN_DIR"
-  printf '%s\n' '{"format_version":2,"hostname":"mirroros-edit","storage_option":"btrfs-rescue"}' > "${PLAN_DIR}/choices-valid.json"
-  printf '%s\n' '{"format_version":2,"unknown_key":"value"}' > "${PLAN_DIR}/choices-invalid.json"
+  printf '%s\n' '{"format_version":3,"hostname":"mirroros-edit","storage_option":"btrfs-rescue"}' > "${PLAN_DIR}/choices-valid.json"
+  printf '%s\n' '{"format_version":3,"unknown_key":"value"}' > "${PLAN_DIR}/choices-invalid.json"
   run_plan default ''
   sha256sum -- "${PLAN_DIR}/default/installation-plan.json" 2>/dev/null | cut -d' ' -f1 > "${PLAN_DIR}/sha-before" || true
   run_plan edited "${PLAN_DIR}/choices-valid.json"
@@ -113,6 +113,7 @@ const steps = [
   { expect: [machineMarker, 'Cancel'], keys: () => '\r' },
   { expect: ['Select install disk'], keys: () => '\r' },
   { expect: ['Select storage layout'], keys: () => '\r' },
+  { expect: ['Hibernation', 'Enabled', 'Disabled'], keys: () => '\r' },
   { expect: ['Swapfile size (MiB)>'], keys: () => '\r' },
   { expect: ['Timezone'], keys: () => '\r' },
   { expect: ['System language'], keys: () => '\r' },

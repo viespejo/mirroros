@@ -1,5 +1,5 @@
 {
-  "format_version": 2,
+  "format_version": 3,
   "policy": {
     "firmware_mode": {
       "value": "uefi",
@@ -41,7 +41,7 @@
       "editable": false
     },
     "kernel_cmdline": {
-      "value": "root=UUID=<root> rw resume=UUID=<root> resume_offset=<resume_offset>",
+      "value": "root=UUID=<root> rw zswap.enabled=0 resume=UUID=<root> resume_offset=<resume_offset>",
       "provenance": "personal_preference",
       "editable": false
     },
@@ -54,18 +54,38 @@
       "provenance": "personal_preference",
       "editable": false
     },
-    "swapfile_size": {
-      "value": 4096,
+    "hibernation": {
+      "value": true,
       "provenance": "personal_preference",
       "editable": true
     },
     "zram": {
-      "value": false,
+      "value": {
+        "package": "zram-generator",
+        "package_source": "arch_official_repository",
+        "destination": "/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf",
+        "zram_size": "ram",
+        "compression_algorithm": "zstd",
+        "swap_priority": 100
+      },
+      "provenance": "personal_preference",
+      "editable": false
+    },
+    "memory_reclaim": {
+      "value": {
+        "destination": "/usr/lib/sysctl.d/60-mirroros-memory.conf",
+        "settings": {
+          "vm.swappiness": 180,
+          "vm.page-cluster": 0,
+          "vm.watermark_scale_factor": 125,
+          "vm.watermark_boost_factor": 0
+        }
+      },
       "provenance": "personal_preference",
       "editable": false
     },
     "packages": {
-      "value": ["base", "linux", "linux-firmware", "sudo", "neovim", "man-db", "man-pages"],
+      "value": ["base", "linux", "linux-firmware", "zram-generator", "sudo", "neovim", "man-db", "man-pages"],
       "provenance": "personal_preference",
       "editable": false
     },

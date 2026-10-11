@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { loadFacts } from '../plan/generate-plan.mjs';
 import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_VALID } from '../plan/validate-plan.mjs';
 import { standardReason } from './outcomes.mjs';
-import { digestPrefix, machineLabel } from './review-content.mjs';
+import { digestPrefix, hibernationLabel, machineLabel, swapfileWarning } from './review-content.mjs';
+import { detectedMemoryBytes, memoryUnavailableReason } from '../plan/generate-plan.mjs';
 
 // Read-only data helpers for the guided assistant (install/confirmation/lib). The assistant is a Bash flow
 // that cannot parse JSON by itself; this module reads documents the plan, discovery, and review components
@@ -100,9 +101,29 @@ function disks([path]) {
   return EXIT_VALID;
 }
 
+// Exit 0 when the warnings of a plan or a choice preview include the given code; otherwise exit 2. The assistant
+// only asks whether a warning the plan component produced exists; it never recomputes the rule behind it.
+function hasWarning([path, code]) {
+  const warnings = readJson(path).warnings ?? [];
+  return warnings.some(item => item.code === code) ? EXIT_VALID : EXIT_INVALID_INPUT;
+}
+
 function storage([path]) {
   for (const option of readJson(path).options.storage_option) process.stdout.write(`${option.value}\t${option.tier}\n`);
   return EXIT_VALID;
+}
+
+// Exit 0 when the valid facts report the detected memory; otherwise prints the memory_unavailable reason as a
+// JSON reasons list on stdout and exits 2, so the flow can end the run as blocked with repeated discovery.
+function memory([path]) {
+  const loaded = loadFacts(path);
+  if (loaded.facts === undefined) {
+    printReasons(loaded.reasons);
+    return EXIT_INVALID_INPUT;
+  }
+  if (detectedMemoryBytes(loaded.facts) !== undefined) return EXIT_VALID;
+  process.stdout.write(`${JSON.stringify([memoryUnavailableReason()], null, 2)}\n`);
+  return EXIT_INVALID_INPUT;
 }
 
 function profile([path]) {
@@ -121,7 +142,9 @@ function reviewValues([path]) {
     ['disk', diskLabel(disk, disk.current_layout?.partitions)],
     ['storage_option', choices.storage_option.value],
     ['storage_tier', choices.storage_option.tier],
-    ['swapfile_size', choices.swapfile_size.value],
+    ['hibernation', choices.hibernation.value],
+    ['hibernation_label', hibernationLabel(plan)],
+    ['swapfile_below_ram', swapfileWarning(plan) === undefined ? 'false' : 'true'],
     ['timezone', choices.timezone.value],
     ['lang', choices.lang.value],
     ['regional_format', choices.regional_format.value],
@@ -161,7 +184,7 @@ function reasonList([code, child]) {
   return EXIT_VALID;
 }
 
-const COMMANDS = { get, disks, storage, profile, 'review-values': reviewValues, 'reasons-text': reasonsText, recoverable, reason: reasonList };
+const COMMANDS = { get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'reasons-text': reasonsText, recoverable, reason: reasonList };
 
 const [command, ...args] = process.argv.slice(2);
 if (COMMANDS[command] === undefined) {

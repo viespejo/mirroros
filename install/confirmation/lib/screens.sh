@@ -177,14 +177,42 @@ storage_layout_form() {
   return 6
 }
 
+# Hibernation is enabled by default. The swapfile size is asked only while it is enabled, and Esc from the size
+# returns here. A choice is applied only when it differs from the current one, so a revisit keeps an explicit size.
+hibernation_form() {
+  local current selected choice status
+  while true; do
+    current=$(flow_choice hibernation) || return 6
+    if [[ $current == true ]]; then selected=Enabled; else selected=Disabled; fi
+    gum style --foreground 8 --padding "$PADDING" 'Hibernation lets the machine power off and resume where it left off.' 'Enabled keeps a swapfile on disk; it also serves as fallback swap when zram is full.'
+    choice=$(gum choose --show-help --height 3 --selected "$selected" --header 'Hibernation' Enabled Disabled) || return $?
+    if [[ $choice != "$selected" ]]; then
+      case $choice in
+        Enabled) screen_apply_listed hibernation true || return $? ;;
+        Disabled) screen_apply_listed hibernation false || return $? ;;
+        *) return 6 ;;
+      esac
+    fi
+    if [[ $choice == Disabled ]]; then return 0; fi
+    step 'Choose swapfile size'
+    status=0
+    swapfile_size_form || status=$?
+    if ((status != 1)); then return "$status"; fi
+    step 'Choose hibernation'
+  done
+}
+
 swapfile_size_form() {
   local value normalized minimum maximum status
   value=$(flow_choice swapfile_size) || return 6
   minimum=$(flow_assistant get "$FLOW_PREVIEW" options.swapfile_size.minimum) || return 6
   maximum=$(flow_assistant get "$FLOW_PREVIEW" options.swapfile_size.maximum) || return 6
   while true; do
-    gum style --foreground 8 --padding "$PADDING" 'The swapfile is used for swap and hibernation.' 'The default does not guarantee hibernation for every workload.'
+    gum style --foreground 8 --padding "$PADDING" 'The swapfile holds the hibernation image and also serves as fallback swap after zram.' 'The default does not guarantee hibernation for every workload.'
     gum style --padding "$PADDING" "Enter an integer from $minimum to $maximum MiB." 'A real plan checks that the complete layout fits the selected disk.'
+    if flow_assistant has-warning "$FLOW_PREVIEW" swapfile_below_ram; then
+      gum style --foreground 3 --padding "$PADDING" 'Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space.'
+    fi
     value=$(gum input --show-help --value "$value" --placeholder 'Size in MiB' --prompt 'Swapfile size (MiB)> ') || return $?
     normalized=$value
     while [[ $normalized == 0* && ${#normalized} -gt 1 ]]; do normalized=${normalized:1}; done
@@ -310,7 +338,7 @@ review_rows() {
     Machine "${FLOW_REVIEW[machine]}" \
     Disk "${FLOW_REVIEW[disk]}" \
     Storage "$(storage_label_for "${FLOW_REVIEW[storage_option]}" "${FLOW_REVIEW[storage_tier]}")" \
-    Swapfile "${FLOW_REVIEW[swapfile_size]} MiB" \
+    Hibernation "${FLOW_REVIEW[hibernation_label]}" \
     Timezone "${FLOW_REVIEW[timezone]}" \
     Language "${FLOW_REVIEW[lang]}" \
     Formats "$(formats_label_for "${FLOW_REVIEW[regional_format]}") (${FLOW_REVIEW[format_locale]})" \
@@ -333,6 +361,12 @@ review_form() {
   while true; do
     review_rows
     echo
+    if [[ ${FLOW_REVIEW[hibernation]} == false ]]; then
+      gum style --foreground 8 --padding "$PADDING" 'Hibernation is disabled: no swapfile will be created.'
+    fi
+    if [[ ${FLOW_REVIEW[swapfile_below_ram]} == true ]]; then
+      gum style --foreground 3 --padding "$PADDING" 'Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space.'
+    fi
     gum style --foreground 8 --padding "$PADDING" 'Review only: this does not approve a plan or authorize disk changes.' 'Next: confirm the disk to erase, then a password explanation. This version runs no installation.'
     choice=$(gum choose --show-help --height 3 --selected 'Continue to confirmation' --header 'Review navigation' 'Continue to confirmation' 'Inspect complete plan' 'Back') || return $?
     case $choice in

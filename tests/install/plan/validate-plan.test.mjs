@@ -22,7 +22,7 @@ import {
   STORAGE_OPTION_NAMES,
 } from './build-fixtures.mjs';
 import { discover } from '../discovery/helpers.mjs';
-import { generate, unqualifiedFacts } from './helpers.mjs';
+import { assets, generate, unqualifiedFacts } from './helpers.mjs';
 
 const facts = fixtureFacts();
 const codes = reasons => reasons.map(item => item.code);
@@ -51,9 +51,12 @@ test('a valid plan is accepted for every storage option and root account mode', 
       const text = readFileSync(join(planFixturesRoot, 'valid', `${storageOption}--${rootAccount}.json`), 'utf8');
       const { plan, reasons } = parsePlanText(text);
       assert.deepEqual(reasons, []);
-      assert.deepEqual(validatePlan(plan, { facts }), [], `${storageOption} ${rootAccount}`);
+      assert.deepEqual(validatePlan(plan, { facts, assets }), [], `${storageOption} ${rootAccount}`);
       assert.deepEqual(validatePlan(plan), [], `${storageOption} ${rootAccount} without facts`);
     }
+    const disabled = JSON.parse(readFileSync(join(planFixturesRoot, 'valid', `${storageOption}--hibernation-disabled.json`), 'utf8'));
+    assert.deepEqual(validatePlan(disabled, { facts, assets }), [], `${storageOption} hibernation disabled`);
+    assert.deepEqual(validatePlan(disabled), [], `${storageOption} hibernation disabled without facts`);
   }
 });
 
@@ -62,7 +65,7 @@ test('every invalid fixture is rejected with its own code', () => {
   for (const name of readdirSync(join(planFixturesRoot, 'invalid'))) {
     const expected = name.split('--')[0];
     const plan = JSON.parse(readFileSync(join(planFixturesRoot, 'invalid', name), 'utf8'));
-    const reasons = validatePlan(plan, { facts });
+    const reasons = validatePlan(plan, { facts, assets });
     assert.ok(codes(reasons).includes(expected), `${name}: expected ${expected}, got ${codes(reasons).join(', ')}`);
   }
 });
@@ -75,13 +78,31 @@ test('single-rule fixtures raise only their rule', () => {
     'locale_derivation_mismatch--lc-all': ['locale_derivation_mismatch'],
     'locale_derivation_mismatch--formats': ['locale_derivation_mismatch'],
     'machine_identity_mismatch--architecture': ['machine_identity_mismatch'],
+    'machine_identity_mismatch--memory': ['machine_identity_mismatch'],
+    'plan_format_unsupported--version-2': ['plan_format_unsupported'],
+    'hibernation_plan_mismatch--disabled-with-size': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--disabled-with-swapfile': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--disabled-with-resume': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--disabled-with-swap-subvolume': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--disabled-with-offset-resolution': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--enabled-without-swapfile': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--enabled-without-size': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--size-above-memory-range': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--enabled-without-priority': ['hibernation_plan_mismatch'],
+    'hibernation_plan_mismatch--enabled-without-swap-subvolume': ['hibernation_plan_mismatch'],
+    'configuration_asset_mismatch--zram-priority': ['configuration_asset_mismatch'],
+    'configuration_asset_mismatch--sysctl-value': ['configuration_asset_mismatch'],
+    'configuration_asset_mismatch--missing-zram-operation': ['operations_storage_mismatch', 'configuration_asset_mismatch'],
+    'configuration_asset_mismatch--missing-package': ['configuration_asset_mismatch'],
+    'configuration_asset_mismatch--missing-zswap': ['configuration_asset_mismatch'],
+    'configuration_asset_mismatch--source-hash': ['configuration_asset_mismatch'],
     'machine_identity_mismatch--dmi-availability': ['machine_identity_mismatch'],
     'profile_binding_mismatch--matched-without-hash': ['profile_binding_mismatch'],
     'profile_binding_mismatch--unqualified-with-id': ['profile_binding_mismatch'],
     'secret_consumer_mismatch--duplicated': ['secret_consumer_mismatch'],
     'root_account_secret_mismatch--password-undeclared': ['root_account_secret_mismatch'],
     'root_account_secret_mismatch--locked-declared': ['root_account_secret_mismatch'],
-    'plan_size_does_not_fit--swapfile': ['plan_size_does_not_fit'],
+    'plan_size_does_not_fit--swapfile': ['plan_size_does_not_fit', 'disk_identity_mismatch'],
     'operation_order_invalid--swapped': ['operation_order_invalid'],
     'operations_storage_mismatch--option': ['operations_storage_mismatch'],
     'digest_mismatch--edited-content': ['digest_mismatch'],
@@ -89,7 +110,7 @@ test('single-rule fixtures raise only their rule', () => {
   };
   for (const [name, expected] of Object.entries(only)) {
     const plan = JSON.parse(readFileSync(join(planFixturesRoot, 'invalid', `${name}.json`), 'utf8'));
-    assert.deepEqual([...new Set(codes(validatePlan(plan, { facts })))], expected, name);
+    assert.deepEqual([...new Set(codes(validatePlan(plan, { facts, assets })))], expected, name);
   }
 });
 
@@ -118,7 +139,8 @@ test('non-objects, bad JSON, and unsupported versions are rejected', () => {
   for (const value of [null, [], 'plan', 3, true]) assert.deepEqual(codes(validatePlan(value)), ['plan_invalid_type']);
   assert.deepEqual(codes(parsePlanText('{not json').reasons), ['plan_not_json']);
   assert.deepEqual(codes(validatePlan({ format_version: 1 })), ['plan_format_unsupported']);
-  assert.deepEqual(codes(validatePlan({ format_version: 3 })), ['plan_format_unsupported']);
+  assert.deepEqual(codes(validatePlan({ format_version: 2 })), ['plan_format_unsupported']);
+  assert.deepEqual(codes(validatePlan({ format_version: 4 })), ['plan_format_unsupported']);
   assert.deepEqual(codes(validatePlan({})), ['plan_format_unsupported']);
 });
 
@@ -243,6 +265,7 @@ test('the machine projection is compared field by field, including whether a fie
     candidate => { delete candidate.target.machine.virtualization; },
     candidate => { candidate.target.machine.dmi.sys_vendor = 'Other'; },
     candidate => { delete candidate.target.machine.dmi.product_name; },
+    candidate => { candidate.target.machine.memory_total_bytes += 1; },
   ];
   for (const [index, mutation] of variants.entries()) {
     const candidate = withDigest((() => { const copy = structuredClone(plan); mutation(copy); return copy; })());
@@ -299,7 +322,15 @@ test('exactly one account_password requirement names its consumers from the root
 });
 
 test('operation sequences match the contract for each storage option', () => {
-  assert.equal(operationSequence('ext4-systemd-boot').length, 15);
+  assert.equal(operationSequence('ext4-systemd-boot').length, 17);
+  assert.equal(operationSequence('ext4-systemd-boot', false).length, 16);
+  assert.deepEqual(operationSequence('ext4-systemd-boot').slice(5, 10), [
+    'install_packages', 'configure_zram', 'configure_memory_reclaim', 'generate_fstab', 'create_swapfile',
+  ]);
+  for (const option of STORAGE_OPTION_NAMES) {
+    const enabled = operationSequence(option);
+    assert.deepEqual(operationSequence(option, false), enabled.filter(kind => kind !== 'create_swapfile'));
+  }
   assert.deepEqual(operationSequence('btrfs-rescue').slice(3, 6), ['format_filesystems', 'create_btrfs_subvolumes', 'mount_target']);
   const limine = operationSequence('btrfs-limine');
   assert.equal(limine.at(-1), 'sync_limine_snapshot_entries');

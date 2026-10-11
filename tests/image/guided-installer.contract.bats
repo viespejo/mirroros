@@ -97,6 +97,16 @@ run_startup() {
   ! grep -Eq '^jq$' "${REPOSITORY_ROOT}/image/archiso/packages.x86_64"
 }
 
+@test "the installed memory policy is not live image content" {
+  ! grep -Eq '^zram-generator$' "${REPOSITORY_ROOT}/image/archiso/packages.x86_64"
+  [ ! -e "${AIROOTFS}/usr/lib/systemd/zram-generator.conf.d" ]
+  [ ! -e "${AIROOTFS}/usr/lib/sysctl.d/60-mirroros-memory.conf" ]
+  [ ! -e "${AIROOTFS}/etc/systemd/zram-generator.conf" ]
+  ! grep -rq 'zswap' "${REPOSITORY_ROOT}/image/archiso" --include='*.cfg' --include='*.conf' --include='profiledef.sh'
+  [ -f "${REPOSITORY_ROOT}/install/plan/assets/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf" ]
+  [ -f "${REPOSITORY_ROOT}/install/plan/assets/usr/lib/sysctl.d/60-mirroros-memory.conf" ]
+}
+
 @test "the console keeps the reference kernel-default font and the live image sets no font" {
   [ ! -e "${AIROOTFS}/etc/vconsole.conf" ]
   ! grep -rq 'FONT=' "${AIROOTFS}/etc"

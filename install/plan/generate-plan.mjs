@@ -2,7 +2,15 @@ import { readFileSync } from 'node:fs';
 import { FACTS_FORMAT_VERSION, isRecord, reason, validateDocument } from '../discovery/validate-facts.mjs';
 import { PlanContractError } from './canonical-json.mjs';
 import { sha256Canonical, withDigest } from './digest-plan.mjs';
-import { resolveValues } from './resolve-choices.mjs';
+import { choicesConflicts, resolveValues } from './resolve-choices.mjs';
+import {
+  SWAPFILE_PRIORITY,
+  checkSwapfileSize,
+  isMemoryBytes,
+  isSwapfileBelowRam,
+  kernelCommandLine,
+  swapfileMaximumMib,
+} from './swap-policy.mjs';
 import {
   ACCOUNT_PASSWORD,
   KINDS,
@@ -26,9 +34,11 @@ export const OPERATION_DESCRIPTIONS = {
   format_filesystems: 'Format the ESP as FAT32 and the root partition with the selected filesystem.',
   create_btrfs_subvolumes: 'Create the flat Btrfs subvolumes on the new filesystem.',
   mount_target: 'Mount the root filesystem and the ESP under the target root.',
-  install_packages: 'Install the base package set and the packages of the storage option.',
+  install_packages: 'Install the base package set, zram-generator, and the packages of the storage option.',
+  configure_zram: 'Deliver the zram-generator drop-in: one zram device sized to memory, compressed with zstd, as preferred swap.',
+  configure_memory_reclaim: 'Deliver the sysctl drop-in with the memory reclaim settings.',
   generate_fstab: 'Generate /etc/fstab by UUID.',
-  create_swapfile: 'Create the swapfile and list it in fstab.',
+  create_swapfile: 'Create the swapfile with fallback swap priority 0 and list it in fstab; it also holds the hibernation image.',
   configure_locale_time_console: 'Configure locales, language, console keymap, time zone, hardware clock, and time sync.',
   configure_hostname_network: 'Set the hostname and configure NetworkManager without predefined connections.',
   create_user: 'Create the user account and set its password from a protected prompt.',
@@ -85,6 +95,20 @@ export function loadFacts(path) {
   return { facts, reasons: [] };
 }
 
+// The detected total memory of the facts' effective view, or undefined when it is not a positive safe integer.
+export function detectedMemoryBytes(facts) {
+  const value = facts.effective?.['hardware.memory_total_bytes']?.value;
+  return isMemoryBytes(value) ? value : undefined;
+}
+
+export function memoryUnavailableReason() {
+  return reason(
+    'memory_unavailable',
+    'The facts do not report the total memory as a positive integer, so zram and the hibernation swapfile cannot be sized; no value is assumed.',
+    'Rerun operations/install discover so the memory is detected, and pass the new target-facts.json.',
+  );
+}
+
 export function diskIdentifier(disk) {
   return disk.identity.by_id ?? disk.identity.path;
 }
@@ -131,7 +155,7 @@ export function selectDisk(disks, requested) {
   )] };
 }
 
-function parametersFor(kind, { values, option, disk }) {
+function parametersFor(kind, { values, option, disk, assets }) {
   switch (kind) {
     case 'wipe_disk_signatures':
       return { disk };
@@ -142,15 +166,31 @@ function parametersFor(kind, { values, option, disk }) {
     case 'format_filesystems':
       return { esp_filesystem: values.esp.filesystem, root_filesystem: option.filesystem };
     case 'create_btrfs_subvolumes':
-      return { subvolumes: option.subvolumes, mount_options: option.mount_options };
+      return { subvolumes: subvolumesFor(option, values.hibernation), mount_options: option.mount_options };
     case 'mount_target':
-      return { esp_mount_point: values.esp.mount_point };
+      return option.subvolumes === undefined
+        ? { esp_mount_point: values.esp.mount_point }
+        : { esp_mount_point: values.esp.mount_point, subvolumes: subvolumesFor(option, values.hibernation) };
     case 'install_packages':
       return { packages: [...values.packages, values.network.package, ...option.additional_packages] };
     case 'generate_fstab':
       return { identifier: 'uuid' };
+    case 'configure_zram':
+      return {
+        destination: assets.configure_zram.destination,
+        source_sha256: assets.configure_zram.sha256,
+        zram_size: values.zram.zram_size,
+        compression_algorithm: values.zram.compression_algorithm,
+        swap_priority: values.zram.swap_priority,
+      };
+    case 'configure_memory_reclaim':
+      return {
+        destination: assets.configure_memory_reclaim.destination,
+        source_sha256: assets.configure_memory_reclaim.sha256,
+        ...values.memory_reclaim.settings,
+      };
     case 'create_swapfile':
-      return { path: '/swapfile', size_mib: values.swapfile_size };
+      return { path: '/swapfile', size_mib: values.swapfile_size, priority: SWAPFILE_PRIORITY };
     case 'configure_locale_time_console':
       return {
         locales: values.locales,
@@ -178,20 +218,25 @@ function parametersFor(kind, { values, option, disk }) {
   }
 }
 
-function resolvedAtApply(kind, option) {
+// The @swap subvolume exists only while hibernation is enabled.
+function subvolumesFor(option, hibernation) {
+  return option.subvolumes.filter(name => hibernation || name !== '@swap');
+}
+
+function resolvedAtApply(kind, option, hibernation) {
   if (kind === 'format_filesystems') return [{ name: 'partition_uuids', method: 'blkid' }];
   if (kind === 'create_swapfile') return [{ name: 'resume_offset', method: option.resume_offset_method }];
   if (kind === 'install_bootloader') {
     return [
       { name: 'root_uuid', method: 'blkid' },
-      { name: 'resume_offset', method: option.resume_offset_method },
+      ...(hibernation ? [{ name: 'resume_offset', method: option.resume_offset_method }] : []),
     ];
   }
   return undefined;
 }
 
 function buildOperations(storageOption, context) {
-  return operationSequence(storageOption).map(kind => {
+  return operationSequence(storageOption, context.values.hibernation).map(kind => {
     const operation = {
       id: kind,
       kind,
@@ -199,7 +244,7 @@ function buildOperations(storageOption, context) {
       parameters: parametersFor(kind, context),
       description: OPERATION_DESCRIPTIONS[kind],
     };
-    const resolved = resolvedAtApply(kind, context.option);
+    const resolved = resolvedAtApply(kind, context.option, context.values.hibernation);
     if (resolved !== undefined) operation.resolved_at_apply = resolved;
     return operation;
   });
@@ -216,8 +261,8 @@ function buildSecrets(rootAccount) {
 }
 
 // The warnings that do not depend on a combination of choices failing. `disk` and `option` may be undefined
-// while a preview has not resolved them yet.
-export function buildWarnings({ facts, disk, storageOption, option }) {
+// while a preview has not resolved them yet. `swapfileSize` is present only while hibernation is enabled.
+export function buildWarnings({ facts, disk, storageOption, option, swapfileSize, memoryTotalBytes }) {
   const warnings = [];
   if (facts.profile.status === 'unqualified') {
     warnings.push(reason(
@@ -238,6 +283,13 @@ export function buildWarnings({ facts, disk, storageOption, option }) {
       'storage_option_experimental',
       `The storage option ${storageOption} is experimental and has no support commitment.`,
       'Select ext4-systemd-boot unless the experimental option is intended.',
+    ));
+  }
+  if (swapfileSize !== undefined && isSwapfileBelowRam(swapfileSize, memoryTotalBytes)) {
+    warnings.push(reason(
+      'swapfile_below_ram',
+      'The swapfile is smaller than the detected memory: hibernation may be unavailable under large memory workloads, because it depends on used memory and free swapfile space.',
+      'Increase swapfile_size if that is not acceptable; the default size is not a guarantee of a successful resume either.',
     ));
   }
   return warnings;
@@ -283,6 +335,16 @@ function buildHardwareSelections(facts, identifier, preselected) {
 // With allowPendingDisk a missing disk selection (several eligible disks, none chosen) is not a failure: the
 // result then has no disk, identifier, or target_disk value.
 export function resolveSelection({ facts, policy, choices, override, allowPendingDisk = false }) {
+  const memoryTotalBytes = detectedMemoryBytes(facts);
+  if (memoryTotalBytes === undefined) return { reasons: [memoryUnavailableReason()] };
+  const conflicts = choicesConflicts(choices.values);
+  if (conflicts.length > 0) return { reasons: conflicts };
+  if (choices.values.swapfile_size !== undefined) {
+    const problem = checkSwapfileSize(choices.values.swapfile_size, memoryTotalBytes);
+    if (problem !== undefined) {
+      return { reasons: [reason('choices_invalid_value', `${problem}.`, 'Fix swapfile_size; see the choice preview for the range derived from the detected memory.')] };
+    }
+  }
   const matched = facts.profile.status === 'matched';
   const appliedOverride = matched ? override : { values: {} };
   const selected = selectDisk(facts.layers.detected.storage.disks, choices.values.target_disk);
@@ -301,15 +363,21 @@ export function resolveSelection({ facts, policy, choices, override, allowPendin
     )] };
   }
 
+  const hibernationEnabled = choices.values.hibernation ?? policy.policy.hibernation.value;
   const detected = preselected
     ? { target_disk: { value: identifier, provenance: 'hardware_detection', editable: true } }
     : {};
+  // The default swapfile size is derived from the detected memory and exists only with hibernation.
+  if (hibernationEnabled) {
+    detected.swapfile_size = { value: swapfileMaximumMib(memoryTotalBytes), provenance: 'hardware_detection', editable: true };
+  }
   const resolved = resolveValues({
     policy: policy.policy,
     detected,
     override: appliedOverride.values,
     choices: { ...choices.values, ...(choices.values.target_disk === undefined ? {} : { target_disk: identifier }) },
   });
+  resolved.kernel_cmdline.value = kernelCommandLine(resolved.kernel_cmdline.value, resolved.hibernation.value);
   const values = Object.fromEntries(Object.entries(resolved).map(([key, entry]) => [key, entry.value]));
   const option = policy.storageOptions[values.storage_option];
   resolved.storage_option = {
@@ -319,20 +387,24 @@ export function resolveSelection({ facts, policy, choices, override, allowPendin
     bootloader: option.bootloader,
     resume_offset_method: option.resume_offset_method,
   };
-  return { reasons: [], matched, appliedOverride, disk, preselected, identifier, resolved, values, option };
+  return { reasons: [], matched, appliedOverride, disk, preselected, identifier, resolved, values, option, memoryTotalBytes };
 }
 
 // facts: a valid target-facts document. policy: the result of loadPlanPolicy. choices and override:
 // `{ values }` results of loadChoices and loadPlanOverride (override may also carry `sha256`); the override
 // applies only to a matched profile. profileDefinition: `{ sha256 }` of the matched profile's definition.
+// assets: the result of loadConfigurationAssets, the destination and SHA-256 of each configuration asset.
 // Returns { plan, reasons }: reasons are input problems (exit 2). A plan that fails its own validator for
 // any other reason is an invariant violation and throws a PlanContractError (exit 6).
-export function generatePlan({ facts, policy, choices = { values: {} }, override = { values: {} }, profileDefinition }) {
+export function generatePlan({ facts, policy, choices = { values: {} }, override = { values: {} }, profileDefinition, assets }) {
+  if (assets === undefined) throw new PlanContractError('the configuration assets were not provided to plan generation');
   const selection = resolveSelection({ facts, policy, choices, override });
   if (selection.reasons.length > 0) return { plan: undefined, reasons: selection.reasons };
-  const { matched, appliedOverride, disk, preselected, identifier, resolved, values, option } = selection;
+  const { matched, appliedOverride, disk, preselected, identifier, resolved, values, option, memoryTotalBytes } = selection;
 
-  const warnings = buildWarnings({ facts, disk, storageOption: values.storage_option, option });
+  const warnings = buildWarnings({
+    facts, disk, storageOption: values.storage_option, option, swapfileSize: values.swapfile_size, memoryTotalBytes,
+  });
 
   const binding = {
     facts_sha256: sha256Canonical(facts),
@@ -352,7 +424,7 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
     format_version: PLAN_FORMAT_VERSION,
     target: { machine: machineProjection(facts), profile: structuredClone(facts.profile), disk: targetDisk },
     choices: resolved,
-    operations: buildOperations(values.storage_option, { values, option, disk: identifier }),
+    operations: buildOperations(values.storage_option, { values, option, disk: identifier, assets }),
     secret_requirements: buildSecrets(values.root_account),
     hardware_selections: buildHardwareSelections(facts, identifier, preselected),
     warnings,
@@ -360,7 +432,7 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
     policy_binding: policyBinding,
   });
 
-  const problems = validatePlan(plan, { facts });
+  const problems = validatePlan(plan, { facts, assets });
   const inputProblems = problems.filter(item => INPUT_CAUSED_CODES.includes(item.code));
   const internalProblems = problems.filter(item => !INPUT_CAUSED_CODES.includes(item.code));
   if (internalProblems.length > 0) {

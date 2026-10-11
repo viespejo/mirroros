@@ -30,8 +30,8 @@ test('the valid fixtures pass', () => {
   assert.deepEqual(validateApprovalRecord(fixture('valid-approval.json')), []);
 });
 
-test('the records are version 2 and the run record is install-run.json', () => {
-  assert.equal(RECORD_FORMAT_VERSION, 2);
+test('the records are version 3 and the run record is install-run.json', () => {
+  assert.equal(RECORD_FORMAT_VERSION, 3);
   assert.equal(RUN_RECORD_FILE, 'install-run.json');
   assert.equal(APPROVAL_RECORD_FILE, 'approval-record.json');
 });
@@ -41,6 +41,22 @@ test('records of the earlier format and the fabricated target id are rejected', 
   assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), format_version: 1 }).some(item => item.includes('format_version')));
   assert.ok(validateRunRecord({ ...fixture('valid-run.json'), target_id: 'reference-vm' }).some(item => item.includes('target_id')));
   assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), target_id: 'reference-vm' }).some(item => item.includes('target_id')));
+});
+
+test('records of version 2 are rejected, and memory is a positive integer in the machine projection', () => {
+  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), format_version: 2 }).some(item => item.includes('format_version')));
+  assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), format_version: 2 }).some(item => item.includes('format_version')));
+  for (const document of [fixture('valid-run.json'), fixture('valid-approval.json')]) {
+    assert.equal(document.machine.memory_total_bytes, 4294967296);
+  }
+  const validate = machine => validateRunRecord({ ...fixture('valid-run.json'), machine });
+  const base = fixture('valid-run.json').machine;
+  assert.deepEqual(validate(base), []);
+  const { memory_total_bytes: _memory, ...withoutMemory } = base;
+  assert.deepEqual(validate(withoutMemory), []);
+  for (const memory of [0, -1, 1.5, '4096', null, 2 ** 53]) {
+    assert.ok(validate({ ...base, memory_total_bytes: memory }).some(item => item.includes('memory_total_bytes')), String(memory));
+  }
 });
 
 test('the approval record has no field that could grant permission', () => {
@@ -191,9 +207,9 @@ test('the canary never reaches disk through the records', () => {
 
 test('choices files are written 0600 and reject secret keys', () => {
   const directory = join(scratch, 'plans', '01');
-  const path = writeChoices(directory, { format_version: 2, hostname: 'laptop' });
+  const path = writeChoices(directory, { format_version: 3, hostname: 'laptop' });
   assert.equal(mode(path), 0o600);
-  assert.throws(() => writeChoices(directory, { format_version: 2, user_password: CANARY }, 'bad.json'), RecordContractError);
+  assert.throws(() => writeChoices(directory, { format_version: 3, user_password: CANARY }, 'bad.json'), RecordContractError);
   assert.throws(() => writeChoices(directory, { format_version: 1, hostname: 'laptop' }, 'old.json'), RecordContractError);
   assert.ok(!existsSync(join(directory, 'bad.json')));
 });

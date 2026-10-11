@@ -55,6 +55,17 @@ function layoutLines(layout) {
 // Every value of a row is one line of plain text: control characters become spaces.
 const oneLine = text => String(text).replace(/[\u0000-\u001f\u007f]/g, ' ');
 
+// The hibernation state the review shows: enabled with its swapfile size, or disabled with no swapfile.
+export function hibernationLabel(plan) {
+  const { choices } = plan;
+  return choices.hibernation.value ? `Enabled (swapfile ${choices.swapfile_size.value} MiB)` : 'Disabled (no swapfile)';
+}
+
+// The persistent warning about a swapfile below the detected memory, or undefined when it does not apply.
+export function swapfileWarning(plan) {
+  return plan.warnings.find(item => item.code === 'swapfile_below_ram');
+}
+
 // The rows of the compact review, as [label, value] pairs from the validated plan. The assistant owns the
 // presentation and adds the rows that are not part of the plan (live connectivity).
 export function compactReview(plan) {
@@ -64,7 +75,7 @@ export function compactReview(plan) {
     ['Machine', machineLabel(plan)],
     ['Disk', diskLabel(plan)],
     ['Storage', `${storage.value} (${storage.tier})`],
-    ['Swapfile', `${choices.swapfile_size.value} MiB`],
+    ['Hibernation', hibernationLabel(plan)],
     ['Timezone', choices.timezone.value],
     ['Language', choices.lang.value],
     ['Formats', `${choices.regional_format.value} (${choices.locale_categories.value.LC_TIME})`],

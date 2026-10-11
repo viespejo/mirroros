@@ -11,16 +11,16 @@ teardown() {
 
 # The answers of the guided route up to the review, with every proposal accepted: welcome, machine check,
 # then the configuration screens (disk, storage, timezone, language, formats, keyboard, root policy) and the
-# inputs (swapfile, hostname, username).
+# inputs (swapfile size, hostname, username). The hibernation choice follows the storage layout, Enabled.
 queue_to_review() {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros'
 }
 
-# After a review that chose Back: Esc back to the swapfile screen, answer it, and walk forward again.
+# After a review that chose Back: Esc back to the hibernation screen, keep it Enabled, answer the size, and walk forward again.
 queue_back_to_swapfile() {
-  confirm_queue choose '0|Back' '1' '1' '1' '1' '1'
+  confirm_queue choose '0|Back' '1' '1' '1' '1' '1' '0|Enabled'
   confirm_queue input '1' '1' "0|$1"
   confirm_queue choose '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
   confirm_queue input '0|mirroros-ref' '0|mirroros'
@@ -127,8 +127,8 @@ approve_plan_script() {
   [ -f "${RUN_DIR}/discovery/final/target-facts.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.txt" ]
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 2 && Object.keys(d).length === 1"
-  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 2 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 3 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password_explanation,discovery_final'"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "d.reason === 'engine_not_available' && /^[0-9a-f]{64}$/.test(d.digest)"
@@ -140,16 +140,16 @@ approve_plan_script() {
 }
 
 @test "accepted proposals keep their provenance and only a changed value becomes a choice" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
-  confirm_queue input '0|8192' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda'
   confirm_queue confirm 0
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 approved
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 2 && d.swapfile_size === 8192 && Object.keys(d).length === 2"
-  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.swapfile_size.source === 'choice' && d.choices.swapfile_size.value === 8192 && d.choices.lang.source === 'policy' && d.choices.hostname.source === 'override' && d.choices.hostname.value === 'mirroros-ref'"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.swapfile_size === 2048 && Object.keys(d).length === 2"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.swapfile_size.source === 'choice' && d.choices.swapfile_size.value === 2048 && d.choices.lang.source === 'policy' && d.choices.hostname.source === 'override' && d.choices.hostname.value === 'mirroros-ref'"
 }
 
 @test "choosing Cancel at the machine check exits 3, rediscovers nothing, and still writes the records" {
@@ -226,7 +226,7 @@ approve_plan_script() {
 }
 
 @test "Esc at a configuration screen goes back and keeps the confirmed answers" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '1' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '1' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
@@ -239,7 +239,7 @@ approve_plan_script() {
 }
 
 @test "an invalid value shows its reason and asks again without keeping it" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
   confirm_queue input '0|100' '0|4096' '0|mirroros-ref' "0|${CONFIRM_CANARY}" '0|mirroros' '0|vda'
@@ -247,7 +247,7 @@ approve_plan_script() {
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 approved
-  confirm_assert_gum_called 'Use a whole number from 512 to 65536 MiB.'
+  confirm_assert_gum_called 'Use a whole number from 512 to 4096 MiB.'
   confirm_assert_gum_called 'Use 1-32 characters, starting with a lowercase letter or underscore.'
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
   confirm_assert_no_canary
@@ -255,7 +255,7 @@ approve_plan_script() {
 
 @test "answers changed after the review regenerate a new numbered plan before confirmation" {
   queue_to_review
-  queue_back_to_swapfile 8192
+  queue_back_to_swapfile 2048
   confirm_queue choose '0|Continue to confirmation' '0|Continue'
   confirm_queue confirm 0
   confirm_queue input '0|vda'
@@ -264,12 +264,13 @@ approve_plan_script() {
   confirm_assert_run 2 approved
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 2 && new Set(d.digests).size === 2 && d.final_digest === d.digests[1]"
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
-  confirm_json_assert "${RUN_DIR}/plans/02/choices.json" "d.swapfile_size === 8192"
-  confirm_json_assert "${RUN_DIR}/plans/02/installation-plan.json" "d.choices.swapfile_size.value === 8192"
+  confirm_json_assert "${RUN_DIR}/plans/02/choices.json" "d.swapfile_size === 2048"
+  confirm_json_assert "${RUN_DIR}/plans/02/installation-plan.json" "d.choices.swapfile_size.value === 2048"
   confirm_assert_private
 }
 
 @test "an invalid combination keeps the last valid plan, shows its reason, and grants no approval" {
+  confirm_scenario_memory 67108864
   queue_to_review
   queue_back_to_swapfile 65536
   confirm_queue choose '0|Cancel'
@@ -309,7 +310,7 @@ approve_plan_script() {
 
 @test "a machine with several eligible disks lists them and records the chosen disk" {
   confirm_scenario_two_disks
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vdb (32G)' '0|ext4 + systemd-boot - Default' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vdb (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vdb'
@@ -347,7 +348,7 @@ approve_plan_script() {
   confirm_assert_run 2 approved
   cmp -- "$PLAN_FILE" "${TEST_ROOT}/given.json"
   cmp -- "$PLAN_FILE" "${RUN_DIR}/plans/01/installation-plan.json"
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 2 && Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && Object.keys(d).length === 1"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.entry === 'plan_file' && d.digests.length === 1"
   confirm_assert_gum_not_called 'Choose installation disk'
   confirm_assert_gum_called 'confirm --default=false'
@@ -389,7 +390,7 @@ approve_plan_script() {
   node -e '
     const fs = require("node:fs");
     const policy = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    policy.policy.swapfile_size.value = 2048;
+    policy.policy.hibernation.value = false;
     fs.writeFileSync(process.argv[1], JSON.stringify(policy, null, 2) + "\n");
   ' "${CODE_ROOT}/install/plan/policy.json"
   confirm_queue choose '0|Continue'
@@ -422,6 +423,109 @@ approve_plan_script() {
   confirm_assert_reason machine_identity_changed
   confirm_assert_reason profile_binding_changed
   confirm_assert_gum_not_called 'Review navigation'
+}
+
+@test "a changed detected memory invalidates the plan before review" {
+  confirm_make_plan
+  confirm_scenario_memory 8388608
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 invalidated
+  confirm_assert_reason machine_identity_changed
+  confirm_assert_gum_not_called 'Review navigation'
+}
+
+@test "a changed or missing configuration asset invalidates the plan before review" {
+  local asset="${CODE_ROOT}/install/plan/assets/usr/lib/sysctl.d/60-mirroros-memory.conf"
+
+  confirm_make_plan
+  printf '%s\n' '# changed after the plan' >> "$asset"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 invalidated
+  confirm_assert_reason configuration_assets_changed
+  confirm_assert_gum_not_called 'Review navigation'
+  rm -rf -- "$RUN_DIR" "$asset"
+  confirm_queue choose '0|Continue'
+  confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 invalidated
+  confirm_assert_reason configuration_assets_changed
+}
+
+@test "missing detected memory blocks the guided run with 2 and memory_unavailable before any choice" {
+  confirm_scenario_memory ''
+  confirm_queue choose '0|Continue' '0|Continue'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 blocked
+  confirm_assert_reason memory_unavailable
+  confirm_assert_gum_not_called 'Hibernation'
+  confirm_assert_gum_not_called '^(confirm|input) '
+  [ ! -e "${RUN_DIR}/plans/01" ]
+}
+
+@test "disabled hibernation asks no size, plans no swapfile, and the review says so without another dialog" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Disabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_assert_reason engine_not_available
+  confirm_assert_gum_not_called 'Swapfile size'
+  confirm_assert_gum_called 'Hibernation is disabled: no swapfile will be created.'
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.hibernation.value === false && !('swapfile_size' in d.choices) && !d.operations.some(o => o.kind === 'create_swapfile')"
+  confirm_assert_private
+}
+
+@test "a reduced swapfile size keeps its warning in the size screen, the review, and the plan" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Back' '1' '1' '1' '1' '1' '0|Enabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '1' '1' '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  confirm_assert_gum_called 'Below detected memory: hibernation may be unavailable'
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.swapfile_size.value === 2048 && d.warnings.some(w => w.code === 'swapfile_below_ram')"
+}
+
+@test "disabling and re-enabling hibernation proposes the memory-based size again" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Back' '1' '1' '1' '1' '1' '0|Disabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Back' '1' '1' '1' '1' '1' '0|Enabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '1' '1' '0|mirroros-ref' '0|mirroros' '1' '1' '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  [ "$(grep -c -- '--value 4096' "${DOUBLE_STATE}/gum-calls.log")" -ge 2 ]
+  [ "$(grep -c -- '--value 2048' "${DOUBLE_STATE}/gum-calls.log")" -eq 0 ]
+  confirm_json_assert "${RUN_DIR}/plans/03/installation-plan.json" "d.choices.hibernation.value === true && d.choices.swapfile_size.value === 4096"
+}
+
+@test "Esc at the swapfile size returns to the hibernation choice" {
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' '0|Enabled' \
+    '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
+    '0|Continue to confirmation' '0|Continue'
+  confirm_queue input '1' '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue confirm 0
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 2 ]
+  confirm_assert_run 2 approved
+  [ "$(grep -c -- '--header Hibernation' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
 }
 
 # A hook that swaps the fixture root for another raw fixture, as if the disk changed under the run.
@@ -514,7 +618,7 @@ swap_scenario_hook() {
 
   printf '%s\n' no > "${DOUBLE_STATE}/ntp"
   confirm_hook_call choose 2 "printf '%s\n' yes > '${DOUBLE_STATE}/ntp'"
-  confirm_queue choose '0|Continue' '0|Retry clock check' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' \
+  confirm_queue choose '0|Continue' '0|Retry clock check' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
@@ -557,7 +661,7 @@ swap_scenario_hook() {
 
 @test "the live keyboard change stays in the live session and does not alter the installed choices" {
   confirm_queue choose '0|Change installation keyboard layout' '0|Spanish (ES)' '0|Continue' '0|Continue' '0|/dev/vda (32G)' \
-    '0|ext4 + systemd-boot - Default' '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' \
+    '0|ext4 + systemd-boot - Default' '0|Enabled' '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' \
     '0|Locked (default)' '0|Continue to confirmation' '0|Continue'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
   confirm_queue confirm 0

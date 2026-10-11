@@ -1,13 +1,16 @@
 # Installation confirmation (`mirroros-install`)
 
-`format_version: 2`. Produced by `mirroros-install` (`operations/install`) without a subcommand, which runs the
+`format_version: 3`. Produced by `mirroros-install` (`operations/install`) without a subcommand, which runs the
 guided live installer: one interactive Gum flow that prepares the live environment, discovers the machine
 automatically, collects the installation choices, generates and reviews an
 [installation plan](installation-plan.md), and requires a machine-, disk-, and digest-bound confirmation.
 Confirmation is ephemeral and single-use: it exists only inside one process. No persisted file authorizes
 anything. The two JSON documents below are evidence records. Unknown fields are rejected by
 `install/confirmation/validate-records.mjs`, and records of `format_version` `1` (`apply-run.json`,
-`apply.log`) are historical evidence that is neither read nor transformed.
+`apply.log`) and `2` (earlier `install-run.json` and `approval-record.json`) are historical evidence that is
+neither read nor transformed. Version `3` supports `machine.memory_total_bytes` and the choices of
+[installation plan](installation-plan.md) version 3, per
+[ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md).
 
 In this version the command always ends at the engine boundary. The installation engine
 (`install/engine/apply`) is not part of this version, so a valid approval exits `2` with the outcome `approved`
@@ -80,12 +83,15 @@ The screens and their order are the reference's, with the integration difference
 4. **Automatic discovery** into `discovery/initial/`: `install/discovery/discover` without `--target`, as a
    process. The result shows the machine as recognized or unqualified (see
    [Machine check](#machine-check)).
-5. **Configuration screens**, in order: installation disk, storage layout, swapfile size, timezone, system
-   language, regional formats, installed keyboard, hostname, username, root policy.
+5. **Configuration screens**, in order: installation disk, storage layout, hibernation (with swapfile size when
+   enabled), timezone, system language, regional formats, installed keyboard, hostname, username, root policy.
    - Defaults and per-value validation come from the plan component's published helpers
      ([`installation-plan.md`](installation-plan.md#choice-helpers)) as processes; the assistant owns no policy.
    - The disk screen always lists the real eligible disks, including when there is only one. Labels and stable
      identifiers are kept separate.
+   - The hibernation stage first offers Enabled or Disabled, initially Enabled, and shows the sizing screen only
+     when enabled (see D15). Disabling removes any explicit size; re-enabling proposes the RAM-derived default
+     again. A revisit shows the current choice. The stage is reachable from the edit menu like any other.
    - Advancing without changing a proposal keeps its provenance and source; only a changed value becomes a user
      choice.
    - Back or Esc returns to the previous screen without applying an incomplete answer and keeps confirmed
@@ -93,7 +99,9 @@ The screens and their order are the reference's, with the integration difference
 6. **Review.** On entering review, `install/plan/plan` generates the first plan into `plans/01/` and validates the
    complete combination. The review shows the compact answers and the plan reference (the first 12 hex
    characters of the digest). The menu offers continuing to confirmation, inspecting the complete plan, and
-   going back.
+   going back. The review shows the hibernation state: enabled with the swapfile size and, when the size is below
+   detected memory, the persistent warning; or disabled, stating that no swapfile will be created. No additional
+   confirmation dialog is added.
    - Inspecting the complete plan opens `gum pager` with the persisted plan text: disk and current layout, all
      choices with provenance and source, the destructive operations, warnings, secret requirements without
      values, and the plan reference. Leaving the pager returns to the review, preserves the answers, and grants no
@@ -132,8 +140,8 @@ or retry, and only answers that remain valid are kept. Recoverable are: a failed
 discovery result whose only reasons are `network_no_default_route`, `network_dns_failed`, or
 `network_https_failed`, and an invalid choice combination at generation. Every other failure stops: an
 unexpected failure retains its diagnostics in `install.log`, and any child status is kept in
-`child_exit_status`. A change of the machine, the profile binding, the disk, the layout, eligibility, policy, or
-the plan invalidates approval (see [Reasons](#reasons)); it is never confused with cancellation, which exits
+`child_exit_status`. A change of the machine (including its detected memory), the profile binding, the disk, the layout, eligibility,
+policy, the configuration assets, or the plan invalidates approval (see [Reasons](#reasons)); it is never confused with cancellation, which exits
 `3`.
 
 ## Safety projection
@@ -143,7 +151,7 @@ fresh facts and this projection:
 
 | Field | Source |
 | --- | --- |
-| Machine | `target.machine` of the plan against the observed `architecture`, `virtualization`, and DMI `sys_vendor` and `product_name`, compared by value and by availability. |
+| Machine | `target.machine` of the plan against the observed `architecture`, `memory_total_bytes`, `virtualization`, and DMI `sys_vendor` and `product_name`, compared by value and by availability. Detected memory that differs or is unavailable invalidates approval, including when hibernation is disabled. |
 | Profile binding | `target.profile` against the facts' `profile`, and `profile_definition_sha256` recomputed from the matched profile's `target.json`. An unqualified machine must still be unqualified. |
 | `firmware.boot_mode` | `choices.firmware_mode` of the plan against the facts `firmware`. |
 | `firmware.secure_boot` | Not recorded in the plan: the Secure Boot state of the fresh facts is compared with the state in `discovery/initial/`. |
@@ -151,6 +159,7 @@ fresh facts and this projection:
 | `eligible` | Must remain `true`. |
 | `current_layout` | `partition_table` and, for each partition, `uuid`, `partuuid`, size, `fstype`, `label`, and `mountpoints`. |
 | `policy_binding` | `policy_sha256` and `override_sha256`, recomputed from `install/plan/policy.json` and the matched profile's override. |
+| Configuration assets | The `destination` and `source_sha256` of `configure_zram` and `configure_memory_reclaim` against the SHA-256 recomputed from the current allowlisted source assets under `install/plan/assets/`. A changed, missing, or damaged asset invalidates approval. |
 
 No fabricated target id takes part. `facts_binding.facts_sha256` is not compared: facts include `source.run_id`, so
 every rediscovery hashes differently. Network readiness is not part of the projection.
@@ -164,11 +173,12 @@ Invalidation reasons carry the `next_step` "Regenerate and review the installati
 
 | Code | Condition |
 | --- | --- |
-| `machine_identity_changed` | The machine projection differs from the plan, including a field that appeared or disappeared. |
+| `machine_identity_changed` | The machine projection, including detected memory, differs from the plan, including a field that appeared or disappeared. |
 | `profile_binding_changed` | The profile classification, or the matched profile's definition hash, differs from the plan. |
 | `target_identity_changed` | The firmware mode, the Secure Boot state, or the disk identity differs from the plan. |
 | `target_layout_changed` | The disk is no longer eligible, or its `current_layout` differs from the plan. |
 | `policy_changed` | The recomputed policy or override hash differs from `policy_binding`. |
+| `configuration_assets_changed` | A configuration asset's hash or destination differs from the reviewed plan, or an asset is missing or damaged. |
 | `digest_mismatch` | The plan file fails its digest, before review or in the re-check after confirmation. |
 | Validator codes | A plan given with `--plan` fails `validate-plan.mjs`; its code passes through (see [`installation-plan.md`](installation-plan.md#validation)). A plan of an earlier format is `plan_format_unsupported`, with the instruction to regenerate it. |
 | Discovery codes | Fresh facts are invalid or discovery fails; the code passes through (see [`target-facts.md`](target-facts.md#validation)), for example `profile_ambiguous`. |
@@ -193,8 +203,8 @@ Other reasons:
 | --- | --- | --- |
 | `2` | `approved` | The user confirmed, the final revalidation passed, and the engine boundary was reached. Reason `engine_not_available`. |
 | `3` | `cancelled` | The user chose Cancel, answered No, pressed Esc at an authorization prompt, pressed Ctrl+C during the interactive phase, cancelled a failed preparation, or typed a device name that does not match (reason `confirmation_mismatch`). |
-| `2` | `invalidated` | A machine, profile, disk, layout, eligibility, policy, or plan change was detected before review or after confirmation. The reason is one of the invalidation codes above. |
-| `2` | `blocked` | The run cannot reach review for an input reason: invalid facts, an explicit-assertion rejection, an ambiguous profile match, no eligible disk, or an unrecoverable discovery result. |
+| `2` | `invalidated` | A machine, profile, disk, layout, eligibility, policy, configuration asset, or plan change was detected before review or after confirmation. The reason is one of the invalidation codes above. |
+| `2` | `blocked` | The run cannot reach review for an input reason: invalid facts, an explicit-assertion rejection, an ambiguous profile match, no eligible disk, missing detected memory (`memory_unavailable`, repeat discovery), or an unrecoverable discovery result. |
 | `5` | `failed` | An external tool failed unexpectedly. |
 | `6` | `failed` | Damaged checkout or embedded code, or Gum that is missing or not qualified. |
 | `128+n` | none | Termination by a signal outside the interactive phase, and every signal other than SIGINT. |
@@ -263,11 +273,11 @@ secret. Historical evidence from earlier versions is not renamed or transformed.
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `2`. |
+| `format_version` | Always `3`. |
 | `run_id` | Run identifier. |
 | `timestamp` | RFC 3339 start time. |
 | `entry` | `guided` or `plan_file`. |
-| `machine` | The observed machine projection as in the plan's `target.machine`; omitted when discovery was not reached. |
+| `machine` | The observed machine projection as in the plan's `target.machine`, including `memory_total_bytes`; omitted when discovery was not reached. |
 | `profile` | `status` and, only for a match, `profile_id`; omitted when discovery was not reached. |
 | `gum_version` | Output of `gum --version`; omitted when Gum was not found. |
 | `stages` | The stages reached, in order, from `preparation`, `discovery_initial`, `plan`, `review`, `confirmation`, `password_explanation`, and `discovery_final`. |
@@ -284,7 +294,7 @@ confirmation.
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `2`. |
+| `format_version` | Always `3`. |
 | `run_id` | Run identifier, the same as in `install-run.json`. |
 | `timestamp` | RFC 3339 time the record was written. |
 | `digest` | The final plan digest; omitted when no plan exists. |
@@ -304,7 +314,7 @@ The reference is the frozen copy at
 [`prototypes/frontend/guided-installer/`](../prototypes/frontend/guided-installer/README.md): its logo, Tokyo
 Night palette, layout, centering, widgets, navigation, and screen order are reproduced. Only the differences
 below are intended. Any other visual, wording, workflow, or widget difference needs the maintainer's approval
-first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4.
+first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4, except D15, which was approved at plan 02-08, Task 1, with the acceptance of [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md).
 
 | # | Reference | Production | Why |
 | --- | --- | --- | --- |
@@ -321,12 +331,13 @@ first. The wording shown is the proposed production text; every item awaits appr
 | D11 | Password screen header "No password collection in this prototype"; menu "Finish preview" / "Back". | Header "No password is collected in this version"; menu "Continue" / "Back". | Truthful wording. |
 | D12 | Root screen: "The intended flow asks for one password, with repetition, after plan approval." / "This preview does not collect passwords or change accounts." | "Installation will ask for one password, with repetition, after you approve the plan." / "This version does not collect passwords or change accounts." When password login is enabled, a gray line is added: "Sharing the password does not give root an independent recovery credential." | DEC-004, DEC-005. |
 | D13 | Ending: "Presentation demo finished. No installation or disk operation executed." / "Synthetic example facts were used. No credentials or evidence were saved." | "Installation was not started: the installation engine is not part of this version." / "No installation-disk operation was executed. Your approval was not saved and cannot authorize a later run." The run directory is named. Exit `2`. | Truthful engine-unavailable ending. |
-| D14 | Screen titles list includes "Choose installation target", "Confirmation preview - simulation only", and "Password requirements - preview only". | "Choose installation target" is replaced by "Machine check" (D1); the other two are replaced as in D9 and D10; a titled screen is added for the clock failure (D4). The remaining titles are unchanged. | Consequence of D1, D4, D9, D10. |
+| D14 | Screen titles list includes "Choose installation target", "Confirmation preview - simulation only", and "Password requirements - preview only". | "Choose installation target" is replaced by "Machine check" (D1); the other two are replaced as in D9 and D10; a titled screen is added for the clock failure (D4). The remaining titles are unchanged, except the title of the stage changed by D15. | Consequence of D1, D4, D9, D10, D15. |
+| D15 | "Choose swapfile size" screen at the position after storage layout: gray lines "The swapfile is used for swap and hibernation." / "The default does not guarantee hibernation for every workload.", the range line, and the "Swapfile size (MiB)> " input. Review row "Swapfile": "<n> MiB". | The stage is titled "Choose hibernation" and is shown at the same position. A `gum choose` with the header "Hibernation" offers "Enabled" and "Disabled", with the current choice selected (Enabled initially) and the gray lines "Hibernation lets the machine power off and resume where it left off." / "Enabled keeps a swapfile on disk; it also serves as fallback swap when zram is full." Only when Enabled, the sizing screen titled "Choose swapfile size" follows, in the reference's style, with the gray lines "The swapfile holds the hibernation image and also serves as fallback swap after zram." / "The default does not guarantee hibernation for every workload.", the range line stating the RAM-derived minimum and maximum, the unchanged input, and, when the size is below detected memory, the persistent yellow line "Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space." Back from the sizing returns to the hibernation choice. Disabling removes the explicit size and re-enabling proposes the RAM-derived default again. The review row "Swapfile" becomes "Hibernation": "Enabled (swapfile <n> MiB)", or "Disabled (no swapfile)" with the gray line "Hibernation is disabled: no swapfile will be created."; the yellow below-memory line is repeated under the rows when it applies. No additional confirmation dialog, and no claim that the default guarantees a successful resume. | DEC-013, DEC-014, DEC-028; [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md): hibernation is optional and the swapfile size is RAM-derived. |
 
 Unchanged and not differences: the logo and its two-tone drawing, the palette and the VT-only palette setting, the
 centering, the Gum widget styles, the welcome text and the live-keyboard screen (including "This layout is for the
 live installation, not the installed system."), the Wi-Fi instruction text and its pager, the timezone,
-installed-keyboard, hostname, username, root-policy, storage, swapfile, and language and formats screens and
+installed-keyboard, hostname, username, root-policy, storage, and language and formats screens and
 options, Back and Esc navigation in configuration steps, the cancellation message, and the console font (the
 kernel default; the reference documents none).
 

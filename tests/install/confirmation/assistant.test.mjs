@@ -4,7 +4,9 @@ import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { previewChoices } from '../../../install/plan/preview-choices.mjs';
-import { CANARY, facts, generate, policy, referenceOverride, removeDirectory, repository, temporaryDirectory, unqualifiedFacts } from './helpers.mjs';
+import {
+  CANARY, facts, generate, policy, referenceOverride, removeDirectory, repository, temporaryDirectory, unqualifiedFacts, withMemory,
+} from './helpers.mjs';
 
 const scratch = temporaryDirectory();
 after(() => removeDirectory(scratch));
@@ -50,7 +52,10 @@ test('review-values prints the plan values and the plan reference, and nothing s
   assert.equal(values.machine, 'Recognized (reference-vm)');
   assert.equal(values.storage_option, plan.choices.storage_option.value);
   assert.equal(values.storage_tier, plan.choices.storage_option.tier);
-  assert.equal(values.swapfile_size, String(plan.choices.swapfile_size.value));
+  assert.equal(values.hibernation, 'true');
+  assert.equal(values.hibernation_label, 'Enabled (swapfile 4096 MiB)');
+  assert.equal(values.swapfile_below_ram, 'false');
+  assert.equal('swapfile_size' in values, false);
   assert.equal(values.format_locale, plan.choices.locale_categories.value.LC_TIME);
   assert.equal(values.plan_reference, plan.digest.value.slice(0, 12));
   assert.ok(!/password|secret|token/i.test(result.stdout));
@@ -120,4 +125,34 @@ test('an unknown reason code or command fails with exit 6 and prints no secret',
   assert.equal(unknown.status, 6);
   assert.ok(!unknown.stdout.includes(CANARY) && !unknown.stderr.includes(CANARY));
   assert.equal(run('frobnicate').status, 6);
+});
+
+test('review-values reports disabled hibernation and a reduced size without a swapfile value', () => {
+  const disabled = Object.fromEntries(rows(run('review-values', write('disabled-plan.json', generate({ choices: { hibernation: false } }).plan)).stdout));
+  assert.equal(disabled.hibernation, 'false');
+  assert.equal(disabled.hibernation_label, 'Disabled (no swapfile)');
+  assert.equal(disabled.swapfile_below_ram, 'false');
+  const reduced = Object.fromEntries(rows(run('review-values', write('reduced-plan.json', generate({ choices: { swapfile_size: 2048 } }).plan)).stdout));
+  assert.equal(reduced.hibernation_label, 'Enabled (swapfile 2048 MiB)');
+  assert.equal(reduced.swapfile_below_ram, 'true');
+});
+
+test('memory succeeds for facts with detected memory and blocks with repeated discovery guidance otherwise', () => {
+  assert.equal(run('memory', write('with-memory.json', facts())).status, 0);
+  const result = run('memory', write('without-memory.json', withMemory(facts(), undefined)));
+  assert.equal(result.status, 2);
+  const [reason] = JSON.parse(result.stdout);
+  assert.equal(reason.code, 'memory_unavailable');
+  assert.match(reason.next_step, /discover/);
+  assert.equal(run('memory', write('broken-facts.json', { format_version: 2 })).status, 2);
+});
+
+test('has-warning exits 0 only when the preview or plan carries the warning code', () => {
+  const reduced = previewChoices({ facts: facts(), policy, choices: { values: { swapfile_size: 2048 } }, override: referenceOverride() }).document;
+  const exact = previewChoices({ facts: facts(), policy, override: referenceOverride() }).document;
+  assert.equal(run('has-warning', write('warn-reduced.json', reduced), 'swapfile_below_ram').status, 0);
+  assert.equal(run('has-warning', write('warn-exact.json', exact), 'swapfile_below_ram').status, 2);
+  assert.equal(run('has-warning', write('warn-plan.json', generate({ choices: { swapfile_size: 2048 } }).plan), 'swapfile_below_ram').status, 0);
+  assert.equal(run('has-warning', write('warn-plan-off.json', generate({ choices: { hibernation: false } }).plan), 'swapfile_below_ram').status, 2);
+  assert.equal(run('has-warning', write('warn-none.json', { format_version: 3 }), 'swapfile_below_ram').status, 2);
 });

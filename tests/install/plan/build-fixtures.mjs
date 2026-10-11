@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const planFixturesRoot = resolve(here, '../../fixtures/plan');
 const policyPath = resolve(here, '../../../install/plan/policy.json');
 const profileDefinitionPath = resolve(here, '../../../targets/reference-vm/target.json');
+const assetsRoot = resolve(here, '../../../install/plan/assets');
 
 export const STORAGE_OPTION_NAMES = ['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine'];
 export const ROOT_ACCOUNT_MODES = ['locked', 'password'];
@@ -20,6 +22,11 @@ export function fixtureFacts() {
 
 function readPolicy() {
   return JSON.parse(readFileSync(policyPath, 'utf8'));
+}
+
+// Independent of the generator: the raw-byte SHA-256 of an asset under install/plan/assets.
+function assetSha256(source) {
+  return createHash('sha256').update(readFileSync(resolve(assetsRoot, source))).digest('hex');
 }
 
 function parametersFor(kind, context) {
@@ -34,15 +41,34 @@ function parametersFor(kind, context) {
     case 'format_filesystems':
       return { esp_filesystem: values.esp.filesystem, root_filesystem: option.filesystem };
     case 'create_btrfs_subvolumes':
-      return { subvolumes: option.subvolumes, mount_options: option.mount_options };
+      return { subvolumes: subvolumesOf(option, values.hibernation), mount_options: option.mount_options };
     case 'mount_target':
-      return { esp_mount_point: values.esp.mount_point };
+      return option.subvolumes === undefined
+        ? { esp_mount_point: values.esp.mount_point }
+        : { esp_mount_point: values.esp.mount_point, subvolumes: subvolumesOf(option, values.hibernation) };
     case 'install_packages':
       return { packages: [...values.packages, values.network.package, ...option.additional_packages] };
     case 'generate_fstab':
       return { identifier: 'uuid' };
+    case 'configure_zram':
+      return {
+        destination: '/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf',
+        source_sha256: assetSha256('usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf'),
+        zram_size: 'ram',
+        compression_algorithm: 'zstd',
+        swap_priority: 100,
+      };
+    case 'configure_memory_reclaim':
+      return {
+        destination: '/usr/lib/sysctl.d/60-mirroros-memory.conf',
+        source_sha256: assetSha256('usr/lib/sysctl.d/60-mirroros-memory.conf'),
+        'vm.swappiness': 180,
+        'vm.page-cluster': 0,
+        'vm.watermark_scale_factor': 125,
+        'vm.watermark_boost_factor': 0,
+      };
     case 'create_swapfile':
-      return { path: '/swapfile', size_mib: values.swapfile_size };
+      return { path: '/swapfile', size_mib: values.swapfile_size, priority: 0 };
     case 'configure_locale_time_console':
       return {
         locales: values.locales,
@@ -70,19 +96,28 @@ function parametersFor(kind, context) {
   }
 }
 
-function resolvedAtApply(kind, option) {
+function subvolumesOf(option, hibernation) {
+  return option.subvolumes.filter(name => hibernation || name !== '@swap');
+}
+
+function resolvedAtApply(kind, option, hibernation) {
   if (kind === 'format_filesystems') return [{ name: 'partition_uuids', method: 'blkid' }];
   if (kind === 'create_swapfile') return [{ name: 'resume_offset', method: option.resume_offset_method }];
   if (kind === 'install_bootloader') {
     return [
       { name: 'root_uuid', method: 'blkid' },
-      { name: 'resume_offset', method: option.resume_offset_method },
+      ...(hibernation ? [{ name: 'resume_offset', method: option.resume_offset_method }] : []),
     ];
   }
   return undefined;
 }
 
-export function buildValidPlan(storageOption, rootAccount) {
+// The detected memory of the reference VM facts fixture is exactly 4 GiB, so the swapfile maximum and default
+// is 4096 MiB, which equals the raw memory: the boundary that does not warn.
+export const REFERENCE_MEMORY_BYTES = 4294967296;
+export const REFERENCE_SWAPFILE_MIB = 4096;
+
+export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
   const facts = fixtureFacts();
   const policy = readPolicy();
   const option = policy.storage_options[storageOption];
@@ -92,6 +127,18 @@ export function buildValidPlan(storageOption, rootAccount) {
   for (const [key, entry] of Object.entries(policy.policy)) {
     values[key] = entry.value;
     choices[key] = { value: entry.value, provenance: entry.provenance, source: 'policy', editable: entry.editable };
+  }
+  values.hibernation = hibernation;
+  if (hibernation) {
+    values.swapfile_size = REFERENCE_SWAPFILE_MIB;
+    choices.swapfile_size = { value: REFERENCE_SWAPFILE_MIB, provenance: 'hardware_detection', source: 'detected', editable: true };
+  } else {
+    choices.hibernation = { ...choices.hibernation, value: false, source: 'choice' };
+    values.kernel_cmdline = values.kernel_cmdline
+      .split(' ')
+      .filter(token => !token.startsWith('resume=') && !token.startsWith('resume_offset='))
+      .join(' ');
+    choices.kernel_cmdline = { ...choices.kernel_cmdline, value: values.kernel_cmdline };
   }
   const derivedLocale = { value: undefined, provenance: 'technical_necessity', source: 'policy', editable: false };
   values.locales = ['en_US.UTF-8'];
@@ -123,7 +170,7 @@ export function buildValidPlan(storageOption, rootAccount) {
   choices.target_disk = { value: identifier, provenance: 'hardware_detection', source: 'detected', editable: true };
 
   const context = { values, option, disk: identifier };
-  const operations = operationSequence(storageOption).map(kind => {
+  const operations = operationSequence(storageOption, hibernation).map(kind => {
     const operation = {
       id: kind,
       kind,
@@ -131,7 +178,7 @@ export function buildValidPlan(storageOption, rootAccount) {
       parameters: parametersFor(kind, context),
       description: OPERATION_DESCRIPTIONS[kind],
     };
-    const resolved = resolvedAtApply(kind, option);
+    const resolved = resolvedAtApply(kind, option, hibernation);
     if (resolved !== undefined) operation.resolved_at_apply = resolved;
     return operation;
   });
@@ -153,10 +200,11 @@ export function buildValidPlan(storageOption, rootAccount) {
     : [];
 
   const plan = {
-    format_version: 2,
+    format_version: 3,
     target: {
       machine: {
         architecture: 'x86_64',
+        memory_total_bytes: REFERENCE_MEMORY_BYTES,
         virtualization: 'kvm',
         dmi: { sys_vendor: 'QEMU', product_name: 'Standard PC (Q35 + ICH9, 2009)' },
       },
@@ -223,6 +271,7 @@ export const INVALID_CASES = [
   ['plan_invalid_type--choices-not-object', ['ext4-systemd-boot', 'locked'], plan => { plan.choices = []; }],
   ['plan_non_integer_number--swapfile', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.swapfile_size.value = 1.5; }, false],
   ['plan_format_unsupported--version-1', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 1; }],
+  ['plan_format_unsupported--version-2', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 2; }],
   ['plan_field_missing--target', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target; }],
   ['plan_label_missing--source', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.hostname.source; }],
   ['plan_unknown_field--approved', ['ext4-systemd-boot', 'locked'], plan => { plan.approved = true; }],
@@ -247,7 +296,9 @@ export const INVALID_CASES = [
   ['lang_not_in_locales--lang', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.locales.value = ['es_ES.UTF-8']; }],
   ['locale_derivation_mismatch--lc-all', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.locale_categories.value.LC_ALL = 'en_US.UTF-8'; }],
   ['locale_derivation_mismatch--formats', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.regional_format.value = 'es_ES.UTF-8'; }],
+  ['plan_field_missing--memory', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target.machine.memory_total_bytes; }],
   ['machine_identity_mismatch--architecture', ['ext4-systemd-boot', 'locked'], plan => { plan.target.machine.architecture = 'aarch64'; }],
+  ['machine_identity_mismatch--memory', ['ext4-systemd-boot', 'locked'], plan => { plan.target.machine.memory_total_bytes += 1048576; }],
   ['machine_identity_mismatch--dmi-availability', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target.machine.dmi; }],
   ['profile_binding_mismatch--matched-without-hash', ['ext4-systemd-boot', 'locked'], plan => { delete plan.policy_binding.profile_definition_sha256; }],
   ['profile_binding_mismatch--unqualified-with-id', ['ext4-systemd-boot', 'locked'], plan => { plan.target.profile = { status: 'unqualified', profile_id: 'reference-vm' }; }],
@@ -259,14 +310,70 @@ export const INVALID_CASES = [
   ['disk_identity_mismatch--target-disk', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.target_disk.value = 'virtio-OTHER'; }],
   ['disk_identity_mismatch--facts-serial', ['ext4-systemd-boot', 'locked'], plan => { plan.target.disk.serial = 'OTHER-SERIAL'; }],
   ['disk_not_eligible--flag', ['ext4-systemd-boot', 'locked'], plan => { plan.target.disk.eligible = false; }],
-  ['plan_size_does_not_fit--swapfile', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.swapfile_size.value = 65536; }],
+  ['plan_size_does_not_fit--swapfile', ['ext4-systemd-boot', 'locked'], plan => { plan.target.disk.size_bytes = 17000000000; }],
+  ['hibernation_plan_mismatch--disabled-with-size', ['ext4-systemd-boot', 'locked', false], plan => {
+    plan.choices.swapfile_size = { value: 4096, provenance: 'hardware_detection', source: 'detected', editable: true };
+  }],
+  ['hibernation_plan_mismatch--disabled-with-swapfile', ['ext4-systemd-boot', 'locked', false], plan => {
+    const fstab = plan.operations.findIndex(operation => operation.kind === 'generate_fstab');
+    plan.operations.splice(fstab + 1, 0, {
+      id: 'create_swapfile',
+      kind: 'create_swapfile',
+      destructive: false,
+      parameters: { path: '/swapfile', size_mib: 4096, priority: 0 },
+      description: OPERATION_DESCRIPTIONS.create_swapfile,
+      resolved_at_apply: [{ name: 'resume_offset', method: 'filefrag' }],
+    });
+  }],
+  ['hibernation_plan_mismatch--disabled-with-resume', ['ext4-systemd-boot', 'locked', false], plan => {
+    plan.choices.kernel_cmdline.value += ' resume=UUID=<root> resume_offset=<resume_offset>';
+  }],
+  ['hibernation_plan_mismatch--disabled-with-swap-subvolume', ['btrfs-rescue', 'locked', false], plan => {
+    operationOf(plan, 'create_btrfs_subvolumes').parameters.subvolumes.push('@swap');
+  }],
+  ['hibernation_plan_mismatch--disabled-with-offset-resolution', ['ext4-systemd-boot', 'locked', false], plan => {
+    operationOf(plan, 'install_bootloader').resolved_at_apply.push({ name: 'resume_offset', method: 'filefrag' });
+  }],
+  ['hibernation_plan_mismatch--enabled-without-swapfile', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.operations = plan.operations.filter(operation => operation.kind !== 'create_swapfile');
+  }],
+  ['hibernation_plan_mismatch--enabled-without-size', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.swapfile_size; }],
+  ['hibernation_plan_mismatch--size-above-memory-range', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.choices.swapfile_size.value = 4097;
+    operationOf(plan, 'create_swapfile').parameters.size_mib = 4097;
+  }],
+  ['hibernation_plan_mismatch--enabled-without-priority', ['ext4-systemd-boot', 'locked'], plan => {
+    operationOf(plan, 'create_swapfile').parameters.priority = 100;
+  }],
+  ['hibernation_plan_mismatch--enabled-without-swap-subvolume', ['btrfs-rescue', 'locked'], plan => {
+    operationOf(plan, 'mount_target').parameters.subvolumes = ['@', '@home', '@log', '@pkg', '@snapshots'];
+  }],
+  ['configuration_asset_mismatch--zram-priority', ['ext4-systemd-boot', 'locked'], plan => {
+    operationOf(plan, 'configure_zram').parameters.swap_priority = 10;
+  }],
+  ['configuration_asset_mismatch--sysctl-value', ['ext4-systemd-boot', 'locked'], plan => {
+    operationOf(plan, 'configure_memory_reclaim').parameters['vm.swappiness'] = 60;
+  }],
+  ['configuration_asset_mismatch--missing-zram-operation', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.operations = plan.operations.filter(operation => operation.kind !== 'configure_zram');
+  }],
+  ['configuration_asset_mismatch--missing-package', ['ext4-systemd-boot', 'locked'], plan => {
+    const packages = operationOf(plan, 'install_packages').parameters.packages;
+    packages.splice(packages.indexOf('zram-generator'), 1);
+  }],
+  ['configuration_asset_mismatch--missing-zswap', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.choices.kernel_cmdline.value = plan.choices.kernel_cmdline.value.replace(' zswap.enabled=0', '');
+  }],
+  ['configuration_asset_mismatch--source-hash', ['ext4-systemd-boot', 'locked'], plan => {
+    operationOf(plan, 'configure_zram').parameters.source_sha256 = 'f'.repeat(64);
+  }],
   ['facts_binding_mismatch--run-id', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.run_id = 'other-run'; }],
   ['facts_binding_mismatch--facts-hash', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.facts_sha256 = 'f'.repeat(64); }],
   ['digest_mismatch--edited-content', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.hostname.value = 'edited'; }, false],
 ];
 
-export function buildInvalidPlan([, [storageOption, rootAccount], mutate, resign = true]) {
-  const plan = structuredClone(buildValidPlan(storageOption, rootAccount));
+export function buildInvalidPlan([, [storageOption, rootAccount, hibernation = true], mutate, resign = true]) {
+  const plan = structuredClone(buildValidPlan(storageOption, rootAccount, hibernation));
   mutate(plan);
   return resign ? withDigest(plan) : plan;
 }
@@ -277,6 +384,7 @@ export function allFixtures() {
     for (const rootAccount of ROOT_ACCOUNT_MODES) {
       files.set(`valid/${storageOption}--${rootAccount}.json`, buildValidPlan(storageOption, rootAccount));
     }
+    files.set(`valid/${storageOption}--hibernation-disabled.json`, buildValidPlan(storageOption, 'locked', false));
   }
   for (const testCase of INVALID_CASES) files.set(`invalid/${testCase[0]}.json`, buildInvalidPlan(testCase));
   return files;

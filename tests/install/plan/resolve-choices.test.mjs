@@ -8,8 +8,10 @@ import {
   loadPlanOverride,
   loadPlanPolicy,
   loadProfileDefinition,
+  parseChoiceText,
   resolveValues,
 } from '../../../install/plan/resolve-choices.mjs';
+import { REFERENCE_MEMORY_BYTES } from './build-fixtures.mjs';
 import {
   CANARY,
   policy,
@@ -31,15 +33,33 @@ after(() => {
 
 const choose = (document, options = {}) => loadChoices(
   writeJson(scratch, `choices-${Math.random()}.json`, document),
-  { policy: policy.policy, storageOptions: policy.storageOptions, root, ...options },
+  { policy: policy.policy, storageOptions: policy.storageOptions, root, memoryTotalBytes: REFERENCE_MEMORY_BYTES, ...options },
 );
 const codes = result => result.reasons.map(item => item.code);
 
 test('the shipped policy loads with its tier table and a stable hash', () => {
-  assert.equal(policy.document.format_version, 2);
+  assert.equal(policy.document.format_version, 3);
   assert.equal(policy.policy.storage_option.value, 'ext4-systemd-boot');
   assert.equal(policy.policy.regional_format.value, 'follow_language');
   assert.equal('locales' in policy.policy, false);
+  assert.equal(policy.policy.hibernation.value, true);
+  assert.equal('swapfile_size' in policy.policy, false);
+  assert.deepEqual(policy.policy.zram.value, {
+    package: 'zram-generator',
+    package_source: 'arch_official_repository',
+    destination: '/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf',
+    zram_size: 'ram',
+    compression_algorithm: 'zstd',
+    swap_priority: 100,
+  });
+  assert.deepEqual(policy.policy.memory_reclaim.value.settings, {
+    'vm.swappiness': 180,
+    'vm.page-cluster': 0,
+    'vm.watermark_scale_factor': 125,
+    'vm.watermark_boost_factor': 0,
+  });
+  assert.ok(policy.policy.kernel_cmdline.value.split(' ').includes('zswap.enabled=0'));
+  assert.ok(policy.policy.packages.value.includes('zram-generator'));
   assert.deepEqual(
     Object.fromEntries(Object.entries(policy.storageOptions).map(([name, option]) => [name, option.tier])),
     { 'ext4-systemd-boot': 'default', 'btrfs-rescue': 'supported', 'btrfs-limine': 'experimental' },
@@ -61,6 +81,18 @@ test('a damaged policy is a contract error', () => {
   const badDefault = structuredClone(policy.document);
   badDefault.policy.storage_option.value = 'zfs';
   assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-default.json', badDefault)), PlanContractError);
+  const swapInPolicy = structuredClone(policy.document);
+  swapInPolicy.policy.swapfile_size = { value: 4096, provenance: 'personal_preference', editable: true };
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-swapfile.json', swapInPolicy)), PlanContractError);
+  const noHibernation = structuredClone(policy.document);
+  delete noHibernation.policy.hibernation;
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-no-hibernation.json', noHibernation)), PlanContractError);
+  const badZram = structuredClone(policy.document);
+  badZram.policy.zram.value = false;
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-zram.json', badZram)), PlanContractError);
+  const badReclaim = structuredClone(policy.document);
+  badReclaim.policy.memory_reclaim.value.settings['vm.swappiness'] = '180';
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-reclaim.json', badReclaim)), PlanContractError);
   assert.throws(() => loadPlanPolicy(join(scratch, 'absent.json')), PlanContractError);
 });
 
@@ -68,6 +100,8 @@ test('a policy of an earlier format or with a derived key is a contract error', 
   const earlier = structuredClone(policy.document);
   earlier.format_version = 1;
   assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-v1.json', earlier)), PlanContractError);
+  earlier.format_version = 2;
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-v2.json', earlier)), PlanContractError);
   for (const key of ['locales', 'locale_categories']) {
     const derived = structuredClone(policy.document);
     derived.policy[key] = { value: ['en_US.UTF-8'], provenance: 'personal_preference', editable: true };
@@ -80,10 +114,11 @@ test('a policy of an earlier format or with a derived key is a contract error', 
 
 test('every allowed key is accepted with a valid value', () => {
   const document = {
-    format_version: 2,
+    format_version: 3,
     target_disk: 'virtio-SYNTH-VDA-0001',
     storage_option: 'btrfs-rescue',
-    swapfile_size: 8192,
+    hibernation: true,
+    swapfile_size: 2048,
     lang: 'es_ES.UTF-8',
     regional_format: 'en_US.UTF-8',
     console_keymap: 'dvorak',
@@ -100,17 +135,17 @@ test('every allowed key is accepted with a valid value', () => {
 
 test('all three storage options are accepted', () => {
   for (const option of ['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine']) {
-    assert.deepEqual(choose({ format_version: 2, storage_option: option }).reasons, [], option);
+    assert.deepEqual(choose({ format_version: 3, storage_option: option }).reasons, [], option);
   }
 });
 
 test('unknown keys, fixed or derived keys, and secret-like keys are rejected without a value', () => {
-  assert.deepEqual(codes(choose({ format_version: 2, shell: 'zsh' })), ['choices_unknown_key']);
+  assert.deepEqual(codes(choose({ format_version: 3, shell: 'zsh' })), ['choices_unknown_key']);
   for (const key of ['kernel', 'packages', 'esp', 'firmware_mode', 'root_minimum_bytes', 'locales', 'locale_categories']) {
-    assert.deepEqual(codes(choose({ format_version: 2, [key]: 'x' })), ['choices_not_editable'], key);
+    assert.deepEqual(codes(choose({ format_version: 3, [key]: 'x' })), ['choices_not_editable'], key);
   }
   for (const key of ['password', 'root_password', 'user_password', 'account_password', 'passphrase', 'api_token', 'secret']) {
-    const result = choose({ format_version: 2, [key]: CANARY });
+    const result = choose({ format_version: 3, [key]: CANARY });
     assert.deepEqual(codes(result), ['choices_secret_key'], key);
     assert.doesNotMatch(JSON.stringify(result), new RegExp(CANARY));
     assert.deepEqual(result.values, {});
@@ -121,6 +156,7 @@ test('invalid values are rejected and never echoed', () => {
   const invalid = {
     storage_option: 'zfs',
     swapfile_size: 100,
+    hibernation: 'yes',
     lang: 'xx_XX.UTF-8',
     regional_format: 'xx_XX.UTF-8',
     console_keymap: 'nope',
@@ -131,15 +167,18 @@ test('invalid values are rejected and never echoed', () => {
     target_disk: '',
   };
   for (const [key, value] of Object.entries(invalid)) {
-    const result = choose({ format_version: 2, [key]: value });
+    const result = choose({ format_version: 3, [key]: value });
     assert.deepEqual(codes(result), ['choices_invalid_value'], key);
     assert.deepEqual(result.values, {});
   }
-  for (const value of [70000, 511, 1.5, '4096', null]) {
-    assert.deepEqual(codes(choose({ format_version: 2, swapfile_size: value })), ['choices_invalid_value'], String(value));
+  for (const value of [4097, 70000, 511, 1.5, '4096', null, Number.MAX_SAFE_INTEGER + 2]) {
+    assert.deepEqual(codes(choose({ format_version: 3, swapfile_size: value })), ['choices_invalid_value'], String(value));
+  }
+  for (const value of ['true', 1, 0, null, 'false']) {
+    assert.deepEqual(codes(choose({ format_version: 3, hibernation: value })), ['choices_invalid_value'], String(value));
   }
   for (const key of ['hostname', 'timezone', 'console_keymap', 'user_name']) {
-    const result = choose({ format_version: 2, [key]: `${CANARY}_x` });
+    const result = choose({ format_version: 3, [key]: `${CANARY}_x` });
     assert.deepEqual(codes(result), ['choices_invalid_value'], key);
     assert.doesNotMatch(JSON.stringify(result), new RegExp(CANARY));
   }
@@ -147,22 +186,22 @@ test('invalid values are rejected and never echoed', () => {
 
 test('only the two offered languages and regional formats are valid, even when the system supports more', () => {
   for (const key of ['lang', 'regional_format']) {
-    assert.deepEqual(codes(choose({ format_version: 2, [key]: 'de_DE.UTF-8' })), ['choices_invalid_value'], key);
-    assert.deepEqual(codes(choose({ format_version: 2, [key]: ['en_US.UTF-8'] })), ['choices_invalid_value'], key);
+    assert.deepEqual(codes(choose({ format_version: 3, [key]: 'de_DE.UTF-8' })), ['choices_invalid_value'], key);
+    assert.deepEqual(codes(choose({ format_version: 3, [key]: ['en_US.UTF-8'] })), ['choices_invalid_value'], key);
   }
-  assert.deepEqual(choose({ format_version: 2, lang: 'es_ES.UTF-8', regional_format: 'follow_language' }).reasons, []);
-  assert.deepEqual(codes(choose({ format_version: 2, lang: 'follow_language' })), ['choices_invalid_value']);
+  assert.deepEqual(choose({ format_version: 3, lang: 'es_ES.UTF-8', regional_format: 'follow_language' }).reasons, []);
+  assert.deepEqual(codes(choose({ format_version: 3, lang: 'follow_language' })), ['choices_invalid_value']);
 });
 
 test('time zones cannot escape the zoneinfo directory or name a directory', () => {
   for (const zone of ['../../etc/passwd', 'Europe', 'Europe/', '/Europe/Madrid', 'Europe//Madrid', '']) {
-    assert.deepEqual(codes(choose({ format_version: 2, timezone: zone })), ['choices_invalid_value'], zone);
+    assert.deepEqual(codes(choose({ format_version: 3, timezone: zone })), ['choices_invalid_value'], zone);
   }
-  assert.deepEqual(choose({ format_version: 2, timezone: 'UTC' }).reasons, []);
+  assert.deepEqual(choose({ format_version: 3, timezone: 'UTC' }).reasons, []);
 });
 
 test('every problem of a file is reported at once', () => {
-  const result = choose({ format_version: 2, shell: 'zsh', kernel: 'x', hostname: '-bad', user_password: CANARY });
+  const result = choose({ format_version: 3, shell: 'zsh', kernel: 'x', hostname: '-bad', user_password: CANARY });
   assert.deepEqual(codes(result).sort(), ['choices_invalid_value', 'choices_not_editable', 'choices_secret_key', 'choices_unknown_key']);
 });
 
@@ -170,7 +209,11 @@ test('a malformed choices file is invalid, and a file of an earlier format is no
   assert.deepEqual(codes(choose('{not json')), ['choices_invalid_format']);
   assert.deepEqual(codes(choose([])), ['choices_invalid_format']);
   assert.deepEqual(codes(choose({ hostname: 'x' })), ['choices_invalid_format']);
-  assert.deepEqual(codes(choose({ format_version: 3 })), ['choices_invalid_format']);
+  for (const version of [2, 4]) {
+    const result = choose({ format_version: version });
+    assert.deepEqual(codes(result), ['choices_invalid_format'], String(version));
+    assert.match(result.reasons[0].next_step, /not migrated/);
+  }
   const earlier = choose({ format_version: 1, hostname: 'x' });
   assert.deepEqual(codes(earlier), ['choices_invalid_format']);
   assert.match(earlier.reasons[0].next_step, /not migrated/);
@@ -179,15 +222,39 @@ test('a malformed choices file is invalid, and a file of an earlier format is no
   assert.deepEqual(codes(absent), ['choices_invalid_format']);
 });
 
+test('the swapfile size is bounded by the detected memory and never combines with disabled hibernation', () => {
+  assert.deepEqual(choose({ format_version: 3, swapfile_size: 512 }).reasons, []);
+  assert.deepEqual(choose({ format_version: 3, swapfile_size: 4096 }).reasons, []);
+  assert.deepEqual(codes(choose({ format_version: 3, swapfile_size: 4097 })), ['choices_invalid_value']);
+  // 4 GiB + 1 byte rounds the maximum up to 5 GiB; a smaller memory lowers it.
+  assert.deepEqual(choose({ format_version: 3, swapfile_size: 5120 }, { memoryTotalBytes: REFERENCE_MEMORY_BYTES + 1 }).reasons, []);
+  assert.deepEqual(codes(choose({ format_version: 3, swapfile_size: 1025 }, { memoryTotalBytes: 536870912 })), ['choices_invalid_value']);
+  const conflict = choose({ format_version: 3, hibernation: false, swapfile_size: 2048 });
+  assert.deepEqual(codes(conflict), ['choices_conflict']);
+  assert.match(conflict.reasons[0].next_step, /Remove swapfile_size/);
+  assert.deepEqual(choose({ format_version: 3, hibernation: false }).reasons, []);
+  assert.deepEqual(choose({ format_version: 3, hibernation: true, swapfile_size: 2048 }).reasons, []);
+});
+
+test('choice text is parsed by one shared parser', () => {
+  assert.equal(parseChoiceText('hibernation', 'true'), true);
+  assert.equal(parseChoiceText('hibernation', 'false'), false);
+  for (const text of ['TRUE', 'yes', '1', '', ' true']) assert.equal(parseChoiceText('hibernation', text), text);
+  assert.equal(parseChoiceText('swapfile_size', '2048'), 2048);
+  assert.equal(parseChoiceText('swapfile_size', '0512'), 512);
+  for (const text of ['', '-1', '1.5', '1e3', ' 5', '0x10', 'abc']) assert.equal(parseChoiceText('swapfile_size', text), text);
+  assert.equal(parseChoiceText('hostname', 'true'), 'true');
+});
+
 test('missing reference data is an upstream failure, not a user error', () => {
   const empty = temporaryDirectory();
   try {
-    assert.throws(() => choose({ format_version: 2, timezone: 'UTC' }, { root: empty }), PlanUpstreamError);
-    assert.throws(() => choose({ format_version: 2, console_keymap: 'us' }, { root: empty }), PlanUpstreamError);
-    assert.throws(() => choose({ format_version: 2, lang: 'en_US.UTF-8' }, { root: empty }), PlanUpstreamError);
-    assert.throws(() => choose({ format_version: 2, regional_format: 'es_ES.UTF-8' }, { root: empty }), PlanUpstreamError);
-    assert.deepEqual(choose({ format_version: 2, regional_format: 'follow_language' }, { root: empty }).reasons, []);
-    assert.deepEqual(choose({ format_version: 2, swapfile_size: 2048 }, { root: empty }).reasons, []);
+    assert.throws(() => choose({ format_version: 3, timezone: 'UTC' }, { root: empty }), PlanUpstreamError);
+    assert.throws(() => choose({ format_version: 3, console_keymap: 'us' }, { root: empty }), PlanUpstreamError);
+    assert.throws(() => choose({ format_version: 3, lang: 'en_US.UTF-8' }, { root: empty }), PlanUpstreamError);
+    assert.throws(() => choose({ format_version: 3, regional_format: 'es_ES.UTF-8' }, { root: empty }), PlanUpstreamError);
+    assert.deepEqual(choose({ format_version: 3, regional_format: 'follow_language' }, { root: empty }).reasons, []);
+    assert.deepEqual(choose({ format_version: 3, swapfile_size: 2048 }, { root: empty }).reasons, []);
   } finally {
     removeDirectory(empty);
   }
@@ -255,7 +322,7 @@ test('values resolve policy < detected < override < choice and record the source
 });
 
 test('a choice equal to its proposal keeps the labels of that proposal', () => {
-  const sameAsPolicy = resolveValues({ policy: policy.policy, choices: { hostname: 'mirroros', swapfile_size: 4096 } });
+  const sameAsPolicy = resolveValues({ policy: policy.policy, choices: { hostname: 'mirroros', hibernation: true } });
   assert.deepEqual(sameAsPolicy, resolveValues({ policy: policy.policy }));
   const sameAsOverride = resolveValues({ policy: policy.policy, override: { hostname: 'mirroros-ref' }, choices: { hostname: 'mirroros-ref' } });
   assert.equal(sameAsOverride.hostname.source, 'override');

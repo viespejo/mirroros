@@ -1,8 +1,8 @@
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { generate, facts, policy, referenceOverride, referenceProfileDefinition, unqualifiedFacts } from '../plan/helpers.mjs';
+import { assets, generate, facts, policy, referenceOverride, referenceProfileDefinition, unqualifiedFacts, withMemory } from '../plan/helpers.mjs';
 
-export { facts, generate, policy, referenceOverride, referenceProfileDefinition, unqualifiedFacts };
+export { assets, facts, generate, policy, referenceOverride, referenceProfileDefinition, unqualifiedFacts, withMemory };
 export { removeDirectory, repository, temporaryDirectory } from '../plan/helpers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
