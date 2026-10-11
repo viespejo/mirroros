@@ -203,14 +203,16 @@ hibernation_form() {
 }
 
 swapfile_size_form() {
-  local value normalized minimum maximum status
+  local value normalized minimum maximum status warned
   value=$(flow_choice swapfile_size) || return 6
   minimum=$(flow_assistant get "$FLOW_PREVIEW" options.swapfile_size.minimum) || return 6
   maximum=$(flow_assistant get "$FLOW_PREVIEW" options.swapfile_size.maximum) || return 6
   while true; do
     gum style --foreground 8 --padding "$PADDING" 'The swapfile holds the hibernation image and also serves as fallback swap after zram.' 'The default does not guarantee hibernation for every workload.'
     gum style --padding "$PADDING" "Enter an integer from $minimum to $maximum MiB." 'A real plan checks that the complete layout fits the selected disk.'
+    warned=false
     if flow_assistant has-warning "$FLOW_PREVIEW" swapfile_below_ram; then
+      warned=true
       gum style --foreground 3 --padding "$PADDING" 'Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space.'
     fi
     value=$(gum input --show-help --value "$value" --placeholder 'Size in MiB' --prompt 'Swapfile size (MiB)> ') || return $?
@@ -219,7 +221,14 @@ swapfile_size_form() {
     status=0
     flow_apply_choice swapfile_size "$normalized" || status=$?
     case $status in
-      0) return 0 ;;
+      0)
+        # A newly accepted reduced size shows its warning once, in this screen, before moving on.
+        if [[ $warned == false ]] && flow_assistant has-warning "$FLOW_PREVIEW" swapfile_below_ram; then
+          step 'Choose swapfile size'
+          continue
+        fi
+        return 0
+        ;;
       1) ;;
       *) return "$status" ;;
     esac
