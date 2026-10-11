@@ -15,13 +15,13 @@ teardown() {
 queue_to_review() {
   confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
-  confirm_queue input '0|4096' ${1:+'0|4096'} '0|mirroros-ref' '0|mirroros'
+  confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros'
 }
 
 # After a review that chose Back: Esc back to the hibernation screen, keep it Enabled, answer the size, and walk forward again.
 queue_back_to_swapfile() {
   confirm_queue choose '0|Back' '1' '1' '1' '1' '1' '0|Enabled'
-  confirm_queue input '1' '1' "0|$1" ${2:+"0|$2"}
+  confirm_queue input '1' '1' "0|$1"
   confirm_queue choose '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
   confirm_queue input '0|mirroros-ref' '0|mirroros'
 }
@@ -143,7 +143,7 @@ approve_plan_script() {
   confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
-  confirm_queue input '0|2048' '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda'
   confirm_queue confirm 0
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
@@ -255,7 +255,7 @@ approve_plan_script() {
 
 @test "answers changed after the review regenerate a new numbered plan before confirmation" {
   queue_to_review
-  queue_back_to_swapfile 2048 2048
+  queue_back_to_swapfile 2048
   confirm_queue choose '0|Continue to confirmation' '0|Continue'
   confirm_queue confirm 0
   confirm_queue input '0|vda'
@@ -271,7 +271,7 @@ approve_plan_script() {
 
 @test "an invalid combination keeps the last valid plan, shows its reason, and grants no approval" {
   confirm_scenario_memory 67108864
-  queue_to_review warned
+  queue_to_review
   queue_back_to_swapfile 65536
   confirm_queue choose '0|Cancel'
   confirm_run_pty --output "$RUN_DIR"
@@ -483,13 +483,13 @@ approve_plan_script() {
   confirm_assert_private
 }
 
-@test "a reduced swapfile size keeps its warning in the size screen, the review, and the plan" {
+@test "a reduced swapfile size keeps its warning in the review and the plan" {
   confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Back' '1' '1' '1' '1' '1' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
-  confirm_queue input '0|2048' '0|2048' '0|mirroros-ref' '0|mirroros' '1' '1' '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '1' '1' '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda'
   confirm_queue confirm 0
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
@@ -506,13 +506,13 @@ approve_plan_script() {
     '0|Back' '1' '1' '1' '1' '1' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Continue'
-  confirm_queue input '0|2048' '0|2048' '0|mirroros-ref' '0|mirroros' '1' '1' '0|mirroros-ref' '0|mirroros' '1' '1' '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
+  confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '1' '1' '0|mirroros-ref' '0|mirroros' '1' '1' '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda'
   confirm_queue confirm 0
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 approved
   [ "$(grep -c -- '--value 4096' "${DOUBLE_STATE}/gum-calls.log")" -ge 2 ]
-  [ "$(grep -c -- '--value 2048' "${DOUBLE_STATE}/gum-calls.log")" -eq 1 ]
+  [ "$(grep -c -- '--value 2048' "${DOUBLE_STATE}/gum-calls.log")" -eq 0 ]
   confirm_json_assert "${RUN_DIR}/plans/03/installation-plan.json" "d.choices.hibernation.value === true && d.choices.swapfile_size.value === 4096"
 }
 

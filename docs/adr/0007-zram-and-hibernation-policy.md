@@ -74,7 +74,7 @@ MirrorOS adopts the following installed-system policy. Items marked "plan" are e
 
 4. Planning requires a positive detected `memory_total_bytes`, even with hibernation disabled. If it is missing, generation fails with an actionable diagnostic asking for repeated discovery. No memory or size is assumed.
 5. When hibernation is enabled, `swapfile_size` is an integer MiB from 512 to `ceil(memory_total_bytes / 1073741824) * 1024`. That maximum is also the default. The minimum is an input limit, not a claim of sufficient hibernation capacity.
-6. A size whose bytes are below the raw `memory_total_bytes` is valid and produces a persistent warning on the sizing screen, in the review, and in the structured plan. It adds no confirmation dialog. The wording explains that success depends on used memory and free swapfile space and never claims that the default guarantees a successful resume.
+6. A size whose bytes are below the raw `memory_total_bytes` is valid and produces a persistent warning in the review and in the structured plan. The sizing screen shows no warning because a text input cannot validate while the value is typed, and showing it after submission would need an extra redraw or dialog. It adds no confirmation dialog. The wording explains that success depends on used memory and free swapfile space and never claims that the default guarantees a successful resume.
 7. A layout whose ESP, root minimum, and swapfile exceed the disk is rejected. The swapfile is never silently shrunk and hibernation is never silently disabled.
 8. No custom hibernation image-size setting is introduced. The kernel's image-size target and compression are not capacity guarantees.
 
