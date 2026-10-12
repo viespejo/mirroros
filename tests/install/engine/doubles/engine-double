@@ -175,6 +175,7 @@ case "$name" in
       chpasswd)
         input="$(cat)"
         printf '%s\n' "$input" >> "${state}/chroot-stdin.log"
+        # shellcheck disable=SC2016 # The simulated shadow hash requires literal dollar separators.
         set_shadow "$target" "${input%%:*}" '$6$simulated$hash'
         ;;
       passwd) set_shadow "$target" root '!' ;;

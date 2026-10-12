@@ -688,13 +688,15 @@ swap_scenario_hook() {
 @test "the password reaches only the stdin of chpasswd and no record, log, argument, environment, or terminal output" {
   # An unrelated secret in the environment never reaches a record either. It is exported, not passed in the
   # command line: the typescript header records the command.
-  export MIRROROS_ROOT_PASSWORD='PLANTED-ENV-SECRET-0002' ROOT_PASSWORD='PLANTED-ENV-SECRET-0002'
+  local environment_canary
+  environment_canary="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(12).toString("hex"))')"
+  export MIRROROS_ROOT_PASSWORD="$environment_canary" ROOT_PASSWORD="$environment_canary"
   approve_script
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
   confirm_assert_no_canary
-  ! grep -rFq -- 'PLANTED-ENV-SECRET-0002' "$RUN_DIR" "$STDOUT_PATH" "$TYPESCRIPT"
+  ! grep -rFq -- "$environment_canary" "$RUN_DIR" "$STDOUT_PATH" "$TYPESCRIPT"
   grep -qxF "mirroros:${CONFIRM_PASSWORD}" "${DOUBLE_STATE}/chroot-stdin.log"
   [ "$(grep -cF "$CONFIRM_PASSWORD" "${DOUBLE_STATE}/chroot-stdin.log")" -eq 1 ]
   [ -s "${DOUBLE_STATE}/observed.log" ]

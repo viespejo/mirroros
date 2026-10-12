@@ -8,7 +8,7 @@ CONFIRM_CANARY='PLANTED-CONFIRM-SECRET-0001'
 CONFIRM_PASSWORD="$CONFIRM_CANARY"
 CONFIRM_ENGINE_SUPPORT="${CONFIRM_SOURCE_ROOT}/tests/install/engine"
 # The engine helpers provide the embedded Limine packages that the default btrfs-limine plan installs.
-# shellcheck source=../engine/support.bash
+# shellcheck source=tests/install/engine/support.bash
 source "${CONFIRM_ENGINE_SUPPORT}/support.bash"
 # The external tools of the installation engine, answered by the engine double (it also answers systemctl for the
 # keyring wait and for a chosen restart or power off, which it only records).
@@ -78,6 +78,7 @@ confirm_teardown() {
 # The live mirrorlist that the engine double copies into the target.
 confirm_seed_mirrorlist() {
   mkdir -p "${FIXTURE_ROOT}/etc/pacman.d"
+  # shellcheck disable=SC2016 # Pacman expands these literal mirrorlist placeholders, not Bash.
   printf 'Server = https://mirror.example.invalid/$repo/os/$arch\n' > "${FIXTURE_ROOT}/etc/pacman.d/mirrorlist"
 }
 

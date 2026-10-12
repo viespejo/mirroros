@@ -35,6 +35,7 @@ engine_setup() {
   node "${ENGINE_DISCOVERY_SUPPORT}/build-root.mjs" "${ENGINE_SOURCE_ROOT}/tests/fixtures/discovery/raw/reference-vm-layout.json" \
     "$FIXTURE_ROOT" "$DOUBLE_STATE"
   mkdir -p "${FIXTURE_ROOT}/etc/pacman.d"
+  # shellcheck disable=SC2016 # Pacman expands these literal mirrorlist placeholders, not Bash.
   printf 'Server = https://mirror.example.invalid/$repo/os/$arch\n' > "${FIXTURE_ROOT}/etc/pacman.d/mirrorlist"
   engine_use_plan ext4-systemd-boot--password
 }
@@ -45,6 +46,7 @@ engine_make_packages() {
   mkdir -p "$directory"
   printf 'package one\n' > "${directory}/limine-mkinitcpio-hook-1.0-1-any.pkg.tar.zst"
   printf 'package two\n' > "${directory}/limine-snapper-sync-1.0-1-any.pkg.tar.zst"
+  # shellcheck disable=SC2016 # Template literals are expanded by JavaScript, not Bash.
   node -e '
     const { createHash } = require("crypto");
     const { readFileSync, writeFileSync } = require("fs");
