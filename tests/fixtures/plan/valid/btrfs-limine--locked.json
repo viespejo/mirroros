@@ -78,9 +78,9 @@
     "storage_option": {
       "value": "btrfs-limine",
       "provenance": "personal_preference",
-      "source": "choice",
+      "source": "policy",
       "editable": true,
-      "tier": "experimental",
+      "tier": "default",
       "filesystem": "btrfs",
       "bootloader": "limine",
       "resume_offset_method": "btrfs inspect-internal map-swapfile -r"
@@ -412,8 +412,7 @@
           "efibootmgr",
           "libnotify",
           "gettext",
-          "base-devel",
-          "git"
+          "inotify-tools"
         ]
       },
       "description": "Install the base package set, zram-generator, and the packages of the storage option."
@@ -670,13 +669,7 @@
       }
     ]
   },
-  "warnings": [
-    {
-      "code": "storage_option_experimental",
-      "message": "The storage option btrfs-limine is experimental and has no support commitment.",
-      "next_step": "Select ext4-systemd-boot unless the experimental option is intended."
-    }
-  ],
+  "warnings": [],
   "facts_binding": {
     "facts_sha256": "b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11",
     "run_id": "20261007T120000Z-11111111-2222-4333-8444-555555555555",
@@ -684,12 +677,12 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "1228da24a702a7a93b7dbc73aadce58a0dc713a62dc4a3903ff8affca3dd061d",
+    "policy_sha256": "343fc65dcfb7ed9dfa6941b96a6556025b824f6e0b5c77205a6b73eea4c921d6",
     "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "069160a2f9eb150306d02e73392a9381a6f1b737988a6ec13c04670c329f2e33"
+    "value": "998543e1ee80e54e412d1a5cbe29b9ca8f28400bc2f34be47d9a5c774c273f49"
   }
 }

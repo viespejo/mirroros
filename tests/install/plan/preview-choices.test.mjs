@@ -65,9 +65,9 @@ test('the preview lists the allowed values and the rule of each free-text key', 
     value: 'virtio-SYNTH-VDA-0001', path: '/dev/vda', size_bytes: 34359738368,
   }]);
   assert.deepEqual(options.storage_option.map(option => [option.value, option.tier, option.filesystem, option.bootloader]), [
-    ['ext4-systemd-boot', 'default', 'ext4', 'systemd-boot'],
+    ['ext4-systemd-boot', 'supported', 'ext4', 'systemd-boot'],
     ['btrfs-rescue', 'supported', 'btrfs', 'systemd-boot'],
-    ['btrfs-limine', 'experimental', 'btrfs', 'limine'],
+    ['btrfs-limine', 'default', 'btrfs', 'limine'],
   ]);
   assert.deepEqual(options.swapfile_size, {
     minimum: 512, maximum: 4096, default: 4096, unit: 'MiB', memory_total_bytes: 4294967296, editable: true,
@@ -119,14 +119,15 @@ test('an unknown or ineligible disk in the choices is reported, and so is an uni
   assert.deepEqual(codes(preview({ factsDocument: anonymous })), ['disk_unidentifiable']);
 });
 
-test('warnings cover the unqualified machine, the experimental option, and a disk without by_id', () => {
+test('warnings cover the unqualified machine and a disk without by_id, and no storage option warns', () => {
   assert.deepEqual(preview().document.warnings, []);
   const unqualified = preview({ factsDocument: unqualifiedFacts() }).document;
   assert.deepEqual(unqualified.warnings.map(warning => warning.code), ['machine_unqualified']);
   assert.equal(unqualified.choices.hostname.value, 'mirroros');
   assert.equal(unqualified.choices.hostname.source, 'policy');
-  const experimental = preview({ choices: { storage_option: 'btrfs-limine' } }).document;
-  assert.deepEqual(experimental.warnings.map(warning => warning.code), ['storage_option_experimental']);
+  for (const storageOption of ['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine']) {
+    assert.deepEqual(preview({ choices: { storage_option: storageOption } }).document.warnings, [], storageOption);
+  }
   const noById = facts();
   delete noById.layers.detected.storage.disks[0].identity.by_id;
   assert.deepEqual(preview({ factsDocument: noById }).document.warnings.map(warning => warning.code), ['disk_without_by_id']);

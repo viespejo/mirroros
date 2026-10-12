@@ -13,7 +13,7 @@ teardown() {
 # then the configuration screens (disk, storage, timezone, language, formats, keyboard, root policy) and the
 # inputs (swapfile size, hostname, username). The hibernation choice follows the storage layout, Enabled.
 queue_to_review() {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros'
 }
@@ -125,7 +125,7 @@ approve_plan_script() {
   [ -f "${RUN_DIR}/discovery/final/target-facts.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.txt" ]
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.storage_option === 'ext4-systemd-boot' && Object.keys(d).length === 2"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 4 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password,discovery_final,engine'"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
@@ -139,7 +139,7 @@ approve_plan_script() {
 }
 
 @test "accepted proposals keep their provenance and only a changed value becomes a choice" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|2048' '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -147,7 +147,7 @@ approve_plan_script() {
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.swapfile_size === 2048 && Object.keys(d).length === 2"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.swapfile_size === 2048 && d.storage_option === 'ext4-systemd-boot' && Object.keys(d).length === 3"
   confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.swapfile_size.source === 'choice' && d.choices.swapfile_size.value === 2048 && d.choices.lang.source === 'policy' && d.choices.hostname.source === 'override' && d.choices.hostname.value === 'mirroros-ref'"
 }
 
@@ -225,7 +225,7 @@ approve_plan_script() {
 }
 
 @test "Esc at a configuration screen goes back and keeps the confirmed answers" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '1' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '1' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -238,7 +238,7 @@ approve_plan_script() {
 }
 
 @test "an invalid value shows its reason and asks again without keeping it" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|100' '0|4096' '0|mirroros-ref' "0|${CONFIRM_CANARY}" '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -248,7 +248,7 @@ approve_plan_script() {
   confirm_assert_run 0 installed
   confirm_assert_gum_called 'Use a whole number from 512 to 4096 MiB.'
   confirm_assert_gum_called 'Use 1-32 characters, starting with a lowercase letter or underscore.'
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 2"
   confirm_assert_no_canary
 }
 
@@ -262,7 +262,7 @@ approve_plan_script() {
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 2 && new Set(d.digests).size === 2 && d.final_digest === d.digests[1]"
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 2"
   confirm_json_assert "${RUN_DIR}/plans/02/choices.json" "d.swapfile_size === 2048"
   confirm_json_assert "${RUN_DIR}/plans/02/installation-plan.json" "d.choices.swapfile_size.value === 2048"
   confirm_assert_private
@@ -309,7 +309,7 @@ approve_plan_script() {
 
 @test "a machine with several eligible disks lists them and records the chosen disk" {
   confirm_scenario_two_disks
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vdb (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vdb (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vdb' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -467,7 +467,7 @@ approve_plan_script() {
 }
 
 @test "disabled hibernation asks no size, plans no swapfile, and the review says so without another dialog" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Disabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Disabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -482,7 +482,7 @@ approve_plan_script() {
 }
 
 @test "a reduced swapfile size keeps its warning in the review and the plan" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Back' '1' '1' '1' '1' '1' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
@@ -497,7 +497,7 @@ approve_plan_script() {
 }
 
 @test "disabling and re-enabling hibernation proposes the memory-based size again" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Back' '1' '1' '1' '1' '1' '0|Disabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
@@ -515,7 +515,7 @@ approve_plan_script() {
 }
 
 @test "Esc at the swapfile size returns to the hibernation choice" {
-  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '1' '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -616,7 +616,7 @@ swap_scenario_hook() {
 
   printf '%s\n' no > "${DOUBLE_STATE}/ntp"
   confirm_hook_call choose 2 "printf '%s\n' yes > '${DOUBLE_STATE}/ntp'"
-  confirm_queue choose '0|Continue' '0|Retry clock check' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Default' '0|Enabled' \
+  confirm_queue choose '0|Continue' '0|Retry clock check' '0|Continue' '0|/dev/vda (32G)' '0|ext4 + systemd-boot - Supported' '0|Enabled' \
     '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' '0|Locked (default)' \
     '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
@@ -659,7 +659,7 @@ swap_scenario_hook() {
 
 @test "the live keyboard change stays in the live session and does not alter the installed choices" {
   confirm_queue choose '0|Change installation keyboard layout' '0|Spanish (ES)' '0|Continue' '0|Continue' '0|/dev/vda (32G)' \
-    '0|ext4 + systemd-boot - Default' '0|Enabled' '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' \
+    '0|ext4 + systemd-boot - Supported' '0|Enabled' '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' \
     '0|Locked (default)' '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
   confirm_queue confirm 0
@@ -668,7 +668,7 @@ swap_scenario_hook() {
   confirm_assert_run 0 installed
   grep -qx 'loadkeys es' "${DOUBLE_STATE}/calls.log"
   confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.choices.console_keymap.value === 'us' && d.choices.console_keymap.source === 'policy'"
-  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 1"
+  confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "Object.keys(d).length === 2"
 }
 
 @test "an unexpected phase failure stops with its status and retained diagnostics" {

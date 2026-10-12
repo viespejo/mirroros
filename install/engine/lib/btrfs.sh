@@ -65,7 +65,10 @@ mount_btrfs_subvolumes() {
 
 # Removes the subvolume ids that genfstab writes, so a rollback of @ cannot leave a stale id.
 filter_fstab_subvolume_ids() {
-  sed -E 's/(,subvolid=[0-9]+)|(subvolid=[0-9]+,)//g' "${TARGET}/etc/fstab" | put_file 0644 /etc/fstab
+  # The whole file is read before it is rewritten: a pipe would truncate it while sed is still reading.
+  local filtered
+  filtered="$(sed -E 's/(,subvolid=[0-9]+)|(subvolid=[0-9]+,)//g' "${TARGET}/etc/fstab")" || check_fail 'fstab cannot be filtered'
+  printf '%s\n' "$filtered" | put_file 0644 /etc/fstab
 }
 
 op_configure_snapper() {

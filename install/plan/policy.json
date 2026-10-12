@@ -26,7 +26,7 @@
       "editable": false
     },
     "storage_option": {
-      "value": "ext4-systemd-boot",
+      "value": "btrfs-limine",
       "provenance": "personal_preference",
       "editable": true
     },
@@ -181,7 +181,7 @@
   },
   "storage_options": {
     "ext4-systemd-boot": {
-      "tier": "default",
+      "tier": "supported",
       "filesystem": "ext4",
       "bootloader": "systemd-boot",
       "resume_offset_method": "filefrag",
@@ -197,7 +197,7 @@
       "additional_packages": ["btrfs-progs", "snapper", "snap-pac", "compsize"]
     },
     "btrfs-limine": {
-      "tier": "experimental",
+      "tier": "default",
       "filesystem": "btrfs",
       "bootloader": "limine",
       "resume_offset_method": "btrfs inspect-internal map-swapfile -r",
@@ -205,7 +205,7 @@
       "mount_options": "compress=zstd:1,relatime",
       "additional_packages": [
         "btrfs-progs", "snapper", "snap-pac", "compsize",
-        "limine", "efibootmgr", "libnotify", "gettext", "base-devel", "git"
+        "limine", "efibootmgr", "libnotify", "gettext", "inotify-tools"
       ]
     }
   }

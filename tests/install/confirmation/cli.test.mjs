@@ -204,7 +204,7 @@ test('edit set rejects a secret key without writing', () => {
 test('options list eligible disks and storage tiers', () => {
   assert.equal(run('options', 'disks', factsPath).stdout, 'virtio-SYNTH-VDA-0001 (32.0 GiB)\n');
   const storage = run('options', 'storage', repository).stdout.trim().split('\n');
-  assert.deepEqual(storage, ['ext4-systemd-boot (default)', 'btrfs-rescue (supported)', 'btrfs-limine (experimental)']);
+  assert.deepEqual(storage, ['ext4-systemd-boot (supported)', 'btrfs-rescue (supported)', 'btrfs-limine (default)']);
 });
 
 test('reasons prints standard reasons and extracts them from run files', () => {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,9 +9,12 @@ import { spawnSync } from 'node:child_process';
 import {
   buildArtifactMetadata,
   buildExecutionResult,
+  buildLiminePackageManifest,
+  limineBuildArguments,
   validateArtifactMetadata,
   validateBundle,
   validateExecutionResult,
+  validateLimineRecipe,
 } from '../../../image/builder/lib/build-documents-core.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -50,6 +53,20 @@ function validMetadata() {
     artifact: {
       iso: { name: 'mirroros.iso', size_bytes: 1234, sha256: 'e'.repeat(64) },
       package_manifest: { name: 'pkglist.x86_64.txt', sha256: 'f'.repeat(64) },
+    },
+    prebuilt_packages: {
+      manifest_path: '/usr/local/lib/mirroros/packages/packages.json',
+      manifest_sha256: '9'.repeat(64),
+      packages: [
+        {
+          name: 'limine-snapper-sync',
+          version: '1.32.1-1',
+          file: 'limine-snapper-sync-1.32.1-1-x86_64.pkg.tar.zst',
+          sha256: '8'.repeat(64),
+          aur_commit: '7'.repeat(40),
+          upstream_commit: '6'.repeat(40),
+        },
+      ],
     },
     controls: {
       secret_scan_scope: 'mirroros-created-content',
@@ -155,6 +172,7 @@ const metadataMissingPaths = [
   'repository_configuration.mirrorlist.path', 'repository_configuration.mirrorlist.sha256',
   'artifact', 'artifact.iso', 'artifact.iso.name', 'artifact.iso.size_bytes', 'artifact.iso.sha256',
   'artifact.package_manifest', 'artifact.package_manifest.name', 'artifact.package_manifest.sha256',
+  'prebuilt_packages', 'prebuilt_packages.manifest_path', 'prebuilt_packages.manifest_sha256', 'prebuilt_packages.packages',
   'controls', 'controls.secret_scan_scope', 'controls.outcomes',
   'controls.outcomes.signature_verification', 'controls.outcomes.archiso_version',
   'controls.outcomes.profile_secret_scan', 'controls.outcomes.evidence_secret_scan', 'controls.outcomes.bundle_validation',
@@ -185,6 +203,10 @@ const metadataWrongTypes = [
   ['artifact', []], ['artifact.iso', []], ['artifact.iso.name', 1], ['artifact.iso.size_bytes', '1234'],
   ['artifact.iso.sha256', 'invalid'], ['artifact.package_manifest', []], ['artifact.package_manifest.name', 1],
   ['artifact.package_manifest.sha256', 'invalid'],
+  ['prebuilt_packages', []], ['prebuilt_packages.manifest_path', 1], ['prebuilt_packages.manifest_sha256', 'invalid'],
+  ['prebuilt_packages.packages', []], ['prebuilt_packages.packages', ['limine-snapper-sync']],
+  ['prebuilt_packages.packages.0.sha256', 'invalid'], ['prebuilt_packages.packages.0.aur_commit', 'v1.32.1'],
+  ['prebuilt_packages.packages.0.upstream_commit', 'main'], ['prebuilt_packages.packages.0.file', '../escape.pkg.tar.zst'],
   ['controls', []], ['controls.secret_scan_scope', 'all-content'], ['controls.outcomes', []],
   ['controls.outcomes.signature_verification', 'unknown'], ['controls.outcomes.archiso_version', 'unknown'],
   ['controls.outcomes.profile_secret_scan', 'unknown'], ['controls.outcomes.evidence_secret_scan', 'unknown'],
@@ -349,4 +371,85 @@ test('CLI reports invalid contracts to stderr with status 6', () => withFixture(
   const child = spawnSync(process.execPath, [cli, 'write-metadata', '--input', input, '--output', output], { encoding: 'utf8' });
   assert.equal(child.status, 6);
   assert.match(child.stderr, /build-documents:/);
+}));
+
+function validRecipe() {
+  return JSON.parse(readFileSync(join(repository, 'image/builder/aur/limine-tools.json'), 'utf8'));
+}
+
+test('the committed Limine recipe is valid and pins both tools twice', () => {
+  const recipe = validRecipe();
+  assert.deepEqual(validateLimineRecipe(recipe), []);
+  assert.deepEqual(recipe.packages.map(entry => entry.name), ['limine-mkinitcpio-hook', 'limine-snapper-sync']);
+  assert.ok(recipe.makedepends.includes('gradle'));
+  const [dependencies, ...entries] = limineBuildArguments(recipe);
+  assert.equal(dependencies, recipe.makedepends.join(','));
+  assert.equal(entries.length, 2);
+  for (const entry of entries) assert.match(entry, /^[a-z0-9@._+-]+:[a-f0-9]{40}:[a-f0-9]{40}$/);
+});
+
+test('rejects Limine recipes with movable or malformed pins', () => {
+  for (const mutate of [
+    recipe => { recipe.packages[0].upstream_commit = '1.40.0'; },
+    recipe => { recipe.packages[0].aur_commit = 'master'; },
+    recipe => { recipe.packages[1].name = recipe.packages[0].name; },
+    recipe => { recipe.packages = []; },
+    recipe => { recipe.makedepends = ['base-devel', 'gradle; rm -rf /']; },
+    recipe => { recipe.schema_version = 2; },
+  ]) {
+    const recipe = validRecipe();
+    mutate(recipe);
+    assert.ok(validateLimineRecipe(recipe).length > 0);
+    assert.throws(() => limineBuildArguments(recipe));
+  }
+});
+
+function builtRows(recipe) {
+  return recipe.packages.map(entry => [
+    entry.name, '1.0-1', `${entry.name}-1.0-1-x86_64.pkg.tar.zst`, entry.aur_commit, entry.upstream_commit,
+  ]);
+}
+
+test('builds the Limine package manifest only from records matching the recipe', () => {
+  const recipe = validRecipe();
+  const rows = builtRows(recipe);
+  const hashes = Object.fromEntries(rows.map(row => [row[2], hash(row[2])]));
+  const manifest = buildLiminePackageManifest(recipe, rows, hashes);
+  assert.equal(manifest.schema_version, 1);
+  assert.deepEqual(manifest.packages.map(entry => entry.name), recipe.packages.map(entry => entry.name));
+  assert.equal(manifest.packages[0].sha256, hashes[rows[0][2]]);
+
+  assert.throws(() => buildLiminePackageManifest(recipe, rows.slice(1), hashes));
+  const wrongPin = structuredClone(rows);
+  wrongPin[0][4] = 'f'.repeat(40);
+  assert.throws(() => buildLiminePackageManifest(recipe, wrongPin, hashes));
+  assert.throws(() => buildLiminePackageManifest(recipe, rows, {}));
+});
+
+test('CLI emits NUL-delimited recipe arguments and writes a host-hashed package manifest', () => withFixture(root => {
+  const recipePath = join(repository, 'image/builder/aur/limine-tools.json');
+  const recipe = validRecipe();
+  const child = spawnSync(process.execPath, [cli, 'read-recipe', '--input', recipePath], { encoding: 'utf8' });
+  assert.equal(child.status, 0, child.stderr);
+  assert.deepEqual(child.stdout.split('\0').slice(0, -1), limineBuildArguments(recipe));
+
+  const directory = join(root, 'packages');
+  mkdirSync(directory, { mode: 0o700 });
+  const rows = builtRows(recipe);
+  for (const row of rows) writeFileSync(join(directory, row[2]), `package ${row[0]}\n`, { mode: 0o600 });
+  writeFileSync(join(directory, 'packages.tsv'), `${rows.map(row => row.join('\t')).join('\n')}\n`, { mode: 0o600 });
+  const output = join(directory, 'packages.json');
+  const writer = spawnSync(process.execPath, [
+    cli, 'write-package-manifest', '--recipe', recipePath, '--directory', directory, '--output', output,
+  ], { encoding: 'utf8' });
+  assert.equal(writer.status, 0, writer.stderr);
+  assert.equal(statSync(output).mode & 0o777, 0o600);
+  const manifest = JSON.parse(readFileSync(output, 'utf8'));
+  assert.equal(manifest.packages[0].sha256, hash(`package ${rows[0][0]}\n`));
+
+  writeFileSync(join(directory, 'packages.tsv'), `${rows[0].join('\t')}\n`, { mode: 0o600 });
+  const mismatch = spawnSync(process.execPath, [
+    cli, 'write-package-manifest', '--recipe', recipePath, '--directory', directory, '--output', join(root, 'other.json'),
+  ], { encoding: 'utf8' });
+  assert.equal(mismatch.status, 6);
 }));

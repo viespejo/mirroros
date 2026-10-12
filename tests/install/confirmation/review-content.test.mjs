@@ -28,7 +28,7 @@ test('the compact review shows the machine, disk, answers, and the plan referenc
   const shown = rows(subject);
   assert.equal(shown.Machine, 'Recognized (reference-vm)');
   assert.equal(shown.Disk, '/dev/vda 32.0 GiB');
-  assert.equal(shown.Storage, 'ext4-systemd-boot (default)');
+  assert.equal(shown.Storage, 'btrfs-limine (default)');
   assert.equal(shown.Hibernation, 'Enabled (swapfile 2048 MiB)');
   assert.equal(shown.Hostname, 'laptop');
   assert.equal(shown['Plan reference'], subject.digest.value.slice(0, 12));
@@ -103,7 +103,7 @@ test('the complete plan is the persisted plan text followed by the plan referenc
 });
 
 test('the complete plan carries the disk, every choice with provenance, operations, warnings, and secrets', () => {
-  const subject = plan({ storage_option: 'btrfs-limine', root_account: 'password' });
+  const subject = plan({ storage_option: 'btrfs-limine', root_account: 'password' }, unqualifiedFacts());
   const text = completePlanText(subject);
   assert.ok(text.includes('virtio-SYNTH-VDA-0001') && text.includes('SYNTH-ESP'));
   for (const [key, entry] of Object.entries(subject.choices)) {

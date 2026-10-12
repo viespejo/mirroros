@@ -76,11 +76,12 @@ publication_write_metadata_input() {
     "$BUILD_VALIDATION_BUNDLE" \
     "${#tool_versions[@]}" "${tool_versions[@]}" \
     "${#SOURCE_CAPTURE_DIRTY_PATHS[@]}" "${SOURCE_CAPTURE_DIRTY_PATHS[@]}" \
-    "$SOURCE_CAPTURE_EMBEDDED_ISO_PATH" \
+    "$SOURCE_CAPTURE_EMBEDDED_ISO_PATH" "$CONTAINER_LIMINE_MANIFEST_PATH" \
     "${#SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" "${SOURCE_CAPTURE_EMBEDDED_PATHS[@]}" \
     "${#SOURCE_CAPTURE_EMBEDDED_IDENTITIES[@]}" "${SOURCE_CAPTURE_EMBEDDED_IDENTITIES[@]}" \
     "${#SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS[@]}" "${SOURCE_CAPTURE_EMBEDDED_DIRTY_PATHS[@]}" <<'NODE'
-import { writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const [
@@ -119,6 +120,9 @@ const dirtyPathCount = Number(args[cursor++]);
 const dirtyPaths = args.slice(cursor, cursor + dirtyPathCount);
 cursor += dirtyPathCount;
 const embeddedIsoPath = args[cursor++];
+const limineManifestPath = args[cursor++];
+const limineManifestBytes = readFileSync(limineManifestPath);
+const limineManifest = JSON.parse(limineManifestBytes.toString('utf8'));
 const embeddedPathCount = Number(args[cursor++]);
 const embeddedPaths = args.slice(cursor, cursor + embeddedPathCount);
 cursor += embeddedPathCount;
@@ -147,6 +151,11 @@ const document = {
     iso_path: embeddedIsoPath,
     subtrees: embeddedPaths.map((path, index) => ({ path, identity: embeddedIdentities[index] })),
     dirty_paths: embeddedDirtyPaths,
+  },
+  prebuilt_packages: {
+    manifest_path: `${embeddedIsoPath}/packages/packages.json`,
+    manifest_sha256: createHash('sha256').update(limineManifestBytes).digest('hex'),
+    packages: limineManifest.packages,
   },
   construction: {
     architecture: 'x86_64',

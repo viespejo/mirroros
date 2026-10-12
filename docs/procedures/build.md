@@ -67,6 +67,8 @@ Besides the profile, the build embeds the MirrorOS code the live environment run
 
 The builder creates a privileged, run-labeled Docker container with `--init` (so the container's PID 1 honors `SIGTERM` and `docker stop` completes promptly) and without `--rm`. It mounts only the captured profile as a read-only bind and, for the default invocation, the named Pacman cache volume. It does not pass the host environment, an env-file, or credential mounts. `/work` and `/out` remain inside the container. `SOURCE_DATE_EPOCH` is the run start time in seconds and is passed explicitly to `mkarchiso`.
 
+**Limine snapshot tools stage.** Before `mkarchiso`, a stage in the same verified container prebuilds the Limine snapshot tools pinned in `image/builder/aur/limine-tools.json` ([ADR 0003](../adr/0003-storage-and-recovery-baseline.md), [ADR 0008](../adr/0008-installation-engine-execution-boundary.md)). The recipe lists the AUR packaging commit, the upstream commit, and the explicit `makedepends` of each package. The stage needs network access (AUR, GitLab, GitHub, and Maven Central) and runs `image/builder/lib/aur-build.sh` in the container. As root it installs the `makedepends` with `pacman -S --needed`; it then builds each package as an unprivileged user with `makepkg`, without sudoers and without `--syncdeps`, after verifying the AUR commit and replacing the movable `#tag=` source with the pinned `#commit=` and verifying that the build used it. The host recomputes the SHA-256 of each package, checks that the records match the recipe, and writes `packages.json` (name, version, file, SHA-256, AUR and upstream commits). The packages and `packages.json` are placed only in the private profile copy under `airootfs/usr/local/lib/mirroros/packages/`; they are never committed to Git. A pin mismatch or build failure fails the build with status `5` (or `6` when the recipe or the built records do not match) and no ISO is produced. The upstream Gradle dependencies are pinned by version only, which ADR 0003 records as an accepted limitation for Story 3.2.
+
 Stage output is displayed live and recorded with `tee` in private per-stage logs under `evidence/archiso-build/<run-id>/logs/`. After the build, the native package manifest is extracted from the ISO inside the container, and the effective container mirrorlist is copied into evidence. The exported ISO, manifest, and mirrorlist are checked before the container is removed.
 
 The current operation timeouts are:
@@ -76,6 +78,7 @@ The current operation timeouts are:
 | Image pull | 10 minutes |
 | Cosign verification | 10 minutes |
 | Package update and Archiso installation | 30 minutes |
+| Limine snapshot tools build | 60 minutes |
 | `mkarchiso` | 120 minutes |
 | ISO manifest and mirrorlist extraction | 30 minutes |
 | Output export | 15 minutes |
@@ -95,7 +98,7 @@ Each run uses an ID of the form `YYYYMMDDTHHMMSSZ-<uuid>`. Existing reserved run
 
 Run-specific directories are mode `0700`; run files are mode `0600` and owned by the invoking user. The builder holds an exclusive lock for the run, including cleanup, and does not unlink `run.lock`. Generated build, distribution, and evidence paths are local outputs; preserve the evidence needed for review or recovery.
 
-Artifact metadata records the execution and source identity, clean/dirty state and profile identity, architecture, verified image digest, exact Archiso version, `SOURCE_DATE_EPOCH`, tool versions, Cosign identity and issuer, the `embedded_code` block (ISO path, declared subtrees with per-subtree Git object hashes, or `dirty-path-list` and the embedded dirty-path list for a dirty run), the effective profile `pacman.conf` reference, mirrorlist hash, ISO name/size/SHA-256, manifest, control outcomes, traceability limitations, and the absence of boot qualification. The native package manifest records installed package names and versions, not per-package repository origin. Compare manifests between runs to review rolling-resolution changes; do not infer repository attribution from them.
+Artifact metadata records the execution and source identity, clean/dirty state and profile identity, architecture, verified image digest, exact Archiso version, `SOURCE_DATE_EPOCH`, tool versions, Cosign identity and issuer, the `embedded_code` block (ISO path, declared subtrees with per-subtree Git object hashes, or `dirty-path-list` and the embedded dirty-path list for a dirty run), the effective profile `pacman.conf` reference, mirrorlist hash, the `prebuilt_packages` block (ISO path and SHA-256 of `packages.json`, and each Limine package's name, version, file, SHA-256, AUR commit, and upstream commit), ISO name/size/SHA-256, manifest, control outcomes, traceability limitations, and the absence of boot qualification. The native package manifest records installed package names and versions, not per-package repository origin. Compare manifests between runs to review rolling-resolution changes; do not infer repository attribution from them.
 
 ## Secret-scan scope
 

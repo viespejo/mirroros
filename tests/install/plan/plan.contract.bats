@@ -147,7 +147,7 @@ assert_private_permissions() {
   [ "$PLAN_STATUS" -eq 0 ]
   grep -Fq 'Profile: matched reference-vm' "$STDOUT_PATH"
   grep -Fq 'Disk: virtio-SYNTH-VDA-0001' "$STDOUT_PATH"
-  grep -Fq 'Storage option: ext4-systemd-boot (default)' "$STDOUT_PATH"
+  grep -Fq 'Storage option: btrfs-limine (default)' "$STDOUT_PATH"
   grep -Fq 'Destructive operations: ' "$STDOUT_PATH"
   grep -Fq 'Secrets required: account_password' "$STDOUT_PATH"
   grep -Fq "Digest: sha256 $(plan_digest "${WORK_DIR}/out/installation-plan.json")" "$STDOUT_PATH"
@@ -234,12 +234,12 @@ assert_private_permissions() {
   [ "$(plan_digest "${WORK_DIR}/one/installation-plan.json")" == "$(plan_digest "${WORK_DIR}/two/installation-plan.json")" ]
 }
 
-@test "an experimental storage option is accepted with its tier and a warning" {
-  write_choices '{"format_version":3,"storage_option":"btrfs-limine"}'
+@test "a supported storage option is accepted with its tier and no experimental warning" {
+  write_choices '{"format_version":3,"storage_option":"ext4-systemd-boot"}'
   run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
   [ "$PLAN_STATUS" -eq 0 ]
-  json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.storage_option.tier === 'experimental'"
-  assert_stderr_contains 'experimental'
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.storage_option.tier === 'supported'"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "!d.warnings.some(w => w.code === 'storage_option_experimental')"
 }
 
 @test "root_account password adds the root consumer to the single account_password requirement" {

@@ -39,7 +39,7 @@ const codes = result => result.reasons.map(item => item.code);
 
 test('the shipped policy loads with its tier table and a stable hash', () => {
   assert.equal(policy.document.format_version, 3);
-  assert.equal(policy.policy.storage_option.value, 'ext4-systemd-boot');
+  assert.equal(policy.policy.storage_option.value, 'btrfs-limine');
   assert.equal(policy.policy.regional_format.value, 'follow_language');
   assert.equal('locales' in policy.policy, false);
   assert.equal(policy.policy.hibernation.value, true);
@@ -62,7 +62,7 @@ test('the shipped policy loads with its tier table and a stable hash', () => {
   assert.ok(policy.policy.packages.value.includes('zram-generator'));
   assert.deepEqual(
     Object.fromEntries(Object.entries(policy.storageOptions).map(([name, option]) => [name, option.tier])),
-    { 'ext4-systemd-boot': 'default', 'btrfs-rescue': 'supported', 'btrfs-limine': 'experimental' },
+    { 'ext4-systemd-boot': 'supported', 'btrfs-rescue': 'supported', 'btrfs-limine': 'default' },
   );
   assert.match(policy.sha256, /^[0-9a-f]{64}$/);
   assert.equal(loadPlanPolicy(policyPath).sha256, policy.sha256);

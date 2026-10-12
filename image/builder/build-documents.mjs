@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { createReadStream, readFileSync, writeFileSync, chmodSync, statSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import {
   buildArtifactMetadata,
   buildExecutionResult,
+  buildLiminePackageManifest,
   ContractError,
+  limineBuildArguments,
   validateBundle,
 } from './lib/build-documents-core.mjs';
 
-const usage = 'Usage: build-documents.mjs write-metadata --input FILE --output FILE | write-result --input FILE --output FILE | validate-bundle --metadata FILE --iso FILE --manifest FILE --checksums FILE';
+const usage = 'Usage: build-documents.mjs write-metadata --input FILE --output FILE | write-result --input FILE --output FILE | validate-bundle --metadata FILE --iso FILE --manifest FILE --checksums FILE | read-recipe --input FILE | write-package-manifest --recipe FILE --directory DIR --output FILE';
 
 function parseOptions(arguments_, allowed) {
   const options = {};
@@ -54,6 +56,30 @@ async function run(arguments_) {
       ? buildArtifactMetadata(input)
       : buildExecutionResult(input);
     writeJson(options['--output'], document);
+    return 0;
+  }
+
+  if (command === 'read-recipe') {
+    const options = parseOptions(rest, ['--input']);
+    const arguments_ = limineBuildArguments(readJson(options['--input']));
+    process.stdout.write(arguments_.map(argument => `${argument}\0`).join(''));
+    return 0;
+  }
+
+  if (command === 'write-package-manifest') {
+    const options = parseOptions(rest, ['--recipe', '--directory', '--output']);
+    const recipe = readJson(options['--recipe']);
+    const rows = readFileSync(join(options['--directory'], 'packages.tsv'), 'utf8')
+      .split('\n')
+      .filter(line => line.length > 0)
+      .map(line => line.split('\t'));
+    const hashes = {};
+    for (const row of rows) {
+      const file = row[2];
+      if (typeof file !== 'string' || file !== basename(file)) throw new ContractError('malformed build record');
+      hashes[file] = await sha256File(join(options['--directory'], file));
+    }
+    writeJson(options['--output'], buildLiminePackageManifest(recipe, rows, hashes));
     return 0;
   }
 

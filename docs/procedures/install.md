@@ -1,6 +1,6 @@
 # Install lifecycle procedure
 
-**Availability:** `discover`, `plan`, and the guided live installer (`mirroros-install` without a subcommand) are implemented, and the guided installer installs the base system through the native engine (`install/engine/apply`, [`contracts/installation-engine.md`](../../contracts/installation-engine.md)). In this version the engine implements the `ext4-systemd-boot` storage option; plans for the Btrfs options are rejected by the engine before any disk write until their slices land. Installation postconditions are not verified yet (Story 2.6).
+**Availability:** `discover`, `plan`, and the guided live installer (`mirroros-install` without a subcommand) are implemented, and the guided installer installs the base system through the native engine (`install/engine/apply`, [`contracts/installation-engine.md`](../../contracts/installation-engine.md)). The engine implements all three storage options (`btrfs-limine`, the default, `btrfs-rescue`, and `ext4-systemd-boot`). Installation postconditions are not verified yet (Story 2.6).
 
 ## Current behavior
 

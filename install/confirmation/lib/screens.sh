@@ -14,9 +14,9 @@
 # The labels of the reference for the values the plan component resolves.
 storage_label_for() {
   case "$1:$2" in
-    ext4-systemd-boot:default) printf '%s' 'ext4 + systemd-boot - Default' ;;
+    ext4-systemd-boot:supported) printf '%s' 'ext4 + systemd-boot - Supported' ;;
     btrfs-rescue:supported) printf '%s' 'Btrfs + Snapper + systemd-boot - Supported' ;;
-    btrfs-limine:experimental) printf '%s' 'Btrfs + Snapper + Limine - Experimental' ;;
+    btrfs-limine:default) printf '%s' 'Btrfs + Snapper + Limine - Default' ;;
     *) printf '%s - %s' "$1" "$2" ;;
   esac
 }
@@ -164,9 +164,8 @@ storage_layout_form() {
     if [[ $value == "$current" ]]; then selected=$label; fi
   done < "${FLOW_TMP}/storage.tsv"
   [[ -n $selected ]] || return 6
-  gum style --foreground 8 --padding "$PADDING" 'Planned layout: GPT, 1 GiB FAT32 EFI partition, unencrypted root.' 'Selection only: no partitioning, formatting, or erasure runs here.'
+  gum style --foreground 8 --padding "$PADDING" 'Planned layout: GPT, 2 GiB FAT32 EFI partition, unencrypted root.' 'Selection only: no partitioning, formatting, or erasure runs here.'
   gum style --padding "$PADDING" 'ext4: recovery from independent rescue media.' 'Btrfs + systemd-boot: root snapshots; restore from rescue media.' 'Btrfs + Limine: snapshot boot; persistent restore remains unvalidated.'
-  gum style --foreground 3 --padding "$PADDING" 'Limine is experimental, with no support commitment and AUR dependencies.'
   choice=$(gum choose --show-help --height 5 --selected "$selected" --header 'Select storage layout' "${labels[@]}") || return $?
   for index in "${!labels[@]}"; do
     if [[ ${labels[index]} == "$choice" ]]; then

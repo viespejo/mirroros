@@ -84,6 +84,11 @@ if [[ "${1:-}" == 'exec' ]]; then
   shift || true
   command_name="${1:-}"
   shift || true
+  if [[ "$command_name" == 'bash' && "${1:-}" == *'mirroros-aur-build' ]]; then
+    shift 3
+    printf '%s\n' "$@" > "${BUILDER_CALL_LOG%/*}/limine.args"
+    exit "${BUILDER_LIMINE_STATUS:-0}"
+  fi
   if [[ "$command_name" == 'bash' ]]; then
     script=''
     while [[ "$#" -gt 0 ]]; do
@@ -129,6 +134,17 @@ if [[ "${1:-}" == 'cp' ]]; then
     printf '%s\n' 'base 1-1' 'archiso 91-1' > "$destination_path"
   elif [[ "$source_path" == *'/mirrorlist' ]]; then
     printf '%s\n' 'Server = https://mirror.example.invalid/$repo/os/$arch' > "$destination_path"
+  elif [[ "$source_path" == *'aur-build.sh' ]]; then
+    exit 0
+  elif [[ "$source_path" == *':/var/tmp/mirroros-limine-packages' ]]; then
+    mkdir -p -- "$destination_path"
+    while IFS=: read -r package_name aur_commit upstream_commit; do
+      [[ "$package_name" == *,* || -z "$aur_commit" ]] && continue
+      printf 'synthetic package %s\n' "$package_name" > "${destination_path}/${package_name}-1.0-1-x86_64.pkg.tar.zst"
+      printf '%s\t1.0-1\t%s\t%s\t%s\n' \
+        "$package_name" "${package_name}-1.0-1-x86_64.pkg.tar.zst" "$aur_commit" "$upstream_commit" >> "${destination_path}/packages.tsv"
+    done < "${BUILDER_CALL_LOG%/*}/limine.args"
+    exit 0
   else
     exit 41
   fi

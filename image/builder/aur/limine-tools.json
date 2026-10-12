@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "makedepends": [
+    "base-devel",
+    "git",
+    "gradle",
+    "gettext",
+    "limine",
+    "mkinitcpio",
+    "efibootmgr",
+    "snapper",
+    "btrfs-progs",
+    "libnotify"
+  ],
+  "packages": [
+    {
+      "name": "limine-mkinitcpio-hook",
+      "aur_commit": "94ffde9c60808595b287edf9d4219da202a85a7a",
+      "upstream_commit": "35dab4b732861f5e8d307a1a7873856a877913aa"
+    },
+    {
+      "name": "limine-snapper-sync",
+      "aur_commit": "b3c82aded52032687a76922f2dee9497600818f2",
+      "upstream_commit": "b4c0da2d4532a993809219f9e5d51a1fa85fcb93"
+    }
+  ]
+}

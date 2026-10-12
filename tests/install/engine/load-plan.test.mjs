@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,12 +52,64 @@ test('text that is not JSON is blocked', () => {
   assert.deepEqual([fields[0], fields[1], fields[2]], ['fail', 'blocked', 'plan_not_json']);
 });
 
-test('operations the engine does not implement yet are rejected naming the kind', () => {
-  const { fields } = verify(planText('valid', 'btrfs-limine--locked'));
-  assert.deepEqual([fields[0], fields[1], fields[2]], ['fail', 'blocked', 'stage_failed']);
-  assert.equal(fields[5], 'install_limine_snapshot_tools');
+test('the plans of every storage option load, Limine included, with their operations in plan order', () => {
+  const limine = streamOperations(verify(planText('valid', 'btrfs-limine--locked')).fields).map(operation => operation.id);
+  assert.equal(verify(planText('valid', 'btrfs-limine--locked')).fields[0], 'ok');
+  assert.ok(limine.indexOf('install_limine_snapshot_tools') > limine.indexOf('install_bootloader'));
+  assert.equal(limine.at(-1), 'sync_limine_snapshot_entries');
+  assert.ok(limine.indexOf('sync_limine_snapshot_entries') > limine.indexOf('create_baseline_snapshot'));
   assert.equal(verify(planText('valid', 'btrfs-rescue--locked')).fields[0], 'ok');
 });
+
+function withManifest(callback) {
+  const directory = mkdtempSync(join(tmpdir(), 'engine-limine-'));
+  try {
+    return callback(directory);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+function limineCheck(directory) {
+  return runNode(loadPlanPath, ['limine-manifest', '--directory', directory], '').stdout.split('\0').slice(0, -1);
+}
+
+function writeLiminePackage(directory, name, contents, sha256 = createHash('sha256').update(contents).digest('hex')) {
+  const file = `${name}-1.0-1-x86_64.pkg.tar.zst`;
+  writeFileSync(join(directory, file), contents);
+  return { name, version: '1.0-1', file, sha256, aur_commit: 'a'.repeat(40), upstream_commit: 'b'.repeat(40) };
+}
+
+test('the Limine manifest is verified against the package hashes before anything is installed', () => withManifest(directory => {
+  const packages = [writeLiminePackage(directory, 'limine-one', 'one'), writeLiminePackage(directory, 'limine-two', 'two')];
+  writeFileSync(join(directory, 'packages.json'), JSON.stringify({ schema_version: 1, packages }));
+  const fields = limineCheck(directory);
+  assert.deepEqual(fields.slice(0, 2), ['ok', '2']);
+  assert.deepEqual(fields.slice(2, 6), ['limine-one', packages[0].file, '1.0-1', packages[0].sha256]);
+  assert.deepEqual(fields.slice(6, 8), ['limine-two', packages[1].file]);
+}));
+
+test('a missing, malformed, or mismatching Limine manifest is refused with a message', () => withManifest(directory => {
+  assert.equal(limineCheck(directory)[0], 'fail');
+  const good = writeLiminePackage(directory, 'limine-one', 'one');
+  const cases = [
+    { schema_version: 2, packages: [good] },
+    { schema_version: 1, packages: [] },
+    { schema_version: 1, packages: [{ ...good, file: '../escape.pkg.tar.zst' }] },
+    { schema_version: 1, packages: [{ ...good, sha256: 'F'.repeat(64) }] },
+    { schema_version: 1, packages: [{ ...good, sha256: '0'.repeat(64) }] },
+    { schema_version: 1, packages: [{ ...good, file: 'absent-1.0-1-x86_64.pkg.tar.zst' }] },
+    { schema_version: 1, packages: [good, good] },
+  ];
+  for (const manifest of cases) {
+    writeFileSync(join(directory, 'packages.json'), JSON.stringify(manifest));
+    const fields = limineCheck(directory);
+    assert.equal(fields[0], 'fail', JSON.stringify(manifest));
+    assert.ok(fields[1].length > 0);
+  }
+  writeFileSync(join(directory, 'packages.json'), '{ not json');
+  assert.equal(limineCheck(directory)[0], 'fail');
+}));
 
 test('a NUL character in the plan is rejected so the stream stays unambiguous', () => {
   const plan = JSON.parse(planText('valid', EXT4));

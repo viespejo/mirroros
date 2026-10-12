@@ -1,17 +1,12 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { diskDifferences, selectedDisk } from '../confirmation/compare-safety.mjs';
 import { normalizeStorage } from '../discovery/normalize-facts.mjs';
 import { isRecord, reason } from '../discovery/validate-facts.mjs';
 import { parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
-
-// Operation kinds the engine does not implement yet; a plan that contains one is rejected before any
-// destructive step, never partially applied.
-export const UNIMPLEMENTED_KINDS = [
-  'install_limine_snapshot_tools',
-  'sync_limine_snapshot_entries',
-];
 
 const NEXT_STEP_REGENERATE = 'Generate a new plan with this artifact, review it, and confirm it again.';
 
@@ -76,14 +71,6 @@ export function verifyPlan(text, { digest, commit, dirty }) {
       NEXT_STEP_REGENERATE,
     ));
   }
-  const unimplemented = plan.operations.find(operation => UNIMPLEMENTED_KINDS.includes(operation.kind));
-  if (unimplemented !== undefined) {
-    return failure('blocked', reason(
-      'stage_failed',
-      `The installation engine does not implement the operation ${unimplemented.kind} yet.`,
-      'Select a storage option this version of the engine implements, then generate and confirm a new plan.',
-    ), unimplemented.kind);
-  }
 
   const disk = plan.target.disk;
   const fields = [
@@ -135,8 +122,52 @@ export function checkDisk(text, rawStorage) {
   return stream(['ok']);
 }
 
+const PACKAGE_NAME = /^[a-z0-9@._+-]+$/;
+const PACKAGE_FILE = /^[A-Za-z0-9@._+:-]+\.pkg\.tar\.zst$/;
+const SHA256 = /^[a-f0-9]{64}$/;
+
+// The prebuilt Limine packages embedded in the artifact (pre-install check of install_limine_snapshot_tools):
+// the manifest must be valid and every listed file must match its SHA-256. The answer is a NUL-delimited
+// stream: "ok", the package count, and name, file, version, and SHA-256 per package, or "fail" and a message.
+export function checkLimineManifest(directory) {
+  const refuse = message => stream(['fail', message]);
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(join(directory, 'packages.json'), 'utf8'));
+  } catch (error) {
+    return refuse(`The Limine package manifest is missing or is not valid JSON (${error.code ?? error.name}).`);
+  }
+  if (!isRecord(manifest) || manifest.schema_version !== 1 || !Array.isArray(manifest.packages) || manifest.packages.length === 0) {
+    return refuse('The Limine package manifest does not have the expected format.');
+  }
+  const fields = ['ok', manifest.packages.length];
+  const names = new Set();
+  for (const entry of manifest.packages) {
+    if (!isRecord(entry) || typeof entry.name !== 'string' || !PACKAGE_NAME.test(entry.name) || names.has(entry.name)
+      || typeof entry.version !== 'string' || entry.version.length === 0 || /[\s\0]/.test(entry.version)
+      || typeof entry.file !== 'string' || !PACKAGE_FILE.test(entry.file) || basename(entry.file) !== entry.file
+      || typeof entry.sha256 !== 'string' || !SHA256.test(entry.sha256)) {
+      return refuse('The Limine package manifest holds an invalid entry.');
+    }
+    names.add(entry.name);
+    let actual;
+    try {
+      actual = createHash('sha256').update(readFileSync(join(directory, entry.file))).digest('hex');
+    } catch (error) {
+      return refuse(`The Limine package ${entry.name} is missing (${error.code ?? error.name}).`);
+    }
+    if (actual !== entry.sha256) return refuse(`The Limine package ${entry.name} does not match its recorded SHA-256.`);
+    fields.push(entry.name, entry.file, entry.version, entry.sha256);
+  }
+  return stream(fields);
+}
+
 function main(args) {
   const [mode] = args;
+  if (mode === 'limine-manifest') {
+    process.stdout.write(checkLimineManifest(readOption(args, '--directory')));
+    return;
+  }
   const text = readFileSync(0, 'utf8');
   if (mode === 'verify') {
     process.stdout.write(verifyPlan(text, {
@@ -158,7 +189,7 @@ function main(args) {
     }
     process.stdout.write(checkDisk(text, raw));
   } else {
-    process.stderr.write('Usage: load-plan.mjs verify|check-disk ...\n');
+    process.stderr.write('Usage: load-plan.mjs verify|check-disk|limine-manifest ...\n');
     process.exitCode = 2;
   }
 }

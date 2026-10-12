@@ -16,10 +16,13 @@ CONTAINER_FAILURE_STATUS=0
 CONTAINER_LOGS_DIR=''
 CONTAINER_CONFIG_IDENTITY=''
 CONTAINER_CONFIG_ISSUER=''
+# shellcheck disable=SC2034 # Consumed by publication.sh metadata collection.
+CONTAINER_LIMINE_MANIFEST_PATH=''
 CONTAINER_TIMEOUT_PULL=600
 CONTAINER_TIMEOUT_COSIGN=600
 CONTAINER_TIMEOUT_PREPARE=1800
 CONTAINER_TIMEOUT_BUILD=7200
+CONTAINER_TIMEOUT_LIMINE_TOOLS=3600
 CONTAINER_TIMEOUT_EXTRACTION=1800
 CONTAINER_TIMEOUT_EXPORT=900
 CONTAINER_TIMEOUT_DOCKER=120
@@ -558,6 +561,85 @@ container_cleanup_current() {
   return 1
 }
 
+container_build_limine_tools() {
+  local recipe_path="${BUILDER_DIR}/aur/limine-tools.json"
+  local script_path="${BUILDER_DIR}/lib/aur-build.sh"
+  local container_script='/usr/local/bin/mirroros-aur-build'
+  local container_output='/var/tmp/mirroros-limine-packages'
+  local arguments_file="${BUILD_RUN_DIR}/.limine-recipe-arguments.$$"
+  local staging_directory="${BUILD_RUN_DIR}/limine-packages"
+  local destination_directory="${SOURCE_CAPTURE_PROFILE_PATH}/airootfs${SOURCE_CAPTURE_EMBEDDED_ISO_PATH}/packages"
+  local status
+  local package_file
+  local -a build_arguments=()
+
+  if node "${BUILDER_DIR}/build-documents.mjs" read-recipe --input "$recipe_path" > "$arguments_file" && \
+    mapfile -d '' -t build_arguments < "$arguments_file"; then
+    rm -f -- "$arguments_file"
+  else
+    status=$?
+    rm -f -- "$arguments_file"
+    printf 'MirrorOS build: invalid Limine tools recipe: %s\n' "$recipe_path" >&2
+    container_set_failure limine-tools-recipe 6 "$status"
+    return 6
+  fi
+  if [[ ! -f "$script_path" || ! -r "$script_path" ]]; then
+    printf 'MirrorOS build: missing Limine tools build script: %s\n' "$script_path" >&2
+    container_set_failure limine-tools-recipe 6 ''
+    return 6
+  fi
+  if container_run_stage limine-tools-copy "$CONTAINER_TIMEOUT_DOCKER" \
+    docker cp "$script_path" "${CONTAINER_ID}:${container_script}" && \
+    container_run_stage limine-tools-mode "$CONTAINER_TIMEOUT_DOCKER" \
+    docker exec "$CONTAINER_ID" chmod 0755 "$container_script"; then
+    :
+  else
+    status=$?
+    container_set_failure limine-tools-copy 5 "$status"
+    return 5
+  fi
+  if container_run_stage limine-tools "$CONTAINER_TIMEOUT_LIMINE_TOOLS" \
+    docker exec "$CONTAINER_ID" bash "$container_script" "$container_output" "${build_arguments[@]}"; then
+    :
+  else
+    status=$?
+    container_set_failure limine-tools 5 "$status"
+    return 5
+  fi
+  if container_run_stage limine-tools-export "$CONTAINER_TIMEOUT_EXPORT" \
+    docker cp "${CONTAINER_ID}:${container_output}" "$staging_directory"; then
+    :
+  else
+    status=$?
+    container_set_failure limine-tools-export 5 "$status"
+    return 5
+  fi
+  if node "${BUILDER_DIR}/build-documents.mjs" write-package-manifest \
+    --recipe "$recipe_path" --directory "$staging_directory" --output "${staging_directory}/packages.json"; then
+    :
+  else
+    status=$?
+    printf '%s\n' 'MirrorOS build: the built Limine packages do not match the pinned recipe.' >&2
+    container_set_failure limine-tools-manifest 6 "$status"
+    return 6
+  fi
+  if ! (umask 022 && mkdir -p -- "$destination_directory"); then
+    printf 'MirrorOS build: could not create the profile package directory: %s\n' "$destination_directory" >&2
+    container_set_failure limine-tools-placement 5 ''
+    return 5
+  fi
+  for package_file in "${staging_directory}"/*.pkg.tar.zst "${staging_directory}/packages.json"; do
+    if [[ ! -f "$package_file" || -L "$package_file" ]] || \
+      ! install -m 0644 -- "$package_file" "${destination_directory}/${package_file##*/}"; then
+      printf 'MirrorOS build: could not place the Limine package artifact: %s\n' "$package_file" >&2
+      container_set_failure limine-tools-placement 5 ''
+      return 5
+    fi
+  done
+  # shellcheck disable=SC2034 # Consumed by publication.sh metadata collection.
+  CONTAINER_LIMINE_MANIFEST_PATH="${staging_directory}/packages.json"
+}
+
 container_construct() {
   local status
   local prep_script='pacman -Syu --noconfirm && pacman -S --needed --noconfirm archiso'
@@ -609,6 +691,11 @@ container_construct() {
     status=$?
     container_set_failure container-workdirs 5 "$status"
     return 5
+  fi
+  if container_build_limine_tools; then
+    :
+  else
+    return "$CONTAINER_FAILURE_STATUS"
   fi
   if container_run_stage mkarchiso "$CONTAINER_TIMEOUT_BUILD" \
     docker exec --env "SOURCE_DATE_EPOCH=${BUILD_SOURCE_DATE_EPOCH}" \

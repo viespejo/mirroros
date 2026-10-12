@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { renderPlan, renderSummary } from '../../../install/plan/render-plan.mjs';
 import { planFixturesRoot, ROOT_ACCOUNT_MODES, STORAGE_OPTION_NAMES } from './build-fixtures.mjs';
-import { CANARY, generate, unqualifiedFacts } from './helpers.mjs';
+import { CANARY, generate, policy, unqualifiedFacts } from './helpers.mjs';
 
 const HEADINGS = [
   '1. Target',
@@ -19,7 +19,7 @@ const HEADINGS = [
 
 function planFor(storageOption, rootAccount, extra = {}) {
   const choices = { ...extra };
-  if (storageOption !== 'ext4-systemd-boot') choices.storage_option = storageOption;
+  if (storageOption !== 'btrfs-limine') choices.storage_option = storageOption;
   if (rootAccount !== 'locked') choices.root_account = rootAccount;
   return generate({ choices }).plan;
 }
@@ -66,7 +66,7 @@ test('choices show their value, provenance, source, and editable marker', () => 
   assert.match(text, /hostname: mirroros-ref\n\s+provenance personal_preference; source override \[editable\]/);
   assert.match(text, /kernel: linux\n\s+provenance technical_necessity; source policy\n/);
   assert.match(text, /target_disk: virtio-SYNTH-VDA-0001\n\s+provenance hardware_detection; source detected \[editable\]/);
-  assert.match(text, /tier default; filesystem ext4; boot loader systemd-boot/);
+  assert.match(text, /tier supported; filesystem ext4; boot loader systemd-boot/);
 });
 
 test('the render shows the digest of the plan and reflects an edit', () => {
@@ -113,7 +113,9 @@ test('the target section shows the observed machine and the profile without clai
 });
 
 test('experimental options and detected capabilities are explained', () => {
-  const text = renderPlan(planFor('btrfs-limine', 'locked'));
+  const experimental = structuredClone(policy);
+  experimental.storageOptions['btrfs-limine'].tier = 'experimental';
+  const text = renderPlan(generate({ policyOverride: experimental }).plan);
   assert.match(text, /tier experimental/);
   assert.match(text, /storage_option_experimental: .*experimental/);
   assert.match(text, /rule not_evaluated; next story 2\.6/);

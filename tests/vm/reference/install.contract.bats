@@ -1,7 +1,7 @@
 load discovery-support
 
 # Contract tests for qualify-install (Story 2.5) with doubles for QEMU, xorriso, qemu-img, and Gitleaks.
-# REFERENCE_INSTALL_CASE: the case whose guest report the QEMU double emits (ext4, failure, cancel-password).
+# REFERENCE_INSTALL_CASE: the case whose guest report the QEMU double emits (default, limine-nohib, ext4, failure, cancel-password).
 # REFERENCE_INSTALL_BAD: wrong-exit | missing-engine | canary-leak | no-resume makes the report wrong in one way.
 # REFERENCE_INSTALL_LOGIN: ok (default) | none; none makes the second boot never log in.
 # REFERENCE_COMPARE_STATUS: qemu-img compare status (0 identical, 1 different, 2 error).
@@ -106,7 +106,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
       const [runId, name, bad, canary] = process.argv.slice(1);
       const digest = "a".repeat(64);
       const expected = {
-        ext4: [0, "installed"], failure: [5, "failed"], "cancel-password": [3, "cancelled"],
+        default: [0, "installed"], "limine-nohib": [0, "installed"], ext4: [0, "installed"], failure: [5, "failed"], "cancel-password": [3, "cancelled"],
       }[name];
       const exit = bad === "wrong-exit" ? 1 : expected[0];
       const common = { format_version: 4, run_id: "install-run", outcome: expected[1] };
@@ -119,15 +119,17 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
       };
       if (expected[1] !== "cancelled" && bad !== "missing-engine") {
         const engine = { format_version: 1, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
-        if (name === "ext4") engine.resolved = { resume_offset: bad === "no-resume" ? undefined : 1234 };
+        const hibernating = name === "ext4" || name === "default";
+        if (hibernating) engine.resolved = { resume_offset: bad === "no-resume" ? undefined : 1234 };
         if (name === "failure") { engine.failed_operation = { id: "install_packages", command: ["pacstrap"] }; engine.not_started = ["generate_fstab"]; }
         files["engine/engine-run.json"] = JSON.stringify(engine);
         files["engine/engine.log"] = "engine output\n";
         files["engine/state.json"] = "{}";
       }
-      const observation = name === "ext4" && bad !== "no-resume"
+      const hibernation = name === "ext4" || name === "default";
+      const observation = hibernation && bad !== "no-resume"
         ? { "boot-entries.txt": "options root=UUID=x rw zswap.enabled=0 resume=UUID=x resume_offset=1234\n" }
-        : name === "ext4" ? { "boot-entries.txt": "options root=UUID=x rw zswap.enabled=0\n" } : {};
+        : name === "failure" || name === "cancel-password" ? {} : { "boot-entries.txt": "options root=UUID=x rw zswap.enabled=0\n" };
       process.stdout.write(JSON.stringify({
         schema_version: 1, run_id: runId, target: "reference-vm", exit_status: 0, facts: null, error: null, stderr_tail: "",
         install: { name, exit_status: exit, files, observation, private_permissions: true, driver_tail: "" },
@@ -223,16 +225,19 @@ install_result_field() {
   [ ! -e "${REFERENCE_REPOSITORY_ROOT}/build" ]
 }
 
-@test "the wired cases that need later slices are disabled with exit 2 and no run resources" {
+@test "the default and limine-nohib cases are enabled, log in as the user, and expect resume only with hibernation" {
+  use_matching_bundle
   local case_name
 
   for case_name in default limine-nohib; do
+    rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence" "${REFERENCE_REPOSITORY_ROOT}/build"
+    export REFERENCE_INSTALL_CASE="$case_name"
     reference_invoke_install --case "$case_name" "$REFERENCE_BUNDLE_DIR"
-    [ "$REFERENCE_COMMAND_STATUS" -eq 2 ]
-    [[ "$(<"$REFERENCE_STDERR_PATH")" == *'not enabled'* ]]
+    [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+    [ "$(install_result_field boot.logins.mirroros)" == 'true' ]
+    [ "$(install_result_field counted)" == 'true' ]
+    [ "$(install_result_field install.resume_as_expected)" == 'true' ]
   done
-  [ ! -e "${REFERENCE_REPOSITORY_ROOT}/build" ]
-  [ ! -s "$REFERENCE_CALL_LOG" ]
 }
 
 @test "the reference VM configuration is version 2 and carries the installation deadline and login timings" {

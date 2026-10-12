@@ -157,7 +157,7 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
   choices.storage_option = {
     value: storageOption,
     provenance: policy.policy.storage_option.provenance,
-    source: storageOption === 'ext4-systemd-boot' ? 'policy' : 'choice',
+    source: storageOption === 'btrfs-limine' ? 'policy' : 'choice',
     editable: true,
     tier: option.tier,
     filesystem: option.filesystem,

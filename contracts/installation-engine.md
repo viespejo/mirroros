@@ -158,7 +158,8 @@ follows, and no operation invokes a Limine or snapshot tool before `install_limi
 
 - **`install_bootloader`** writes only `/etc/default/limine`: `ESP_PATH="/boot"`, `SKIP_UEFI=yes` (the binary
   goes to the fallback path and no firmware entry is created), and `KERNEL_CMDLINE` set to the plan's
-  `kernel_cmdline` (resolved as above) plus `rootflags=subvol=@`. It deploys no EFI binary, runs no tool, and
+  `kernel_cmdline` (resolved as above) plus `rootflags=subvol=@`, written as the `KERNEL_CMDLINE[default]`
+  array entry the tool reads. It deploys no EFI binary, runs no tool, and
   verifies only the content of that file.
 - **`install_limine_snapshot_tools`** reads `/usr/local/lib/mirroros/packages/packages.json` of the running
   artifact and verifies the SHA-256 of every listed package file against it, before installing anything. A
@@ -171,33 +172,36 @@ follows, and no operation invokes a Limine or snapshot tool before `install_limi
   normal entries of the Limine configuration. The engine then verifies, and fails without trying any other
   mechanism when something is missing:
   - `/boot/EFI/BOOT/BOOTX64.EFI` exists and is not empty;
-  - the Limine configuration written by the tool contains an entry carrying `root=UUID=<root>`,
-    `rootflags=subvol=@`, `zswap.enabled=0`, and `resume=` and `resume_offset=` only when hibernation is
-    enabled;
-  - the kernel and initramfs files that entry references exist under `/boot`;
+  - the Limine configuration `/boot/limine.conf` written by the tool contains a normal entry (above the
+    `//Snapshots` line) whose `cmdline:` carries `root=UUID=<root>`, `rootflags=subvol=@`, `zswap.enabled=0`,
+    and `resume=` and `resume_offset=` only when hibernation is enabled, and a global `timeout:` equal to the
+    plan's `bootloader_options.timeout`;
+  - the kernel and initramfs files that entry references (`path:` and `module_path:` lines of the form
+    `boot():/<machine-id>/linux/...`) exist on the ESP;
   - no unified kernel image exists on the ESP.
+
+  The `/boot/vmlinuz-linux` and `/boot/initramfs-linux.img` files that `pacstrap` leaves on the ESP are not
+  referenced by the Limine entries and are neither verified nor removed.
 
   The engine never calls `limine-update`, never deploys the EFI binary itself, and never writes `limine.conf` by
   hand.
 - **`configure_snapper`** and **`enable_services`** behave as for `btrfs-rescue` plus the service constant above.
 - **`sync_limine_snapshot_entries`** runs `limine-snapper-sync` after the baseline and verifies at least one
-  snapshot entry that points to the baseline snapshot, and that the files it references exist.
+  snapshot entry that points to the baseline snapshot, and that the files it references exist. The snapshot
+  entries are written by the tool below the `//Snapshots` line, with `rootflags=subvol=/@snapshots/<N>/snapshot`
+  and kernel and initramfs copies under `/boot/<machine-id>/limine_history/`. The service needs `inotifywait`
+  (package `inotify-tools`, part of the option's `additional_packages`) to stay active.
 
-The exact configuration path under the ESP and the entry syntax are confirmed against the pinned packages by the
-development check that Story 2.5 requires before this option is implemented; if the observed behavior differs
-from the description above, implementation stops at a decision checkpoint and this section is amended, not
-worked around.
+The configuration path, the entry syntax, and the behavior described above were observed against the pinned
+packages in a development check before this option was implemented.
 
 #### Mapping of `bootloader_options`
 
 | Option | systemd-boot | Limine |
 | --- | --- | --- |
-| `timeout` | `timeout` in `loader.conf`. | Applies: the same number of seconds in the Limine configuration. The mechanism supported by the pinned tools is fixed by the development check above. |
-| `editor` | `editor no` when `false`. | Applies: the Limine entry editor is disabled when `false`. The mechanism is fixed by the same check. |
-| `fallback_entry` | A second entry using the fallback initramfs. | Does not apply as an extra entry: the fallback-path binary on the ESP and the snapshot entries are the recovery path of this option, and no fallback-initramfs entry is written unless the same check shows the pinned tools write one. |
-
-If the check shows that the pinned tools offer no supported way to apply `timeout` or `editor`, this contract
-states that it does not apply and why, through the same decision checkpoint, before the value is claimed.
+| `timeout` | `timeout` in `loader.conf`. | Applies through the tool's default (3 seconds): the engine verifies that the `timeout:` of the generated configuration equals the plan's value and fails the operation otherwise; it does not rewrite the file. |
+| `editor` | `editor no` when `false`. | Does not apply: the pinned tools offer no supported key for it, so the Limine menu editor stays enabled. The engine records `not_applicable_to_limine`. |
+| `fallback_entry` | A second entry using the fallback initramfs. | Does not apply as an extra entry: the fallback-path binary on the ESP and the snapshot entries are the recovery path of this option, and the pinned tools write no fallback-initramfs entry. The engine records `not_applicable_to_limine`. |
 
 ## Evidence and state
 
@@ -242,7 +246,7 @@ Each JSON file is written to a temporary file in the same directory, re-read, va
 | `resolved` | Apply-time values: `partition_uuids` and, when hibernation is enabled, `resume_offset`. |
 | `mirrors` | `servers` (the active `Server =` lines) and `mirrorlist_sha256`. |
 | `constants` | The engine constants used, per kind. |
-| `limine_tools` | `btrfs-limine` only: for each package, `name`, `version`, `sha256`, `aur_commit`, `upstream_commit`. |
+| `constants.install_limine_snapshot_tools.package.<name>` | `btrfs-limine` only: the `version` and `sha256` of each verified package. The AUR and upstream pins stay in the embedded `packages.json` and the artifact metadata. |
 | `cleanup` | The cleanup actions taken and their results; present when cleanup ran. |
 
 The record contains no secret and no value derived from one.

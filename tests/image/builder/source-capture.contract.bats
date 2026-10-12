@@ -282,3 +282,12 @@ teardown() {
   [[ "$output" == *'Gitleaks detected a secret in the captured profile'* ]]
   ! grep -Fq -- "$synthetic" "$report_path"
 }
+
+@test "capture contains no generated Limine packages; the build stage adds them later" {
+  local destination="${BUILDER_TEST_ROOT}/packages capture"
+
+  run builder_capture_embedded "$destination"
+  [ "$status" -eq 0 ]
+  [ ! -e "${destination}/image/archiso/airootfs/usr/local/lib/mirroros/packages" ]
+  [ -z "$(find "$destination" -name '*.pkg.tar.zst' -print)" ]
+}

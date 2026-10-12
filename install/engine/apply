@@ -8,6 +8,8 @@ umask 077
 # command, no non-interactive mode, and no option that bypasses any of those steps.
 SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
 CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+# engine.log is plain text: native tools (for example the Limine snapshot tools) color their output from TERM.
+export TERM=dumb
 
 usage_error() {
   printf 'MirrorOS engine: %s\n' "$1" >&2
@@ -15,7 +17,7 @@ usage_error() {
   exit 2
 }
 
-for library in common precheck storage btrfs system accounts boot; do
+for library in common precheck storage btrfs system accounts boot limine; do
   # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
   source "${SCRIPT_DIR}/lib/${library}.sh" 2> /dev/null || {
     printf 'MirrorOS engine: the embedded engine code is damaged: lib/%s.sh could not be loaded.\n' "$library" >&2
@@ -44,6 +46,8 @@ declare -A DISPATCH=(
   [configure_root_account]=op_configure_root_account
   [configure_sudo_sysrq_pacman]=op_configure_sudo_sysrq_pacman
   [install_bootloader]=op_install_bootloader
+  [install_limine_snapshot_tools]=op_install_limine_snapshot_tools
+  [sync_limine_snapshot_entries]=op_sync_limine_snapshot_entries
   [enable_services]=op_enable_services
 )
 

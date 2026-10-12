@@ -109,6 +109,7 @@ op_enable_services() {
   case "$STORAGE_OPTION" in
     ext4-systemd-boot) extra=(systemd-boot-update.service) ;;
     btrfs-rescue) extra=(systemd-boot-update.service snapper-cleanup.timer) ;;
+    btrfs-limine) extra=(limine-snapper-sync.service snapper-cleanup.timer) ;;
     *) check_fail "no service set is defined for ${STORAGE_OPTION}" ;;
   esac
   record_constant enable_services.option_services "${extra[*]}"

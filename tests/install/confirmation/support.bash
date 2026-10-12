@@ -7,9 +7,12 @@ CONFIRM_CANARY='PLANTED-CONFIRM-SECRET-0001'
 # The password the scripted Gum double answers with; it is the canary, so every scan for it covers the password.
 CONFIRM_PASSWORD="$CONFIRM_CANARY"
 CONFIRM_ENGINE_SUPPORT="${CONFIRM_SOURCE_ROOT}/tests/install/engine"
+# The engine helpers provide the embedded Limine packages that the default btrfs-limine plan installs.
+# shellcheck source=../engine/support.bash
+source "${CONFIRM_ENGINE_SUPPORT}/support.bash"
 # The external tools of the installation engine, answered by the engine double (it also answers systemctl for the
 # keyring wait and for a chosen restart or power off, which it only records).
-CONFIRM_ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs blkid mount umount mountpoint
+CONFIRM_ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
   swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot)
 
 # Keys sent through the pty, one at a time, and extra environment words for the command under test. When
@@ -43,6 +46,7 @@ confirm_setup() {
   cp -a "${CONFIRM_SOURCE_ROOT}/hardware/discovery" "${CODE_ROOT}/hardware/discovery"
   cp -a "${CONFIRM_SOURCE_ROOT}/targets" "${CODE_ROOT}/targets"
   printf '{\n  "commit": "%s",\n  "dirty": false\n}\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' > "${CODE_ROOT}/identity.json"
+  engine_make_packages
 
   for tool_name in lsblk ip getent curl uname systemd-detect-virt bootctl; do
     ln -s "${CONFIRM_DISCOVERY_SUPPORT}/doubles/${tool_name}" "${DOUBLE_BIN}/${tool_name}"

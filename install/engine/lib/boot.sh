@@ -44,6 +44,7 @@ install_systemd_boot() {
 op_install_bootloader() {
   case "$STORAGE_OPTION" in
     ext4-systemd-boot | btrfs-rescue) install_systemd_boot ;;
+    btrfs-limine) op_install_limine_bootloader ;;
     *) check_fail "no boot loader function is defined for ${STORAGE_OPTION}" ;;
   esac
 }

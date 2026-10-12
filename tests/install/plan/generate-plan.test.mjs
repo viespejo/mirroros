@@ -29,7 +29,7 @@ const codes = result => result.reasons.map(item => item.code);
 test('defaults for the reference VM produce the independent fixture exactly', () => {
   const { plan, reasons } = generate();
   assert.deepEqual(reasons, []);
-  assert.deepEqual(plan, buildValidPlan('ext4-systemd-boot', 'locked'));
+  assert.deepEqual(plan, buildValidPlan('btrfs-limine', 'locked'));
   assert.deepEqual(validatePlan(plan, { facts: facts() }), []);
 });
 
@@ -37,7 +37,7 @@ test('every storage option and root account mode matches its fixture', () => {
   for (const storageOption of STORAGE_OPTION_NAMES) {
     for (const rootAccount of ROOT_ACCOUNT_MODES) {
       const choices = {};
-      if (storageOption !== 'ext4-systemd-boot') choices.storage_option = storageOption;
+      if (storageOption !== 'btrfs-limine') choices.storage_option = storageOption;
       if (rootAccount !== 'locked') choices.root_account = rootAccount;
       const { plan, reasons } = generate({ choices });
       assert.deepEqual(reasons, []);
@@ -135,16 +135,20 @@ test('a disk with neither by_id nor path is rejected', () => {
   assert.deepEqual(codes(generate({ factsDocument: anonymous })), ['disk_unidentifiable']);
 });
 
-test('storage options show their tier and the experimental one warns', () => {
+test('storage options show their tier and only an experimental tier warns', () => {
   const tiers = Object.fromEntries(STORAGE_OPTION_NAMES.map(name => {
     const { plan } = generate({ choices: { storage_option: name } });
     return [name, [plan.choices.storage_option.tier, plan.warnings.map(warning => warning.code)]];
   }));
   assert.deepEqual(tiers, {
-    'ext4-systemd-boot': ['default', []],
+    'ext4-systemd-boot': ['supported', []],
     'btrfs-rescue': ['supported', []],
-    'btrfs-limine': ['experimental', ['storage_option_experimental']],
+    'btrfs-limine': ['default', []],
   });
+  const experimental = structuredClone(policy);
+  experimental.storageOptions['btrfs-rescue'].tier = 'experimental';
+  const { plan } = generate({ choices: { storage_option: 'btrfs-rescue' }, policyOverride: experimental });
+  assert.deepEqual(plan.warnings.map(warning => warning.code), ['storage_option_experimental']);
 });
 
 test('one shared account password names the root operation only when root password access is enabled', () => {
@@ -326,7 +330,7 @@ test('a generated plan that fails its own validator is an invariant violation', 
   broken.policy.esp.value.size_bytes = 1.5;
   assert.throws(() => generate({ policyOverride: broken }), PlanContractError);
   const noOption = structuredClone(policy);
-  noOption.storageOptions['ext4-systemd-boot'].tier = 'unlisted';
+  noOption.storageOptions['btrfs-limine'].tier = 'unlisted';
   assert.throws(() => generate({ policyOverride: noOption }), PlanContractError);
 });
 

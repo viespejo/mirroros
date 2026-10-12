@@ -352,13 +352,113 @@ teardown() {
   [ ! -e "$OUTPUT" ]
 }
 
-@test "Limine plans are rejected in the pre-check naming the operation, with the disk untouched" {
+@test "an approved btrfs-limine plan installs the Limine tools, the baseline, and the snapshot entries" {
   engine_use_plan btrfs-limine--locked
   engine_run
-  [ "$ENGINE_STATUS" -eq 2 ]
-  [ "$(engine_json reasons.0.code)" = stage_failed ]
-  [ "$(engine_json reasons.0.operation)" = install_limine_snapshot_tools ]
-  engine_disk_untouched
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(engine_json outcome)" = installed ]
+  [ "$(engine_json not_started)" = '[]' ]
+  [ "$(engine_json constants.sync_limine_snapshot_entries.baseline_snapshot)" = 1 ]
+  [ ! -e "${RUN_ROOT}/target/var/tmp/mirroros-packages" ]
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+  grep -q 'systemctl enable limine-snapper-sync.service$' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "btrfs-limine writes only the Limine defaults file with the planned command line and rootflags" {
+  engine_use_plan btrfs-limine--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  local defaults="${RUN_ROOT}/target/etc/default/limine"
+  grep -qx 'ESP_PATH="/boot"' "$defaults"
+  grep -qx 'SKIP_UEFI=yes' "$defaults"
+  grep -q '^KERNEL_CMDLINE\[default\]="root=UUID=11111111-2222-4333-8444-555555555555 rw zswap.enabled=0 resume=UUID=11111111-2222-4333-8444-555555555555 resume_offset=1998848 rootflags=subvol=@"$' "$defaults"
+  ! engine_called bootctl
+  ! grep -q '^arch-chroot .* \(limine-update\|limine-deploy\|efibootmgr\|limine\)\( \|$\)' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "btrfs-limine carries resume parameters only when hibernation is planned" {
+  engine_use_plan btrfs-limine--hibernation-disabled
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  ! grep -q 'resume' "${RUN_ROOT}/target/etc/default/limine"
+  ! grep -q 'resume' "${RUN_ROOT}/target/boot/limine.conf"
+  grep -q 'rootflags=subvol=@' "${RUN_ROOT}/target/boot/limine.conf"
+  ! grep -q '@swap' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "no Limine or snapshot tool runs before the package transaction installs it" {
+  engine_use_plan btrfs-limine--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  local install_line sync_line baseline_line
+  install_line="$(grep -n -m1 'pacman -U' "${DOUBLE_STATE}/calls.log" | cut -d: -f1)"
+  sync_line="$(grep -n -m1 'target limine-snapper-sync$' "${DOUBLE_STATE}/calls.log" | cut -d: -f1)"
+  baseline_line="$(grep -n -m1 'snapper --no-dbus -c root create --type single' "${DOUBLE_STATE}/calls.log" | cut -d: -f1)"
+  [ -n "$install_line" ] && [ -n "$sync_line" ] && [ -n "$baseline_line" ]
+  [ "$install_line" -lt "$baseline_line" ]
+  [ "$baseline_line" -lt "$sync_line" ]
+  [ "$(grep -c 'limine-snapper-sync$' "${DOUBLE_STATE}/calls.log")" -eq 1 ]
+  [ -s "${RUN_ROOT}/target/etc/mkinitcpio.conf.d/10-mirroros-limine.conf" ]
+  grep -q 'sd-btrfs-overlayfs' "${RUN_ROOT}/target/etc/mkinitcpio.conf.d/10-mirroros-limine.conf"
+}
+
+@test "a Limine package whose hash differs from the manifest fails with exit 6 and installs nothing" {
+  engine_use_plan btrfs-limine--locked
+  printf 'tampered\n' >> "${CODE_ROOT}/packages/limine-snapper-sync-1.0-1-any.pkg.tar.zst"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 6 ]
+  [ "$(engine_json reasons.0.code)" = engine_asset_mismatch ]
+  [ "$(engine_json failed_operation.id)" = install_limine_snapshot_tools ]
+  ! grep -q 'pacman -U' "${DOUBLE_STATE}/calls.log"
+  [ ! -e "${DOUBLE_STATE}/limine-installed" ]
+}
+
+@test "a missing Limine manifest fails with exit 6 before any package is installed" {
+  engine_use_plan btrfs-limine--locked
+  rm -- "${CODE_ROOT}/packages/packages.json"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 6 ]
+  [ "$(engine_json reasons.0.code)" = engine_asset_mismatch ]
+  ! grep -q 'pacman -U' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "a missing fallback EFI binary, kernel file, or normal entry fails install_limine_snapshot_tools" {
+  engine_use_plan btrfs-limine--locked
+  for switch in limine-no-efi limine-missing-kernel limine-no-entry limine-uki; do
+    rm -rf -- "$RUN_ROOT" "$OUTPUT"
+    mkdir -p "$RUN_ROOT"
+    : > "${DOUBLE_STATE}/calls.log"
+    : > "${DOUBLE_STATE}/${switch}"
+    engine_run
+    [ "$ENGINE_STATUS" -eq 5 ]
+    [ "$(engine_json reasons.0.code)" = stage_failed ]
+    [ "$(engine_json failed_operation.id)" = install_limine_snapshot_tools ]
+    ! grep -q 'limine-snapper-sync$' "${DOUBLE_STATE}/calls.log"
+    rm -f -- "${DOUBLE_STATE}/${switch}"
+  done
+}
+
+@test "a Limine timeout that differs from the plan fails install_limine_snapshot_tools" {
+  engine_use_plan btrfs-limine--locked
+  printf '9\n' > "${DOUBLE_STATE}/limine-timeout"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 5 ]
+  [ "$(engine_json failed_operation.id)" = install_limine_snapshot_tools ]
+}
+
+@test "a missing snapshot entry or snapshot file fails sync_limine_snapshot_entries" {
+  engine_use_plan btrfs-limine--locked
+  for switch in limine-no-snapshot-entry limine-missing-snapshot-file; do
+    rm -rf -- "$RUN_ROOT" "$OUTPUT"
+    mkdir -p "$RUN_ROOT"
+    : > "${DOUBLE_STATE}/calls.log"
+    rm -f -- "${DOUBLE_STATE}/snapshots.list"
+    : > "${DOUBLE_STATE}/${switch}"
+    engine_run
+    [ "$ENGINE_STATUS" -eq 5 ]
+    [ "$(engine_json failed_operation.id)" = sync_limine_snapshot_entries ]
+    rm -f -- "${DOUBLE_STATE}/${switch}"
+  done
 }
 
 @test "an approved btrfs-rescue plan installs the flat subvolumes, the @swap swapfile, Snapper, and the baseline" {

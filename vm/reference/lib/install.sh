@@ -28,8 +28,8 @@ INSTALL_MONITOR_NAME='m.sock'
 # A private short-lived directory: Unix socket paths are limited to 108 bytes, which run directories can exceed.
 INSTALL_MONITOR_DIR=''
 INSTALL_DRIVER_MARGIN_SECONDS=300
-# Cases whose engine kinds exist in this slice. The others are wired and stay disabled until their slice.
-INSTALL_ENABLED_CASES=(ext4 btrfs-rescue failure cancel-password)
+# Cases whose engine kinds exist in this version. A case that is wired but missing here stays disabled.
+INSTALL_ENABLED_CASES=(default limine-nohib ext4 btrfs-rescue failure cancel-password)
 
 install_usage_error() {
   printf 'MirrorOS qualify-install: %s\n' "$1" >&2

@@ -31,11 +31,36 @@ engine_setup() {
   done
   ln -s "${ENGINE_DISCOVERY_SUPPORT}/doubles/lsblk" "${DOUBLE_BIN}/lsblk"
   : > "${DOUBLE_STATE}/calls.log"
+  engine_make_packages
   node "${ENGINE_DISCOVERY_SUPPORT}/build-root.mjs" "${ENGINE_SOURCE_ROOT}/tests/fixtures/discovery/raw/reference-vm-layout.json" \
     "$FIXTURE_ROOT" "$DOUBLE_STATE"
   mkdir -p "${FIXTURE_ROOT}/etc/pacman.d"
   printf 'Server = https://mirror.example.invalid/$repo/os/$arch\n' > "${FIXTURE_ROOT}/etc/pacman.d/mirrorlist"
   engine_use_plan ext4-systemd-boot--password
+}
+
+# The prebuilt Limine packages and their manifest, as the artifact embeds them next to the engine code.
+engine_make_packages() {
+  local directory="${CODE_ROOT}/packages"
+  mkdir -p "$directory"
+  printf 'package one\n' > "${directory}/limine-mkinitcpio-hook-1.0-1-any.pkg.tar.zst"
+  printf 'package two\n' > "${directory}/limine-snapper-sync-1.0-1-any.pkg.tar.zst"
+  node -e '
+    const { createHash } = require("crypto");
+    const { readFileSync, writeFileSync } = require("fs");
+    const directory = process.argv[1];
+    const entry = (name, file) => ({
+      name, file, version: "1.0-1",
+      sha256: createHash("sha256").update(readFileSync(`${directory}/${file}`)).digest("hex")
+    });
+    writeFileSync(`${directory}/packages.json`, JSON.stringify({
+      schema_version: 1,
+      packages: [
+        entry("limine-mkinitcpio-hook", "limine-mkinitcpio-hook-1.0-1-any.pkg.tar.zst"),
+        entry("limine-snapper-sync", "limine-snapper-sync-1.0-1-any.pkg.tar.zst")
+      ]
+    }));
+  ' "$directory"
 }
 
 engine_teardown() {

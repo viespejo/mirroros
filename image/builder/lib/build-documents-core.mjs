@@ -67,6 +67,92 @@ function validateHash(value, path, errors) {
   }
 }
 
+const PACKAGE_NAME_PATTERN = /^[a-z0-9@._+-]+$/;
+const COMMIT_PATTERN = /^[a-f0-9]{40}$/;
+
+function validatePrebuiltPackageEntries(entries, path, errors) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    errors.push(`${path} must be a non-empty array`);
+    return;
+  }
+  const names = new Set();
+  entries.forEach((entry, index) => {
+    const entryPath = `${path}[${index}]`;
+    if (!isRecord(entry)) {
+      errors.push(`${entryPath} must be an object`);
+      return;
+    }
+    if (typeof entry.name !== 'string' || !PACKAGE_NAME_PATTERN.test(entry.name)) errors.push(`${entryPath}.name must be a package name`);
+    else if (names.has(entry.name)) errors.push(`${entryPath}.name is duplicated`);
+    else names.add(entry.name);
+    stringField(entry, 'version', `${entryPath}.version`, errors);
+    if (!safeFilename(entry.file) || !entry.file.endsWith('.pkg.tar.zst')) errors.push(`${entryPath}.file must be a safe package filename`);
+    validateHash(entry.sha256, `${entryPath}.sha256`, errors);
+    if (typeof entry.aur_commit !== 'string' || !COMMIT_PATTERN.test(entry.aur_commit)) errors.push(`${entryPath}.aur_commit must be a 40-character commit`);
+    if (typeof entry.upstream_commit !== 'string' || !COMMIT_PATTERN.test(entry.upstream_commit)) errors.push(`${entryPath}.upstream_commit must be a 40-character commit`);
+  });
+}
+
+export function validateLimineRecipe(recipe) {
+  const errors = [];
+  if (!isRecord(recipe)) return ['recipe must be an object'];
+  if (recipe.schema_version !== 1) errors.push('schema_version must be 1');
+  if (!Array.isArray(recipe.makedepends) || recipe.makedepends.length === 0
+    || recipe.makedepends.some(name => typeof name !== 'string' || !PACKAGE_NAME_PATTERN.test(name))) {
+    errors.push('makedepends must be a non-empty array of package names');
+  }
+  if (!Array.isArray(recipe.packages) || recipe.packages.length === 0) {
+    errors.push('packages must be a non-empty array');
+  } else {
+    const names = new Set();
+    recipe.packages.forEach((entry, index) => {
+      const path = `packages[${index}]`;
+      if (!isRecord(entry)) {
+        errors.push(`${path} must be an object`);
+        return;
+      }
+      if (typeof entry.name !== 'string' || !PACKAGE_NAME_PATTERN.test(entry.name)) errors.push(`${path}.name must be a package name`);
+      else if (names.has(entry.name)) errors.push(`${path}.name is duplicated`);
+      else names.add(entry.name);
+      if (typeof entry.aur_commit !== 'string' || !COMMIT_PATTERN.test(entry.aur_commit)) errors.push(`${path}.aur_commit must be a 40-character commit`);
+      if (typeof entry.upstream_commit !== 'string' || !COMMIT_PATTERN.test(entry.upstream_commit)) errors.push(`${path}.upstream_commit must be a 40-character commit`);
+    });
+  }
+  return errors;
+}
+
+// Arguments for the in-container build script: makedepends CSV, then NAME:AUR:UPSTREAM per package.
+export function limineBuildArguments(recipe) {
+  const errors = validateLimineRecipe(recipe);
+  if (errors.length > 0) throw new ContractError(errors);
+  return [
+    recipe.makedepends.join(','),
+    ...recipe.packages.map(entry => `${entry.name}:${entry.aur_commit}:${entry.upstream_commit}`),
+  ];
+}
+
+// rows come from the build script's packages.tsv; hashes (file name -> SHA-256) are computed by the host.
+export function buildLiminePackageManifest(recipe, rows, hashes) {
+  const errors = validateLimineRecipe(recipe);
+  if (errors.length > 0) throw new ContractError(errors);
+  if (!Array.isArray(rows) || rows.length !== recipe.packages.length) {
+    throw new ContractError('built packages do not match the recipe package count');
+  }
+  const packages = recipe.packages.map((expected, index) => {
+    const row = rows[index];
+    if (!Array.isArray(row) || row.length !== 5) throw new ContractError(`malformed build record for ${expected.name}`);
+    const [name, version, file, aurCommit, upstreamCommit] = row;
+    if (name !== expected.name || aurCommit !== expected.aur_commit || upstreamCommit !== expected.upstream_commit) {
+      throw new ContractError(`built package does not match the pinned recipe entry for ${expected.name}`);
+    }
+    return { name, version, file, sha256: hashes[file], aur_commit: aurCommit, upstream_commit: upstreamCommit };
+  });
+  const manifestErrors = [];
+  validatePrebuiltPackageEntries(packages, 'packages', manifestErrors);
+  if (manifestErrors.length > 0) throw new ContractError(manifestErrors);
+  return { schema_version: 1, packages };
+}
+
 export function validateArtifactMetadata(metadata) {
   const errors = [];
   if (!isRecord(metadata)) return ['metadata must be an object'];
@@ -142,6 +228,11 @@ export function validateArtifactMetadata(metadata) {
   const manifest = objectAt(artifact, 'package_manifest', 'artifact.package_manifest', errors);
   if (!safeFilename(manifest.name)) errors.push('artifact.package_manifest.name must be a safe filename');
   validateHash(manifest.sha256, 'artifact.package_manifest.sha256', errors);
+
+  const prebuilt = objectAt(metadata, 'prebuilt_packages', 'prebuilt_packages', errors);
+  stringField(prebuilt, 'manifest_path', 'prebuilt_packages.manifest_path', errors);
+  validateHash(prebuilt.manifest_sha256, 'prebuilt_packages.manifest_sha256', errors);
+  validatePrebuiltPackageEntries(prebuilt.packages, 'prebuilt_packages.packages', errors);
 
   const controls = objectAt(metadata, 'controls', 'controls', errors);
   if (controls.secret_scan_scope !== SECRET_SCAN_SCOPE) errors.push(`controls.secret_scan_scope must be ${SECRET_SCAN_SCOPE}`);
