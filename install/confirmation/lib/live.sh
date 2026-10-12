@@ -10,10 +10,12 @@
 # and live-network.sh); see install/confirmation/UPSTREAM.md.
 
 readonly LIVE_CLOCK_WAIT_SECONDS=60
+readonly LIVE_KEYRING_WAIT_SECONDS=600
 # Prototype endpoint, matching the current discovery policy. Discovery remains authoritative.
 readonly LIVE_HTTPS_URL='https://archlinux.org/'
 readonly LIVE_NETWORK_NOT_READY=10
 readonly LIVE_CLOCK_NOT_READY=11
+readonly LIVE_KEYRING_NOT_READY=12
 
 live_network_status='Not checked'
 live_keyboard_label='English (US)'
@@ -80,6 +82,29 @@ live_clock_ready() {
     if ((attempt < LIVE_CLOCK_WAIT_SECONDS)); then sleep 1; fi
   done
   return "$LIVE_CLOCK_NOT_READY"
+}
+
+# Waits for pacman-init.service to report active, with the same one-second sleeps as the clock wait, at most
+# LIVE_KEYRING_WAIT_SECONDS seconds per attempt. It starts nothing and changes no signature policy. A screen is drawn
+# only when the keyring is not ready on the first look. Returns 0, LIVE_KEYRING_NOT_READY (the wait expired or the
+# service failed), or 6.
+live_keyring_ready() {
+  local attempt state drawn=false
+  command -v systemctl > /dev/null || return 6
+  for ((attempt = 0; attempt <= LIVE_KEYRING_WAIT_SECONDS; attempt++)); do
+    state=$(systemctl is-active pacman-init.service 2> /dev/null < /dev/null) || true
+    case $state in
+      active) return 0 ;;
+      failed) return "$LIVE_KEYRING_NOT_READY" ;;
+    esac
+    if [[ $drawn == false ]]; then
+      step 'Preparing the package keyring'
+      gum style --foreground 8 --padding "$PADDING" 'Waiting for the package keyring to be initialized...'
+      drawn=true
+    fi
+    if ((attempt < LIVE_KEYRING_WAIT_SECONDS)); then sleep 1; fi
+  done
+  return "$LIVE_KEYRING_NOT_READY"
 }
 
 # One coordinated attempt: route, name resolution, time readiness, then the validated HTTPS check, so a clock
@@ -195,8 +220,21 @@ live_clock_form() {
   esac
 }
 
-# Live preparation: it draws a screen that needs attention only when the coordinated check fails. Returns 0
-# when the live environment is ready, 1 for Back, or another status for the flow to normalize.
+# The keyring failure screen. Returns 0 to retry the keyring check, or 1 for Esc; Cancel ends the run.
+live_keyring_form() {
+  local action
+  step 'Package keyring not ready'
+  gum style --padding "$PADDING" 'Package signatures cannot be verified until the keyring is ready.' 'Wait a moment, then retry.'
+  action=$(gum choose --show-help --height 2 --selected 'Retry keyring check' 'Retry keyring check' 'Cancel') || return $?
+  case $action in
+    'Retry keyring check') return 0 ;;
+    Cancel) flow_cancel preparation ;;
+    *) return 6 ;;
+  esac
+}
+
+# Live preparation: it draws a screen that needs attention only when the coordinated check or the keyring wait
+# fails. Returns 0 when the live environment is ready, 1 for Back, or another status for the flow to normalize.
 live_preparation_form() {
   local status mode=check
   while true; do
@@ -207,7 +245,7 @@ live_preparation_form() {
         status=0
         live_prepare_check || status=$?
         case $status in
-          0) live_network_status='Connected'; return 0 ;;
+          0) live_network_status='Connected'; mode=keyring ;;
           "$LIVE_NETWORK_NOT_READY")
             live_network_status='Not connected'
             flow_log 'live preparation: live_network_not_ready'
@@ -224,7 +262,7 @@ live_preparation_form() {
         status=0
         live_connect_form || status=$?
         case $status in
-          0) live_network_status='Connected'; return 0 ;;
+          0) live_network_status='Connected'; mode=keyring ;;
           "$LIVE_CLOCK_NOT_READY") flow_log 'live preparation: live_clock_not_ready'; mode=clock ;;
           *) return "$status" ;;
         esac
@@ -234,6 +272,23 @@ live_preparation_form() {
         live_clock_form || status=$?
         case $status in
           0) mode=check ;;
+          *) return "$status" ;;
+        esac
+        ;;
+      keyring)
+        status=0
+        live_keyring_ready || status=$?
+        case $status in
+          0) return 0 ;;
+          "$LIVE_KEYRING_NOT_READY") flow_log 'live preparation: live_keyring_not_ready'; mode=keyring_failed ;;
+          *) return "$status" ;;
+        esac
+        ;;
+      keyring_failed)
+        status=0
+        live_keyring_form || status=$?
+        case $status in
+          0) mode=keyring ;;
           *) return "$status" ;;
         esac
         ;;

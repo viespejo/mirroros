@@ -30,8 +30,8 @@ test('the valid fixtures pass', () => {
   assert.deepEqual(validateApprovalRecord(fixture('valid-approval.json')), []);
 });
 
-test('the records are version 3 and the run record is install-run.json', () => {
-  assert.equal(RECORD_FORMAT_VERSION, 3);
+test('the records are version 4 and the run record is install-run.json', () => {
+  assert.equal(RECORD_FORMAT_VERSION, 4);
   assert.equal(RUN_RECORD_FILE, 'install-run.json');
   assert.equal(APPROVAL_RECORD_FILE, 'approval-record.json');
 });
@@ -43,9 +43,11 @@ test('records of the earlier format and the fabricated target id are rejected', 
   assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), target_id: 'reference-vm' }).some(item => item.includes('target_id')));
 });
 
-test('records of version 2 are rejected, and memory is a positive integer in the machine projection', () => {
-  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), format_version: 2 }).some(item => item.includes('format_version')));
-  assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), format_version: 2 }).some(item => item.includes('format_version')));
+test('records of versions 2 and 3 are rejected, and memory is a positive integer in the machine projection', () => {
+  for (const version of [2, 3]) {
+    assert.ok(validateRunRecord({ ...fixture('valid-run.json'), format_version: version }).some(item => item.includes('format_version')));
+    assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), format_version: version }).some(item => item.includes('format_version')));
+  }
   for (const document of [fixture('valid-run.json'), fixture('valid-approval.json')]) {
     assert.equal(document.machine.memory_total_bytes, 4294967296);
   }
@@ -77,6 +79,9 @@ test('the stages are known, unique, and in flow order', () => {
   assert.ok(validateRunRecord({ ...run, stages: ['plan', 'preparation'] }).length > 0);
   assert.ok(validateRunRecord({ ...run, stages: ['plan', 'plan'] }).length > 0);
   assert.ok(validateRunRecord({ ...run, stages: ['apply'] }).length > 0);
+  assert.deepEqual(validateRunRecord({ ...run, stages: ['confirmation', 'password', 'discovery_final', 'engine'] }), []);
+  assert.ok(validateRunRecord({ ...run, stages: ['password_explanation'] }).length > 0);
+  assert.ok(validateRunRecord({ ...run, stages: ['engine', 'password'] }).length > 0);
   assert.ok(validateRunRecord({ ...run, stages: 'plan' }).length > 0);
 });
 
@@ -124,17 +129,19 @@ test('secret-like keys are rejected at any depth', () => {
   assert.ok(validateRunRecord(run).some(item => item.includes('secret-like')));
 });
 
-test('exit status must agree with the outcome and 0 is never valid', () => {
+test('exit status must agree with the outcome and 0 is valid only for installed', () => {
   assert.ok(validateRunRecord(fixture('invalid-run-exit-status.json')).length > 0);
-  const table = { approved: 2, cancelled: 3, invalidated: 2, blocked: 2 };
+  const table = { installed: 0, cancelled: 3, invalidated: 2, blocked: 2 };
   for (const [outcome, status] of Object.entries(table)) {
     const run = { ...fixture('valid-run.json'), outcome, exit_status: status };
     assert.deepEqual(validateRunRecord(run), [], outcome);
     assert.ok(validateRunRecord({ ...run, exit_status: status === 2 ? 3 : 2 }).length > 0, outcome);
   }
-  for (const status of [5, 6]) {
+  for (const status of [5, 6, 130, 143]) {
     assert.deepEqual(validateRunRecord({ ...fixture('valid-run.json'), outcome: 'failed', exit_status: status }), []);
   }
+  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), outcome: 'failed', exit_status: 0 }).length > 0);
+  assert.ok(validateRunRecord({ ...fixture('valid-run.json'), outcome: 'approved', exit_status: 2 }).length > 0);
 });
 
 test('required fields, formats, and the final digest are checked', () => {

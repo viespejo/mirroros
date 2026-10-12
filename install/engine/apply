@@ -1,0 +1,104 @@
+#!/usr/bin/bash
+# shellcheck disable=SC2034 # CODE_ROOT and CURRENT_OP are read by the libraries that apply sources.
+set -Eeuo pipefail
+umask 077
+
+# Internal installation engine (contracts/installation-engine.md, ADR 0008). It is invoked only by the guided
+# assistant after the bound confirmation, the password entry, and the final revalidation. It has no public
+# command, no non-interactive mode, and no option that bypasses any of those steps.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+
+usage_error() {
+  printf 'MirrorOS engine: %s\n' "$1" >&2
+  printf '%s\n' 'Usage: install/engine/apply --plan <file> --digest <hex> --output <dir> (internal; the password is read from fd 3).' >&2
+  exit 2
+}
+
+for library in common precheck storage system accounts boot; do
+  # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
+  source "${SCRIPT_DIR}/lib/${library}.sh" 2> /dev/null || {
+    printf 'MirrorOS engine: the embedded engine code is damaged: lib/%s.sh could not be loaded.\n' "$library" >&2
+    exit 6
+  }
+done
+
+# The kind -> function dispatch table. A kind absent here is rejected in the pre-check, never skipped.
+declare -A DISPATCH=(
+  [wipe_disk_signatures]=op_wipe_disk_signatures
+  [create_partition_table]=op_create_partition_table
+  [create_partitions]=op_create_partitions
+  [format_filesystems]=op_format_filesystems
+  [mount_target]=op_mount_target
+  [install_packages]=op_install_packages
+  [configure_zram]=op_configure_zram
+  [configure_memory_reclaim]=op_configure_memory_reclaim
+  [generate_fstab]=op_generate_fstab
+  [create_swapfile]=op_create_swapfile
+  [configure_locale_time_console]=op_configure_locale_time_console
+  [configure_hostname_network]=op_configure_hostname_network
+  [create_user]=op_create_user
+  [configure_root_account]=op_configure_root_account
+  [configure_sudo_sysrq_pacman]=op_configure_sudo_sysrq_pacman
+  [install_bootloader]=op_install_bootloader
+  [enable_services]=op_enable_services
+)
+
+parse_arguments() {
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --plan)
+        [[ "$#" -ge 2 && -z "$PLAN_FILE" ]] || usage_error '--plan requires one file.'
+        PLAN_FILE="$2"
+        shift 2
+        ;;
+      --digest)
+        [[ "$#" -ge 2 && -z "$CONFIRMED_DIGEST" ]] || usage_error '--digest requires one value.'
+        CONFIRMED_DIGEST="$2"
+        shift 2
+        ;;
+      --output)
+        [[ "$#" -ge 2 && -z "$OUTPUT" ]] || usage_error '--output requires one directory.'
+        OUTPUT="$2"
+        shift 2
+        ;;
+      *)
+        usage_error "unsupported argument: $1"
+        ;;
+    esac
+  done
+  [[ -n "$PLAN_FILE" && -n "$CONFIRMED_DIGEST" && -n "$OUTPUT" ]] || usage_error '--plan, --digest, and --output are required.'
+  [[ -f "$PLAN_FILE" && -r "$PLAN_FILE" ]] || usage_error "--plan is not a readable file: ${PLAN_FILE}"
+  [[ "$CONFIRMED_DIGEST" =~ ^[0-9a-f]{64}$ ]] || usage_error '--digest must be a 64-digit lowercase hexadecimal value.'
+}
+
+execute_plan() {
+  local id
+  for id in "${OP_IDS[@]}"; do
+    CURRENT_OP="$id"
+    engine_log "== ${id} =="
+    write_state running "$id"
+    "${DISPATCH[$id]}"
+    COMPLETED+=("$id")
+  done
+  CURRENT_OP=''
+}
+
+main() {
+  parse_arguments "$@"
+  acquire_lock
+  prepare_output
+  trap 'on_unexpected_error $?' ERR
+  trap 'on_signal 2' INT
+  trap 'on_signal 15' TERM
+  trap 'on_signal 1' HUP
+  read_identity
+  load_plan
+  check_keyring
+  read_password
+  final_block
+  execute_plan
+  finish installed 0
+}
+
+main "$@"

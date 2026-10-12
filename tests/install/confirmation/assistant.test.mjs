@@ -110,14 +110,15 @@ test('reason builds the flow-owned reasons with the original child status and th
   assert.equal(failed.length, 1);
   assert.equal(failed[0].code, 'stage_failed');
   assert.equal(failed[0].child_exit_status, 77);
-  for (const code of ['live_network_not_ready', 'live_clock_not_ready']) {
+  for (const code of ['live_network_not_ready', 'live_clock_not_ready', 'live_keyring_not_ready']) {
     const [item] = JSON.parse(run('reason', code).stdout);
     assert.equal(item.code, code);
     assert.ok(item.message && item.next_step);
     assert.ok(!('child_exit_status' in item));
   }
   assert.notEqual(JSON.parse(run('reason', 'live_network_not_ready').stdout)[0].message, JSON.parse(run('reason', 'live_clock_not_ready').stdout)[0].message);
-  assert.equal(JSON.parse(run('reason', 'engine_not_available').stdout)[0].code, 'engine_not_available');
+  assert.equal(JSON.parse(run('reason', 'engine_version_mismatch').stdout)[0].code, 'engine_version_mismatch');
+  assert.equal(run('reason', 'engine_not_available').status, 6);
 });
 
 test('an unknown reason code or command fails with exit 6 and prints no secret', () => {
@@ -155,4 +156,40 @@ test('has-warning exits 0 only when the preview or plan carries the warning code
   assert.equal(run('has-warning', write('warn-plan.json', generate({ choices: { swapfile_size: 2048 } }).plan), 'swapfile_below_ram').status, 0);
   assert.equal(run('has-warning', write('warn-plan-off.json', generate({ choices: { hibernation: false } }).plan), 'swapfile_below_ram').status, 2);
   assert.equal(run('has-warning', write('warn-none.json', { format_version: 3 }), 'swapfile_below_ram').status, 2);
+});
+
+const operations = ['wipe_disk_signatures', 'create_partition_table', 'install_packages'].map((id, index) => ({
+  id, description: `Description of ${id}`, status: ['completed', 'running', 'pending'][index],
+}));
+const state = extra => ({ format_version: 1, status: 'running', current: 'create_partition_table', index: 2, total: 3, operations, updated_at: '2026-10-12T12:00:00Z', ...extra });
+
+test('engine-progress prints completed, total, position, description, and the package count', () => {
+  const result = run('engine-progress', write('state.json', state()));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '1\t3\t2\tDescription of create_partition_table\t\n');
+  const packages = run('engine-progress', write('state-packages.json', state({
+    current: 'install_packages',
+    operations: operations.map((item, index) => ({ ...item, status: index < 2 ? 'completed' : 'running' })),
+    packages_installed: 41,
+  })));
+  assert.equal(packages.stdout, '2\t3\t3\tDescription of install_packages\t41\n');
+  assert.equal(run('engine-progress', join(scratch, 'missing-state.json')).status, 2);
+});
+
+const engineRun = extra => ({
+  format_version: 1, started_at: '2026-10-12T12:00:00Z', finished_at: '2026-10-12T12:05:00Z', outcome: 'failed', exit_status: 5,
+  reasons: [{ code: 'stage_failed', stage: 'engine', operation: 'install_packages', message: 'm', next_step: 'n', child_exit_status: 1 }],
+  completed: ['wipe_disk_signatures'], not_started: [], failed_operation: { id: 'install_packages', command: ['pacstrap'], child_exit_status: 1 },
+  ...extra,
+});
+
+test('engine-summary prints the failed operation, whether the disk was touched, and the child status', () => {
+  assert.equal(run('engine-summary', write('run-failed.json', engineRun())).stdout, 'install_packages\ttrue\t1\n');
+  const before = engineRun({
+    outcome: 'blocked', exit_status: 2, completed: [], failed_operation: undefined,
+    reasons: [{ code: 'live_keyring_not_ready', stage: 'engine', operation: 'precheck', message: 'm', next_step: 'n' }],
+  });
+  assert.equal(run('engine-summary', write('run-blocked.json', before)).stdout, 'precheck\tfalse\t\n');
+  const wiping = engineRun({ completed: [], failed_operation: { id: 'wipe_disk_signatures', command: ['wipefs'], child_exit_status: 1 } });
+  assert.equal(run('engine-summary', write('run-wipe.json', wiping)).stdout.split('\t')[1], 'true');
 });

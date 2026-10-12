@@ -105,7 +105,7 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 | Key | Editable | Value |
 | --- | --- | --- |
 | `target_disk` | yes | The `by_id` of the selected disk, or its `path` when it has no `by_id`. |
-| `storage_option` | yes | `ext4-systemd-boot`, `btrfs-rescue`, or `btrfs-limine`. The entry also carries `tier`, `filesystem`, `bootloader`, and `resume_offset_method` from the tier table. |
+| `storage_option` | yes | `ext4-systemd-boot`, `btrfs-rescue`, or `btrfs-limine` (the default). The entry also carries `tier`, `filesystem`, `bootloader`, and `resume_offset_method` from the tier table. |
 | `hibernation` | yes | Boolean, initially `true`. Enables the hibernation swapfile and resume configuration; see [Hibernation and swapfile](#hibernation-and-swapfile). |
 | `swapfile_size` | yes | Present only when `hibernation` is `true`. Integer MiB from 512 to the RAM-derived maximum; the maximum is also the default. |
 | `lang` | yes | The system language: `en_US.UTF-8` (English, US) or `es_ES.UTF-8` (Spanish, Spain). |
@@ -119,9 +119,12 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 | `root_account` | yes | `locked` or `password`. |
 | `firmware_mode`, `partition_table`, `esp`, `root_minimum_bytes`, `kernel`, `initramfs`, `kernel_cmdline`, `bootloader_options`, `zram`, `memory_reclaim`, `packages`, `mirrorlist`, `hardware_clock`, `time_sync`, `network`, `user_groups`, `user_shell`, `sudoers`, `sysrq`, `pacman_options`, `fstrim` | no | Fixed by policy. |
 
-The tier table of the policy reflects [ADR 0003](../docs/adr/0003-storage-and-recovery-baseline.md):
-`ext4-systemd-boot` is `default`, `btrfs-rescue` is `supported`, and `btrfs-limine` is `experimental`.
-Selecting an experimental option adds the warning `storage_option_experimental`.
+The tier table of the policy reflects [ADR 0009](../docs/adr/0009-storage-option-promotion-and-esp-size.md):
+`btrfs-limine` is `default` and is the default `storage_option`, while `ext4-systemd-boot` and `btrfs-rescue`
+are `supported`. The ESP is 2 GiB for every option. The additional packages of `btrfs-limine` do not include
+`base-devel` or `git`: its Limine snapshot tools are prebuilt in the artifact
+([ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md)). Selecting an option whose tier is
+`experimental` adds the warning `storage_option_experimental`; no option has that tier under the current policy.
 
 ### Hibernation and swapfile
 
@@ -214,7 +217,8 @@ Each operation is an object with:
 | `resolved_at_apply` | Optional list of `{ "name", "method" }` for values that only exist during apply. They carry no value in the plan. |
 
 The plan holds no command lines, so the digest does not depend on how the engine implements a step. An
-engine must reject any `kind` it does not know.
+engine must reject any `kind` it does not know. The engine's behavior per kind, including the constants it owns,
+is defined in [`installation-engine.md`](installation-engine.md).
 
 #### Kind vocabulary
 
@@ -237,7 +241,7 @@ engine must reject any `kind` it does not know.
 | `configure_root_account` | no | Lock the root account, or give it the same password as the user. Consumes `account_password` only for `password`. |
 | `configure_sudo_sysrq_pacman` | no | Sudoers drop-in, sysrq, and pacman options. |
 | `install_bootloader` | no | Install and configure the option's bootloader and kernel command line, including `zswap.enabled=0`. Resolves `root_uuid`, and `resume_offset` only when `hibernation` is `true`. |
-| `install_limine_snapshot_tools` | no | Build and install the pinned Limine snapshot tools. `btrfs-limine` only. |
+| `install_limine_snapshot_tools` | no | Install the pinned Limine snapshot tools prebuilt in the artifact, after verifying them against the embedded manifest. `btrfs-limine` only. |
 | `configure_snapper` | no | Snapper root configuration for `@` only, with `snap-pac`. Btrfs only. |
 | `enable_services` | no | Enable NetworkManager, the time sync service, `fstrim.timer`, and the option's services. |
 | `create_baseline_snapshot` | no | Take the post-install baseline snapshot. Btrfs only. |
@@ -295,7 +299,7 @@ requested. The shared password is not an independent recovery credential, and th
 
 `channel` is always `protected_prompt`. Values, hashes, and length hints never appear, and secret-named
 keys are rejected everywhere else in the document. The plan names the requirement only; no value is
-collected in this version (see [`installation-confirmation.md`](installation-confirmation.md#password-hand-over)).
+stored: the assistant collects it and hands it to the engine over a protected channel (see [`installation-confirmation.md`](installation-confirmation.md#password-hand-over)).
 
 ### `hardware_selections`
 
@@ -313,7 +317,7 @@ and `next_story` (`"2.6"`) for `graphics_vendor`, `battery_present`, `virtualiza
 | Field | Description |
 | --- | --- |
 | `facts_binding.facts_sha256` | SHA-256 of the canonical `target-facts.json`. |
-| `facts_binding.run_id`, `commit`, `dirty` | Copied from the facts `source`. |
+| `facts_binding.run_id`, `commit`, `dirty` | Copied from the facts `source`. The engine requires `commit` and `dirty` to equal its own embedded code identity ([`installation-engine.md`](installation-engine.md#pre-check-order)). |
 | `policy_binding.policy_sha256` | SHA-256 of the canonical `install/plan/policy.json`. |
 | `policy_binding.profile_definition_sha256` | SHA-256 of the canonical `targets/<id>/target.json` of the matched profile. Present exactly when `target.profile.status` is `matched`. |
 | `policy_binding.override_sha256` | SHA-256 of the canonical applied `plan.json` override. Omitted when none applied; it can be present only for a matched profile. |

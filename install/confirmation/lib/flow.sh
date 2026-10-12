@@ -5,8 +5,8 @@
 # The flow invokes install/discovery/discover and install/plan/plan as processes and uses the Node helpers
 # of install/confirmation/cli.mjs and assistant.mjs for every decision about plans, records, and safety.
 # Gum only presents and collects input. Confirmation is ephemeral: nothing persisted authorizes anything,
-# and every path ends in a record and an exit status other than 0. The installation engine does not exist in
-# this version: the flow never creates, looks for, or invokes install/engine/apply.
+# and every path ends in a record. The flow invokes install/engine/apply (contracts/installation-engine.md) only
+# after the bound confirmation, the protected password entry, and the final revalidation; it is the only caller.
 #
 # The orchestrator sets FLOW_CODE_ROOT, FLOW_PLAN_ARG, and FLOW_OUTPUT_ARG before calling flow_main.
 
@@ -32,6 +32,16 @@ FLOW_PROFILE_STATUS=''
 FLOW_DISCOVERED=false
 FLOW_CONFIRMED=false
 FLOW_PLAN_JUMPED=false
+# The single account password. A global that is never exported, logged, or recorded; it lives from the password
+# screen until the engine invocation consumes it (or the run ends).
+FLOW_PASSWORD=''
+FLOW_EXIT_MENU=''
+FLOW_ENGINE_PID=''
+FLOW_ENGINE_SHOWN=''
+FLOW_ENGINE_FAILED_OPERATION=''
+FLOW_ENGINE_FAILED_STATUS=''
+FLOW_ENGINE_DESTRUCTIVE=true
+FLOW_ENGINE_ROOT="${FLOW_ENGINE_ROOT:-${MIRROROS_ENGINE_RUN_ROOT:-/run/mirroros}}"
 NEXT_SCREEN=''
 FLOW_STAGES=()
 declare -gA FLOW_REVIEW=()
@@ -91,7 +101,8 @@ flow_finish() {
   local reasons="${4:-}"
   local stages=''
 
-  trap - INT
+  trap - INT TERM HUP
+  FLOW_PASSWORD=''
   if ((${#FLOW_STAGES[@]} > 0)); then stages="$(IFS=,; printf '%s' "${FLOW_STAGES[*]}")"; fi
   if ! flow_cli record "$FLOW_RUN_DIR" "$FLOW_RUN_ID" "$(flow_timestamp)" "$FLOW_ENTRY" \
     "$FLOW_GUM_VERSION" "$status" "$outcome" "$operation" "$reasons" "$stages"; then
@@ -101,6 +112,8 @@ flow_finish() {
     exit 6
   fi
   flow_log "outcome=${outcome} exit_status=${status} step=${operation}"
+  # An ending menu (success or failure screen) runs after the records are written, so a killed menu loses nothing.
+  if [[ -n "$FLOW_EXIT_MENU" ]]; then "$FLOW_EXIT_MENU" || true; fi
   printf 'Evidence: %s\n' "$FLOW_RUN_DIR"
   exit "$status"
 }
@@ -251,6 +264,40 @@ flow_init() {
   : > "$FLOW_INVALID_TEXT"
   : > "$FLOW_STDERR"
   flow_log "run ${FLOW_RUN_ID} started"
+  flow_release_target
+}
+
+# The start-of-run cleanup: only the engine's own mount point and a swapfile beneath it are released. Nothing else
+# is touched, and a failure is logged without stopping the run (discovery then reports the disk as ineligible).
+flow_release_target() {
+  local root target="${FLOW_ENGINE_ROOT}/target" swaps swapfile released=false
+
+  root="${MIRROROS_DISCOVERY_ROOT:-}"
+  swaps="${root%/}/proc/swaps"
+
+  if [[ ! -d "$target" ]]; then
+    flow_log 'start-of-run cleanup: the engine mount point does not exist'
+    return 0
+  fi
+  for swapfile in "${target}/swapfile" "${target}/swap/swapfile"; do
+    if [[ -e "$swapfile" ]] && grep -qF -- "$swapfile" "$swaps" 2> /dev/null; then
+      released=true
+      if swapoff -- "$swapfile" > /dev/null 2>&1 < /dev/null; then
+        flow_log "start-of-run cleanup: swapfile turned off: ${swapfile}"
+      else
+        flow_log "start-of-run cleanup: the swapfile could not be turned off: ${swapfile}"
+      fi
+    fi
+  done
+  if mountpoint -q "$target" 2> /dev/null; then
+    released=true
+    if umount -R -- "$target" > /dev/null 2>&1 < /dev/null; then
+      flow_log 'start-of-run cleanup: the engine mount point was unmounted'
+    else
+      flow_log 'start-of-run cleanup: the engine mount point could not be unmounted'
+    fi
+  fi
+  if [[ "$released" == false ]]; then flow_log 'start-of-run cleanup: nothing to release'; fi
 }
 
 # Gum must be present and of the qualified major version (ADR 0004); its version is recorded.
@@ -373,6 +420,14 @@ flow_load_given_plan() {
     0) ;;
     2) flow_finish_reasons 2 invalidated plan_validation "$output" ;;
     *) flow_finish_failed "$status" plan_validation ;;
+  esac
+  # A plan of another code identity never reaches review: no confirmation or password is requested for it.
+  status=0
+  flow_cli identity "$FLOW_CODE_ROOT" "$FLOW_PLAN_ARG" > "$output" || status=$?
+  case "$status" in
+    0) ;;
+    2) flow_report_reasons 'Plan validation' "$output"; flow_finish_reasons 2 blocked plan_identity "$output" ;;
+    *) flow_finish_failed "$status" plan_identity ;;
   esac
   mkdir -m 700 -- "$directory"
   cp -- "$FLOW_PLAN_ARG" "${directory}/installation-plan.json"
@@ -603,13 +658,121 @@ flow_revalidate() {
   flow_plan_field digest-prefix digest_recheck
 }
 
-# The installation engine is Story 2.5: a valid approval ends here and nothing is executed.
-flow_ending() {
-  clear_logo
-  echo
-  gum style 'Installation was not started: the installation engine is not part of this version.'
-  gum style --foreground 8 'No installation-disk operation was executed. Your approval was not saved and cannot authorize a later run.'
-  flow_finish_standard 2 approved engine_boundary engine_not_available quiet
+# The progress screen is redrawn only when the engine's state changed since the last drawing.
+flow_engine_progress() {
+  local line completed total position description packages
+  local state="${FLOW_RUN_DIR}/engine/state.json"
+
+  [[ -f "$state" ]] || return 0
+  line="$(flow_assistant engine-progress "$state" 2> /dev/null)" || return 0
+  [[ -n "$line" && "$line" != "$FLOW_ENGINE_SHOWN" ]] || return 0
+  FLOW_ENGINE_SHOWN="$line"
+  IFS=$'\t' read -r completed total position description packages <<< "$line"
+  ui_progress "$completed" "$total" "$position" "$description" "${packages:-}"
+}
+
+# During the engine phase the signals are forwarded to the engine's process group; the engine cleans up and ends
+# itself, and this process waits for it.
+flow_engine_signal() {
+  flow_log "signal ${1} forwarded to the engine"
+  kill -s "$1" -- "-${FLOW_ENGINE_PID}" 2> /dev/null || true
+}
+
+# Restarting or powering off happens only when the user chooses it from a menu that ran after the records.
+flow_power_action() {
+  flow_log "the user chose: systemctl ${1}"
+  systemctl "$1" > /dev/null 2>&1 < /dev/null || true
+}
+
+flow_success_menu() {
+  local choice status=0
+
+  flow_leave_interactive
+  choice=$(gum choose --show-help --height 2 --selected 'Restart now' 'Restart now' 'Return to shell') || status=$?
+  if ((status == 0)) && [[ "$choice" == 'Restart now' ]]; then flow_power_action reboot; fi
+}
+
+flow_failure_menu() {
+  local choice status
+
+  flow_leave_interactive
+  while true; do
+    ui_engine_failure "$FLOW_ENGINE_FAILED_OPERATION" "$FLOW_ENGINE_FAILED_STATUS" "$FLOW_ENGINE_DESTRUCTIVE" \
+      "${FLOW_RUN_DIR}/engine/engine.log" "$FLOW_RUN_DIR"
+    status=0
+    choice=$(gum choose --show-help --height 4 --selected 'Return to shell' 'View full log' 'Return to shell' 'Restart' 'Power off') || status=$?
+    ((status == 0)) || return 0
+    case "$choice" in
+      'View full log')
+        gum pager < "${FLOW_RUN_DIR}/engine/engine.log" || true
+        ;;
+      Restart) flow_power_action reboot; return 0 ;;
+      'Power off') flow_power_action poweroff; return 0 ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
+# One invocation of the engine (install/engine/apply). The password reaches it only on fd 3, through process
+# substitution with the printf builtin, and this process drops its own copy once the engine has started. The
+# installer lock is inherited as fd 4. The engine runs with stdin /dev/null, in its own process group, and the
+# console belongs to this process alone: it only reads the engine's state.json.
+flow_engine() {
+  local digest engine_dir="${FLOW_RUN_DIR}/engine" status=0 started outcome summary
+  local reasons="${FLOW_TMP}/engine-reasons.json" operation child destructive
+
+  flow_reached engine
+  digest="$(flow_assistant get "$FLOW_PLAN_FILE" digest.value)" || flow_unexpected engine_start 6 'Installation engine'
+  flow_log 'engine started'
+  started=$SECONDS
+  FLOW_ENGINE_SHOWN=''
+  trap 'flow_engine_signal INT' INT
+  trap 'flow_engine_signal TERM' TERM
+  trap 'flow_engine_signal HUP' HUP
+  # A background job of a non-interactive shell starts with SIGINT ignored, which the engine could not trap; env
+  # restores the default so the forwarded SIGINT reaches the engine's own handler.
+  setsid env --default-signal=INT "${FLOW_CODE_ROOT}/install/engine/apply" --plan "$FLOW_PLAN_FILE" --digest "$digest" --output "$engine_dir" \
+    3< <(printf '%s\n' "$FLOW_PASSWORD") < /dev/null > /dev/null 2> "$FLOW_STDERR" &
+  FLOW_ENGINE_PID=$!
+  FLOW_PASSWORD=''
+  while kill -0 "$FLOW_ENGINE_PID" 2> /dev/null; do
+    flow_engine_progress
+    # A terminal SIGINT also ends this sleep; the trap already forwarded it, and the loop waits for the engine.
+    sleep 0.5 || true
+  done
+  wait "$FLOW_ENGINE_PID" || status=$?
+  trap - INT TERM HUP
+  flow_log "engine ended with exit status ${status}"
+  flow_log_diagnostics
+
+  if ! flow_cli engine-result "${engine_dir}/engine-run.json" "$status" > "$reasons" 2> /dev/null; then
+    flow_log 'the engine record is missing or invalid'
+    flow_assistant reason stage_failed "$status" > "$reasons"
+    ui_failure 'Installation engine' "The engine ended with status ${status} and left no valid record." "Check install.log and engine/ in ${FLOW_RUN_DIR}."
+    flow_finish 5 failed engine "$reasons"
+  fi
+  outcome="$(flow_assistant get "${engine_dir}/engine-run.json" outcome)" || flow_unexpected engine 6 'Installation engine'
+  case "$outcome" in
+    installed)
+      FLOW_EXIT_MENU=flow_success_menu
+      ui_success "$((SECONDS - started))"
+      flow_finish 0 installed engine "$reasons"
+      ;;
+    blocked | invalidated)
+      flow_report_reasons 'Installation engine' "$reasons"
+      flow_finish "$status" "$outcome" engine "$reasons"
+      ;;
+    failed)
+      summary="$(flow_assistant engine-summary "${engine_dir}/engine-run.json")" || flow_unexpected engine 6 'Installation engine'
+      IFS=$'\t' read -r operation destructive child <<< "$summary"
+      FLOW_ENGINE_FAILED_OPERATION="$operation"
+      FLOW_ENGINE_FAILED_STATUS="${child:-$status}"
+      FLOW_ENGINE_DESTRUCTIVE="${destructive:-true}"
+      FLOW_EXIT_MENU=flow_failure_menu
+      flow_finish "$status" failed engine "$reasons"
+      ;;
+    *) flow_unexpected engine 6 'Installation engine' ;;
+  esac
 }
 
 flow_main() {
@@ -620,5 +783,5 @@ flow_main() {
   flow_enter_interactive
   flow_screens
   flow_revalidate
-  flow_ending
+  flow_engine
 }

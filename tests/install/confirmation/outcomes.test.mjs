@@ -72,26 +72,39 @@ test('stage statuses map to blocked, invalidated, or failed', () => {
   assert.deepEqual(mapStageStatus(77, { invalidating: false }), { action: 'stop', exit_status: 5, outcome: 'failed' });
 });
 
-test('the outcome table matches the contract and never allows 0', () => {
-  assert.deepEqual(OUTCOMES, { approved: [2], cancelled: [3], invalidated: [2], blocked: [2], failed: [5, 6] });
-  assert.ok(Object.values(OUTCOMES).every(statuses => !statuses.includes(0)));
+test('the outcome table matches the contract and allows 0 only for installed', () => {
+  assert.deepEqual(Object.keys(OUTCOMES), ['installed', 'cancelled', 'invalidated', 'blocked', 'failed']);
+  assert.deepEqual(OUTCOMES.installed, [0]);
+  assert.deepEqual([OUTCOMES.cancelled, OUTCOMES.invalidated, OUTCOMES.blocked], [[3], [2], [2]]);
+  assert.ok(!('approved' in OUTCOMES));
+  // failed: 5, 6, and 128+n for a signal during the engine (129 to 255).
+  assert.deepEqual(OUTCOMES.failed.slice(0, 3), [5, 6, 129]);
+  assert.equal(OUTCOMES.failed.at(-1), 255);
+  assert.ok(OUTCOMES.failed.includes(143) && !OUTCOMES.failed.includes(128));
+  for (const [outcome, statuses] of Object.entries(OUTCOMES)) {
+    if (outcome !== 'installed') assert.ok(!statuses.includes(0), outcome);
+  }
 });
 
 test('resultFor defaults to the first exit and rejects a mismatch', () => {
-  assert.deepEqual(resultFor('approved'), { exit_status: 2, outcome: 'approved', reasons: [] });
+  assert.deepEqual(resultFor('installed'), { exit_status: 0, outcome: 'installed', reasons: [] });
   assert.deepEqual(resultFor('failed', { exitStatus: 6 }).exit_status, 6);
-  assert.throws(() => resultFor('approved', { exitStatus: 0 }));
+  assert.deepEqual(resultFor('failed', { exitStatus: 143 }).exit_status, 143);
+  assert.throws(() => resultFor('installed', { exitStatus: 2 }));
+  assert.throws(() => resultFor('blocked', { exitStatus: 0 }));
   assert.throws(() => resultFor('cancelled', { exitStatus: 2 }));
+  assert.throws(() => resultFor('approved'));
   assert.throws(() => resultFor('unknown'));
 });
 
 test('standard reasons exist for every codified case', () => {
-  for (const code of ['confirmation_mismatch', 'engine_not_available', 'gum_not_qualified', 'device_name_unavailable']) {
+  for (const code of ['confirmation_mismatch', 'engine_version_mismatch', 'gum_not_qualified', 'device_name_unavailable']) {
     const item = standardReason(code);
     assert.equal(item.code, code);
     assert.ok(item.message.length > 0 && item.next_step.length > 0);
   }
   assert.throws(() => standardReason('nope'));
+  assert.throws(() => standardReason('engine_not_available'));
 });
 
 test('structured reasons use the architecture shape', () => {

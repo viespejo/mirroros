@@ -34,7 +34,7 @@ done
 case_name="$(basename "$(dirname "$serial")")"
 run_id="$case_name"
 case "$case_name" in
-  approve | cancel | mismatch | layout-change) run_id="$(basename "$(dirname "$(dirname "$serial")")")" ;;
+  password-cancel | cancel | mismatch | layout-change) run_id="$(basename "$(dirname "$(dirname "$serial")")")" ;;
 esac
 printf 'SERIAL-NOISE-MARKER\r\n' >> "$serial"
 exit_status="${REFERENCE_DISCOVERY_EXIT:-0}"
@@ -72,7 +72,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
       # shellcheck disable=SC2016 # Literal Node program with explicit arguments.
       plan_section=",\"confirmation\":$(node -e '
         const [name, bad, missing, smbios, badProfile, missingEvidence] = process.argv.slice(1);
-        const expected = {approve: [2, "approved", "engine_not_available"], cancel: [3, "cancelled", undefined],
+        const expected = {"password-cancel": [3, "cancelled", undefined], cancel: [3, "cancelled", undefined],
           mismatch: [3, "cancelled", "confirmation_mismatch"], "layout-change": [2, "invalidated", "target_layout_changed"]}[name];
         const experimental = smbios !== "";
         const profile = experimental ? {status: "unqualified"}
@@ -84,7 +84,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
         const files = {"install-run.json": JSON.stringify({...common, exit_status: expected[0], final_digest: digest}),
           "approval-record.json": JSON.stringify({...common, digest, reason: expected[2]}), "install.log": "plain log\n",
           "discovery/initial/target-facts.json": "{}", "plans/01/installation-plan.json": "{}"};
-        if (name === "approve" || name === "layout-change") files["discovery/final/target-facts.json"] = "{}";
+        if (name === "layout-change") files["discovery/final/target-facts.json"] = "{}";
         if (missing === "1") delete files["approval-record.json"];
         if (missingEvidence === "1") delete files["plans/01/installation-plan.json"];
         process.stdout.write(JSON.stringify({name, exit_status: expected[0], files, private_permissions: true, layout_write_status: 0}));

@@ -377,7 +377,7 @@ if (errors.length === 0 && scenario.startsWith('confirmation')) {
   const confirmation = report.confirmation;
   const expectedProfile = JSON.parse(expectedProfileText);
   const expected = {
-    approve: [2, 'approved', 'engine_not_available'],
+    'password-cancel': [3, 'cancelled', undefined],
     cancel: [3, 'cancelled', undefined],
     mismatch: [3, 'cancelled', 'confirmation_mismatch'],
     'layout-change': [2, 'invalidated', 'target_layout_changed'],
@@ -398,7 +398,7 @@ if (errors.length === 0 && scenario.startsWith('confirmation')) {
     const sameProfile = profile => isRecord(profile) && profile.status === expectedProfile.status
       && profile.profile_id === expectedProfile.profile_id;
     const required = ['install.log', 'discovery/initial/target-facts.json', 'plans/01/installation-plan.json',
-      ...(confirmationCase === 'approve' || confirmationCase === 'layout-change' ? ['discovery/final/target-facts.json'] : [])];
+      ...(confirmationCase === 'layout-change' ? ['discovery/final/target-facts.json'] : [])];
     const checks = {
       exits_as_expected: confirmation.exit_status === expected[0] && run?.exit_status === expected[0],
       profile_as_expected: sameProfile(run?.profile) && sameProfile(approval?.profile) && sameProfile(report.facts?.profile),
@@ -515,7 +515,7 @@ discovery_run_confirmation_cases() {
   local verdict
   local -a verdicts=()
 
-  for name in approve cancel mismatch layout-change; do
+  for name in password-cancel cancel mismatch layout-change; do
     DISCOVERY_CONFIRMATION_CASE="$name"
     EVIDENCE_RUN_DIR="${evidence_base}/${name}"
     mkdir -m 700 -- "$EVIDENCE_RUN_DIR" || { outcome_mark_failure 5 case-directory; break; }

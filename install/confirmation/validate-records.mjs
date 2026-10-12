@@ -1,9 +1,9 @@
 import { CHOICES_FORMAT_VERSION, PROFILE_STATUSES } from '../plan/validate-plan.mjs';
 import { OUTCOMES } from './outcomes.mjs';
 
-export const RECORD_FORMAT_VERSION = 3;
+export const RECORD_FORMAT_VERSION = 4;
 export const ENTRIES = ['guided', 'plan_file'];
-export const STAGES = ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation', 'password_explanation', 'discovery_final'];
+export const STAGES = ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation', 'password', 'discovery_final', 'engine'];
 
 export class RecordContractError extends Error {
   constructor(errors) {

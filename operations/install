@@ -52,9 +52,9 @@ if lifecycle_discovery_main \
   'install' \
   'Run the guided live installer: prepare the live environment, discover the machine, collect choices, review an installation plan, and require a bound confirmation. Also provides the discover and plan components.' \
   'A colored interactive console of the live ISO; external backup, rescue media, and a known-good ISO are required before physical migration. Reference-VM qualification must precede physical installation.' \
-  'Optional --plan <file> and --output <dir>; the machine is discovered automatically. discover and plan have their own inputs.' \
-  'The installation engine is not part of this version: the guided installer changes no installation disk, collects no password, and ends at the engine boundary.' \
-  'Run-associated output is written under evidence/install/<run-id>/ or --output: install-run.json, approval-record.json, and install.log.' \
+  'Optional --plan <file> and --output <dir>; the machine is discovered automatically; the single account password is asked at a protected prompt. discover and plan have their own inputs.' \
+  'After the bound confirmation, the account password, and a final revalidation, the guided installer ERASES the confirmed disk and installs the base system; a failure afterwards leaves the disk partially modified. discover and plan change nothing.' \
+  'Run-associated output is written under evidence/install/<run-id>/ or --output: install-run.json, approval-record.json, install.log, and engine/ when the engine started.' \
   "$@"; then
   exit 0
 else

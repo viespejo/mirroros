@@ -304,8 +304,8 @@ function withDiskSize(document, bytes) {
 }
 
 test('choices that contradict the disk are input errors', () => {
-  // The ESP, the root minimum, and the default swapfile need 21474836480 bytes; the root minimum and ESP alone need 17179869184.
-  const small = withDiskSize(facts(), 18000000000);
+  // The ESP, the root minimum, and the default swapfile need 22548578304 bytes; the root minimum and ESP alone need 18253611008.
+  const small = withDiskSize(facts(), 19000000000);
   const tooSmall = generate({ factsDocument: small });
   assert.deepEqual(codes(tooSmall), ['plan_size_does_not_fit']);
   assert.match(tooSmall.reasons[0].next_step, /disable hibernation/);
@@ -316,9 +316,9 @@ test('choices that contradict the disk are input errors', () => {
   assert.equal(disabled.plan.choices.hibernation.value, false);
   const tinyDisk = withDiskSize(facts(), 17000000000);
   assert.deepEqual(codes(generate({ factsDocument: tinyDisk, choices: { hibernation: false } })), ['plan_size_does_not_fit']);
-  const fits = withDiskSize(facts(), 21474836480);
+  const fits = withDiskSize(facts(), 22548578304);
   assert.deepEqual(generate({ factsDocument: fits }).reasons, []);
-  assert.deepEqual(codes(generate({ factsDocument: withDiskSize(facts(), 21474836479) })), ['plan_size_does_not_fit']);
+  assert.deepEqual(codes(generate({ factsDocument: withDiskSize(facts(), 22548578303) })), ['plan_size_does_not_fit']);
 });
 
 test('a generated plan that fails its own validator is an invariant violation', () => {

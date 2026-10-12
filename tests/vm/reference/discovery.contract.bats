@@ -175,7 +175,7 @@ use_matching_bundle() {
   [ "$(grep -c 'qemu-img compare' "$REFERENCE_CALL_LOG")" -eq 4 ]
   local evidence name
   evidence="$(reference_discovery_evidence_dir)"
-  for name in approve cancel mismatch layout-change; do
+  for name in password-cancel cancel mismatch layout-change; do
     [ -f "${evidence}/${name}/install/install-run.json" ]
     [ -f "${evidence}/${name}/install/approval-record.json" ]
     [ -f "${evidence}/${name}/install/install.log" ]

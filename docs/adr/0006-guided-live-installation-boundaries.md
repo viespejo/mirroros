@@ -150,4 +150,4 @@ These amendments are applied only when this ADR is accepted (plan 02-07, Task 5)
 
 ## Superseded by
 
-`None`
+Partially superseded by [ADR 0008](0008-installation-engine-execution-boundary.md), which supersedes only the hand-over boundary: the premise that no installation engine is reachable and the reversal-boundary clause that required this supersession. The rest of this decision is unchanged.

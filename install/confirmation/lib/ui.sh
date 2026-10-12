@@ -107,6 +107,65 @@ ui_setup() {
   fi
 }
 
+# The engine progress screen (D17). Arguments: operations completed, total, one-based position of the current
+# operation, its plan description, and the package count (empty when none). The bar is the completed operations over
+# the total; the package count never moves it.
+ui_progress() {
+  local completed=$1 total=$2 position=$3 description=$4 packages=$5
+  local width=34 filled=0 bar empty
+  if ((total > 0)); then filled=$((completed * width / total)); fi
+  printf -v bar '%*s' "$filled" ''
+  printf -v empty '%*s' "$((width - filled))" ''
+  clear_logo
+  echo
+  gum style --padding "0 0 0 $PADDING_LEFT" 'Installing MirrorOS'
+  echo
+  printf '%s%s%s\n' "$PADDING_LEFT_SPACES" "${bar// /█}" "${empty// /░}"
+  gum style --foreground 8 --padding "$PADDING" "[${position}/${total}] ${description}"
+  if [[ -n $packages ]]; then gum style --foreground 8 --padding "$PADDING" "Packages installed: ${packages}"; fi
+}
+
+# The success screen (D18). Argument: the elapsed seconds of the engine phase.
+ui_success() {
+  local seconds=$1 duration
+  if ((seconds >= 3600)); then
+    duration="$((seconds / 3600))h $((seconds % 3600 / 60))m $((seconds % 60))s"
+  elif ((seconds >= 60)); then
+    duration="$((seconds / 60))m $((seconds % 60))s"
+  else
+    duration="${seconds}s"
+  fi
+  clear_logo
+  echo
+  gum style --padding "$PADDING" "Installed MirrorOS in ${duration}"
+  gum style --foreground 8 --padding "$PADDING" 'Base system installed. Installation postconditions are not verified in this version (Story 2.6).'
+  echo
+}
+
+# The failure screen of an engine failure or interruption (D19). Arguments: failed operation, exit status, whether a
+# destructive operation had started (true or false), the engine log, and the run directory. The log tail has no
+# control characters and is cut to the terminal width.
+ui_engine_failure() {
+  local operation=$1 status=$2 destructive=$3 log=$4 run_directory=$5 line width
+  width=$((TERM_WIDTH - PADDING_LEFT - 1))
+  clear_logo
+  echo
+  gum style --foreground 1 --padding "$PADDING" 'MirrorOS installation stopped'
+  echo
+  gum style --padding "$PADDING" "Failed operation: ${operation:-unknown}" "Exit status: ${status}"
+  if [[ $destructive == true ]]; then
+    gum style --foreground 1 --padding "$PADDING" 'The disk was partially modified and installation did not complete.'
+  else
+    gum style --padding "$PADDING" 'The disk was not modified.'
+  fi
+  echo
+  while IFS= read -r line || [[ -n $line ]]; do
+    printf '%s%s\n' "$PADDING_LEFT_SPACES" "${line:0:width}"
+  done < <(tail -n 15 -- "$log" 2> /dev/null | LC_ALL=C sed -e 's/\x1b\[[0-9;?]*[ -\/]*[@-~]//g' | tr -cd '[:print:]\n')
+  echo
+  gum style --foreground 8 --padding "$PADDING" "Run directory: ${run_directory}"
+}
+
 # A failed phase is reported with its phase, cause, and next action. Arguments: phase, cause, next action.
 ui_failure() {
   gum style --foreground 1 --padding "$PADDING" "Phase: $1" "Cause: $2" "Next: $3"

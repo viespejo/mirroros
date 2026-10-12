@@ -113,3 +113,5 @@ Revisit this decision if any of the following occurs:
 ## Superseded by
 
 Partially superseded by [ADR 0007](0007-zram-and-hibernation-policy.md), which amends only the swap, `@swap`, and resume clauses: `@swap` and the resume parameters of the installation plan apply only when hibernation is enabled. The rest of this decision is unchanged.
+
+Partially superseded by [ADR 0009](0009-storage-option-promotion-and-esp-size.md), which supersedes only the support-tier classification, the default storage option, the experimental conditions of the Btrfs and Limine option, and the 1 GiB ESP constraint. The rest of this decision is unchanged.

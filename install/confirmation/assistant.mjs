@@ -26,6 +26,10 @@ const FLOW_REASONS = {
     message: 'The system clock was not reported as synchronized within the wait.',
     next_step: 'Make sure the network works so automatic time synchronization can complete, then retry the clock check.',
   },
+  live_keyring_not_ready: {
+    message: 'The live package keyring was not reported as initialized within the wait.',
+    next_step: 'Wait a moment so pacman-init.service can finish, then retry the keyring check.',
+  },
   stage_failed: {
     message: 'A phase failed unexpectedly.',
     next_step: 'Check install.log in the run directory, then rerun mirroros-install.',
@@ -184,7 +188,39 @@ function reasonList([code, child]) {
   return EXIT_VALID;
 }
 
-const COMMANDS = { get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'reasons-text': reasonsText, recoverable, reason: reasonList };
+// The progress of the engine for the progress screen, as one tab-separated line: operations completed, total,
+// the one-based position of the current operation, its plan description, and the package count (empty when
+// none). It reads only state.json, which the engine rewrites atomically; an unreadable file exits 2.
+function engineProgress([path]) {
+  let state;
+  try {
+    state = readJson(path);
+  } catch {
+    return EXIT_INVALID_INPUT;
+  }
+  const completed = state.operations.filter(item => item.status === 'completed').length;
+  const current = state.operations.find(item => item.id === state.current) ?? state.operations[completed];
+  const position = Math.min(completed + 1, state.total);
+  process.stdout.write(`${[completed, state.total, position, oneLine(current?.description ?? ''), state.packages_installed ?? ''].join('\t')}\n`);
+  return EXIT_VALID;
+}
+
+// The facts the failure screen shows from a valid engine record, as one tab-separated line: the failed operation
+// (or the operation named by the first reason), whether a destructive operation had started (`true` or `false`),
+// and the child exit status, which is last because it may be empty.
+function engineSummary([path]) {
+  const run = readJson(path);
+  const operation = run.failed_operation?.id ?? run.reasons[0]?.operation ?? '';
+  const child = run.failed_operation?.child_exit_status ?? run.reasons[0]?.child_exit_status ?? '';
+  const destructive = run.completed.includes('wipe_disk_signatures') || operation === 'wipe_disk_signatures';
+  process.stdout.write(`${[oneLine(operation || 'unknown'), destructive, child].join('\t')}\n`);
+  return EXIT_VALID;
+}
+
+const COMMANDS = {
+  get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'reasons-text': reasonsText,
+  recoverable, reason: reasonList, 'engine-progress': engineProgress, 'engine-summary': engineSummary,
+};
 
 const [command, ...args] = process.argv.slice(2);
 if (COMMANDS[command] === undefined) {

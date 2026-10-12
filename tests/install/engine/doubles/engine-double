@@ -1,0 +1,159 @@
+#!/usr/bin/bash
+# PATH double for the installation engine tests. One script serves every external tool of the engine (it is
+# linked under each tool's name): it records the call, its environment, and its parent's command line, can be
+# made to fail through fail.<tool>[.<subcommand>] files, and simulates just the effects the engine checks.
+# It never touches a real device, mount, or account.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+name="${0##*/}"
+state="$DOUBLE_STATE"
+root="${MIRROROS_DISCOVERY_ROOT:-}"
+printf '%s %s\n' "$name" "$*" >> "${state}/calls.log"
+printf '%s %s\n' "$name" "$(umask)" >> "${state}/umask.log"
+{ tr '\0' '\n' < "/proc/$$/environ"; tr '\0' ' ' < "/proc/${PPID}/cmdline"; printf '\n'; } >> "${state}/observed.log" 2> /dev/null || true
+
+subcommand=''
+[[ "$name" == arch-chroot ]] && subcommand="${2:-}"
+failure_keys=("fail.${name}")
+[[ -z "$subcommand" ]] || failure_keys=("fail.${name}.${subcommand}" "fail.${name}")
+for key in "${failure_keys[@]}"; do
+  if [[ -f "${state}/${key}" ]]; then
+    printf '%s: simulated failure\n' "$name" >&2
+    exit "$(< "${state}/${key}")"
+  fi
+done
+
+last="${*: -1}"
+base="${last##*/}"
+emit_output() {
+  local file
+  for file in "${state}/out/${name}.${base}" "${state}/out/${name}"; do
+    if [[ -f "$file" ]]; then cat "$file"; return 0; fi
+  done
+  return 1
+}
+
+set_shadow() {
+  local target="$1" account="$2" value="$3"
+  awk -F: -v OFS=: -v account="$account" -v value="$value" '$1 == account { $2 = value } { print }' "${target}/etc/shadow" > "${target}/etc/shadow.new"
+  mv -- "${target}/etc/shadow.new" "${target}/etc/shadow"
+}
+
+case "$name" in
+  wipefs)
+    if [[ " $* " == *' --noheadings '* ]]; then emit_output || true; fi
+    ;;
+  sfdisk)
+    if [[ " $* " == *' --dump '* ]]; then emit_output || printf 'label: gpt\n'
+    elif [[ " $* " == *' --part-type '* ]]; then
+      emit_output || { [[ "$last" == 1 ]] && printf 'C12A7328-F81F-11D2-BA4B-00A0C93EC93B\n' || printf '0FC63DAF-8483-4772-8E79-3D69D8477DE4\n'; }
+    else cat >> "${state}/sfdisk-input.log"
+    fi
+    ;;
+  blockdev)
+    if [[ " $* " == *' --getsize64 '* ]]; then emit_output || printf '2147483648\n'; fi
+    ;;
+  partprobe)
+    touch "${1}1" "${1}2"
+    ;;
+  blkid)
+    tag="${4:-}"
+    node="${5:-}"
+    case "$tag" in
+      UUID) if [[ "$node" == *1 ]]; then printf 'ABCD-1234\n'; else printf '11111111-2222-4333-8444-555555555555\n'; fi ;;
+      TYPE) if [[ "$node" == *1 ]]; then printf 'vfat\n'; else emit_output || printf 'ext4\n'; fi ;;
+    esac
+    ;;
+  mount)
+    printf '%s\n' "$last" >> "${state}/mounted.list"
+    ;;
+  umount)
+    if [[ -f "${state}/mounted.list" ]]; then
+      grep -v -- "^${last}" "${state}/mounted.list" > "${state}/mounted.new" || true
+      mv -- "${state}/mounted.new" "${state}/mounted.list"
+    fi
+    ;;
+  mountpoint)
+    [[ -f "${state}/mounted.list" ]] && grep -qx -- "$last" "${state}/mounted.list"
+    ;;
+  genfstab)
+    printf 'UUID=11111111-2222-4333-8444-555555555555 / ext4 rw,relatime 0 1\nUUID=ABCD-1234 /boot vfat rw,umask=0077 0 2\n'
+    ;;
+  mkswap)
+    file="${2:-}"
+    size="${4:-}"
+    truncate -s "${size%M}M" "$file"
+    chmod 600 "$file"
+    ;;
+  filefrag)
+    emit_output || printf 'Filesystem type is: ef53\n ext logical physical expected length flags\n   0:        0..    1023:      34816..     35839:   1024: last,eof\n'
+    ;;
+  systemctl)
+    if [[ "${1:-}" == is-active ]]; then
+      if [[ -f "${state}/keyring-failed" ]]; then printf 'failed\n'; exit 3; fi
+      if [[ -f "${state}/keyring-not-ready" ]]; then printf 'inactive\n'; exit 3; fi
+      printf 'active\n'
+    fi
+    ;;
+  pacstrap)
+    target="${2:-}"
+    mkdir -p "${target}/boot" "${target}/etc/pacman.d" "${target}/etc/sudoers.d" "${target}/etc/sysctl.d" \
+      "${target}/usr/share/zoneinfo/Europe" "${target}/var/lib/pacman/local" "${target}/var/tmp"
+    if [[ -f "${state}/pacstrap-hang" ]]; then
+      : > "${state}/pacstrap-started"
+      while [[ ! -f "${state}/pacstrap-release" ]]; do /usr/bin/sleep 0.2; done
+    fi
+    : > "${target}/boot/vmlinuz-linux"
+    : > "${target}/boot/initramfs-linux.img"
+    : > "${target}/boot/initramfs-linux-fallback.img"
+    cp -- "${root}/etc/pacman.d/mirrorlist" "${target}/etc/pacman.d/mirrorlist"
+    : > "${target}/usr/share/zoneinfo/Europe/Madrid"
+    # The shipped file keeps two trailing blanks on every commented entry.
+    printf '#en_US.UTF-8 UTF-8  \n#es_ES.UTF-8 UTF-8  \n#fr_FR.UTF-8 UTF-8  \n' > "${target}/etc/locale.gen"
+    printf '[options]\n#Color\n#ParallelDownloads = 5\n#VerbosePkgLists\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n' > "${target}/etc/pacman.conf"
+    printf 'root:x:0:0::/root:/usr/bin/bash\n' > "${target}/etc/passwd"
+    printf 'root::19000:0:99999:7:::\n' > "${target}/etc/shadow"
+    printf 'root:x:0:\nwheel:x:998:\n' > "${target}/etc/group"
+    count=0
+    for package in "${@:3}"; do count=$((count + 1)); mkdir -p "${target}/var/lib/pacman/local/${package}-1-1"; done
+    ;;
+  arch-chroot)
+    target="${1:-}"
+    command_name="${2:-}"
+    case "$command_name" in
+      pacman) printf 'base 3-1\nlinux 6.1-1\n' ;;
+      useradd)
+        arguments=("${@:3}")
+        account="${arguments[${#arguments[@]}-1]}"
+        groups=''
+        shell=''
+        for ((index = 0; index < ${#arguments[@]}; index++)); do
+          [[ "${arguments[index]}" == --groups ]] && groups="${arguments[index + 1]}"
+          [[ "${arguments[index]}" == --shell ]] && shell="${arguments[index + 1]}"
+        done
+        printf '%s:x:1000:1000::/home/%s:%s\n' "$account" "$account" "$shell" >> "${target}/etc/passwd"
+        printf '%s:!:19000:0:99999:7:::\n' "$account" >> "${target}/etc/shadow"
+        for group in ${groups//,/ }; do
+          awk -F: -v OFS=: -v group="$group" -v account="$account" '$1 == group { $4 = ($4 == "" ? account : $4 "," account) } { print }' "${target}/etc/group" > "${target}/etc/group.new"
+          mv -- "${target}/etc/group.new" "${target}/etc/group"
+        done
+        ;;
+      chpasswd)
+        input="$(cat)"
+        printf '%s\n' "$input" >> "${state}/chroot-stdin.log"
+        set_shadow "$target" "${input%%:*}" '$6$simulated$hash'
+        ;;
+      passwd) set_shadow "$target" root '!' ;;
+      bootctl)
+        if [[ "${3:-}" == install ]]; then mkdir -p "${target}/boot/EFI/systemd" "${target}/boot/loader/entries"; fi
+        ;;
+      systemctl)
+        mkdir -p "${state}/enabled"
+        if [[ "${3:-}" == enable ]]; then : > "${state}/enabled/${4}"
+        elif [[ "${3:-}" == is-enabled ]]; then [[ -f "${state}/enabled/${4}" ]] && printf 'enabled\n'
+        fi
+        ;;
+    esac
+    ;;
+  *) ;;
+esac

@@ -4,6 +4,13 @@ CONFIRM_SOURCE_ROOT="$(cd -- "${CONFIRM_SUPPORT_DIR}/../../.." && pwd -P)"
 CONFIRM_DISCOVERY_SUPPORT="${CONFIRM_SOURCE_ROOT}/tests/install/discovery"
 CONFIRM_FIXTURES="${CONFIRM_SOURCE_ROOT}/tests/fixtures/discovery/raw"
 CONFIRM_CANARY='PLANTED-CONFIRM-SECRET-0001'
+# The password the scripted Gum double answers with; it is the canary, so every scan for it covers the password.
+CONFIRM_PASSWORD="$CONFIRM_CANARY"
+CONFIRM_ENGINE_SUPPORT="${CONFIRM_SOURCE_ROOT}/tests/install/engine"
+# The external tools of the installation engine, answered by the engine double (it also answers systemctl for the
+# keyring wait and for a chosen restart or power off, which it only records).
+CONFIRM_ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs blkid mount umount mountpoint
+  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot)
 
 # Keys sent through the pty, one at a time, and extra environment words for the command under test. When
 # CONFIRM_WAIT_FOR names a file, the keys are sent only after a double or hook has created it.
@@ -22,11 +29,12 @@ confirm_setup() {
   DOUBLE_STATE="${TEST_ROOT}/double state"
   DOUBLE_BIN="${TEST_ROOT}/double bin"
   WORK_DIR="${TEST_ROOT}/work directory"
+  RUN_ROOT="${TEST_ROOT}/run root"
   RUN_DIR="${TEST_ROOT}/run directory"
   TYPESCRIPT="${TEST_ROOT}/typescript.log"
   STDOUT_PATH="${TEST_ROOT}/stdout.log"
   STDERR_PATH="${TEST_ROOT}/stderr.log"
-  mkdir -p "${CODE_ROOT}/operations/lib" "$FIXTURE_ROOT" "$DOUBLE_STATE" "$DOUBLE_BIN" "$WORK_DIR"
+  mkdir -p "${CODE_ROOT}/operations/lib" "$FIXTURE_ROOT" "${DOUBLE_STATE}/out" "$DOUBLE_BIN" "$WORK_DIR" "$RUN_ROOT"
 
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/install" "${CODE_ROOT}/operations/install"
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/lib/lifecycle-discovery.sh" "${CODE_ROOT}/operations/lib/lifecycle-discovery.sh"
@@ -42,6 +50,9 @@ confirm_setup() {
   for tool_name in sudo pkexec doas su; do
     ln -s "${CONFIRM_DISCOVERY_SUPPORT}/doubles/elevation" "${DOUBLE_BIN}/${tool_name}"
   done
+  for tool_name in "${CONFIRM_ENGINE_TOOLS[@]}"; do
+    ln -s "${CONFIRM_ENGINE_SUPPORT}/doubles/engine-double" "${DOUBLE_BIN}/${tool_name}"
+  done
   for tool_name in gum timedatectl sleep loadkeys; do
     ln -s "${CONFIRM_SUPPORT_DIR}/doubles/${tool_name}" "${DOUBLE_BIN}/${tool_name}"
   done
@@ -54,15 +65,23 @@ confirm_setup() {
 }
 
 confirm_teardown() {
+  pkill -KILL -f "${TEST_ROOT:-/nonexistent}" 2> /dev/null || true
   if [[ -n "${TEST_ROOT:-}" && -d "$TEST_ROOT" ]]; then
     rm -rf -- "$TEST_ROOT"
   fi
+}
+
+# The live mirrorlist that the engine double copies into the target.
+confirm_seed_mirrorlist() {
+  mkdir -p "${FIXTURE_ROOT}/etc/pacman.d"
+  printf 'Server = https://mirror.example.invalid/$repo/os/$arch\n' > "${FIXTURE_ROOT}/etc/pacman.d/mirrorlist"
 }
 
 # Builds the fake system root and the double state from a raw discovery fixture, replacing any earlier one.
 confirm_scenario() {
   find "$FIXTURE_ROOT" -mindepth 1 -delete
   node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "${CONFIRM_FIXTURES}/${1}.json" "$FIXTURE_ROOT" "$DOUBLE_STATE"
+  confirm_seed_mirrorlist
 }
 
 # Like confirm_scenario with reference-vm-empty plus a second eligible disk (vdb).
@@ -79,6 +98,7 @@ confirm_scenario_two_disks() {
   ' "${CONFIRM_FIXTURES}/reference-vm-empty.json" "$raw"
   find "$FIXTURE_ROOT" -mindepth 1 -delete
   node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
+  confirm_seed_mirrorlist
 }
 
 # Like confirm_scenario with reference-vm-empty, but with the given detected memory in KiB (absent when empty).
@@ -94,6 +114,7 @@ confirm_scenario_memory() {
   ' "${CONFIRM_FIXTURES}/reference-vm-empty.json" "$raw" "$1"
   find "$FIXTURE_ROOT" -mindepth 1 -delete
   node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
+  confirm_seed_mirrorlist
 }
 
 # Like confirm_scenario with reference-vm-empty, but with a DMI vendor that no defined profile declares: a valid
@@ -109,6 +130,7 @@ confirm_scenario_unqualified() {
   ' "${CONFIRM_FIXTURES}/reference-vm-empty.json" "$raw"
   find "$FIXTURE_ROOT" -mindepth 1 -delete
   node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
+  confirm_seed_mirrorlist
 }
 
 # Appends scripted answers to the queue of one gum subcommand.
@@ -129,7 +151,7 @@ confirm_hook_call() {
 }
 
 confirm_environment() {
-  printf 'PATH=%q DOUBLE_STATE=%q MIRROROS_DISCOVERY_ROOT=%q TERM=linux' "${DOUBLE_BIN}:${PATH}" "$DOUBLE_STATE" "$FIXTURE_ROOT"
+  printf 'PATH=%q DOUBLE_STATE=%q MIRROROS_DISCOVERY_ROOT=%q MIRROROS_ENGINE_RUN_ROOT=%q TERM=linux' "${DOUBLE_BIN}:${PATH}" "$DOUBLE_STATE" "$FIXTURE_ROOT" "$RUN_ROOT"
 }
 
 # Runs `operations/install <arguments>` under a real pseudo-terminal so Gum, the TTY checks, and signals

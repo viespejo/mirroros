@@ -73,7 +73,7 @@
       "destructive": true,
       "parameters": {
         "disk": "virtio-SYNTH-VDA-0001",
-        "esp_size_bytes": 1073741824,
+        "esp_size_bytes": 2147483648,
         "esp_mount_point": "/boot",
         "root": "remaining_space"
       },
@@ -355,12 +355,12 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "d2791b38a77a55fba8e665e7100ef1811c96db5b64ff15009fe7a5c440414b98",
+    "policy_sha256": "1228da24a702a7a93b7dbc73aadce58a0dc713a62dc4a3903ff8affca3dd061d",
     "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "906c0fd045f6a16adf506a2f78664e6eb56d8924b63d2cda158135ef9d3b4649"
+    "value": "c15275794be1538c4275198b60b14ac3bc664033828dc867a4bd22ccd7679ac4"
   }
 }

@@ -21,6 +21,16 @@ readonly REQUIRED_FILES=(
   install/confirmation/lib/screens.sh
   install/confirmation/lib/ui.sh
   install/discovery/discover
+  install/discovery/discover-storage
+  install/engine/apply
+  install/engine/engine-record.mjs
+  install/engine/load-plan.mjs
+  install/engine/lib/accounts.sh
+  install/engine/lib/boot.sh
+  install/engine/lib/common.sh
+  install/engine/lib/precheck.sh
+  install/engine/lib/storage.sh
+  install/engine/lib/system.sh
   install/plan/plan
 )
 
@@ -32,15 +42,17 @@ Usage: mirroros-install [--plan <file>] [--output <dir>]
        mirroros-install plan --facts <file> [--choices <file>] [--output <dir>]
        mirroros-install --help
 Purpose: Prepare the live environment, discover the machine automatically, collect the installation choices, generate and review an installation plan, and require a confirmation bound to the machine, the disk, and the plan. The same assistant starts on tty1 of the live ISO.
-Prerequisites: a colored interactive console (TERM set and not dumb, NO_COLOR unset), Gum 2.x, and the prerequisites of discover. The live session runs as root; nothing is reachable without the confirmation.
-Inputs: --plan reviews an existing installation plan of the current format instead of the configuration screens; it is validated, copied, and compared with fresh discovery. --output names an absent or empty run directory; the default is evidence/install/<run-id>/. No option confirms anything, and none disables the prompts.
-Consequential effects: None in this version. The installation engine is not part of it, so even a valid confirmation changes no installation disk. No elevation is invoked and no password or Wi-Fi credential is requested. The live keyboard changes only this live session.
-Evidence: install-run.json, approval-record.json, install.log, discovery/initial/, discovery/final/ when reached, and plans/NN/ with choices.json. Evidence is written with 0700 directories and 0600 files.
+Prerequisites: a colored interactive console (TERM set and not dumb, NO_COLOR unset), Gum 2.x, the prerequisites of discover, and no other installation run in progress. The live session runs as root; nothing is reachable without the confirmation and the password.
+Inputs: --plan reviews an existing installation plan of the current format and of this artifact's code identity instead of the configuration screens; it is validated, copied, and compared with fresh discovery. --output names an absent or empty run directory; the default is evidence/install/<run-id>/. No option confirms anything, and none disables the prompts.
+Consequential effects: After the bound confirmation, the account password, and a final revalidation, the installation engine ERASES the confirmed disk and installs the base system. A failure after that point leaves the disk partially modified; retrying is a new run. The single account password is requested twice with a protected prompt and is never written anywhere. No elevation is invoked and no Wi-Fi credential is requested. The live keyboard changes only this live session. Restarting or powering off happens only when you choose it.
+Evidence: install-run.json, approval-record.json, install.log, discovery/initial/, discovery/final/ when reached, plans/NN/ with choices.json, and engine/ when the engine started. Evidence is written with 0700 directories and 0600 files.
 Normalized exit outcomes:
-  2: invalid input, no supported terminal, or an approved, blocked, or invalidated run
+  0: the base system was installed (postconditions are not verified in this version)
+  2: invalid input, no supported terminal, a concurrent run, or a blocked or invalidated run
   3: explicit user cancellation, including a confirmation that did not match
-  5: an external tool failed unexpectedly
-  6: damaged embedded code or Gum that is not qualified
+  5: an external tool failed unexpectedly, including an engine operation
+  6: damaged embedded code or assets, or Gum that is not qualified
+  128+n: a signal interrupted the engine
 Documentation: docs/procedures/install.md
 EOF
 }
@@ -88,6 +100,20 @@ damaged() {
 # shellcheck disable=SC1091 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
 source "${SCRIPT_DIR}/lib/ui.sh" 2> /dev/null || damaged 'install/confirmation/lib/ui.sh could not be loaded.'
 ui_terminal_gate || exit 2
+
+# The installer lock comes right after the terminal gate: before the Gum check, the start-of-run cleanup, discovery,
+# and the run directory. A second run exits 2 on stderr only and touches nothing. The descriptor stays open for the
+# whole run and is inherited by the engine as fd 4; the kernel releases the lock when this process ends.
+FLOW_ENGINE_ROOT="${MIRROROS_ENGINE_RUN_ROOT:-/run/mirroros}"
+FLOW_ENGINE_ROOT="${FLOW_ENGINE_ROOT%/}"
+if ! { install -d -m 0700 -- "$FLOW_ENGINE_ROOT" && exec 4> "${FLOW_ENGINE_ROOT}/install.lock"; } 2> /dev/null; then
+  printf '%s\n' 'MirrorOS install: the installer lock cannot be opened.' 'Next step: check that /run/mirroros is writable and rerun mirroros-install; nothing was asked or changed.' >&2
+  exit 5
+fi
+if ! flock -n 4; then
+  printf '%s\n' 'MirrorOS install: install_already_running: another installation run holds the installer lock.' 'Next step: wait for that run to end, or finish it in its console; nothing was asked or changed.' >&2
+  exit 2
+fi
 
 for required in "${REQUIRED_FILES[@]}"; do
   [[ -f "${FLOW_CODE_ROOT}/${required}" ]] || damaged "${required} is missing."

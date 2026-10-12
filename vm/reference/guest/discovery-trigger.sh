@@ -129,10 +129,13 @@ const steps = [
     const typed = /Type the device name \(([^)\s]+)\)/.exec(plain)?.[1] ?? 'vda';
     return `${name === 'mismatch' ? 'wrong-device' : typed}\r`;
   } },
-  { expect: ['No password is collected in this version'], keys: () => {
+  // password-cancel stops at the protected prompt with Ctrl+C. layout-change writes the fixture first, then types a
+  // fixed throwaway password for the disposable disk so that the final revalidation can invalidate the run.
+  { expect: ['Password>'], keys: () => {
     if (name === 'layout-change') layoutWrite();
-    return '\r';
+    return name === 'password-cancel' ? '\u0003' : 'qualification-test\r';
   } },
+  { expect: ['Confirm>'], keys: () => 'qualification-test\r' },
 ];
 const advance = () => {
   quiet = null;

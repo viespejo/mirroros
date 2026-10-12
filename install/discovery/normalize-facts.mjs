@@ -185,7 +185,7 @@ function normalizeDisk(device, context, missing) {
   });
 }
 
-function normalizeStorage(raw, minimumBytes) {
+export function normalizeStorage(raw, minimumBytes) {
   const source = record(raw);
   const missing = [];
   if (!Array.isArray(source.blockdevices)) missing.push('storage.blockdevices');

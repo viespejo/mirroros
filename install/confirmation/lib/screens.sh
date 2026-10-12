@@ -315,8 +315,10 @@ root_account_form() {
   local choice value current
   current=$(flow_choice root_account) || return 6
   gum style --foreground 8 --padding "$PADDING" 'Locked root: use your wheel-group user with sudo for administration.' 'Password enabled: root receives the same password as your user.'
-  gum style --padding "$PADDING" 'Installation will ask for one password, with repetition, after you approve the plan.' 'This version does not collect passwords or change accounts.'
-  gum style --foreground 8 --padding "$PADDING" 'Sharing the password does not give root an independent recovery credential.'
+  gum style --padding "$PADDING" 'One password is asked, with repetition, after you approve the plan.'
+  if [[ $current == password ]]; then
+    gum style --foreground 8 --padding "$PADDING" 'Sharing the password does not give root an independent recovery credential.'
+  fi
   choice=$(gum choose --show-help --height 5 --selected "$(root_label_for "$current")" --header 'Root account' 'Locked (default)' 'Password login enabled') || return $?
   case $choice in
     'Locked (default)') value=locked ;;
@@ -364,7 +366,7 @@ review_form() {
     if [[ ${FLOW_REVIEW[swapfile_below_ram]} == true ]]; then
       gum style --foreground 3 --padding "$PADDING" 'Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space.'
     fi
-    gum style --foreground 8 --padding "$PADDING" 'Review only: this does not approve a plan or authorize disk changes.' 'Next: confirm the disk to erase, then a password explanation. This version runs no installation.'
+    gum style --foreground 8 --padding "$PADDING" 'Review only: this does not approve a plan or authorize disk changes.' 'Next: confirm the disk to erase, then set the password. Installation starts after that.'
     choice=$(gum choose --show-help --height 3 --selected 'Continue to confirmation' --header 'Review navigation' 'Continue to confirmation' 'Inspect complete plan' 'Back') || return $?
     case $choice in
       'Continue to confirmation') return 0 ;;
@@ -419,22 +421,44 @@ confirmation_form() {
   flow_confirmed
 }
 
+# The single account password, asked twice with a protected prompt. It is kept only in FLOW_PASSWORD (a global,
+# never exported, never logged, never recorded) until the engine invocation consumes it. A blank or mismatching
+# pair asks both fields again. Esc discards the value and returns to the review; Ctrl+C cancels.
 password_form() {
-  local choice root_message
-  flow_reached password_explanation
+  local first second root_message status failure
+  flow_reached password
   flow_load_review
+  FLOW_PASSWORD=''
   case ${FLOW_REVIEW[root_account]} in
     locked) root_message='Root stays locked; no password is assigned to root.' ;;
     password) root_message='Root receives the same password as your user, not a second password.' ;;
     *) return 6 ;;
   esac
-  gum style --foreground 3 --padding "$PADDING" 'NO PASSWORD IS REQUESTED IN THIS VERSION.'
-  gum style --padding "$PADDING" "Installation will ask for one password for ${FLOW_REVIEW[user_name]}, with repetition." 'Your user can administer the system with sudo.' "$root_message"
-  gum style --foreground 8 --padding "$PADDING" 'Passwords follow real bound plan/disk confirmation, before disk writes.' 'Cancelling password entry must prevent installation from starting.' 'Passwords never belong in the plan, review, or retained evidence.'
-  choice=$(gum choose --show-help --height 3 --selected 'Continue' --header 'No password is collected in this version' 'Continue' 'Back') || return $?
-  case $choice in
-    Continue) return 0 ;;
-    Back) return 1 ;;
-    *) return 6 ;;
-  esac
+  while true; do
+    gum style --padding "$PADDING" "One password is used for ${FLOW_REVIEW[user_name]}." 'Your user can administer the system with sudo.' "$root_message"
+    gum style --foreground 8 --padding "$PADDING" 'Passwords follow real bound plan/disk confirmation, before disk writes.' 'Cancelling password entry must prevent installation from starting.' 'Passwords never belong in the plan, review, or retained evidence.'
+    status=0
+    first=$(gum input --password --show-help --prompt 'Password> ') || status=$?
+    case $status in
+      0) ;;
+      1) return 1 ;;
+      130) flow_cancel password ;;
+      *) return "$status" ;;
+    esac
+    status=0
+    second=$(gum input --password --show-help --prompt 'Confirm> ') || status=$?
+    case $status in
+      0) ;;
+      1) return 1 ;;
+      130) flow_cancel password ;;
+      *) return "$status" ;;
+    esac
+    if [[ -n $first && $first == "$second" ]]; then
+      FLOW_PASSWORD=$first
+      return 0
+    fi
+    if [[ -z $first ]]; then failure="Password can't be blank"; else failure="Passwords didn't match"; fi
+    step 'Password'
+    gum style --foreground 1 --padding "$PADDING" "$failure"
+  done
 }

@@ -74,6 +74,54 @@ function assetDifferences(plan, assets) {
   return reasons;
 }
 
+function withoutMountpoints(layout) {
+  if (layout === undefined || !Array.isArray(layout.partitions)) return layout;
+  return {
+    ...layout,
+    partitions: layout.partitions.map(({ mountpoints: _mountpoints, ...partition }) => partition),
+  };
+}
+
+// The comparison of the plan's disk with its fresh facts disk (undefined when the disk is gone): identity,
+// eligibility, and layout. With `ignoreMounts` the mount points of the layout and the `mounted` ineligibility
+// are left out: occupancy is a separate check of the installation engine.
+export function diskDifferences(plan, disk, { ignoreMounts = false } = {}) {
+  const reasons = [];
+  const planned = plan.target.disk;
+  if (disk === undefined) {
+    reasons.push(invalidation(
+      'target_identity_changed',
+      `The disk ${describeDisk(planned)} selected by the plan is no longer present.`,
+    ));
+    return reasons;
+  }
+  const differing = IDENTITY_KEYS.filter(key => !sameValue(planned[key], disk.identity[key]));
+  if (differing.length > 0) {
+    reasons.push(invalidation(
+      'target_identity_changed',
+      `The identity of ${describeDisk(planned)} differs from the plan (${differing.join(', ')}).`,
+    ));
+  }
+  const eligible = ignoreMounts
+    ? (disk.ineligible_reasons ?? []).filter(item => item !== 'mounted').length === 0
+    : disk.eligible === true;
+  if (!eligible) {
+    reasons.push(invalidation(
+      'target_layout_changed',
+      `The disk ${describeDisk(planned)} is no longer eligible for installation.`,
+    ));
+  }
+  const observedLayout = ignoreMounts ? withoutMountpoints(disk.layout) : disk.layout;
+  const plannedLayout = ignoreMounts ? withoutMountpoints(planned.current_layout) : planned.current_layout;
+  if (!sameValue(plannedLayout, observedLayout)) {
+    reasons.push(invalidation(
+      'target_layout_changed',
+      `The partition layout of ${describeDisk(planned)} differs from the plan.`,
+    ));
+  }
+  return reasons;
+}
+
 // Pure comparison of a valid plan with fresh facts (DEC-005). `hashes` holds the recomputed
 // `policy_sha256`, `profile_definition_sha256`, and `override_sha256` (each undefined when it does not
 // apply, that is, without a matched profile or without an override). `baselineFacts` is the facts document
@@ -119,34 +167,7 @@ export function compareSafety({ plan, facts, hashes, baselineFacts, assets }) {
     }
   }
 
-  const planned = plan.target.disk;
-  const disk = selectedDisk(plan, facts);
-  if (disk === undefined) {
-    reasons.push(invalidation(
-      'target_identity_changed',
-      `The disk ${describeDisk(planned)} selected by the plan is no longer present.`,
-    ));
-  } else {
-    const differing = IDENTITY_KEYS.filter(key => !sameValue(planned[key], disk.identity[key]));
-    if (differing.length > 0) {
-      reasons.push(invalidation(
-        'target_identity_changed',
-        `The identity of ${describeDisk(planned)} differs from the plan (${differing.join(', ')}).`,
-      ));
-    }
-    if (disk.eligible !== true) {
-      reasons.push(invalidation(
-        'target_layout_changed',
-        `The disk ${describeDisk(planned)} is no longer eligible for installation.`,
-      ));
-    }
-    if (!sameValue(planned.current_layout, disk.layout)) {
-      reasons.push(invalidation(
-        'target_layout_changed',
-        `The partition layout of ${describeDisk(planned)} differs from the plan.`,
-      ));
-    }
-  }
+  reasons.push(...diskDifferences(plan, selectedDisk(plan, facts)));
 
   const binding = plan.policy_binding;
   if (binding.policy_sha256 !== hashes.policy_sha256) {
