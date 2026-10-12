@@ -8,6 +8,8 @@ readonly ESP_TYPE_GUID='C12A7328-F81F-11D2-BA4B-00A0C93EC93B'
 readonly ROOT_TYPE_GUID='0FC63DAF-8483-4772-8E79-3D69D8477DE4'
 readonly MIBIBYTE=1048576
 
+ROOT_FILESYSTEM=''
+
 # The kernel's partition node naming: a disk name ending in a digit takes a "p" before the number.
 partition_node() {
   if [[ "$DISK_NODE" =~ [0-9]$ ]]; then printf '%sp%s' "$DISK_NODE" "$1"; else printf '%s%s' "$DISK_NODE" "$1"; fi
@@ -61,6 +63,7 @@ op_format_filesystems() {
   local root_filesystem esp_type root_type
   root_filesystem="$(param root_filesystem)"
   [[ "$(param esp_filesystem)" == vfat ]] || check_fail 'the ESP filesystem is not vfat'
+  ROOT_FILESYSTEM="$root_filesystem"
   run mkfs.fat -F 32 "$ESP_PART"
   case "$root_filesystem" in
     ext4) run mkfs.ext4 -F -L mirroros "$ROOT_PART" ;;
@@ -80,7 +83,13 @@ op_format_filesystems() {
 op_mount_target() {
   [[ "$(param esp_mount_point)" == /boot ]] || check_fail 'the ESP mount point is not /boot'
   install -d -m 0700 -- "$TARGET"
-  run mount "$ROOT_PART" "$TARGET"
+  if [[ "$ROOT_FILESYSTEM" == btrfs ]]; then
+    [[ -n "$BTRFS_MOUNT_OPTIONS" ]] || check_fail 'the Btrfs mount options were not resolved'
+    run mount -o "${BTRFS_MOUNT_OPTIONS},subvol=@" "$ROOT_PART" "$TARGET"
+    mount_btrfs_subvolumes
+  else
+    run mount "$ROOT_PART" "$TARGET"
+  fi
   install -d -m 0755 -- "${TARGET}/boot"
   run mount -o umask=0077 "$ESP_PART" "${TARGET}/boot"
   mountpoint -q "$TARGET" || check_fail 'the root mount is missing'
@@ -130,25 +139,35 @@ op_install_packages() {
 
 op_generate_fstab() {
   run_to_target_file 0644 /etc/fstab genfstab -U "$TARGET"
+  if [[ "$ROOT_FILESYSTEM" == btrfs ]]; then filter_fstab_subvolume_ids; fi
   grep -q -- "UUID=${ROOT_UUID}" "${TARGET}/etc/fstab" || check_fail 'the root filesystem is not in fstab by UUID'
   grep -q -- "UUID=${ESP_UUID}" "${TARGET}/etc/fstab" || check_fail 'the ESP is not in fstab by UUID'
   ! grep -q 'subvolid=' "${TARGET}/etc/fstab" || check_fail 'fstab holds a subvolume id'
 }
 
 op_create_swapfile() {
-  local path size_mib priority first_extent size mode
+  local path size_mib priority first_extent size mode swap_path
   path="$(param path)"
   size_mib="$(param size_mib)"
   priority="$(param priority)"
   [[ "$path" == /swapfile && "$size_mib" =~ ^[0-9]+$ && "$priority" =~ ^[0-9]+$ ]] || check_fail 'the swapfile parameters are not valid'
-  run mkswap --file "${TARGET}${path}" --size "${size_mib}M"
-  capture first_extent filefrag -v "${TARGET}${path}"
-  RESUME_OFFSET="$(awk '$1 == "0:" { sub(/\.\./, "", $4); print $4; exit }' <<< "$first_extent")"
+  swap_path="$path"
+  if [[ "$ROOT_FILESYSTEM" == btrfs ]]; then
+    # The plan's path is the same for every option; on Btrfs the file lives in the @swap subvolume mounted at /swap.
+    swap_path=/swap/swapfile
+    mountpoint -q "${TARGET}/swap" || check_fail 'the @swap subvolume is not mounted at /swap'
+    run btrfs filesystem mkswapfile --size "${size_mib}M" "${TARGET}${swap_path}"
+    capture RESUME_OFFSET btrfs inspect-internal map-swapfile -r "${TARGET}${swap_path}"
+  else
+    run mkswap --file "${TARGET}${path}" --size "${size_mib}M"
+    capture first_extent filefrag -v "${TARGET}${path}"
+    RESUME_OFFSET="$(awk '$1 == "0:" { sub(/\.\./, "", $4); print $4; exit }' <<< "$first_extent")"
+  fi
   [[ "$RESUME_OFFSET" =~ ^[1-9][0-9]*$ ]] || check_fail 'the resume offset is not a positive integer'
-  size="$(stat -c %s -- "${TARGET}${path}")"
-  mode="$(stat -c %a -- "${TARGET}${path}")"
+  size="$(stat -c %s -- "${TARGET}${swap_path}")"
+  mode="$(stat -c %a -- "${TARGET}${swap_path}")"
   [[ "$size" == "$((size_mib * MIBIBYTE))" && "$mode" == 600 ]] || check_fail 'the swapfile size or mode differs from the plan'
-  printf '%s none swap defaults,pri=%s 0 0\n' "$path" "$priority" >> "${TARGET}/etc/fstab"
-  grep -q -- "^${path} none swap" "${TARGET}/etc/fstab" || check_fail 'the swapfile is not in fstab'
+  printf '%s none swap defaults,pri=%s 0 0\n' "$swap_path" "$priority" >> "${TARGET}/etc/fstab"
+  grep -q -- "^${swap_path} none swap" "${TARGET}/etc/fstab" || check_fail 'the swapfile is not in fstab'
   RESOLVED+=("resume_offset=${RESUME_OFFSET}")
 }

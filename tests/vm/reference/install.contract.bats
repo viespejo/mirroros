@@ -226,7 +226,7 @@ install_result_field() {
 @test "the wired cases that need later slices are disabled with exit 2 and no run resources" {
   local case_name
 
-  for case_name in default limine-nohib btrfs-rescue; do
+  for case_name in default limine-nohib; do
     reference_invoke_install --case "$case_name" "$REFERENCE_BUNDLE_DIR"
     [ "$REFERENCE_COMMAND_STATUS" -eq 2 ]
     [[ "$(<"$REFERENCE_STDERR_PATH")" == *'not enabled'* ]]

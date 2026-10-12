@@ -29,7 +29,7 @@ INSTALL_MONITOR_NAME='m.sock'
 INSTALL_MONITOR_DIR=''
 INSTALL_DRIVER_MARGIN_SECONDS=300
 # Cases whose engine kinds exist in this slice. The others are wired and stay disabled until their slice.
-INSTALL_ENABLED_CASES=(ext4 failure cancel-password)
+INSTALL_ENABLED_CASES=(ext4 btrfs-rescue failure cancel-password)
 
 install_usage_error() {
   printf 'MirrorOS qualify-install: %s\n' "$1" >&2

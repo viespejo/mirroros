@@ -9,10 +9,7 @@ import { parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
 // Operation kinds the engine does not implement yet; a plan that contains one is rejected before any
 // destructive step, never partially applied.
 export const UNIMPLEMENTED_KINDS = [
-  'create_btrfs_subvolumes',
   'install_limine_snapshot_tools',
-  'configure_snapper',
-  'create_baseline_snapshot',
   'sync_limine_snapshot_entries',
 ];
 

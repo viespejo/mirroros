@@ -5,7 +5,7 @@ ENGINE_DISCOVERY_SUPPORT="${ENGINE_SOURCE_ROOT}/tests/install/discovery"
 ENGINE_PLAN_FIXTURES="${ENGINE_SOURCE_ROOT}/tests/fixtures/plan"
 ENGINE_CANARY='PLANTED-ENGINE-SECRET-0001'
 ENGINE_COMMIT='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs blkid mount umount mountpoint
+ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
   swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep)
 
 ENGINE_STATUS=0

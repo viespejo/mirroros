@@ -52,9 +52,10 @@ test('text that is not JSON is blocked', () => {
 });
 
 test('operations the engine does not implement yet are rejected naming the kind', () => {
-  const { fields } = verify(planText('valid', 'btrfs-rescue--locked'));
+  const { fields } = verify(planText('valid', 'btrfs-limine--locked'));
   assert.deepEqual([fields[0], fields[1], fields[2]], ['fail', 'blocked', 'stage_failed']);
-  assert.equal(fields[5], 'create_btrfs_subvolumes');
+  assert.equal(fields[5], 'install_limine_snapshot_tools');
+  assert.equal(verify(planText('valid', 'btrfs-rescue--locked')).fields[0], 'ok');
 });
 
 test('a NUL character in the plan is rejected so the stream stays unambiguous', () => {

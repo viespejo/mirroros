@@ -19,6 +19,8 @@ install_systemd_boot() {
   local cmdline timeout editor_line
   resolved_cmdline
   cmdline="$CMDLINE"
+  # Engine constant: the Btrfs option boots the flat @ subvolume.
+  [[ "$STORAGE_OPTION" != btrfs-rescue ]] || cmdline+=' rootflags=subvol=@'
   [[ "$(param bootloader)" == systemd-boot ]] || check_fail 'the plan does not select systemd-boot'
   timeout="$(param options.timeout)"
   [[ "$timeout" =~ ^[0-9]+$ ]] || check_fail 'the boot timeout is not valid'
@@ -41,7 +43,7 @@ install_systemd_boot() {
 
 op_install_bootloader() {
   case "$STORAGE_OPTION" in
-    ext4-systemd-boot) install_systemd_boot ;;
+    ext4-systemd-boot | btrfs-rescue) install_systemd_boot ;;
     *) check_fail "no boot loader function is defined for ${STORAGE_OPTION}" ;;
   esac
 }

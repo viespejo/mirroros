@@ -352,11 +352,125 @@ teardown() {
   [ ! -e "$OUTPUT" ]
 }
 
-@test "btrfs and Limine plans are rejected in the pre-check naming the operation, with the disk untouched" {
-  engine_use_plan btrfs-rescue--locked
+@test "Limine plans are rejected in the pre-check naming the operation, with the disk untouched" {
+  engine_use_plan btrfs-limine--locked
   engine_run
   [ "$ENGINE_STATUS" -eq 2 ]
   [ "$(engine_json reasons.0.code)" = stage_failed ]
-  [ "$(engine_json reasons.0.operation)" = create_btrfs_subvolumes ]
+  [ "$(engine_json reasons.0.operation)" = install_limine_snapshot_tools ]
   engine_disk_untouched
+}
+
+@test "an approved btrfs-rescue plan installs the flat subvolumes, the @swap swapfile, Snapper, and the baseline" {
+  engine_use_plan btrfs-rescue--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(engine_json outcome)" = installed ]
+  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 20 ]
+  [ "$(engine_json resolved.resume_offset)" = 1998848 ]
+  for subvolume in @ @home @log @pkg @snapshots @swap; do
+    grep -q "^btrfs subvolume create .*/target/${subvolume}\$" "${DOUBLE_STATE}/calls.log"
+  done
+  grep -q '^btrfs filesystem mkswapfile --size 4096M .*/target/swap/swapfile$' "${DOUBLE_STATE}/calls.log"
+  grep -q '^btrfs inspect-internal map-swapfile -r .*/target/swap/swapfile$' "${DOUBLE_STATE}/calls.log"
+  ! engine_called filefrag
+  ! engine_called mkswap
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+}
+
+@test "btrfs-rescue mounts every subvolume with the planned options and keeps subvolume ids out of fstab" {
+  engine_use_plan btrfs-rescue--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  grep -q '^mount -o compress=zstd:1,relatime,subvol=@ .*/target$' "${DOUBLE_STATE}/calls.log"
+  grep -q '^mount -o compress=zstd:1,relatime,subvol=@home .*/target/home$' "${DOUBLE_STATE}/calls.log"
+  grep -q '^mount -o compress=zstd:1,relatime,subvol=@log .*/target/var/log$' "${DOUBLE_STATE}/calls.log"
+  grep -q '^mount -o compress=zstd:1,relatime,subvol=@pkg .*/target/var/cache/pacman/pkg$' "${DOUBLE_STATE}/calls.log"
+  grep -q '^mount -o compress=zstd:1,relatime,subvol=@snapshots .*/target/.snapshots$' "${DOUBLE_STATE}/calls.log"
+  grep -q '^mount -o compress=zstd:1,relatime,subvol=@swap .*/target/swap$' "${DOUBLE_STATE}/calls.log"
+  local fstab="${RUN_ROOT}/target/etc/fstab"
+  ! grep -q 'subvolid=' "$fstab"
+  grep -q 'subvol=/@home ' "$fstab"
+  grep -q 'subvol=/@swap ' "$fstab"
+  grep -qx '/swap/swapfile none swap defaults,pri=0 0 0' "$fstab"
+  [ "$(stat -c %a "${RUN_ROOT}/target/swap/swapfile")" = 600 ]
+}
+
+@test "btrfs-rescue boots the flat root subvolume with resume parameters and the fallback entry" {
+  engine_use_plan btrfs-rescue--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  grep -qx 'options root=UUID=11111111-2222-4333-8444-555555555555 rw zswap.enabled=0 resume=UUID=11111111-2222-4333-8444-555555555555 resume_offset=1998848 rootflags=subvol=@' \
+    "${RUN_ROOT}/target/boot/loader/entries/mirroros.conf"
+  grep -q 'rootflags=subvol=@$' "${RUN_ROOT}/target/boot/loader/entries/mirroros-fallback.conf"
+}
+
+@test "btrfs-rescue without hibernation has no @swap, no swapfile, and no resume parameter" {
+  engine_use_plan btrfs-rescue--hibernation-disabled
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 19 ]
+  ! grep -q '@swap' "${DOUBLE_STATE}/calls.log"
+  ! grep -q 'mkswapfile' "${DOUBLE_STATE}/calls.log"
+  ! grep -q '/swap' "${RUN_ROOT}/target/etc/fstab"
+  ! grep -q 'resume' "${RUN_ROOT}/target/boot/loader/entries/mirroros.conf"
+  grep -q 'rootflags=subvol=@$' "${RUN_ROOT}/target/boot/loader/entries/mirroros.conf"
+}
+
+@test "Snapper is configured for the root only after the packages, around the @snapshots mount, and the baseline comes last" {
+  engine_use_plan btrfs-rescue--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  local calls="${DOUBLE_STATE}/calls.log" pacstrap umount_line create_config delete_line mount_line baseline enable_line
+  pacstrap="$(engine_call_line pacstrap)"
+  umount_line="$(grep -n -m1 '^umount .*/target/.snapshots$' "$calls" | cut -d: -f1)"
+  create_config="$(grep -n -m1 'snapper --no-dbus -c root create-config /$' "$calls" | cut -d: -f1)"
+  delete_line="$(grep -n -m1 '^btrfs subvolume delete .*/target/.snapshots$' "$calls" | cut -d: -f1)"
+  mount_line="$(grep -n '^mount -o compress=zstd:1,relatime,subvol=@snapshots ' "$calls" | tail -n 1 | cut -d: -f1)"
+  baseline="$(grep -n -m1 'snapper --no-dbus -c root create --type single --description post-install baseline$' "$calls" | cut -d: -f1)"
+  enable_line="$(grep -n -m1 'systemctl enable' "$calls" | cut -d: -f1)"
+  [ "$pacstrap" -lt "$umount_line" ]
+  [ "$umount_line" -lt "$create_config" ]
+  [ "$create_config" -lt "$delete_line" ]
+  [ "$delete_line" -lt "$mount_line" ]
+  [ "$enable_line" -lt "$baseline" ]
+  grep -q 'snapper --no-dbus -c root set-config TIMELINE_CREATE=no NUMBER_CLEANUP=yes NUMBER_LIMIT=10$' "$calls"
+  [ "$(grep -c 'snapper --no-dbus -c root create-config' "$calls")" -eq 1 ]
+  [ "$(engine_json constants.configure_snapper.config)" != undefined ]
+  grep -qx 'TIMELINE_CREATE="no"' "${RUN_ROOT}/target/etc/snapper/configs/root"
+  grep -qx 'NUMBER_CLEANUP="yes"' "${RUN_ROOT}/target/etc/snapper/configs/root"
+  grep -qx 'NUMBER_LIMIT="10"' "${RUN_ROOT}/target/etc/snapper/configs/root"
+  grep -q 'post-install baseline' "${DOUBLE_STATE}/snapshots.list"
+}
+
+@test "btrfs-rescue enables the cleanup timer and leaves the timeline timer disabled" {
+  engine_use_plan btrfs-rescue--locked
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ -f "${DOUBLE_STATE}/enabled/snapper-cleanup.timer" ]
+  [ -f "${DOUBLE_STATE}/enabled/systemd-boot-update.service" ]
+  [ ! -e "${DOUBLE_STATE}/enabled/snapper-timeline.timer" ]
+  grep -q 'systemctl disable snapper-timeline.timer$' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "a Snapper failure stops the later operations and the baseline is never taken" {
+  engine_use_plan btrfs-rescue--locked
+  printf '3\n' > "${DOUBLE_STATE}/fail.arch-chroot.snapper"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 5 ]
+  [ "$(engine_json failed_operation.id)" = configure_snapper ]
+  [ "$(engine_json failed_operation.child_exit_status)" = 3 ]
+  [ ! -d "${DOUBLE_STATE}/enabled" ]
+  [ ! -e "${DOUBLE_STATE}/snapshots.list" ]
+  [ "$(grep -c '^wipefs --all' "${DOUBLE_STATE}/calls.log")" -eq 1 ]
+}
+
+@test "a failing subvolume creation ends the run at that operation with the top-level mount cleaned up" {
+  engine_use_plan btrfs-rescue--locked
+  printf '1\n' > "${DOUBLE_STATE}/fail.btrfs"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 5 ]
+  [ "$(engine_json failed_operation.id)" = create_btrfs_subvolumes ]
+  ! engine_called pacstrap
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
 }

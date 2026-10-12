@@ -187,10 +187,11 @@ The prerequisites are those of `operations/test`, plus `tar` and `base64` for th
 | Case | Choices | Expected result |
 | --- | --- | --- |
 | `ext4` | `ext4-systemd-boot`, hibernation on, root account `password` | `installed`, exit `0`; the disk boots alone and the planned user and `root` log in; the engine resolved a `resume_offset` and the boot entry carries `resume=` and `resume_offset=` |
+| `btrfs-rescue` | `btrfs-rescue`, hibernation off, root account `locked` | `installed`, exit `0`; the disk boots alone and the planned user logs in; the observation lists the subvolumes `@`, `@home`, `@log`, `@pkg`, and `@snapshots` without `@swap`, the baseline snapshot, and no `resume=` parameter |
 | `failure` | `ext4-systemd-boot`, hibernation off; the live mirror list is made unreachable before the run (the approved fixture write) | `failed`, exit `5`, failed operation `install_packages`, later operations not started |
 | `cancel-password` | `ext4-systemd-boot`, hibernation off; Ctrl+C at the password prompt | `cancelled`, exit `3`, no `engine/` evidence, and a disk identical to the one before launch |
 
-The `default`, `limine-nohib`, and `btrfs-rescue` cases are wired in the harness and stay disabled until the slices that implement their storage options.
+The `default` and `limine-nohib` cases are wired in the harness and stay disabled until the slice that implements the `btrfs-limine` option.
 
 In the guest, the trigger runs `discover`, creates the plan with the case's choices through `plan --choices`, applies the fixture write when the case has one, and drives the real `mirroros-install --plan` route in a pty with `TERM=linux` and real Gum. The driver is prompt-driven like the confirmation qualification: it fires a rule only when the rule's strings are on screen and the output has been quiet for 250 ms, so it does not assume the order of the screens. The account password is a random 24-character hexadecimal canary generated per run; it is typed only into the two protected fields. After a successful installation the guest mounts the target read-only to collect a non-gating observation (partition table, filesystems, `fstab`, boot entries, and the file list of the ESP) and returns one run-bound JSON report over the serial console.
 

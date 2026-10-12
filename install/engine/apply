@@ -15,7 +15,7 @@ usage_error() {
   exit 2
 }
 
-for library in common precheck storage system accounts boot; do
+for library in common precheck storage btrfs system accounts boot; do
   # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
   source "${SCRIPT_DIR}/lib/${library}.sh" 2> /dev/null || {
     printf 'MirrorOS engine: the embedded engine code is damaged: lib/%s.sh could not be loaded.\n' "$library" >&2
@@ -35,6 +35,9 @@ declare -A DISPATCH=(
   [configure_memory_reclaim]=op_configure_memory_reclaim
   [generate_fstab]=op_generate_fstab
   [create_swapfile]=op_create_swapfile
+  [create_btrfs_subvolumes]=op_create_btrfs_subvolumes
+  [configure_snapper]=op_configure_snapper
+  [create_baseline_snapshot]=op_create_baseline_snapshot
   [configure_locale_time_console]=op_configure_locale_time_console
   [configure_hostname_network]=op_configure_hostname_network
   [create_user]=op_create_user

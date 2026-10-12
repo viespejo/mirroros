@@ -11,7 +11,7 @@ The normative behavior (invocation, pre-check order, per-kind operations and eng
 - `engine-record.mjs` — Node record writer. Writes `engine-run.json` and `state.json` atomically with mode 0600 and rejects secret-looking keys.
 - `lib/common.sh` — shared helpers: logging to `engine.log`, state publication, record calls, signal and cleanup handling.
 - `lib/precheck.sh` — lock verification, keyring check, password read, and the final block before the first destructive operation.
-- `lib/storage.sh`, `lib/system.sh`, `lib/accounts.sh`, `lib/boot.sh` — one function per operation kind, grouped by concern.
+- `lib/storage.sh`, `lib/btrfs.sh`, `lib/system.sh`, `lib/accounts.sh`, `lib/boot.sh` — one function per operation kind, grouped by concern.
 
 ## Rules that shape the code
 
