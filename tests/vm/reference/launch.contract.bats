@@ -300,12 +300,13 @@ launch_run_session() {
 launch_run_guest_script() {
   local curl_output="$1"
   local curl_status="$2"
+  local missing_tool="${3:-}"
   local guest_dir="${REFERENCE_TEST_ROOT}/guest root"
   local guest_bin="${guest_dir}/bin"
   local tool
 
   mkdir -p "$guest_bin" "${guest_dir}/efi"
-  for tool in pacstrap genfstab arch-chroot archinstall; do
+  for tool in pacstrap genfstab arch-chroot; do
     printf '#!/usr/bin/bash\nexit 0\n' > "${guest_bin}/${tool}"
   done
   cat > "${guest_bin}/ip" <<'EOF'
@@ -324,6 +325,8 @@ EOF
     printf "MIRROROS_RUN_ID='%s'\n" "$LAUNCH_RUN_ID"
     printf "MIRROROS_HTTPS_URL='https://archlinux.org/'\n"
     printf "MIRROROS_HTTPS_TIMEOUT_SECONDS='30'\n"
+    # Hide archinstall and the selected missing tool even if installed on the host.
+    printf 'command() { if [[ "$1" == -v && ( "$2" == archinstall || "$2" == "%s" ) ]]; then return 1; fi; builtin command "$@"; }\n' "$missing_tool"
     tail -n +2 -- "$REFERENCE_GUEST_SCRIPT" \
       | sed -e "s#/sys/firmware/efi#'${guest_dir}/efi'#" -e "s#^SERIAL_DEVICE=.*#SERIAL_DEVICE='${guest_dir}/serial'#" \
         -e 's#^NETWORK_WAIT_SECONDS=.*#NETWORK_WAIT_SECONDS=2#'
@@ -338,6 +341,19 @@ EOF
   [ "$status" -eq 0 ]
   run node "$REFERENCE_DOCUMENTS_CLI" validate-report --report "${REFERENCE_TEST_ROOT}/report.json" --run-id "$LAUNCH_RUN_ID"
   [ "$status" -eq 0 ]
+}
+
+@test "the guest requires each native tool but does not require archinstall" {
+  local tool
+  for tool in pacstrap genfstab arch-chroot; do
+    launch_run_guest_script '200 0' 0 "$tool"
+    run launch_module 'launch_extract_report "$1" "$2" "$3"' "$GUEST_SERIAL_PATH" "$LAUNCH_RUN_ID" "${REFERENCE_TEST_ROOT}/report.json"
+    [ "$status" -eq 0 ]
+    run node "$REFERENCE_DOCUMENTS_CLI" validate-report --report "${REFERENCE_TEST_ROOT}/report.json" --run-id "$LAUNCH_RUN_ID"
+    [ "$status" -eq 4 ]
+    [ "$(reference_json "${REFERENCE_TEST_ROOT}/report.json" 'r.checks.native_install_tools.status')" == failed ]
+    [ "$(reference_json "${REFERENCE_TEST_ROOT}/report.json" 'r.checks.native_install_tools.detail')" == "missing: $tool" ]
+  done
 }
 
 @test "the guest script reports a failed HTTPS check as a consistent failed report" {

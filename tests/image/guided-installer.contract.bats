@@ -80,7 +80,7 @@ run_startup() {
   grep -Fq '/usr/local/lib/mirroros/install/confirmation/live-startup' "$zlogin"
   [ "$(grep -n '~/.automated_script.sh' "$zlogin" | cut -d: -f1)" -lt \
     "$(grep -n 'live-startup' "$zlogin" | head -1 | cut -d: -f1)" ]
-  grep -Fq "setopt SINGLE_LINE_ZLE" "$zlogin"
+  ! grep -Eq 'accessibility=|SINGLE_LINE_ZLE' "$zlogin"
 }
 
 @test "profile permissions list every executable entry point as 0:0:755 and add no setuid" {

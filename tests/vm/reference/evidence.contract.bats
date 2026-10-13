@@ -126,6 +126,18 @@ evidence_module() {
   [ "$(reference_json "${EVIDENCE_DIR}/result.json" 'r.failed_stage')" == 'guest-checks' ]
 }
 
+@test "a missing native installation tool remains a qualification failure in evidence" {
+  run evidence_module '
+    LAUNCH_VERDICT='\''{"errors":[],"passed":false,"failed_checks":["native_install_tools"]}'\''
+    outcome_mark_failure 4 guest-checks
+    outcome_note_cleanup success ""
+    evidence_finalize
+  '
+  [ "$status" -eq 0 ]
+  [ "$(reference_json "${EVIDENCE_DIR}/result.json" 'r.checks.native_install_tools')" == 'failed' ]
+  [ "$(reference_json "${EVIDENCE_DIR}/result.json" 'r.status')" == '4' ]
+}
+
 @test "without an accepted guest report no check is credited" {
   run evidence_module '
     LAUNCH_VERDICT=""

@@ -1,12 +1,28 @@
 # Build procedure
 
-The `operations/build` command constructs a traceable installation ISO from the unchanged `image/archiso/` profile. A successful build validates the construction controls and publishes a bundle; it does not establish that the ISO boots or qualifies in a VM. No byte-reproducibility claim is made.
+The `operations/build` command constructs a traceable installation ISO from the project-owned `image/archiso/` profile. A successful build validates the construction controls and publishes a bundle; it does not establish that the ISO boots or qualifies in a VM. No byte-reproducibility claim is made.
 
 ## Purpose and qualification boundary
 
 The build captures the Archiso profile, verifies the current official Arch Linux OCI image with Cosign, constructs the ISO with upstream `mkarchiso` inside a privileged Docker container, and publishes the ISO with its checksum, artifact metadata, and native package manifest. Run evidence is retained separately under `evidence/archiso-build/<run-id>/`.
 
 Boot, VM, installation, and UEFI qualification are outside this procedure. The artifact metadata explicitly records that boot qualification has not been performed.
+
+### Reduced live profile and identity
+
+The [approved live-package audit](iso-size-and-live-branding.md) retains 62 x86_64 declarations and removes 69 inherited declarations. The profile boots through `uefi.systemd-boot` only; firmware, Ethernet/Wi-Fi, OpenSSH, Vim, native installation tools and minimal FAT/ext4/Btrfs rescue remain. Build-host Archiso dependencies are not live declarations: removal of live mtools or GRUB does not remove host construction tools. Compression is unchanged.
+
+Output identity is `mirroros-YYYY.MM.DD-x86_64.iso`, label `MIRROROS_YYYYMM`, publisher `MirrorOS`, application `MirrorOS Live/Rescue`, and live hostname `mirroros`. Date evaluation still uses `SOURCE_DATE_EPOCH`. Technical `install_dir=arch` and Archiso parameters stay upstream-compatible. The regular `/etc/os-release` overlay identifies MirrorOS with `ID_LIKE=arch`; `/usr/lib/os-release` remains package-owned. Archiso 91 copies the overlay before package installation and appends image fields to the effective os-release. Inspect the built root to confirm that the override survived; this does not change the target installed independently by pacstrap.
+
+Before accepting a reduced artifact, inspect **actual resolved manifests**, not only declarations:
+
+```sh
+MIRROROS_BASELINE_BUNDLE='/absolute/path/to/baseline-bundle' \
+MIRROROS_REDUCED_BUNDLE='/absolute/path/to/reduced-bundle' \
+bats tests/image/live-profile.contract.bats
+```
+
+The bundle contract verifies checksums, retained declarations and dependency tools, every approved cut's absence, and preservation of all baseline firmware/microcode packages. Without both bundles it explicitly skips the manifest check. A removed package that reappears as a dependency blocks the cut pending audit review; do not force package removal. Compare package versions, source/tool versions and cache conditions before interpreting size or duration. Build success alone does not qualify these capabilities. Builds require explicit authorization; attended acceptance and measurements belong to [the live-profile procedure](iso-size-and-live-branding.md).
 
 ## Invocation
 

@@ -1,0 +1,6 @@
+NAME="MirrorOS"
+PRETTY_NAME="MirrorOS Live/Rescue"
+ID=mirroros
+ID_LIKE=arch
+BUILD_ID=rolling
+DOCUMENTATION_URL="https://wiki.archlinux.org/"

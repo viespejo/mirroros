@@ -1,6 +1,6 @@
 # Test procedure
 
-The `operations/test` command qualifies the bootstrap medium of a MirrorOS bundle in one fixed, headless reference VM. Success shows that the unchanged ISO boots through the supported UEFI/OVMF path and reaches a usable, networked live installation environment. It does not install anything, and it does not verify capabilities, accept an artifact as known-good, or make it eligible for a target laptop. A passing run only makes the artifact eligible for later installation-engine prototypes.
+The `operations/test` command qualifies the bootstrap medium of a MirrorOS bundle in one fixed, headless reference VM. Success shows that the selected ISO boots through the supported UEFI/OVMF path and reaches a usable, networked live installation environment. It does not install anything, and it does not verify capabilities, accept an artifact as known-good, or make it eligible for a target laptop. A passing run only makes the artifact eligible for later installation-engine prototypes.
 
 ## Invocation
 
@@ -54,10 +54,25 @@ The checks confirm:
 
 - UEFI boot mode;
 - a working root shell;
-- runtime availability of the native installation tools;
+- runtime availability of `pacstrap`, `genfstab`, and `arch-chroot` (archinstall is removed and is not required);
 - a usable IPv4 address and a default route;
 - DNS resolution of `archlinux.org`;
 - an HTTPS request to `https://archlinux.org/` with TLS validation, the body discarded, and HTTP `200`, within at most 30 seconds.
+
+## Reduced-profile static checks and attended acceptance
+
+Run the profile and complementary builder/reference contracts without constructing an ISO or launching a real VM:
+
+```sh
+bats tests/image/live-profile.contract.bats tests/image/guided-installer.contract.bats \
+  tests/image/builder/ tests/vm/reference/
+node --test tests/image/builder/*.test.mjs tests/vm/reference/*.test.mjs
+git diff --check
+```
+
+These check approved declarations, MirrorOS metadata/date behavior, live Arch lineage, removed resources, unchanged SSH policy, startup and native-tool failure handling. Reference/builder contracts use doubles, not actual runtime qualification. Supply `MIRROROS_BASELINE_BUNDLE` and `MIRROROS_REDUCED_BUNDLE` as documented in [Build](build.md#reduced-live-profile-and-identity) to check actual dependency-resolved manifests; otherwise that check is explicitly skipped.
+
+The [live-package audit and attended QEMU/UEFI acceptance procedure](iso-size-and-live-branding.md#manual-acceptance-and-optimization-measurements) is the manual acceptance path for this reduction. It provides [graphical launch and separate installed/rescue boots](iso-size-and-live-branding.md#graphical-launch-installed-boot-and-rescue-boot), a three-option [installation matrix](iso-size-and-live-branding.md#installation-matrix), [ext4/Btrfs mounting and arch-chroot](iso-size-and-live-branding.md#rescue-mounting-and-arch-chroot), a separate Wi-Fi-device checklist, and private verdict/size/timing worksheets. Until required attended verdicts and a comparable size/timing comparison are recorded and approved, runtime acceptance remains pending; unavailable Wi-Fi evidence is pending, never inferred from virtual Ethernet. Each build, each VM launch (including disk-only and rescue boots), and each destructive case requires explicit authorization. These graphical unseeded observations complement, but do not change or replace, the reference VM configuration, qualification IDs, counted-run rules or Story 2.6 gate.
 
 ## Deadlines, stopping, and cleanup
 

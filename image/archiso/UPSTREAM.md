@@ -27,13 +27,13 @@
 
 The incorporated upstream profile remains under `GPL-3.0-or-later`, with its upstream notices retained. Original MirrorOS material remains under `GPL-3.0-only`; incorporation does not relicense the upstream files.
 
-The supported boot scope is **UEFI/OVMF only**. BIOS and Syslinux assets are retained unchanged from upstream but are unsupported and unqualified.
+The supported boot scope is **UEFI/OVMF only**, using systemd-boot. The reviewed live-profile reduction removes BIOS/Syslinux resources and inherited speech/Braille helpers; shared Archiso hooks and dependencies remain. External GRUB loopback configuration is retained without claiming a qualified additional boot path.
 
 ## Local delta
 
 - **Baseline:** vendor import commit `bc4cd22b0e4294914f38f4ba800b88474ab3a50a`.
-- **Functional summary:** `None`.
-- **Statistics:** 0 added paths, 0 modified paths, 0 deleted paths; 0 files changed, 0 insertions, 0 deletions. `UPSTREAM.md` is excluded from this comparison.
+- **Functional summary:** Embed the MirrorOS installer entry point and tty1 startup integration, Node.js/Gum runtime declarations and executable permissions; preserve NoCloud orchestration. Apply the [approved package audit](../../docs/procedures/iso-size-and-live-branding.md): 62 retained x86_64 declarations, 69 removed declarations, associated service/agent/speech and BIOS resource cleanup. Set MirrorOS ISO metadata, live hostname, welcome and boot titles; add a live-only regular `/etc/os-release` override with Arch lineage. Preserve upstream technical paths, firmware, network configuration, SSH policy and package signature policy. Installed-system policy is separate.
+- **Statistics:** Use the baseline comparison below for the reviewed integration commit; include new profile paths before recording final statistics. `UPSTREAM.md` is excluded. No generated image or embedded code payload is committed.
 
 Run from `main` after the merge commit; `HEAD` then identifies the reviewed integration commit:
 
@@ -50,7 +50,7 @@ git diff --stat "$VENDOR_BASELINE_COMMIT" HEAD \
 - **Aggregate signature validation:** passed (Cosign image signature and Pacman package signature).
 - **Import integrity:** passed (`pacman -Qkk archiso`; exported profile comparison).
 - **Secret scan:** passed (vendor profile and acquisition evidence).
-- **Build qualification:** not yet performed.
-- **UEFI/OVMF boot qualification:** not yet performed.
+- **Reduced/branded profile build qualification:** pending; previous artifacts do not qualify this delta.
+- **Reduced/branded profile UEFI/OVMF boot qualification:** pending attended verification and resolved manifest inspection. Static contract tests do not establish runtime acceptance.
 
 Acceptance checks for the failure drill, cached import, and uncached verification all passed. The failure drill rejected a deliberately modified copy while preserving the acquisition container until diagnostics were exported and Gitleaks passed. The cached import reused the package archive. The uncached run matched package version `91-1`, the package SHA-256 above, and the imported profile. Detailed evidence is retained under `evidence/archiso-import/20261004T171704Z-91-1/`; failure-drill evidence is under `evidence/archiso-import/20261004T170955Z-failure-drill/`.

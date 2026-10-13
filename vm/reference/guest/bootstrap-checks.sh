@@ -73,11 +73,11 @@ check_native_install_tools() {
   local tool
   local -a missing=()
 
-  for tool in pacstrap genfstab arch-chroot archinstall; do
+  for tool in pacstrap genfstab arch-chroot; do
     command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
   done
   if [[ "${#missing[@]}" -eq 0 ]]; then
-    record native_install_tools passed 'pacstrap genfstab arch-chroot archinstall are available'
+    record native_install_tools passed 'pacstrap genfstab arch-chroot are available'
   else
     record native_install_tools failed "missing: ${missing[*]}"
   fi
