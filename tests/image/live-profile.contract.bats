@@ -127,7 +127,19 @@ JS
   for package in iwd systemd-networkd systemd-resolved; do
     [ "$(readlink "${PROFILE}/airootfs/etc/systemd/system/multi-user.target.wants/${package}.service")" = "/usr/lib/systemd/system/${package}.service" ]
   done
-  git -C "$REPOSITORY_ROOT" diff --exit-code "$VENDOR_BASELINE" -- image/archiso/airootfs/etc/systemd/network image/archiso/airootfs/etc/mkinitcpio.conf.d
+  git -C "$REPOSITORY_ROOT" diff --exit-code "$VENDOR_BASELINE" -- image/archiso/airootfs/etc/systemd/network
+}
+
+@test "UEFI-only initramfs omits the Syslinux memdisk hook and preserves all other settings" {
+  ! grep -Fxq syslinux "${PROFILE}/packages.x86_64"
+  run bash -c '
+    set -e
+    baseline=$(git -C "$1" show "$2:image/archiso/airootfs/etc/mkinitcpio.conf.d/archiso.conf")
+    [[ "$baseline" == *" kms memdisk archiso "* ]]
+    expected="${baseline/ kms memdisk archiso / kms archiso }"
+    [[ "$(<"$3")" == "$expected" ]]
+  ' _ "$REPOSITORY_ROOT" "$VENDOR_BASELINE" "${PROFILE}/airootfs/etc/mkinitcpio.conf.d/archiso.conf"
+  [ "$status" -eq 0 ]
 }
 
 @test "actual reduced bundle resolves retained tools, excludes cuts and preserves baseline firmware" {

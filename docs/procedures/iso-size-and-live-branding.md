@@ -242,7 +242,7 @@ Require pacstrap/genfstab/arch-chroot without requiring archinstall. Keep qualif
 
 ### C3: UEFI-only profile and unused live boot tools
 
-Modify `image/archiso/profiledef.sh` to retain `uefi.systemd-boot` only. Remove these BIOS-only resources:
+Modify `image/archiso/profiledef.sh` to retain `uefi.systemd-boot` only. Remove the inherited `memdisk` hook from `image/archiso/airootfs/etc/mkinitcpio.conf.d/archiso.conf`: it detects Syslinux MEMDISK virtual disks and requires `memdiskfind` from the removed `syslinux` package, not the supported UEFI boot path. Preserve every other hook and compression setting. Story 2.6 build qualification exposed this leftover as `binary not found: memdiskfind`; the static profile contract checks this narrow upstream exception. Remove these BIOS-only resources:
 
 - `image/archiso/syslinux/archiso_head.cfg`
 - `image/archiso/syslinux/archiso_pxe.cfg`
