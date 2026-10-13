@@ -104,6 +104,7 @@ case "$name" in
       elif grep -q '^mkfs.btrfs ' "${state}/calls.log"; then fstype=btrfs
       else fstype=ext4; fi
       options="rw,relatime${mount_options:+,${mount_options//subvol=@/subvol=/@}}"
+      if [[ "$fstype" == vfat ]]; then options="${options//umask=0077/fmask=0077,dmask=0077}"; fi
       printf '%s %s %s %s\n' "${mount_dir// /\\x20}" "${mount_device// /\\x20}" "$fstype" "$options"
       found=0
     done < "${state}/mounts.log"

@@ -227,7 +227,10 @@ function mountsActive(context) {
   if (esp === undefined) problems.push('the ESP is not mounted at /boot');
   else {
     if (esp.fstype !== 'vfat') problems.push(`the ESP at /boot is ${esp.fstype}, expected vfat`);
-    if (!esp.options.includes('umask=0077')) problems.push('the ESP at /boot is not mounted with umask=0077');
+    const masks = esp.options.filter(option => /^(umask|fmask|dmask)=/.test(option));
+    const validMasks = masks.every(option => ['umask=0077', 'fmask=0077', 'dmask=0077'].includes(option));
+    const privateMasks = masks.includes('umask=0077') || (masks.includes('fmask=0077') && masks.includes('dmask=0077'));
+    if (!validMasks || !privateMasks) problems.push('the ESP at /boot is not mounted with umask=0077');
   }
   if (filesystem === 'btrfs') {
     for (const name of context.subvolumes) {

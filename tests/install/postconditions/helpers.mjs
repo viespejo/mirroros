@@ -46,7 +46,7 @@ export function goodObservations(plan) {
   } else {
     mounts.push(`${TARGET_ROOT} /dev/vda2 ext4 rw,relatime`);
   }
-  mounts.push(`${TARGET_ROOT}/boot /dev/vda1 vfat rw,relatime,umask=0077`);
+  mounts.push(`${TARGET_ROOT}/boot /dev/vda1 vfat rw,relatime,fmask=0077,dmask=0077`);
   set('mounts', mounts.join('\n'));
   set('uuid:/', ROOT_UUID);
   set('uuid:/boot', ESP_UUID);

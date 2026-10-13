@@ -82,7 +82,7 @@ test('mounts_active compares filesystem types, the ESP options, and every planne
   const ext4 = planFixture('ext4-systemd-boot--password');
   const good = goodObservations(ext4);
   assert.deepEqual(failedIds(ext4, changed(good, { mounts: good.get('mounts').replace('ext4', 'xfs') })), ['mounts_active']);
-  assert.deepEqual(failedIds(ext4, changed(good, { mounts: good.get('mounts').replace(',umask=0077', '') })), ['mounts_active']);
+  assert.deepEqual(failedIds(ext4, changed(good, { mounts: good.get('mounts').replace(',fmask=0077,dmask=0077', '') })), ['mounts_active']);
   assert.deepEqual(failedIds(ext4, changed(good, { mounts: undefined })), ['mounts_active']);
   const btrfs = planFixture('btrfs-rescue--password');
   const base = goodObservations(btrfs);
@@ -91,6 +91,22 @@ test('mounts_active compares filesystem types, the ESP options, and every planne
   assert.deepEqual(failedIds(btrfs, changed(base, { mounts: base.get('mounts').replace('compress=zstd:1,', '') })), ['mounts_active']);
   assert.deepEqual(failedIds(btrfs, changed(base, { mounts: base.get('mounts').replace('subvol=/@log', 'subvol=/@other') })), ['mounts_active']);
   assert.match(detailOf(btrfs, changed(base, { mounts: mounts.filter(line => !line.includes('/@swap')).join('\n') }), 'mounts_active'), /@swap/);
+});
+
+test('mounts_active accepts the VFAT effective masks and rejects missing, incorrect, or contradictory masks', () => {
+  for (const name of VALID_PLANS) {
+    const plan = planFixture(name);
+    const good = goodObservations(plan);
+    const withMasks = masks => changed(good, { mounts: good.get('mounts').replace('fmask=0077,dmask=0077', masks) });
+    for (const masks of ['umask=0077', 'fmask=0077,dmask=0077', 'dmask=0077,fmask=0077', 'umask=0077,fmask=0077,dmask=0077']) {
+      assert.equal(evaluateChecks(plan, withMasks(masks)).status, 'passed', `${name}: ${masks}`);
+    }
+    for (const masks of ['', 'fmask=0077', 'dmask=0077', 'fmask=0022,dmask=0077', 'fmask=0077,dmask=0022',
+      'umask=0022', 'umask=0077,fmask=0022,dmask=0077', 'umask=0022,fmask=0077,dmask=0077',
+      'fmask=0077,dmask=0077,fmask=0022', 'fmask=invalid,dmask=0077']) {
+      assert.deepEqual(failedIds(plan, withMasks(masks)), ['mounts_active'], `${name}: ${masks}`);
+    }
+  }
 });
 
 test('mount paths with escaped blanks are decoded', () => {
