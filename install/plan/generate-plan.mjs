@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { evaluateRules } from '../../hardware/rules/evaluate-rules.mjs';
 import { FACTS_FORMAT_VERSION, isRecord, reason, validateDocument } from '../discovery/validate-facts.mjs';
 import { PlanContractError } from './canonical-json.mjs';
 import { sha256Canonical, withDigest } from './digest-plan.mjs';
@@ -34,7 +35,7 @@ export const OPERATION_DESCRIPTIONS = {
   format_filesystems: 'Format the ESP as FAT32 and the root partition with the selected filesystem.',
   create_btrfs_subvolumes: 'Create the flat Btrfs subvolumes on the new filesystem.',
   mount_target: 'Mount the root filesystem and the ESP under the target root.',
-  install_packages: 'Install the base package set, zram-generator, and the packages of the storage option.',
+  install_packages: 'Install the base package set, zram-generator, the packages of the storage option, and the packages selected by the hardware rules.',
   configure_zram: 'Deliver the zram-generator drop-in: one zram device sized to memory, compressed with zstd, as preferred swap.',
   configure_memory_reclaim: 'Deliver the sysctl drop-in with the memory reclaim settings.',
   generate_fstab: 'Generate /etc/fstab by UUID.',
@@ -155,7 +156,7 @@ export function selectDisk(disks, requested) {
   )] };
 }
 
-function parametersFor(kind, { values, option, disk, assets }) {
+function parametersFor(kind, { values, option, disk, assets, rulePackages }) {
   switch (kind) {
     case 'wipe_disk_signatures':
       return { disk };
@@ -172,7 +173,10 @@ function parametersFor(kind, { values, option, disk, assets }) {
         ? { esp_mount_point: values.esp.mount_point }
         : { esp_mount_point: values.esp.mount_point, subvolumes: subvolumesFor(option, values.hibernation) };
     case 'install_packages':
-      return { packages: [...values.packages, values.network.package, ...option.additional_packages] };
+      return {
+        packages: [...values.packages, values.network.package, ...option.additional_packages],
+        rule_packages: rulePackages.map(entry => entry.name),
+      };
     case 'generate_fstab':
       return { identifier: 'uuid' };
     case 'configure_zram':
@@ -292,6 +296,7 @@ export function buildWarnings({ facts, disk, storageOption, option, swapfileSize
       'Increase swapfile_size if that is not acceptable; the default size is not a guarantee of a successful resume either.',
     ));
   }
+  warnings.push(...evaluateRules(facts).warnings);
   return warnings;
 }
 
@@ -300,7 +305,7 @@ function effectiveValue(facts, path) {
   return entry === undefined || entry.value === undefined ? 'unknown' : entry.value;
 }
 
-function buildHardwareSelections(facts, identifier, preselected) {
+function buildHardwareSelections(facts, identifier, preselected, { rule_outcomes, rule_packages }) {
   const selections = [];
   if (preselected) {
     selections.push({
@@ -318,17 +323,7 @@ function buildHardwareSelections(facts, identifier, preselected) {
     provenance: 'hardware_detection',
     rule: 'uefi_boot_mode_check',
   });
-  const graphics = effectiveValue(facts, 'hardware.graphics');
-  const capability = (id, fact, value) => ({ id, fact, value, rule: 'not_evaluated', next_story: '2.6' });
-  return {
-    selections,
-    detected_capabilities: [
-      capability('graphics_vendor', 'hardware.graphics', Array.isArray(graphics) ? graphics.map(device => device.vendor ?? 'unknown') : graphics),
-      capability('battery_present', 'hardware.battery_present', effectiveValue(facts, 'hardware.battery_present')),
-      capability('virtualization', 'hardware.virtualization', effectiveValue(facts, 'hardware.virtualization')),
-      capability('cpu_vendor', 'hardware.cpu.vendor', effectiveValue(facts, 'hardware.cpu.vendor')),
-    ],
-  };
+  return { selections, rule_outcomes, rule_packages };
 }
 
 // The one resolution of disk and choice values, shared by plan generation and the published choice helpers.
@@ -405,6 +400,7 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
   const warnings = buildWarnings({
     facts, disk, storageOption: values.storage_option, option, swapfileSize: values.swapfile_size, memoryTotalBytes,
   });
+  const rules = evaluateRules(facts);
 
   const binding = {
     facts_sha256: sha256Canonical(facts),
@@ -424,9 +420,9 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
     format_version: PLAN_FORMAT_VERSION,
     target: { machine: machineProjection(facts), profile: structuredClone(facts.profile), disk: targetDisk },
     choices: resolved,
-    operations: buildOperations(values.storage_option, { values, option, disk: identifier, assets }),
+    operations: buildOperations(values.storage_option, { values, option, disk: identifier, assets, rulePackages: rules.rule_packages }),
     secret_requirements: buildSecrets(values.root_account),
-    hardware_selections: buildHardwareSelections(facts, identifier, preselected),
+    hardware_selections: buildHardwareSelections(facts, identifier, preselected, rules),
     warnings,
     facts_binding: binding,
     policy_binding: policyBinding,

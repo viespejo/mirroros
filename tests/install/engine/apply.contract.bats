@@ -26,6 +26,50 @@ teardown() {
   grep -q '^base ' "${OUTPUT}/target-packages.txt"
 }
 
+@test "a missing kernel withholds completion with exit 4, names the check, and cleans up" {
+  : > "${DOUBLE_STATE}/postconditions-missing-kernel"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 4 ]
+  [ "$(engine_json outcome)" = not_verified ]
+  [ "$(engine_json postconditions.failed_checks)" = '["kernel_installed"]' ]
+  [ "$(engine_json reasons.0.code)" = postcondition_failed ]
+  [[ "$(engine_json reasons.0.message)" == *'/boot/vmlinuz-linux is missing'* ]]
+  grep -q 'kernel_installed' "${TEST_ROOT}/stderr.log"
+  [ "$(engine_json not_started)" = '[]' ]
+  [ "$(engine_json status state.json)" = not_verified ]
+  [ "$(engine_json cleanup.umount)" = ok ]
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+  ! grep -rq -- "$ENGINE_CANARY" "$OUTPUT" "${TEST_ROOT}/stdout.log" "${TEST_ROOT}/stderr.log"
+}
+
+@test "missing microcode in the initramfs yields not_verified rather than success or failed" {
+  : > "${DOUBLE_STATE}/initramfs-no-microcode"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 4 ]
+  [ "$(engine_json postconditions.failed_checks)" = '["microcode_selection"]' ]
+  [ "$(engine_json cleanup.umount)" = ok ]
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+}
+
+@test "an invalid checker result or internal checker failure ends failed with exit 5 and cleanup" {
+  local body
+  for body in 'printf "not-json\\n"; exit 4' 'printf "{}\\n"; exit 0' 'exit 6'; do
+    engine_teardown
+    engine_setup
+    printf '#!/usr/bin/bash\n%s\n' "$body" > "${CODE_ROOT}/install/postconditions/check"
+    engine_run
+    [ "$ENGINE_STATUS" -eq 5 ]
+    [ "$(engine_json outcome)" = failed ]
+    [ "$(engine_json reasons.0.code)" = stage_failed ]
+    [ "$(engine_json failed_operation.id)" = postconditions ]
+    [ "$(engine_json postconditions)" = undefined ]
+    [ "$(engine_json cleanup.umount)" = ok ]
+    [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+    ! grep -rq -- "$ENGINE_CANARY" "$OUTPUT"
+    rm -rf -- "$OUTPUT"
+  done
+}
+
 @test "the boot entry carries the resolved root, resume parameters, and zswap off for hibernation" {
   engine_run
   [ "$ENGINE_STATUS" -eq 0 ]
@@ -93,6 +137,39 @@ teardown() {
   ! engine_called mkswap
   ! engine_called filefrag
   [ "$(engine_json resolved.resume_offset)" = undefined ]
+}
+
+@test "pacstrap receives the plan's packages followed by its rule packages in one transaction" {
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(grep -c '^pacstrap ' "${DOUBLE_STATE}/calls.log")" -eq 1 ]
+  grep -q '^pacstrap -K .* networkmanager amd-ucode$' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "a plan without rule packages installs only its own packages" {
+  local unmatched="${TEST_ROOT}/no-rule-packages.json"
+  node --input-type=module - "$PLAN" "$unmatched" "$ENGINE_SOURCE_ROOT" << 'SCRIPT'
+import { readFileSync, writeFileSync } from 'node:fs';
+const [, , source, destination, root] = process.argv;
+const { withDigest } = await import(`${root}/install/plan/digest-plan.mjs`);
+const plan = JSON.parse(readFileSync(source, 'utf8'));
+plan.hardware_selections.rule_outcomes[1].value = 'CentaurHauls';
+plan.hardware_selections.rule_outcomes[1].outcome = 'vendor_not_recognized';
+plan.hardware_selections.rule_packages = [];
+plan.operations.find(operation => operation.kind === 'install_packages').parameters.rule_packages = [];
+plan.warnings.push({
+  code: 'cpu_vendor_unknown',
+  message: 'The CPU vendor is not AuthenticAMD or GenuineIntel, or was not detected; no microcode package is installed.',
+  next_step: 'You may install the microcode package of your CPU vendor after installation.',
+});
+writeFileSync(destination, `${JSON.stringify(withDigest(plan), null, 2)}\n`);
+SCRIPT
+  PLAN="$unmatched"
+  DIGEST="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).digest.value)' "$PLAN")"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(grep -c '^pacstrap ' "${DOUBLE_STATE}/calls.log")" -eq 1 ]
+  ! grep '^pacstrap ' "${DOUBLE_STATE}/calls.log" | grep -q 'ucode'
 }
 
 @test "a digest other than the plan's is invalidated with the disk untouched" {

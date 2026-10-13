@@ -47,7 +47,10 @@ function parametersFor(kind, context) {
         ? { esp_mount_point: values.esp.mount_point }
         : { esp_mount_point: values.esp.mount_point, subvolumes: subvolumesOf(option, values.hibernation) };
     case 'install_packages':
-      return { packages: [...values.packages, values.network.package, ...option.additional_packages] };
+      return {
+        packages: [...values.packages, values.network.package, ...option.additional_packages],
+        rule_packages: ['amd-ucode'],
+      };
     case 'generate_fstab':
       return { identifier: 'uuid' };
     case 'configure_zram':
@@ -200,7 +203,7 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
     : [];
 
   const plan = {
-    format_version: 3,
+    format_version: 4,
     target: {
       machine: {
         architecture: 'x86_64',
@@ -238,11 +241,38 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
           rule: 'uefi_boot_mode_check',
         },
       ],
-      detected_capabilities: [
-        { id: 'graphics_vendor', fact: 'hardware.graphics', value: ['qemu_virtual'], rule: 'not_evaluated', next_story: '2.6' },
-        { id: 'battery_present', fact: 'hardware.battery_present', value: false, rule: 'not_evaluated', next_story: '2.6' },
-        { id: 'virtualization', fact: 'hardware.virtualization', value: 'kvm', rule: 'not_evaluated', next_story: '2.6' },
-        { id: 'cpu_vendor', fact: 'hardware.cpu.vendor', value: 'AuthenticAMD', rule: 'not_evaluated', next_story: '2.6' },
+      rule_outcomes: [
+        {
+          rule: 'graphics',
+          fact: 'hardware.graphics',
+          value: ['qemu_virtual'],
+          outcome: 'kernel_driver_only',
+          explanation: 'Graphics vendors: qemu_virtual. The kernel driver and linux-firmware already installed are enough; nothing additional is selected.',
+        },
+        {
+          rule: 'cpu-microcode',
+          fact: 'hardware.cpu.vendor',
+          value: 'AuthenticAMD',
+          outcome: 'amd_microcode',
+          explanation: 'CPU vendor AuthenticAMD. The amd-ucode package is installed so the matching microcode is loaded at boot.',
+        },
+        {
+          rule: 'battery',
+          fact: 'hardware.battery_present',
+          value: false,
+          outcome: 'battery_absent',
+          explanation: 'No battery was detected. Nothing is selected.',
+        },
+        {
+          rule: 'virtualization',
+          fact: 'hardware.virtualization',
+          value: 'kvm',
+          outcome: 'virtual_machine',
+          explanation: 'Virtualization kvm was detected. Nothing is selected for it in this version.',
+        },
+      ],
+      rule_packages: [
+        { name: 'amd-ucode', rule: 'cpu-microcode', provenance: 'hardware_detection', source: 'detected', editable: false },
       ],
     },
     warnings,
@@ -272,6 +302,7 @@ export const INVALID_CASES = [
   ['plan_non_integer_number--swapfile', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.swapfile_size.value = 1.5; }, false],
   ['plan_format_unsupported--version-1', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 1; }],
   ['plan_format_unsupported--version-2', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 2; }],
+  ['plan_format_unsupported--version-3', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 3; }],
   ['plan_field_missing--target', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target; }],
   ['plan_label_missing--source', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.hostname.source; }],
   ['plan_unknown_field--approved', ['ext4-systemd-boot', 'locked'], plan => { plan.approved = true; }],
@@ -366,6 +397,29 @@ export const INVALID_CASES = [
   }],
   ['configuration_asset_mismatch--source-hash', ['ext4-systemd-boot', 'locked'], plan => {
     operationOf(plan, 'configure_zram').parameters.source_sha256 = 'f'.repeat(64);
+  }],
+  ['hardware_rules_mismatch--outcome', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.hardware_selections.rule_outcomes[1].outcome = 'intel_microcode';
+  }],
+  ['hardware_rules_mismatch--package-added', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.hardware_selections.rule_packages.push({ name: 'intel-ucode', rule: 'cpu-microcode', provenance: 'hardware_detection', source: 'detected', editable: false });
+    operationOf(plan, 'install_packages').parameters.rule_packages.push('intel-ucode');
+  }],
+  ['hardware_rules_mismatch--package-editable', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.hardware_selections.rule_packages[0].editable = true;
+  }],
+  ['hardware_rules_mismatch--install-parameter', ['ext4-systemd-boot', 'locked'], plan => {
+    operationOf(plan, 'install_packages').parameters.rule_packages = [];
+  }],
+  ['hardware_rules_mismatch--warning-missing', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.hardware_selections.rule_outcomes[0].value = ['nvidia'];
+    plan.hardware_selections.rule_outcomes[0].outcome = 'nvidia_nouveau_fallback';
+  }],
+  ['hardware_rules_mismatch--warning-added', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.warnings.push({ code: 'cpu_vendor_unknown', message: 'x', next_step: 'y' });
+  }],
+  ['hardware_rules_mismatch--rule-order', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.hardware_selections.rule_outcomes.reverse();
   }],
   ['facts_binding_mismatch--run-id', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.run_id = 'other-run'; }],
   ['facts_binding_mismatch--facts-hash', ['ext4-systemd-boot', 'locked'], plan => { plan.facts_binding.facts_sha256 = 'f'.repeat(64); }],

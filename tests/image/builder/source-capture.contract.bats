@@ -208,6 +208,8 @@ teardown() {
   [ ! -e "${destination}/image/archiso/airootfs/usr/lib/systemd/zram-generator.conf.d" ]
   [ ! -e "${destination}/image/archiso/airootfs/usr/lib/sysctl.d/60-mirroros-memory.conf" ]
   [ -f "${embedded}/hardware/discovery/normalize-hardware.mjs" ]
+  [ -f "${embedded}/hardware/rules/evaluate-rules.mjs" ]
+  [ -f "${embedded}/hardware/rules/graphics/rule.mjs" ]
   [ -d "${embedded}/targets/reference-vm" ]
   [ ! -e "${embedded}/operations/build" ]
   [ ! -e "${embedded}/tests" ]

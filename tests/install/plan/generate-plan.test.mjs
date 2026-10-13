@@ -79,10 +79,7 @@ test('the single eligible disk is preselected as hardware detection', () => {
   assert.equal(plan.hardware_selections.selections[0].id, 'target_disk');
   assert.equal(plan.hardware_selections.selections[0].rule, 'single_eligible_disk');
   assert.equal(plan.hardware_selections.selections[1].id, 'boot_mode');
-  for (const capability of plan.hardware_selections.detected_capabilities) {
-    assert.equal(capability.rule, 'not_evaluated');
-    assert.equal(capability.next_story, '2.6');
-  }
+  assert.equal(plan.hardware_selections.detected_capabilities, undefined);
 });
 
 test('several eligible disks are never guessed', () => {

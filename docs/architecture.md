@@ -1044,9 +1044,12 @@ mirroros/
 │   │   └── digest-plan.mjs
 │   ├── confirmation/
 │   │   └── confirm-plan
-│   └── engine/
+│   ├── engine/
+│   │   ├── README.md
+│   │   └── apply
+│   └── postconditions/
 │       ├── README.md
-│       └── apply
+│       └── check
 │
 ├── inventory/
 │   ├── capabilities.json
@@ -1086,9 +1089,9 @@ mirroros/
 │   ├── discovery/
 │   │   └── normalize-hardware.mjs
 │   └── rules/
-│       ├── amd-integrated-graphics/
-│       ├── nvidia-discrete-graphics/   # not applicable to the current target (ADR 0005)
-│       ├── hybrid-graphics/            # not applicable to the current target (ADR 0005)
+│       ├── evaluate-rules.mjs
+│       ├── graphics/
+│       ├── cpu-microcode/
 │       ├── battery/
 │       └── virtualization/
 │
@@ -1326,7 +1329,7 @@ Neovim, Pi, and other independent repositories remain authoritative. Their capab
 | Architecture decisions | `docs/adr/` |
 | Agent authority rules | `AGENTS.md`, `docs/architecture.md` |
 | Hibernation | `capabilities/power/hibernate/`, `tests/integration/hibernation/` |
-| Hybrid graphics (not applicable to the current target, ADR 0005) | `hardware/rules/hybrid-graphics/`, target overrides, verification checks |
+| Hardware-derived selections | `hardware/rules/`, `install/plan/generate-plan.mjs`, plan review, `install/postconditions/` |
 
 ### Integration Points
 
@@ -1547,7 +1550,7 @@ Agents have explicit rules for technology authority, Bash and JavaScript selecti
 
 **Important Gated Work:**
 
-1. Populate `install/engine/apply` with the native Arch installation engine selected by [ADR 0002](adr/0002-installation-engine-selection.md), under the execution boundary of [ADR 0008](adr/0008-installation-engine-execution-boundary.md); postcondition verification remains gated to Story 2.6.
+1. Populate `install/engine/apply` with the native Arch installation engine selected by [ADR 0002](adr/0002-installation-engine-selection.md), under the execution boundary of [ADR 0008](adr/0008-installation-engine-execution-boundary.md); the engine invokes the read-only `install/postconditions/` suite before cleanup, and runtime readiness verification remains gated to Epic 5.
 2. Complete the shell versus Ansible convergence prototype and ADR.
 3. Freeze the exact MVP capability inventory before broad environment implementation.
 4. Define installation, execution, and verification schemas through their prototypes and contract tests.

@@ -13,7 +13,7 @@ source "${CONFIRM_ENGINE_SUPPORT}/support.bash"
 # The external tools of the installation engine, answered by the engine double (it also answers systemctl for the
 # keyring wait and for a chosen restart or power off, which it only records).
 CONFIRM_ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
-  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot)
+  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot findmnt pacman lsinitcpio lsattr)
 
 # Keys sent through the pty, one at a time, and extra environment words for the command under test. When
 # CONFIRM_WAIT_FOR names a file, the keys are sent only after a double or hook has created it.
@@ -44,6 +44,7 @@ confirm_setup() {
   cp -a "${CONFIRM_SOURCE_ROOT}/install" "${CODE_ROOT}/install"
   mkdir -p "${CODE_ROOT}/hardware"
   cp -a "${CONFIRM_SOURCE_ROOT}/hardware/discovery" "${CODE_ROOT}/hardware/discovery"
+  cp -a "${CONFIRM_SOURCE_ROOT}/hardware/rules" "${CODE_ROOT}/hardware/rules"
   cp -a "${CONFIRM_SOURCE_ROOT}/targets" "${CODE_ROOT}/targets"
   printf '{\n  "commit": "%s",\n  "dirty": false\n}\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' > "${CODE_ROOT}/identity.json"
   engine_make_packages
@@ -117,6 +118,22 @@ confirm_scenario_memory() {
     else raw.hardware.memory_total_kib = Number(process.argv[3]);
     fs.writeFileSync(process.argv[2], JSON.stringify(raw));
   ' "${CONFIRM_FIXTURES}/reference-vm-empty.json" "$raw" "$1"
+  find "$FIXTURE_ROOT" -mindepth 1 -delete
+  node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
+  confirm_seed_mirrorlist
+}
+
+# Like confirm_scenario with reference-vm-empty, but with the given graphics PCI vendor id and CPU vendor id.
+confirm_scenario_hardware() {
+  local raw="${TEST_ROOT}/hardware.json"
+
+  node -e '
+    const fs = require("node:fs");
+    const raw = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    raw.hardware.display_devices[0].vendor_id = process.argv[3];
+    raw.hardware.cpu.vendor_id = process.argv[4];
+    fs.writeFileSync(process.argv[2], JSON.stringify(raw));
+  ' "${CONFIRM_FIXTURES}/reference-vm-empty.json" "$raw" "$1" "$2"
   find "$FIXTURE_ROOT" -mindepth 1 -delete
   node "${CONFIRM_DISCOVERY_SUPPORT}/build-root.mjs" "$raw" "$FIXTURE_ROOT" "$DOUBLE_STATE"
   confirm_seed_mirrorlist

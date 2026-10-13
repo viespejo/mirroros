@@ -66,6 +66,41 @@ export function swapfileWarning(plan) {
   return plan.warnings.find(item => item.code === 'swapfile_below_ram');
 }
 
+// The one-line label of each hardware rule outcome, shown as a review row (D21).
+const RULE_ROW_LABELS = {
+  graphics: 'Graphics',
+  'cpu-microcode': 'CPU microcode',
+  battery: 'Battery',
+  virtualization: 'Virtualization',
+};
+
+const OUTCOME_LABELS = {
+  kernel_driver_only: 'Kernel driver, nothing additional',
+  nvidia_nouveau_fallback: 'NVIDIA detected, nouveau driver used',
+  vendor_not_recognized: 'Not recognized, nothing installed',
+  battery_present: 'Battery detected',
+  battery_absent: 'No battery detected',
+  physical_machine: 'Physical machine',
+  virtual_machine: 'Virtual machine',
+  not_observed: 'Not observed',
+};
+
+// The review rows of the hardware rule outcomes, as [label, value] pairs in plan order. A rule that selected
+// packages shows them; any other outcome shows its label.
+export function ruleRows(plan) {
+  return plan.hardware_selections.rule_outcomes.map(entry => {
+    const names = plan.hardware_selections.rule_packages.filter(item => item.rule === entry.rule).map(item => item.name);
+    const value = names.length > 0 ? `Installs ${names.join(' ')}` : OUTCOME_LABELS[entry.outcome] ?? entry.outcome.replaceAll('_', ' ');
+    return [RULE_ROW_LABELS[entry.rule] ?? entry.rule, value];
+  });
+}
+
+// The warnings shown under the review rows: every warning of the plan except the swapfile one, which the review
+// shows with its own text.
+export function reviewWarnings(plan) {
+  return plan.warnings.filter(item => item.code !== 'swapfile_below_ram');
+}
+
 // The rows of the compact review, as [label, value] pairs from the validated plan. The assistant owns the
 // presentation and adds the rows that are not part of the plan (live connectivity).
 export function compactReview(plan) {
@@ -73,6 +108,7 @@ export function compactReview(plan) {
   const storage = choices.storage_option;
   const rows = [
     ['Machine', machineLabel(plan)],
+    ...ruleRows(plan),
     ['Disk', diskLabel(plan)],
     ['Storage', `${storage.value} (${storage.tier})`],
     ['Hibernation', hibernationLabel(plan)],

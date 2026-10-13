@@ -29,6 +29,7 @@ RESOLVED=()
 CLEANUP=()
 MIRROR_SERVERS=()
 MIRRORLIST_SHA256=''
+POSTCONDITIONS_JSON=''
 LAST_ARGV=()
 LAST_STATUS=0
 FINISHING=0
@@ -212,6 +213,7 @@ finish() {
     for item in "${RESOLVED[@]}"; do arguments+=(--resolved "$item"); done
     for item in "${MIRROR_SERVERS[@]}"; do arguments+=(--server "$item"); done
     [[ -z "$MIRRORLIST_SHA256" ]] || arguments+=(--mirrorlist-sha256 "$MIRRORLIST_SHA256")
+    [[ -z "$POSTCONDITIONS_JSON" ]] || arguments+=(--postconditions "$POSTCONDITIONS_JSON")
     for item in "${CONSTANTS[@]}"; do arguments+=(--constant "$item"); done
     for item in "${CLEANUP[@]}"; do arguments+=(--cleanup "$item"); done
     node_helper engine-record.mjs run "${arguments[@]}" || status=6
@@ -219,6 +221,38 @@ finish() {
   fi
   if [[ -n "$message" ]]; then printf 'MirrorOS engine: %s\n' "$message" >&2; fi
   exit "$status"
+}
+
+# The postconditions phase (contracts/installation-engine.md, "Postconditions"): after the last operation and before
+# the terminal cleanup, the read-only checker inspects the still-mounted target and its answer decides the outcome.
+# Every path ends in finish: installed (0), not_verified (4), or failed (5) when the checker gave no valid answer.
+# A not_verified run is never retried, repaired, or converted into success or into status 5.
+run_postconditions() {
+  local result status=0 verdict failed first
+  CURRENT_OP=postconditions
+  engine_log '== postconditions =='
+  write_state running postconditions
+  LAST_ARGV=(install/postconditions/check)
+  result="$("${CODE_ROOT}/install/postconditions/check" --plan "$PLAN_FILE" --digest "$CONFIRMED_DIGEST" --target-root "$TARGET" \
+    < /dev/null 2>> "$ENGINE_LOG" 3>&- 4>&-)" || status=$?
+  printf '%s\n' "$result" >> "$ENGINE_LOG"
+  if [[ "$status" != 0 && "$status" != 4 ]]; then
+    LAST_STATUS="$status"
+    stage_fail
+  fi
+  verdict="$(node_helper engine-record.mjs verify-postconditions --result "$result" --exit "$status" 4>&-)" || verdict=invalid
+  if [[ "$verdict" != valid:* ]]; then
+    engine_log 'the postconditions result is not valid for this plan'
+    LAST_STATUS="$status"
+    stage_fail
+  fi
+  POSTCONDITIONS_JSON="$result"
+  CURRENT_OP=''
+  if [[ "$status" == 0 ]]; then finish installed 0; fi
+  failed="${verdict#valid:}"
+  first="${failed%%,*}"
+  finish not_verified 4 '' postconditions \
+    "Installation finished but could not be verified: the check ${first} failed. The disk was modified." ''
 }
 
 on_unexpected_error() {

@@ -65,7 +65,7 @@ The fixed input is `image/archiso/`; there are no profile-selection options.
 
 ### Embedded MirrorOS code
 
-Besides the profile, the build embeds the MirrorOS code the live environment runs, so `mirroros-install` works without a repository checkout. The declared list is explicit (no globs): `operations/install`, `operations/lib/lifecycle-discovery.sh`, `install/`, `hardware/discovery/`, and `targets/`. `contracts/` and `tests/` are not embedded.
+Besides the profile, the build embeds the MirrorOS code the live environment runs, so `mirroros-install` works without a repository checkout. The declared list is explicit (no globs): `operations/install`, `operations/lib/lifecycle-discovery.sh`, `install/`, `hardware/discovery/`, `hardware/rules/`, and `targets/`. `contracts/` and `tests/` are not embedded.
 
 - The code is captured into the private profile copy at `airootfs/usr/local/lib/mirroros/`, keeping the repository-relative layout and file modes, together with `identity.json` (`commit` and `dirty`). Nothing is committed under `image/archiso/airootfs/usr/local/lib/`.
 - A clean repository materializes the declared paths from the commit with `git archive`; a dirty one copies the tracked and untracked, non-ignored paths, as for the profile.

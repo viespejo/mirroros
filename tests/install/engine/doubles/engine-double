@@ -57,8 +57,12 @@ case "$name" in
     touch "${1}1" "${1}2"
     ;;
   blkid)
-    tag="${4:-}"
-    node="${5:-}"
+    # The tag follows --match-tag (engine) or -s (checker); the device is the last argument.
+    tag=''
+    for ((index = 1; index < $#; index++)); do
+      [[ "${!index}" == --match-tag || "${!index}" == -s ]] && { next=$((index + 1)); tag="${!next}"; }
+    done
+    node="$last"
     case "$tag" in
       UUID) if [[ "$node" == *1 ]]; then printf 'ABCD-1234\n'; else printf '11111111-2222-4333-8444-555555555555\n'; fi ;;
       TYPE)
@@ -70,12 +74,40 @@ case "$name" in
     ;;
   mount)
     printf '%s\n' "$last" >> "${state}/mounted.list"
+    mount_options=''
+    for ((index = 1; index < $#; index++)); do
+      [[ "${!index}" == -o ]] && { next=$((index + 1)); mount_options="${!next}"; }
+    done
+    printf '%s\t%s\t%s\n' "$last" "${*: -2:1}" "$mount_options" >> "${state}/mounts.log"
     ;;
   umount)
     if [[ -f "${state}/mounted.list" ]]; then
       grep -v -- "^${last}" "${state}/mounted.list" > "${state}/mounted.new" || true
       mv -- "${state}/mounted.new" "${state}/mounted.list"
     fi
+    if [[ -f "${state}/mounts.log" ]]; then
+      if [[ " $* " == *' -R '* ]]; then
+        awk -F'\t' -v target="$last" 'index($1, target) != 1' "${state}/mounts.log" > "${state}/mounts.new" || true
+      else
+        awk -F'\t' -v target="$last" '$1 != target' "${state}/mounts.log" > "${state}/mounts.new" || true
+      fi
+      mv -- "${state}/mounts.new" "${state}/mounts.log"
+    fi
+    ;;
+  findmnt)
+    # The raw TARGET SOURCE FSTYPE OPTIONS lines of the recorded mounts at or beneath the given target.
+    [[ -f "${state}/mounts.log" ]] || exit 1
+    found=1
+    while IFS=$'\t' read -r mount_dir mount_device mount_options; do
+      case "$mount_dir" in "$last" | "$last"/*) ;; *) continue ;; esac
+      if [[ "$mount_device" == *1 ]]; then fstype=vfat
+      elif grep -q '^mkfs.btrfs ' "${state}/calls.log"; then fstype=btrfs
+      else fstype=ext4; fi
+      options="rw,relatime${mount_options:+,${mount_options//subvol=@/subvol=/@}}"
+      printf '%s %s %s %s\n' "${mount_dir// /\\x20}" "${mount_device// /\\x20}" "$fstype" "$options"
+      found=0
+    done < "${state}/mounts.log"
+    exit "$found"
     ;;
   mountpoint)
     [[ -f "${state}/mounted.list" ]] && grep -qx -- "$last" "${state}/mounted.list"
@@ -127,7 +159,37 @@ case "$name" in
       if [[ -f "${state}/keyring-failed" ]]; then printf 'failed\n'; exit 3; fi
       if [[ -f "${state}/keyring-not-ready" ]]; then printf 'inactive\n'; exit 3; fi
       printf 'active\n'
+    elif [[ "${1:-}" == --root=* && "${2:-}" == is-enabled ]]; then
+      unit="${3:-}"
+      unit="${unit%.service}"
+      if [[ -f "${state}/enabled/${unit}" ]]; then printf 'enabled\n'; else printf 'disabled\n'; exit 1; fi
     fi
+    ;;
+  pacman)
+    # pacman --root <target> --dbpath <path> -Q: the packages of the simulated local database.
+    database=''
+    for ((index = 1; index < $#; index++)); do
+      [[ "${!index}" == --dbpath ]] && { next=$((index + 1)); database="${!next}"; }
+    done
+    for entry in "${database}/local"/*/; do
+      [[ -d "$entry" ]] || continue
+      entry="${entry%/}"
+      entry="${entry##*/}"
+      printf '%s %s\n' "${entry%-*-*}" "${entry##"${entry%-*-*}"-}"
+    done
+    ;;
+  lsinitcpio)
+    # The listing of an initramfs; the microcode entries follow the microcode packages of the simulated target.
+    printf 'early_cpio\nkernel\nkernel/x86\nkernel/x86/microcode\n'
+    target_dir="${last%/boot/*}"
+    if [[ ! -f "${state}/initramfs-no-microcode" ]]; then
+      compgen -G "${target_dir}/var/lib/pacman/local/amd-ucode-*" > /dev/null && printf 'kernel/x86/microcode/AuthenticAMD.bin\n'
+      compgen -G "${target_dir}/var/lib/pacman/local/intel-ucode-*" > /dev/null && printf 'kernel/x86/microcode/GenuineIntel.bin\n'
+    fi
+    printf 'usr/lib/modules/6.1.0/kernel/fs/ext4/ext4.ko\n'
+    ;;
+  lsattr)
+    printf -- '---------------C------ %s\n' "$last"
     ;;
   pacstrap)
     target="${2:-}"
@@ -137,9 +199,9 @@ case "$name" in
       : > "${state}/pacstrap-started"
       while [[ ! -f "${state}/pacstrap-release" ]]; do /usr/bin/sleep 0.2; done
     fi
-    : > "${target}/boot/vmlinuz-linux"
-    : > "${target}/boot/initramfs-linux.img"
-    : > "${target}/boot/initramfs-linux-fallback.img"
+    printf 'kernel\n' > "${target}/boot/vmlinuz-linux"
+    printf 'initramfs\n' > "${target}/boot/initramfs-linux.img"
+    printf 'initramfs\n' > "${target}/boot/initramfs-linux-fallback.img"
     cp -- "${root}/etc/pacman.d/mirrorlist" "${target}/etc/pacman.d/mirrorlist"
     : > "${target}/usr/share/zoneinfo/Europe/Madrid"
     # The shipped file keeps two trailing blanks on every commented entry.
@@ -249,11 +311,17 @@ case "$name" in
         } >> "${target}/boot/limine.conf"
         ;;
       bootctl)
-        if [[ "${3:-}" == install ]]; then mkdir -p "${target}/boot/EFI/systemd" "${target}/boot/loader/entries"; fi
+        if [[ "${3:-}" == install ]]; then
+          mkdir -p "${target}/boot/EFI/systemd" "${target}/boot/EFI/BOOT" "${target}/boot/loader/entries"
+          printf 'EFI\n' > "${target}/boot/EFI/systemd/systemd-bootx64.efi"
+          printf 'EFI\n' > "${target}/boot/EFI/BOOT/BOOTX64.EFI"
+        fi
         ;;
       systemctl)
         mkdir -p "${state}/enabled"
-        if [[ "${3:-}" == enable ]]; then : > "${state}/enabled/${4}"
+        if [[ "${3:-}" == enable ]]; then
+          : > "${state}/enabled/${4}"
+          [[ ! -f "${state}/postconditions-missing-kernel" ]] || rm -f -- "${target}/boot/vmlinuz-linux"
         elif [[ "${3:-}" == disable ]]; then rm -f -- "${state}/enabled/${4}"
         elif [[ "${3:-}" == is-enabled ]]; then [[ -f "${state}/enabled/${4}" ]] && printf 'enabled\n'
         fi

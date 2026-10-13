@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { loadFacts } from '../plan/generate-plan.mjs';
 import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_VALID } from '../plan/validate-plan.mjs';
 import { standardReason } from './outcomes.mjs';
-import { digestPrefix, hibernationLabel, machineLabel, swapfileWarning } from './review-content.mjs';
+import { digestPrefix, hibernationLabel, machineLabel, reviewWarnings, ruleRows, swapfileWarning } from './review-content.mjs';
 import { detectedMemoryBytes, memoryUnavailableReason } from '../plan/generate-plan.mjs';
 
 // Read-only data helpers for the guided assistant (install/confirmation/lib). The assistant is a Bash flow
@@ -149,6 +149,7 @@ function reviewValues([path]) {
     ['hibernation', choices.hibernation.value],
     ['hibernation_label', hibernationLabel(plan)],
     ['swapfile_below_ram', swapfileWarning(plan) === undefined ? 'false' : 'true'],
+    ...ruleRows(plan).map(([label, value]) => [`rule_${label.toLowerCase().replaceAll(' ', '_')}`, value]),
     ['timezone', choices.timezone.value],
     ['lang', choices.lang.value],
     ['regional_format', choices.regional_format.value],
@@ -161,6 +162,12 @@ function reviewValues([path]) {
     ['plan_reference', digestPrefix(plan)],
   ];
   for (const [key, value] of rows) process.stdout.write(`${key}\t${oneLine(value)}\n`);
+  return EXIT_VALID;
+}
+
+// The warnings the review shows under its rows, one message per line, from the validated plan.
+function reviewWarningLines([path]) {
+  for (const item of reviewWarnings(readJson(path))) process.stdout.write(`${oneLine(item.message)}\n`);
   return EXIT_VALID;
 }
 
@@ -218,7 +225,7 @@ function engineSummary([path]) {
 }
 
 const COMMANDS = {
-  get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'reasons-text': reasonsText,
+  get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'review-warnings': reviewWarningLines, 'reasons-text': reasonsText,
   recoverable, reason: reasonList, 'engine-progress': engineProgress, 'engine-summary': engineSummary,
 };
 

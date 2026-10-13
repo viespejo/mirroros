@@ -105,9 +105,11 @@ count_installed_packages() {
 }
 
 op_install_packages() {
-  local packages=() pid status=0 live_mirrorlist target_mirrorlist installed_list
+  local packages=() rule_packages=() pid status=0 live_mirrorlist target_mirrorlist installed_list
   param_lines packages packages
+  param_lines rule_packages rule_packages
   [[ "${#packages[@]}" -gt 0 ]] || check_fail 'the plan lists no package'
+  packages+=("${rule_packages[@]}")
   LAST_ARGV=(pacstrap -K "$TARGET" "${packages[@]}")
   printf '$ %s\n' "${LAST_ARGV[*]}" >> "$ENGINE_LOG"
   # umask 022: pacstrap creates /etc implicitly (mkdir -m applies only to the deepest directory).

@@ -162,10 +162,16 @@ function renderHardware(plan) {
     lines.push(...wrap(`${entry.id}: ${format(entry.value)}`, '    ', '        '));
     lines.push(...wrap(`fact ${entry.fact}; rule ${entry.rule}; provenance ${entry.provenance}`, '        ', '        '));
   }
-  lines.push('', '  Detected capabilities (not evaluated in this stage):');
-  for (const entry of plan.hardware_selections.detected_capabilities) {
-    lines.push(...wrap(`${entry.id}: ${format(entry.value)}`, '    ', '        '));
-    lines.push(...wrap(`fact ${entry.fact}; rule ${entry.rule}; next story ${entry.next_story}`, '        ', '        '));
+  lines.push('', '  Hardware rule outcomes:');
+  for (const entry of plan.hardware_selections.rule_outcomes) {
+    lines.push(...wrap(`${entry.rule}: ${entry.outcome}`, '    ', '        '));
+    lines.push(...wrap(`fact ${entry.fact}; detected ${format(entry.value)}`, '        ', '        '));
+    lines.push(...wrap(entry.explanation, '        ', '        '));
+  }
+  lines.push('', '  Packages selected by hardware rules:');
+  if (plan.hardware_selections.rule_packages.length === 0) lines.push('    None.');
+  for (const entry of plan.hardware_selections.rule_packages) {
+    lines.push(...wrap(`${entry.name}: rule ${entry.rule}; provenance ${entry.provenance}; not editable`, '    ', '        '));
   }
   return lines;
 }

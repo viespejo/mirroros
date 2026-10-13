@@ -36,6 +36,7 @@ FLOW_PLAN_JUMPED=false
 # screen until the engine invocation consumes it (or the run ends).
 FLOW_PASSWORD=''
 FLOW_EXIT_MENU=''
+FLOW_ENGINE_UNVERIFIED=false
 FLOW_ENGINE_PID=''
 FLOW_ENGINE_SHOWN=''
 FLOW_ENGINE_FAILED_OPERATION=''
@@ -697,8 +698,12 @@ flow_failure_menu() {
 
   flow_leave_interactive
   while true; do
-    ui_engine_failure "$FLOW_ENGINE_FAILED_OPERATION" "$FLOW_ENGINE_FAILED_STATUS" "$FLOW_ENGINE_DESTRUCTIVE" \
-      "${FLOW_RUN_DIR}/engine/engine.log" "$FLOW_RUN_DIR"
+    if [[ $FLOW_ENGINE_UNVERIFIED == true ]]; then
+      ui_not_verified "${FLOW_RUN_DIR}/engine/engine-run.json" "$FLOW_RUN_DIR"
+    else
+      ui_engine_failure "$FLOW_ENGINE_FAILED_OPERATION" "$FLOW_ENGINE_FAILED_STATUS" "$FLOW_ENGINE_DESTRUCTIVE" \
+        "${FLOW_RUN_DIR}/engine/engine.log" "$FLOW_RUN_DIR"
+    fi
     status=0
     choice=$(gum choose --show-help --height 4 --selected 'Return to shell' 'View full log' 'Return to shell' 'Restart' 'Power off') || status=$?
     ((status == 0)) || return 0
@@ -757,6 +762,11 @@ flow_engine() {
       FLOW_EXIT_MENU=flow_success_menu
       ui_success "$((SECONDS - started))"
       flow_finish 0 installed engine "$reasons"
+      ;;
+    not_verified)
+      FLOW_ENGINE_UNVERIFIED=true
+      FLOW_EXIT_MENU=flow_failure_menu
+      flow_finish 4 not_verified engine "$reasons"
       ;;
     blocked | invalidated)
       flow_report_reasons 'Installation engine' "$reasons"

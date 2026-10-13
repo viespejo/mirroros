@@ -73,8 +73,9 @@ test('stage statuses map to blocked, invalidated, or failed', () => {
 });
 
 test('the outcome table matches the contract and allows 0 only for installed', () => {
-  assert.deepEqual(Object.keys(OUTCOMES), ['installed', 'cancelled', 'invalidated', 'blocked', 'failed']);
+  assert.deepEqual(Object.keys(OUTCOMES), ['installed', 'not_verified', 'cancelled', 'invalidated', 'blocked', 'failed']);
   assert.deepEqual(OUTCOMES.installed, [0]);
+  assert.deepEqual(OUTCOMES.not_verified, [4]);
   assert.deepEqual([OUTCOMES.cancelled, OUTCOMES.invalidated, OUTCOMES.blocked], [[3], [2], [2]]);
   assert.ok(!('approved' in OUTCOMES));
   // failed: 5, 6, and 128+n for a signal during the engine (129 to 255).

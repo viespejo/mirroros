@@ -1,7 +1,9 @@
 # Installation engine (`install/engine/apply`)
 
-`ENGINE_RUN_FORMAT_VERSION: 1` and `ENGINE_STATE_FORMAT_VERSION: 1`. `install/engine/apply` applies one approved
-[installation plan](installation-plan.md) (format 3) to the confirmed disk with the native Arch commands
+`ENGINE_RUN_FORMAT_VERSION: 2` and `ENGINE_STATE_FORMAT_VERSION: 2`. Version `2` adds the postconditions phase, the
+`postconditions` field of the run record, and the outcome `not_verified`; records and state files of version `1`
+are historical evidence that is neither read nor transformed. `install/engine/apply` applies one approved
+[installation plan](installation-plan.md) (format 4) to the confirmed disk with the native Arch commands
 selected by [ADR 0002](../docs/adr/0002-installation-engine-selection.md). It is an internal boundary: it is
 invoked only by the guided assistant after the bound confirmation, the password entry, and the final
 revalidation described in [`installation-confirmation.md`](installation-confirmation.md), and it is not a public
@@ -57,7 +59,7 @@ untouched and the password discarded.
 | --- | --- | --- |
 | 1 | Inherited or self-taken installer lock (above). | `install_already_running`, exit `2`, stderr only. |
 | 2 | Code identity. The plan is read once into memory. The engine reads its own embedded `identity.json` (the same reading as `install/discovery/discover`) and requires the plan's `facts_binding.commit` and `facts_binding.dirty` to equal it. | `engine_version_mismatch`, `blocked`, exit `2`. A missing or unreadable identity is exit `6`. |
-| 3 | Plan validation with `validate-plan.mjs` (format 3), digest recomputed and equal to `--digest`, and rejection of any unknown kind and of any operation set or order other than the plan contract's for the plan's storage option and hibernation state. | `digest_mismatch`: `invalidated`, exit `2`. Validator codes pass through: `blocked`, exit `2`. |
+| 3 | Plan validation with `validate-plan.mjs` (format 4), digest recomputed and equal to `--digest`, and rejection of any unknown kind and of any operation set or order other than the plan contract's for the plan's storage option and hibernation state. | `digest_mismatch`: `invalidated`, exit `2`. Validator codes pass through: `blocked`, exit `2`. |
 | 4 | Keyring ready, without waiting: `pacman-init.service` is `active`. The engine never waits; the wait belongs to live preparation. | `live_keyring_not_ready`, `blocked`, exit `2`. |
 | 5 | The password is read once from fd 3 and fd 3 is closed. It must be present, non-empty, a single line, and free of NUL. | `password_unavailable`, `blocked`, exit `2`. |
 | 6 | Final block, immediately before the first destructive operation: (a) re-read the disk with the read-only `install/discovery/discover-storage` collector and compare the identity (`path`, `by_id`, `wwn`, `serial`, `model`, `size_bytes`), `current_layout`, and eligibility with the plan by reusing `install/confirmation/compare-safety.mjs`; (b) check occupancy: no partition of the disk is mounted or used as swap, and neither the disk nor its partitions have holders (empty `/sys/block/<dev>/holders` and `/sys/class/block/<part>/holders`, no `lvm`, `crypt`, or `raid*` children in `lsblk`). A leftover mount of the engine's own target mount point on the disk counts as in use. | (a) `target_identity_changed` or `target_layout_changed`, `invalidated`, exit `2`, password discarded. (b) `target_disk_in_use`, `blocked`, exit `2`, with a `next_step` naming what to release manually. |
@@ -100,7 +102,7 @@ operation that installs it.
 | `format_filesystems` | FAT32 on the ESP and the plan's root filesystem (`ext4` or `btrfs`) on the root partition, with the label `mirroros` on the root. Resolves `partition_uuids` with `blkid`. | The ESP volume id and the root UUID are well formed; the filesystems are of the planned types. |
 | `create_btrfs_subvolumes` | Mount the top-level volume, create the plan's `subvolumes` flat at the top level, unmount. `@swap` exists only when the plan lists it. | Every planned subvolume exists. |
 | `mount_target` | ext4: root at the mount point, ESP at `/boot` with `umask=0077`. Btrfs: `subvol=@` at the mount point with the plan's `mount_options`; `@home` at `/home`, `@log` at `/var/log`, `@pkg` at `/var/cache/pacman/pkg`, `@snapshots` at `/.snapshots`, `@swap` at `/swap` only when planned; the ESP at `/boot` with `umask=0077`. | Every planned mount is present beneath the mount point. |
-| `install_packages` | `pacstrap -K` with the plan's `packages`, using the live mirrorlist unchanged and with signature verification always on. No reflector, no ranking, no `-M`, no `SigLevel` change. After success the engine records the active `Server =` lines of the target mirrorlist and its SHA-256, and stores the target's `pacman -Q` as `target-packages.txt`. `packages_installed` in `state.json` counts the entries of the target's local package database. | `pacstrap` succeeds; the kernel and initramfs files named by the plan exist under `/boot`; the target mirrorlist equals the live one. |
+| `install_packages` | `pacstrap -K` with the plan's `packages` followed by its `rule_packages` (one transaction, and no rule or policy is read: the lists come from the plan's parameters), using the live mirrorlist unchanged and with signature verification always on. No reflector, no ranking, no `-M`, no `SigLevel` change. After success the engine records the active `Server =` lines of the target mirrorlist and its SHA-256, and stores the target's `pacman -Q` as `target-packages.txt`. `packages_installed` in `state.json` counts the entries of the target's local package database. | `pacstrap` succeeds; the kernel and initramfs files named by the plan exist under `/boot`; the target mirrorlist equals the live one. |
 | `configure_zram`, `configure_memory_reclaim` | Copy the allowlisted asset to the plan's `destination` only when the SHA-256 of the source equals the plan's `source_sha256`; otherwise fail before writing. | The destination's SHA-256 equals `source_sha256`. |
 | `generate_fstab` | `genfstab -U` into `/etc/fstab`. For Btrfs, `subvolid=` is removed so a rollback of `@` cannot leave a stale subvolume id; subvolume paths stay. | Every planned mount appears by UUID; no `subvolid=`. |
 | `create_swapfile` | Only with hibernation. ext4: `/swapfile` created with `mkswap --file` of `size_mib`. Btrfs: `/swap/swapfile` in `@swap`, created with `btrfs filesystem mkswapfile` (NOCOW), because the swap volume is mounted at `/swap`; the plan's `path` is `/swapfile` for every option and the engine places it there on Btrfs. The fstab line carries `pri=<priority>` (`0`). Resolves `resume_offset`: ext4 from the first physical extent reported by `filefrag`; Btrfs from `btrfs inspect-internal map-swapfile -r`. | `resume_offset` is a positive integer; the swapfile has mode `0600` and the expected size; the fstab line is present. |
@@ -115,6 +117,9 @@ operation that installs it.
 | `enable_services` | `systemctl enable` inside the chroot of the plan's `services` (NetworkManager, the time sync service, `fstrim.timer`) plus the option's services: `systemd-boot` options `systemd-boot-update.service`; both Btrfs options `snapper-cleanup.timer` (and `snapper-timeline.timer` disabled); `btrfs-limine` also `limine-snapper-sync.service` (and not `systemd-boot-update.service`). | `systemctl is-enabled` agrees for every service. |
 | `create_baseline_snapshot` | Btrfs only. `snapper --no-dbus -c root create --type single --description "post-install baseline"`. | The snapshot is listed. |
 | `sync_limine_snapshot_entries` | `btrfs-limine` only, see [Limine](#limine-btrfs-limine). | See there. |
+
+After the last operation completes, the engine runs the [postconditions phase](#postconditions) before any
+terminal cleanup.
 
 `engine-run.json` records every constant used, per kind, so that a run can be understood without the source at
 that commit.
@@ -220,10 +225,10 @@ Each JSON file is written to a temporary file in the same directory, re-read, va
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `1`. |
-| `status` | `running`, `installed`, `failed`, `blocked`, or `invalidated`. |
-| `current` | The `id` of the running operation; omitted when none is running. |
-| `index` | One-based position of the current operation, or the number completed at the end. |
+| `format_version` | Always `2`. |
+| `status` | `running`, `installed`, `not_verified`, `failed`, `blocked`, or `invalidated`. |
+| `current` | The `id` of the running operation, or `postconditions` while the postconditions phase runs; omitted when none is running. |
+| `index` | One-based position of the current operation, or the number completed at the end. During the postconditions phase it equals `total`. |
 | `total` | Number of operations of the plan. |
 | `operations` | In plan order: `id`, `description` (from the plan), and `status` (`pending`, `running`, `completed`, or `failed`). |
 | `packages_installed` | Present only while `install_packages` runs: the count of installed packages. An informational count, never a fraction. |
@@ -233,17 +238,18 @@ Each JSON file is written to a temporary file in the same directory, re-read, va
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `1`. |
+| `format_version` | Always `2`. |
 | `started_at`, `finished_at` | RFC 3339 times. |
 | `plan_digest` | The digest of the plan that was applied. |
 | `code_identity` | `commit` and `dirty` of the running artifact. |
 | `storage_option`, `hibernation` | From the plan. |
-| `outcome` | `installed`, `blocked`, `invalidated`, or `failed`. |
+| `outcome` | `installed`, `not_verified`, `blocked`, `invalidated`, or `failed`. |
 | `exit_status` | The exit status of the engine. |
 | `reasons` | Structured reasons as in [Reasons](#reasons); may be empty. |
 | `completed`, `not_started` | Operation ids. |
 | `failed_operation` | Present on failure: `id`, `command` (argv, non-secret), and `child_exit_status` (the original status). |
 | `resolved` | Apply-time values: `partition_uuids` and, when hibernation is enabled, `resume_offset`. |
+| `postconditions` | The result document of [`installation-postconditions.md`](installation-postconditions.md#result), stored unchanged. Present when the postconditions phase ran, that is, when every operation completed; absent for `blocked`, `invalidated`, and for a `failed` run that stopped earlier. |
 | `mirrors` | `servers` (the active `Server =` lines) and `mirrorlist_sha256`. |
 | `constants` | The engine constants used, per kind. |
 | `constants.install_limine_snapshot_tools.package.<name>` | `btrfs-limine` only: the `version` and `sha256` of each verified package. The AUR and upstream pins stay in the embedded `packages.json` and the artifact metadata. |
@@ -269,17 +275,51 @@ operation or pre-check step), `message`, `next_step`, and `child_exit_status` (o
 | `target_disk_in_use` | `blocked`, `2` | A partition is mounted or used as swap, or the disk has `lvm`, `crypt`, or `raid*` holders. |
 | `engine_asset_mismatch` | `failed`, `6` | A configuration asset or a prebuilt package fails its hash, or the Limine manifest is missing or invalid. Nothing is written or installed from it. |
 | `stage_failed` | `failed`, `5` | An operation failed or its immediate-effect check failed; `operation` names it and `child_exit_status` keeps the original status. |
+| `postcondition_failed` | `not_verified`, `4` | The postconditions suite finished with at least one failed check. `operation` is `postconditions`; `message` names the first failed check by its id and states what was expected and observed (the non-secret `detail`); `next_step` states that the installed system must not be relied on, that the run directory holds the full result, and that a new installation attempt is a new run. One reason per failed check, in suite order. |
 | `engine_interrupted` | `failed`, `128+n` | A signal arrived during the engine. |
 
 ## Exit statuses
 
 | Status | Meaning |
 | --- | --- |
-| `0` | `installed`: every operation of the plan completed with status `0` and its apply-time values were validated. This does not include the pre-restart postcondition suite owned by Story 2.6: the message states "Base system installed. Installation postconditions are not verified in this version (Story 2.6)." |
+| `0` | `installed`: every operation of the plan completed with status `0`, its apply-time values were validated, and every check of the postconditions suite passed. |
 | `2` | `blocked` or `invalidated` before the first destructive operation, or an argument error. The disk is untouched. |
-| `5` | An external tool failed unexpectedly. |
+| `4` | `not_verified`: every operation completed but at least one postcondition failed. The installation is not reported as successful; the target is unmounted by the normal cleanup and every record is retained. |
+| `5` | An external tool failed unexpectedly, including a postconditions checker that did not return a valid result. |
 | `6` | Damaged code, embedded identity, configuration asset, or prebuilt package. |
 | `128+n` | Termination by signal `n` during the engine. |
+
+Exit `4` is distinct from `5`: `5` means a step could not be executed; `4` means every step ran and the resulting
+configuration was found inconsistent or incomplete. `not_verified` is never converted into `installed` or into `5`.
+
+## Postconditions
+
+After the last operation of the plan completes and before any terminal cleanup, the engine sets `state.json`
+`current` to `postconditions` and runs, while the target is still mounted at `/run/mirroros/target`:
+
+```text
+install/postconditions/check --plan <plan> --digest <digest> --target-root /run/mirroros/target
+```
+
+The component is read-only and is defined in [`installation-postconditions.md`](installation-postconditions.md);
+the engine passes it no password, no apply-time value, and no policy. The engine validates the returned result
+document and stores it in `engine-run.json` `postconditions`.
+
+| Checker status | Engine result |
+| --- | --- |
+| `0` | Outcome `installed`, exit `0`. |
+| `4` | Outcome `not_verified`, exit `4`, with one `postcondition_failed` reason per failed check. |
+| Any other status, a missing or invalid result | Outcome `failed`, exit `5`, reason `stage_failed`, operation `postconditions`, with the checker's status in `child_exit_status`. |
+
+The engine runs its terminal cleanup after the phase in every case: `swapoff` of an active swapfile beneath the
+mount point and `umount -R` of the mount point, recorded in `cleanup`. A `not_verified` run therefore leaves the
+target disk written and unmounted, with the engine records under `--output`. There is no retry of the phase, no
+repair of a failed check, no remounting by the assistant, and no resume.
+
+The user-facing message for `installed` states that the base system was installed and that the configuration checks
+passed before the first restart; it never claims that the installed system was booted or that every capability
+works. For `not_verified` the message states that installation finished but could not be verified, names the failed
+check, and states that the disk was modified.
 
 ## Failure, interruption, and cleanup
 
@@ -305,6 +345,6 @@ confirmation and password.
 
 ## Out of scope
 
-Pre-restart postcondition verification (Story 2.6), encryption, Secure Boot, unified kernel images, kernels other
+Runtime readiness verification after the first boot (Epic 5), encryption, Secure Boot, unified kernel images, kernels other
 than `linux`, an offline package repository, and a read-only factory snapshot are not part of the engine.
 `SigLevel = Never` is not used anywhere.

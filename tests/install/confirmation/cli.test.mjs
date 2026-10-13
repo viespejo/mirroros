@@ -156,7 +156,7 @@ test('review prints the fields the orchestrator needs', () => {
   assert.equal(compact.some(([label]) => label === 'Swapfile'), false);
   assert.deepEqual(compact.at(-1), ['Plan reference', plan.digest.value.slice(0, 12)]);
   assert.match(run('review', 'confirmation', planPath).stdout, /^Disk: \/dev\/vda 32\.0 GiB\n[\s\S]*Plan reference: [0-9a-f]{12}\n$/);
-  assert.match(run('review', 'complete', planPath).stdout, /^MirrorOS installation plan \(format 3\)\n[\s\S]*Plan reference: [0-9a-f]{12} /);
+  assert.match(run('review', 'complete', planPath).stdout, /^MirrorOS installation plan \(format 4\)\n[\s\S]*Plan reference: [0-9a-f]{12} /);
   assert.equal(run('review', 'machine', planPath).stdout, 'Recognized (reference-vm)\n');
   assert.equal(run('review', 'device-name', planPath).stdout, 'vda\n');
   assert.equal(run('review', 'digest-prefix', planPath).stdout, `${plan.digest.value.slice(0, 12)}\n`);
@@ -235,7 +235,7 @@ test('record writes both records from the run directory', () => {
   const approval = JSON.parse(readFileSync(join(directory, 'approval-record.json'), 'utf8'));
   assert.deepEqual(validateRunRecord(runRecord), []);
   assert.deepEqual(validateApprovalRecord(approval), []);
-  assert.equal(runRecord.format_version, 4);
+  assert.equal(runRecord.format_version, 5);
   assert.equal(runRecord.entry, 'guided');
   assert.deepEqual(runRecord.stages, ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation']);
   assert.deepEqual(runRecord.machine, plan.target.machine);
@@ -354,7 +354,7 @@ test('identity accepts a plan of the running artifact and blocks any other code 
 
 test('engine-result prints the reasons of a valid record and rejects a missing, invalid, or disagreeing one', () => {
   const record = {
-    format_version: 1, started_at: '2026-10-12T12:00:00Z', finished_at: '2026-10-12T12:05:00Z', outcome: 'failed', exit_status: 5,
+    format_version: 2, started_at: '2026-10-12T12:00:00Z', finished_at: '2026-10-12T12:05:00Z', outcome: 'failed', exit_status: 5,
     reasons: [{ code: 'stage_failed', stage: 'engine', operation: 'install_packages', message: 'm', next_step: 'n', child_exit_status: 1 }],
     completed: ['wipe_disk_signatures'], not_started: ['configure_zram'],
   };
@@ -365,6 +365,18 @@ test('engine-result prints the reasons of a valid record and rejects a missing, 
   assert.equal(run('engine-result', path, '6').status, 1);
   assert.equal(run('engine-result', join(scratch, 'no-engine-run.json'), '5').status, 1);
   assert.equal(run('engine-result', write('engine-run-invalid.json', { ...record, outcome: 'approved' }), '5').status, 1);
-  const installed = write('engine-run-installed.json', { ...record, outcome: 'installed', exit_status: 0, reasons: [], not_started: [] });
+  const passed = { format_version: 1, status: 'passed', checks: [{ id: 'kernel_installed', status: 'passed' }], failed_checks: [] };
+  const installed = write('engine-run-installed.json', { ...record, outcome: 'installed', exit_status: 0, reasons: [], not_started: [], postconditions: passed });
   assert.deepEqual(JSON.parse(run('engine-result', installed, '0').stdout), []);
+  const failed = { format_version: 1, status: 'failed', checks: [{ id: 'kernel_installed', status: 'failed', detail: 'missing' }], failed_checks: ['kernel_installed'] };
+  const unverified = write('engine-run-not-verified.json', {
+    ...record,
+    outcome: 'not_verified',
+    exit_status: 4,
+    reasons: [{ code: 'postcondition_failed', stage: 'engine', operation: 'postconditions', message: 'The check kernel_installed failed: missing', next_step: 'n' }],
+    not_started: [],
+    postconditions: failed,
+  });
+  assert.equal(JSON.parse(run('engine-result', unverified, '4').stdout)[0].code, 'postcondition_failed');
+  assert.equal(run('engine-result', unverified, '5').status, 1);
 });

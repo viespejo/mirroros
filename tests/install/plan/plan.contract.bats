@@ -14,6 +14,8 @@ setup() {
   cp -p "${PLAN_SOURCE_ROOT}/operations/install" "${CODE_ROOT}/operations/install"
   cp -p "${PLAN_SOURCE_ROOT}/operations/lib/lifecycle-discovery.sh" "${CODE_ROOT}/operations/lib/lifecycle-discovery.sh"
   cp -a "${PLAN_SOURCE_ROOT}/install" "${CODE_ROOT}/install"
+  mkdir -p "${CODE_ROOT}/hardware"
+  cp -a "${PLAN_SOURCE_ROOT}/hardware/rules" "${CODE_ROOT}/hardware/rules"
   cp -a "${PLAN_SOURCE_ROOT}/targets" "${CODE_ROOT}/targets"
   for tool_name in sudo pkexec doas su; do
     ln -s "${PLAN_SOURCE_ROOT}/tests/install/discovery/doubles/elevation" "${DOUBLE_BIN}/${tool_name}"

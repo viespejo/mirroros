@@ -2,10 +2,13 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const ENGINE_RUN_FORMAT_VERSION = 1;
-export const ENGINE_STATE_FORMAT_VERSION = 1;
-export const STATE_STATUSES = ['running', 'installed', 'failed', 'blocked', 'invalidated'];
-export const RUN_OUTCOMES = ['installed', 'blocked', 'invalidated', 'failed'];
+import { validateResult } from '../postconditions/evaluate.mjs';
+
+export const ENGINE_RUN_FORMAT_VERSION = 2;
+export const ENGINE_STATE_FORMAT_VERSION = 2;
+export const POSTCONDITIONS_OPERATION = 'postconditions';
+export const STATE_STATUSES = ['running', 'installed', 'not_verified', 'failed', 'blocked', 'invalidated'];
+export const RUN_OUTCOMES = ['installed', 'not_verified', 'blocked', 'invalidated', 'failed'];
 export const OPERATION_STATUSES = ['pending', 'running', 'completed', 'failed'];
 
 const SECRET_KEY = /password|passphrase|secret|token/i;
@@ -23,7 +26,7 @@ function assertNoSecretKeys(value, path = 'document') {
 
 export function validateState(state) {
   const errors = [];
-  if (state.format_version !== ENGINE_STATE_FORMAT_VERSION) errors.push('format_version must be 1');
+  if (state.format_version !== ENGINE_STATE_FORMAT_VERSION) errors.push('format_version must be 2');
   if (!STATE_STATUSES.includes(state.status)) errors.push('status is not allowed');
   if (!Number.isInteger(state.index) || state.index < 0) errors.push('index must be a non-negative integer');
   if (!Number.isInteger(state.total) || state.total < 0) errors.push('total must be a non-negative integer');
@@ -43,13 +46,26 @@ export function validateState(state) {
 
 export function validateRun(run) {
   const errors = [];
-  if (run.format_version !== ENGINE_RUN_FORMAT_VERSION) errors.push('format_version must be 1');
+  if (run.format_version !== ENGINE_RUN_FORMAT_VERSION) errors.push('format_version must be 2');
   if (!RUN_OUTCOMES.includes(run.outcome)) errors.push('outcome is not allowed');
   if (!Number.isInteger(run.exit_status) || run.exit_status < 0 || run.exit_status > 255) errors.push('exit_status must be 0..255');
   for (const key of ['started_at', 'finished_at']) if (typeof run[key] !== 'string') errors.push(`${key} is missing`);
   for (const key of ['reasons', 'completed', 'not_started']) if (!Array.isArray(run[key])) errors.push(`${key} must be a list`);
   if (run.outcome === 'installed' && (run.exit_status !== 0 || run.reasons.length > 0 || run.not_started.length > 0)) {
     errors.push('an installed run has status 0, no reasons, and no pending operation');
+  }
+  if (run.outcome === 'installed' && run.postconditions?.status !== 'passed') errors.push('an installed run has passed postconditions');
+  if (run.outcome === 'not_verified') {
+    if (run.exit_status !== 4) errors.push('a not_verified run exits 4');
+    if (run.postconditions?.status !== 'failed') errors.push('a not_verified run has failed postconditions');
+    if (!Array.isArray(run.not_started) || run.not_started.length > 0) errors.push('a not_verified run has no pending operation');
+    if (!Array.isArray(run.reasons) || run.reasons.length === 0 || !run.reasons.every(item => item.code === 'postcondition_failed')) {
+      errors.push('a not_verified run has one postcondition_failed reason per failed check');
+    }
+  }
+  if (run.exit_status === 4 && run.outcome !== 'not_verified') errors.push('only a not_verified run exits 4');
+  if (run.postconditions !== undefined) {
+    for (const problem of validateResult(run.postconditions)) errors.push(`postconditions: ${problem}`);
   }
   if (run.outcome !== 'installed' && run.exit_status === 0) errors.push('only an installed run exits 0');
   for (const item of run.reasons ?? []) {
@@ -96,7 +112,7 @@ export function buildState({ operations, status, current, completed, failed, pac
     format_version: ENGINE_STATE_FORMAT_VERSION,
     status,
     ...(current === undefined ? {} : { current }),
-    index: position === -1 ? done.size : position + 1,
+    index: current === POSTCONDITIONS_OPERATION ? operations.length : position === -1 ? done.size : position + 1,
     total: operations.length,
     operations: states,
     ...(packages === undefined ? {} : { packages_installed: packages }),
@@ -125,6 +141,31 @@ function nested(values, label) {
   return result;
 }
 
+// One reason per failed check, in suite order; the detail is non-secret by the postconditions contract.
+function postconditionReasons(postconditions) {
+  return postconditions.checks.filter(check => check.status === 'failed').map(check => ({
+    code: 'postcondition_failed',
+    stage: 'engine',
+    operation: POSTCONDITIONS_OPERATION,
+    message: `The check ${check.id} failed: ${check.detail}`,
+    next_step: 'Do not rely on the installed system; the full result is in the run directory, and a new installation attempt is a new run with a new plan and confirmation.',
+  }));
+}
+
+// The engine's validation of the checker's answer: a valid document for this plan whose status agrees with the
+// checker's exit status (0 passed, 4 failed). Answers `valid:<failed check ids>` or `invalid`.
+export function verifyPostconditions({ planText, result, exit }) {
+  let document;
+  try {
+    document = JSON.parse(result);
+  } catch {
+    return 'invalid';
+  }
+  const agrees = (exit === '0' && document?.status === 'passed') || (exit === '4' && document?.status === 'failed');
+  if (!agrees || validateResult(document, JSON.parse(planText)).length > 0) return 'invalid';
+  return `valid:${document.failed_checks.join(',')}`;
+}
+
 export function buildRun({ planText, options, now }) {
   const operations = operationsOf(planText);
   const completed = list(options.completed?.[0]);
@@ -144,7 +185,8 @@ export function buildRun({ planText, options, now }) {
   }
   run.outcome = options.outcome?.[0];
   run.exit_status = Number(options.exit?.[0]);
-  run.reasons = options['reason-code'] === undefined ? [] : [{
+  const postconditions = options.postconditions === undefined ? undefined : JSON.parse(options.postconditions[0]);
+  run.reasons = postconditions !== undefined && run.outcome === 'not_verified' ? postconditionReasons(postconditions) : options['reason-code'] === undefined ? [] : [{
     code: options['reason-code'][0],
     stage: 'engine',
     operation: options['reason-operation']?.[0] ?? 'precheck',
@@ -161,6 +203,7 @@ export function buildRun({ planText, options, now }) {
       ...(childStatus === undefined ? {} : { child_exit_status: Number(childStatus) }),
     };
   }
+  if (postconditions !== undefined) run.postconditions = postconditions;
   const resolved = pairs(options.resolved, 'resolved');
   if (Object.keys(resolved).length > 0) {
     if (resolved.resume_offset !== undefined) resolved.resume_offset = Number(resolved.resume_offset);
@@ -190,9 +233,13 @@ function main(args) {
   const [mode, ...rest] = args;
   const options = parseOptions(rest);
   const output = options.output?.[0];
-  if (output === undefined) throw new Error('--output is required');
   const planText = readFileSync(0, 'utf8');
   const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  if (mode === 'verify-postconditions') {
+    process.stdout.write(verifyPostconditions({ planText, result: options.result?.[0], exit: options.exit?.[0] }));
+    return;
+  }
+  if (output === undefined) throw new Error('--output is required');
   if (mode === 'state') {
     const state = buildState({
       operations: operationsOf(planText),

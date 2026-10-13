@@ -7,8 +7,8 @@
 # runs only, MIRROROS_INSTALL_OVERLAY_B64 (a base64 tar of the working-tree embedded subtrees).
 # The case runs the real guided installer in a pty with TERM=linux and real Gum on the disposable /dev/vda disk.
 # The canary is typed only into the protected password fields. After a successful installation the target is
-# mounted read-only to collect a non-gating observation. Evidence is written to tmpfs. The only output is one JSON
-# report on the serial console, wrapped in run-bound marker lines.
+# mounted read-only to collect observations, including the gating microcode archive listing. Evidence is written
+# to tmpfs. The only output is one JSON report on the serial console, wrapped in run-bound marker lines.
 set -u
 umask 077
 
@@ -91,6 +91,7 @@ const down = '\u001b[B';
 const rules = [
   { expect: ['Installed MirrorOS in', 'Return to shell'], keys: () => `${down}\r` },
   { expect: ['MirrorOS installation stopped', 'Return to shell'], keys: () => '\r' },
+  { expect: ['MirrorOS installation could not be verified', 'Return to shell'], keys: () => '\r' },
   { expect: ['Confirm>'], keys: () => `${canary}\r` },
   { expect: ['Password>'], keys: () => (name === 'cancel-password' ? '\u0003' : `${canary}\r`) },
   { expect: ['Device name>'], keys: plain => `${/Type the device name \(([^)\s]+)\)/.exec(plain)?.[1] ?? 'vda'}\r` },
@@ -129,8 +130,8 @@ child.on('close', status => {
 NODE
 fi
 
-# Non-gating observation of the installed disk, read-only: partition table, filesystems, fstab, boot entries, and
-# Btrfs subvolumes when present. It never changes the disk.
+# Read-only observations of the installed disk: partition table, filesystems, fstab, boot entries, microcode, and
+# Btrfs subvolumes when present. Microcode and selected boot parameters are gating; the rest is informational.
 observe_target() {
   local filesystem options=ro
 
@@ -149,6 +150,8 @@ observe_target() {
         [[ -f "$entry" ]] || continue
         { printf '## %s\n' "${entry#"$OBSERVE_MOUNT"}"; cat -- "$entry"; } >> "${OBSERVE_DIR}/boot-entries.txt"
       done
+      lsinitcpio --early --nocolor -l "${OBSERVE_MOUNT}/boot/initramfs-linux.img" > "${OBSERVE_DIR}/microcode.txt" 2>/dev/null \
+        || lsinitcpio --nocolor -l "${OBSERVE_MOUNT}/boot/initramfs-linux.img" > "${OBSERVE_DIR}/microcode.txt" 2>/dev/null || true
       umount "${OBSERVE_MOUNT}/boot" 2>/dev/null || true
     fi
     if [[ "$filesystem" == btrfs ]]; then

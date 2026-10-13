@@ -138,32 +138,63 @@ ui_success() {
   clear_logo
   echo
   gum style --padding "$PADDING" "Installed MirrorOS in ${duration}"
-  gum style --foreground 8 --padding "$PADDING" 'Base system installed. Installation postconditions are not verified in this version (Story 2.6).'
+  gum style --foreground 8 --padding "$PADDING" 'Base system installed. Configuration checks passed before the first restart.'
   echo
+}
+
+# Word-wrap D19 and D20 only, splitting a word when it is wider than the available terminal space.
+ui_wrapped_style() {
+  local foreground=$1 text width=$((TERM_WIDTH - PADDING_LEFT - 1))
+  shift
+  ((width > 0)) || width=1
+  for text in "$@"; do
+    gum style --foreground "$foreground" --padding "$PADDING" "$(printf '%s\n' "$text" | fold -s -w "$width")"
+  done
 }
 
 # The failure screen of an engine failure or interruption (D19). Arguments: failed operation, exit status, whether a
 # destructive operation had started (true or false), the engine log, and the run directory. The log tail has no
-# control characters and is cut to the terminal width.
+# control characters and is wrapped to the terminal width.
 ui_engine_failure() {
-  local operation=$1 status=$2 destructive=$3 log=$4 run_directory=$5 line width
-  width=$((TERM_WIDTH - PADDING_LEFT - 1))
+  local operation=$1 status=$2 destructive=$3 log=$4 run_directory=$5 line
   clear_logo
   echo
-  gum style --foreground 1 --padding "$PADDING" 'MirrorOS installation stopped'
+  ui_wrapped_style 1 'MirrorOS installation stopped'
   echo
-  gum style --padding "$PADDING" "Failed operation: ${operation:-unknown}" "Exit status: ${status}"
+  ui_wrapped_style 7 "Failed operation: ${operation:-unknown}" "Exit status: ${status}"
   if [[ $destructive == true ]]; then
-    gum style --foreground 1 --padding "$PADDING" 'The disk was partially modified and installation did not complete.'
+    ui_wrapped_style 1 'The disk was partially modified and installation did not complete.'
   else
-    gum style --padding "$PADDING" 'The disk was not modified.'
+    ui_wrapped_style 7 'The disk was not modified.'
   fi
   echo
   while IFS= read -r line || [[ -n $line ]]; do
-    printf '%s%s\n' "$PADDING_LEFT_SPACES" "${line:0:width}"
+    ui_wrapped_style 7 "$line"
   done < <(tail -n 15 -- "$log" 2> /dev/null | LC_ALL=C sed -e 's/\x1b\[[0-9;?]*[ -\/]*[@-~]//g' | tr -cd '[:print:]\n')
   echo
-  gum style --foreground 8 --padding "$PADDING" "Run directory: ${run_directory}"
+  ui_wrapped_style 8 "Run directory: ${run_directory}"
+}
+
+# The unverified installation screen (D20). Results come only from the engine's validated record.
+ui_not_verified() {
+  local record=$1 run_directory=$2 id detail
+  clear_logo
+  echo
+  ui_wrapped_style 1 'MirrorOS installation could not be verified'
+  echo
+  ui_wrapped_style 1 'Installation finished, but the installed system failed verification. Do not rely on it.'
+  while IFS=$'\t' read -r id detail; do
+    ui_wrapped_style 7 "Failed check: ${id}" "$detail"
+  done < <(node --input-type=module - "$record" <<'NODE'
+import { readFileSync } from 'node:fs';
+const run = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+for (const check of run.postconditions.checks.filter(item => item.status === 'failed')) {
+  process.stdout.write(`${check.id}\t${check.detail}\n`);
+}
+NODE
+  )
+  echo
+  ui_wrapped_style 8 'The disk was modified. The full result is in the run directory.' "Run directory: ${run_directory}"
 }
 
 # A failed phase is reported with its phase, cause, and next action. Arguments: phase, cause, next action.

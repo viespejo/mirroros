@@ -1,23 +1,27 @@
 # Installation confirmation (`mirroros-install`)
 
-`format_version: 4`. Produced by `mirroros-install` (`operations/install`) without a subcommand, which runs the
+`format_version: 5`. Produced by `mirroros-install` (`operations/install`) without a subcommand, which runs the
 guided live installer: one interactive Gum flow that prepares the live environment, discovers the machine
 automatically, collects the installation choices, generates and reviews an
 [installation plan](installation-plan.md), and requires a machine-, disk-, and digest-bound confirmation.
 Confirmation is ephemeral and single-use: it exists only inside one process. No persisted file authorizes
 anything. The two JSON documents below are evidence records. Unknown fields are rejected by
 `install/confirmation/validate-records.mjs`, and records of `format_version` `1` (`apply-run.json`,
-`apply.log`), `2`, and `3` (earlier `install-run.json` and `approval-record.json`) are historical evidence that
-is neither read nor transformed. Version `4` adds the `password` and `engine` stages and the outcome `installed`,
-and removes `approved` as a terminal outcome and the reason `engine_not_available`; it keeps
+`apply.log`), `2`, `3`, and `4` (earlier `install-run.json` and `approval-record.json`) are historical evidence
+that is neither read nor transformed. Version `4` added the `password` and `engine` stages and the outcome
+`installed`, and removed `approved` as a terminal outcome and the reason `engine_not_available`; it kept
 `machine.memory_total_bytes` and the choices of [installation plan](installation-plan.md) version 3, per
-[ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md).
+[ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). Version `5` accepts the outcome `not_verified`
+(exit `4`) of the engine's [postconditions](installation-postconditions.md) and follows plan format 4, whose
+hardware rule outcomes the review shows.
 
 In this version a valid approval is followed by the protected password entry, a final revalidation, and one
 invocation of the installation engine (`install/engine/apply`, defined in
 [`installation-engine.md`](installation-engine.md)), which installs the base system. Exit `0` and the outcome
-`installed` mean that the engine completed every operation of the approved plan; installation postconditions are
-not verified in this version (Story 2.6). The engine is reachable only through this flow
+`installed` mean that the engine completed every operation of the approved plan and that every check of the
+read-only [postconditions](installation-postconditions.md) passed before the first restart. When an operation
+completed but a postcondition failed, the outcome is `not_verified` with exit `4`, and installation is not
+reported as successful. The engine is reachable only through this flow
 ([ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md)), and the assistant runs only the
 `install/engine/apply` of its own artifact.
 
@@ -123,7 +127,9 @@ The screens and their order are the reference's, with the integration difference
 6. **Review.** On entering review, `install/plan/plan` generates the first plan into `plans/01/` and validates the
    complete combination. The review shows the compact answers and the plan reference (the first 12 hex
    characters of the digest). The menu offers continuing to confirmation, inspecting the complete plan, and
-   going back. The review shows the hibernation state: enabled with the swapfile size and, when the size is below
+   going back. The review shows the outcome of every hardware rule (D21) and, under the rows, every warning of
+   the plan, including the hardware warnings for an NVIDIA or unrecognized graphics device and for an
+   unrecognized CPU vendor. None of them blocks continuing. The review shows the hibernation state: enabled with the swapfile size and, when the size is below
    detected memory, the persistent warning; or disabled, stating that no swapfile will be created. No additional
    confirmation dialog is added.
    - Inspecting the complete plan opens `gum pager` with the persisted plan text: disk and current layout, all
@@ -142,7 +148,7 @@ The screens and their order are the reference's, with the integration difference
 9. **Final revalidation into `discovery/final/`.** Rediscovery, then the safety comparison and a digest re-check
    of the plan file on disk. A failed revalidation is `invalidated` and discards the password.
 10. **Engine.** One invocation of the engine, with the progress screen (D17) while it runs and then the success
-    (D18) or failure (D19) screen.
+    (D18), failure (D19), or `not_verified` (D20) screen.
 
 Going back from any screen after confirmation, including Esc at the password screen, clears the approval;
 renewed review and confirmation are required before the flow can reach the password screen again.
@@ -220,7 +226,7 @@ Other reasons:
 | `confirmation_mismatch` | The typed device name differs from the expected kernel name. There is no second attempt. |
 | `install_already_running` | Another run holds the installer lock. Reported on stderr only; no run directory or records. |
 | `engine_version_mismatch` | The plan was generated by a different code identity (commit or dirty state) than the running artifact. The `next_step` asks to generate a new plan with this artifact. The run is `blocked` before review, so no confirmation or password is requested. |
-| Engine codes | The engine's reasons pass through unchanged (see [`installation-engine.md`](installation-engine.md#reasons)): `target_disk_in_use`, `password_unavailable`, `engine_asset_mismatch`, `engine_interrupted`, and `stage_failed` with the failing operation. |
+| Engine codes | The engine's reasons pass through unchanged (see [`installation-engine.md`](installation-engine.md#reasons)): `target_disk_in_use`, `password_unavailable`, `engine_asset_mismatch`, `engine_interrupted`, `postcondition_failed` (one per failed check), and `stage_failed` with the failing operation. |
 | `gum_not_qualified` | Gum is missing or its major version is not `2`. |
 | `device_name_unavailable` | The selected disk has no kernel `path`, so the device name to type cannot be derived. The run is `blocked` before confirmation. |
 | `live_network_not_ready` | Route, name resolution, or the validated HTTPS check failed during live preparation. Recoverable. |
@@ -234,16 +240,17 @@ Other reasons:
 
 | Exit | Outcome | Condition |
 | --- | --- | --- |
-| `0` | `installed` | The user confirmed, entered the password, the final revalidation passed, and the engine completed every operation of the plan (see [`installation-engine.md`](installation-engine.md#exit-statuses)). |
+| `0` | `installed` | The user confirmed, entered the password, the final revalidation passed, the engine completed every operation of the plan, and every postcondition passed (see [`installation-engine.md`](installation-engine.md#exit-statuses)). |
+| `4` | `not_verified` | The engine completed every operation but at least one postcondition failed (reason `postcondition_failed`, one per failed check). The disk is written and unmounted and the records are retained; the installation is not reported as successful. |
 | `3` | `cancelled` | The user chose Cancel, answered No, pressed Esc at an authorization prompt, pressed Ctrl+C during the interactive phase, cancelled a failed preparation, or typed a device name that does not match (reason `confirmation_mismatch`). |
 | `2` | `invalidated` | A machine, profile, disk, layout, eligibility, policy, configuration asset, or plan change was detected before review, after confirmation, or in the engine's final block before the first destructive operation. The reason is one of the invalidation codes above. |
 | `2` | `blocked` | The run cannot reach review for an input reason: invalid facts, an explicit-assertion rejection, an ambiguous profile match, no eligible disk, missing detected memory (`memory_unavailable`, repeat discovery), an unrecoverable discovery result, a plan of a different code identity (`engine_version_mismatch`), or an engine pre-check that stops before any destructive operation (`live_keyring_not_ready`, `password_unavailable`, `target_disk_in_use`). |
-| `5` | `failed` | An external tool failed unexpectedly, including an engine operation; the disk may be partially modified. |
+| `5` | `failed` | An external tool failed unexpectedly, including an engine operation or a postconditions checker that returned no valid result; the disk may be partially modified. |
 | `6` | `failed` | Damaged checkout or embedded code, a damaged configuration asset or prebuilt package, or Gum that is missing or not qualified. |
 | `128+n` | `failed` | A signal arrived during the engine; reason `engine_interrupted`, after the engine's cleanup. |
 | `128+n` | none | Termination by a signal outside the interactive phase and the engine phase, and every signal other than SIGINT. |
 
-Exit `0` is used only for `installed`. Arguments or terminal errors, and a concurrent run
+Exit `0` is used only for `installed`, and exit `4` only for `not_verified`. Arguments or terminal errors, and a concurrent run
 (`install_already_running`), stop the run before it starts: they exit `2` and
 report on stderr only: no run directory and no records are written. No persisted record can authorize another
 run.
@@ -328,7 +335,7 @@ secret. Historical evidence from earlier versions is not renamed or transformed.
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `4`. |
+| `format_version` | Always `5`. |
 | `run_id` | Run identifier. |
 | `timestamp` | RFC 3339 start time. |
 | `entry` | `guided` or `plan_file`. |
@@ -339,7 +346,7 @@ secret. Historical evidence from earlier versions is not renamed or transformed.
 | `digests` | Plan digests in order of generation, one per `plans/NN/`. |
 | `final_digest` | The digest of the plan shown last; omitted when no plan exists. |
 | `exit_status` | The exit status of the run. |
-| `outcome` | `installed`, `cancelled`, `invalidated`, `blocked`, or `failed`. |
+| `outcome` | `installed`, `not_verified`, `cancelled`, `invalidated`, `blocked`, or `failed`. |
 | `reasons` | List of structured reasons; may be empty. |
 
 ### `approval-record.json`
@@ -349,7 +356,7 @@ confirmation.
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `4`. |
+| `format_version` | Always `5`. |
 | `run_id` | Run identifier, the same as in `install-run.json`. |
 | `timestamp` | RFC 3339 time the record was written. |
 | `digest` | The final plan digest; omitted when no plan exists. |
@@ -369,7 +376,7 @@ The reference is the frozen copy at
 [`prototypes/frontend/guided-installer/`](../prototypes/frontend/guided-installer/README.md): its logo, Tokyo
 Night palette, layout, centering, widgets, navigation, and screen order are reproduced. Only the differences
 below are intended. Any other visual, wording, workflow, or widget difference needs the maintainer's approval
-first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4, except D15, which was approved at plan 02-08, Task 1, with the acceptance of [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). The rewording of D7 and D10 to D14 and the new items D16 to D19 are proposed by plan 02-09 and await approval at its Task 2; their fidelity is confirmed at its attended review.
+first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4, except D15, which was approved at plan 02-08, Task 1, with the acceptance of [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). The rewording of D7 and D10 to D14 and the new items D16 to D19 are proposed by plan 02-09 and await approval at its Task 2; their fidelity is confirmed at its attended review. The rewording of D18 and D19 and the new items D20 and D21 are proposed by plan 02-11 and await approval at its Task 2; their fidelity is confirmed at its attended review.
 
 | # | Reference | Production | Why |
 | --- | --- | --- | --- |
@@ -386,12 +393,14 @@ first. The wording shown is the proposed production text; every item awaits appr
 | D11 | Password screen header "No password collection in this prototype"; menu "Finish preview" / "Back". | Two inputs, "Password> " and "Confirm> " (`gum input --password`), and no menu. A blank value shows "Password can't be blank" and a mismatch shows "Passwords didn't match"; both fields are asked again, with no attempt limit and no strength policy. Esc returns to the review and clears the approval; Ctrl+C cancels. | Truthful wording. |
 | D12 | Root screen: "The intended flow asks for one password, with repetition, after plan approval." / "This preview does not collect passwords or change accounts." | "One password is asked, with repetition, after you approve the plan." The preview-only closing line is removed. When password login is enabled, a gray line is added: "Sharing the password does not give root an independent recovery credential." | DEC-004, DEC-005. |
 | D13 | Ending: "Presentation demo finished. No installation or disk operation executed." / "Synthetic example facts were used. No credentials or evidence were saved." | Replaced by the engine-phase screens D17 to D19. The run directory is named on the failure screen, and no approval is saved or can authorize a later run. | Truthful engine-unavailable ending. |
-| D14 | Screen titles list includes "Choose installation target", "Confirmation preview - simulation only", and "Password requirements - preview only". | "Choose installation target" is replaced by "Machine check" (D1); the other two are replaced as in D9 and D10; a titled screen is added for the clock failure (D4). The remaining titles are unchanged, except the title of the stage changed by D15. Titled screens are added for the keyring wait (D16), the progress (D17), the success (D18), and the failure (D19). | Consequence of D1, D4, D9, D10, D15. |
+| D14 | Screen titles list includes "Choose installation target", "Confirmation preview - simulation only", and "Password requirements - preview only". | "Choose installation target" is replaced by "Machine check" (D1); the other two are replaced as in D9 and D10; a titled screen is added for the clock failure (D4). The remaining titles are unchanged, except the title of the stage changed by D15. Titled screens are added for the keyring wait (D16), the progress (D17), the success (D18), the failure (D19), and the unverified installation (D20). | Consequence of D1, D4, D9, D10, D15. |
 | D15 | "Choose swapfile size" screen at the position after storage layout: gray lines "The swapfile is used for swap and hibernation." / "The default does not guarantee hibernation for every workload.", the range line, and the "Swapfile size (MiB)> " input. Review row "Swapfile": "<n> MiB". | The stage is titled "Choose hibernation" and is shown at the same position. A `gum choose` with the header "Hibernation" offers "Enabled" and "Disabled", with the current choice selected (Enabled initially) and the gray lines "Hibernation lets the machine power off and resume where it left off." / "Enabled keeps a swapfile on disk; it also serves as fallback swap when zram is full." Only when Enabled, the sizing screen titled "Choose swapfile size" follows, in the reference's style, with the gray lines "The swapfile holds the hibernation image and also serves as fallback swap after zram." / "The default does not guarantee hibernation for every workload.", the range line stating the RAM-derived minimum and maximum, and the unchanged input; it shows no warning. Back from the sizing returns to the hibernation choice. Disabling removes the explicit size and re-enabling proposes the RAM-derived default again. The review row "Swapfile" becomes "Hibernation": "Enabled (swapfile <n> MiB)", or "Disabled (no swapfile)" with the gray line "Hibernation is disabled: no swapfile will be created."; when the size is below detected memory, the persistent yellow line "Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space." appears under the rows. No additional confirmation dialog, and no claim that the default guarantees a successful resume. | DEC-013, DEC-014, DEC-028; [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md): hibernation is optional and the swapfile size is RAM-derived. |
 | D16 | None. | Drawn only while the package keyring is not ready. While waiting: a screen titled "Preparing the package keyring" with the gray line "Waiting for the package keyring to be initialized...". When the bound of 600 seconds expires or the service fails: a screen titled "Package keyring not ready" with "Package signatures cannot be verified until the keyring is ready." and "Wait a moment, then retry.", with Retry keyring check and Cancel. No screen is drawn when the keyring is already ready. | DEC-012, DEC-020: visible wait during live preparation, before any confirmation or password. |
 | D17 | None. | Engine progress screen: the logo, the title "Installing MirrorOS", a 34-column progress bar, and the dimmed line "[<n>/<N>] <description>" with the current operation's plan description. The bar is the completed operations over the total, with no time-based curve and no tips. During package installation a second dimmed line shows "Packages installed: <count>"; the count never moves the bar. | DEC-008: progress must be backed by completed work. |
-| D18 | None. | Success screen: the logo, "Installed MirrorOS in <duration>", the dimmed line "Base system installed. Installation postconditions are not verified in this version (Story 2.6).", and a menu "Restart now" / "Return to shell". There is no animated effect. The machine restarts only when "Restart now" is chosen. | DEC-007, DEC-008. |
-| D19 | None. | Failure screen for an engine failure or interruption: the logo, the red title "MirrorOS installation stopped", "Failed operation: <id>", "Exit status: <status>", the red line "The disk was partially modified and installation did not complete." (or "The disk was not modified." when no destructive operation had started), the last 15 lines of `engine.log`, "Run directory: <path>", and a menu "View full log" (`gum pager`) / "Return to shell" / "Restart" / "Power off". It offers no log upload, no media diagnosis, and no automatic action. A stop before the first destructive operation (`blocked` or `invalidated`) uses the D5 screen instead. | DEC-006, DEC-008. |
+| D18 | None. | Success screen: the logo, "Installed MirrorOS in <duration>", the dimmed line "Base system installed. Configuration checks passed before the first restart.", and a menu "Restart now" / "Return to shell". There is no animated effect. The machine restarts only when "Restart now" is chosen. | DEC-007, DEC-008. |
+| D19 | None. | Failure screen for an engine failure or interruption: the logo, the red title "MirrorOS installation stopped", "Failed operation: <id>", "Exit status: <status>", the red line "The disk was partially modified and installation did not complete." (or "The disk was not modified." when no destructive operation had started), the last 15 lines of `engine.log`, "Run directory: <path>", and a menu "View full log" (`gum pager`) / "Return to shell" / "Restart" / "Power off". It offers no log upload, no media diagnosis, and no automatic action. A stop before the first destructive operation (`blocked` or `invalidated`) uses the D5 screen instead. Every line of this screen, including each of the 15 log lines, is wrapped at word boundaries to the terminal width, so that no line overflows the right edge; the wrapping applies to this screen and to D20 only. | DEC-006, DEC-008; DEC-014 of Story 2.6. |
+| D20 | None. | `not_verified` screen, for the outcome `not_verified`: the logo, the red title "MirrorOS installation could not be verified", the red line "Installation finished, but the installed system failed verification. Do not rely on it.", one block per failed check with "Failed check: <id>" and its non-secret `detail` (expected and observed values), the gray line "The disk was modified. The full result is in the run directory.", "Run directory: <path>", and a menu "View full log" (`gum pager`) / "Return to shell" / "Restart" / "Power off". No automatic action and no retry. The restart is never the default. Every line is wrapped at word boundaries to the terminal width, as in D19. | DEC-008, DEC-014 of Story 2.6. |
+| D21 | Review rows end with "Internet"; the hardware appears only in the full plan as `not_evaluated`. | Review rows "Graphics", "CPU microcode", "Battery", and "Virtualization" are added after the "Machine" row, each showing the rule outcome in one line (for example "Kernel driver, nothing additional", "Installs amd-ucode", "Battery detected", or "Virtual machine"). Every warning of the plan, including the hardware warnings of the plan contract, appears as a persistent yellow line under the rows, like the swapfile warning of D15. The complete plan (D8) shows each outcome with its fact, detected value, and explanation, and the rule packages with their provenance. Nothing here is editable or blocks continuing. | FR18, FR33–FR35 of Story 2.6: hardware-derived choices are explained before approval. |
 
 Unchanged and not differences: the logo and its two-tone drawing, the palette and the VT-only palette setting, the
 centering, the Gum widget styles, the welcome text and the live-keyboard screen (including "This layout is for the

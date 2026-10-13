@@ -1,3 +1,4 @@
+import { RULES, evaluateValues } from '../../hardware/rules/evaluate-rules.mjs';
 import { isRecord, reason } from '../discovery/validate-facts.mjs';
 import { canonicalize } from './canonical-json.mjs';
 import { sha256Canonical, verifyDigest } from './digest-plan.mjs';
@@ -10,7 +11,7 @@ import {
   requiredDiskBytes,
 } from './swap-policy.mjs';
 
-export const PLAN_FORMAT_VERSION = 3;
+export const PLAN_FORMAT_VERSION = 4;
 export const PLAN_POLICY_FORMAT_VERSION = 3;
 export const CHOICES_FORMAT_VERSION = 3;
 export const EXIT_VALID = 0;
@@ -176,6 +177,7 @@ const NEXT_STEPS = {
   disk_not_eligible: 'Choose an eligible disk and regenerate the plan.',
   plan_size_does_not_fit: 'Choose a smaller swapfile_size, disable hibernation, or use a larger disk, and regenerate the plan.',
   hibernation_plan_mismatch: 'Regenerate the plan; the swapfile, @swap, and resume settings follow the hibernation choice and the detected memory.',
+  hardware_rules_mismatch: 'Regenerate the plan from the current target-facts.json; rule outcomes, rule packages, and rule warnings are derived by the hardware rules and cannot be edited.',
   configuration_asset_mismatch: 'Regenerate the plan from this MirrorOS checkout; the zram, memory reclaim, package, and zswap settings must agree with the policy and its assets.',
   facts_binding_mismatch: 'Regenerate the plan from the current target-facts.json.',
   digest_mismatch: 'Regenerate the plan; its content changed after the digest was computed.',
@@ -499,10 +501,11 @@ function checkSecrets(secrets, reasons) {
 }
 
 function checkHardware(hardware, reasons) {
-  if (!checkRecord(hardware, 'plan.hardware_selections', ['selections', 'detected_capabilities'], [], reasons)) return;
+  if (!checkRecord(hardware, 'plan.hardware_selections', ['selections', 'rule_outcomes', 'rule_packages'], [], reasons)) return;
   const groups = [
     ['selections', ['id', 'fact', 'value', 'provenance', 'rule']],
-    ['detected_capabilities', ['id', 'fact', 'value', 'rule', 'next_story']],
+    ['rule_outcomes', ['rule', 'fact', 'value', 'outcome', 'explanation']],
+    ['rule_packages', ['name', 'rule', 'provenance', 'source', 'editable']],
   ];
   for (const [group, fields] of groups) {
     const list = hardware[group];
@@ -510,18 +513,66 @@ function checkHardware(hardware, reasons) {
     list.forEach((entry, index) => {
       const path = `plan.hardware_selections.${group}[${index}]`;
       if (!checkRecord(entry, path, fields, [], reasons)) return;
-      for (const key of ['id', 'fact', 'rule']) {
+      for (const key of ['id', 'fact', 'rule', 'outcome', 'explanation', 'name']) {
         if (entry[key] !== undefined) expect(isString(entry[key]), `${path}.${key}`, 'a non-empty string', reasons);
       }
       if (group === 'selections' && entry.provenance !== undefined) {
         expect(entry.provenance === 'hardware_detection', `${path}.provenance`, '"hardware_detection"', reasons);
       }
-      if (group === 'detected_capabilities') {
-        if (entry.rule !== undefined) expect(entry.rule === 'not_evaluated', `${path}.rule`, '"not_evaluated"', reasons);
-        if (entry.next_story !== undefined) expect(entry.next_story === '2.6', `${path}.next_story`, '"2.6"', reasons);
-      }
     });
   }
+}
+
+const POLICY_WARNING_CODES = ['machine_unqualified', 'disk_without_by_id', 'storage_option_experimental', 'swapfile_below_ram'];
+
+function sameDocument(left, right) {
+  try {
+    return canonicalize(left) === canonicalize(right);
+  } catch {
+    return false;
+  }
+}
+
+// The rule outcomes, rule packages, and rule warnings must be exactly what the shared rule module derives from the
+// detected values recorded in the plan. No facts are read: the plan carries the value each rule saw.
+function checkHardwareRules(plan, reasons) {
+  const hardware = plan.hardware_selections;
+  if (!isRecord(hardware) || !Array.isArray(hardware.rule_outcomes) || !Array.isArray(hardware.rule_packages)
+    || !Array.isArray(plan.warnings) || !hardware.rule_outcomes.every(isRecord)) return;
+  const problems = [];
+  const recorded = hardware.rule_outcomes.map(entry => entry.rule);
+  if (!sameDocument(recorded, RULES.map(rule => rule.id))) {
+    problems.push(`rule_outcomes list ${recorded.join(', ')} instead of ${RULES.map(rule => rule.id).join(', ')}`);
+  } else {
+    let derived;
+    try {
+      derived = evaluateValues(Object.fromEntries(hardware.rule_outcomes.map(entry => [entry.rule, entry.value])));
+    } catch (error) {
+      problems.push(`a rule cannot evaluate its recorded value (${error.name})`);
+    }
+    if (derived !== undefined) {
+      hardware.rule_outcomes.forEach((entry, index) => {
+        const expected = derived.rule_outcomes[index];
+        if (entry.fact !== expected.fact) problems.push(`the fact of rule ${entry.rule} is ${entry.fact} instead of ${expected.fact}`);
+        if (entry.outcome !== expected.outcome) problems.push(`the outcome of rule ${entry.rule} is ${entry.outcome}, not valid for its value`);
+      });
+      if (!sameDocument(hardware.rule_packages, derived.rule_packages)) {
+        problems.push('rule_packages differs from the packages named by the rule outcomes, or a rule package lacks its labels or is editable');
+      }
+      const install = operationKinds(plan).find(operation => operation.kind === 'install_packages');
+      if (install !== undefined && !sameDocument(install.parameters?.rule_packages, hardware.rule_packages.map(entry => entry?.name))) {
+        problems.push('the install_packages rule_packages parameter differs from hardware_selections.rule_packages');
+      }
+      const split = plan.warnings.length - derived.warnings.length;
+      const head = split < 0 ? plan.warnings : plan.warnings.slice(0, split);
+      const tail = split < 0 ? [] : plan.warnings.slice(split);
+      if (split < 0 || !sameDocument(tail, derived.warnings)) problems.push('the rule warnings are missing from or differ in warnings');
+      if (head.some(item => !isRecord(item) || !POLICY_WARNING_CODES.includes(item.code))) {
+        problems.push('warnings holds a warning that no policy check or rule outcome produces');
+      }
+    }
+  }
+  for (const problem of problems) add(reasons, 'hardware_rules_mismatch', `${problem[0].toUpperCase()}${problem.slice(1)}.`);
 }
 
 function checkBindings(plan, reasons) {
@@ -851,6 +902,7 @@ export function validatePlan(plan, { facts, assets } = {}) {
   checkDisk(plan, reasons);
   checkSizes(plan, reasons);
   checkHibernation(plan, reasons);
+  checkHardwareRules(plan, reasons);
   checkConfiguration(plan, reasons, assets);
   checkLocalization(plan, reasons);
   checkProfileBinding(plan, reasons);

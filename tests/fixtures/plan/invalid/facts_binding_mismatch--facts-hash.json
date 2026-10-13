@@ -1,5 +1,5 @@
 {
-  "format_version": 3,
+  "format_version": 4,
   "target": {
     "machine": {
       "architecture": "x86_64",
@@ -379,9 +379,12 @@
           "man-db",
           "man-pages",
           "networkmanager"
+        ],
+        "rule_packages": [
+          "amd-ucode"
         ]
       },
-      "description": "Install the base package set, zram-generator, and the packages of the storage option."
+      "description": "Install the base package set, zram-generator, the packages of the storage option, and the packages selected by the hardware rules."
     },
     {
       "id": "configure_zram",
@@ -574,36 +577,45 @@
         "rule": "uefi_boot_mode_check"
       }
     ],
-    "detected_capabilities": [
+    "rule_outcomes": [
       {
-        "id": "graphics_vendor",
+        "rule": "graphics",
         "fact": "hardware.graphics",
         "value": [
           "qemu_virtual"
         ],
-        "rule": "not_evaluated",
-        "next_story": "2.6"
+        "outcome": "kernel_driver_only",
+        "explanation": "Graphics vendors: qemu_virtual. The kernel driver and linux-firmware already installed are enough; nothing additional is selected."
       },
       {
-        "id": "battery_present",
-        "fact": "hardware.battery_present",
-        "value": false,
-        "rule": "not_evaluated",
-        "next_story": "2.6"
-      },
-      {
-        "id": "virtualization",
-        "fact": "hardware.virtualization",
-        "value": "kvm",
-        "rule": "not_evaluated",
-        "next_story": "2.6"
-      },
-      {
-        "id": "cpu_vendor",
+        "rule": "cpu-microcode",
         "fact": "hardware.cpu.vendor",
         "value": "AuthenticAMD",
-        "rule": "not_evaluated",
-        "next_story": "2.6"
+        "outcome": "amd_microcode",
+        "explanation": "CPU vendor AuthenticAMD. The amd-ucode package is installed so the matching microcode is loaded at boot."
+      },
+      {
+        "rule": "battery",
+        "fact": "hardware.battery_present",
+        "value": false,
+        "outcome": "battery_absent",
+        "explanation": "No battery was detected. Nothing is selected."
+      },
+      {
+        "rule": "virtualization",
+        "fact": "hardware.virtualization",
+        "value": "kvm",
+        "outcome": "virtual_machine",
+        "explanation": "Virtualization kvm was detected. Nothing is selected for it in this version."
+      }
+    ],
+    "rule_packages": [
+      {
+        "name": "amd-ucode",
+        "rule": "cpu-microcode",
+        "provenance": "hardware_detection",
+        "source": "detected",
+        "editable": false
       }
     ]
   },
@@ -621,6 +633,6 @@
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "07e9522fa161d073b663c02f6955e2e072d460c345c97e40319afb9ec0216c21"
+    "value": "4d2d0a5868096fc56c23c71cc13904388907e18598185068297c7a3eacfbcefa"
   }
 }

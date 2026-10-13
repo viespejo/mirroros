@@ -116,7 +116,7 @@ approve_plan_script() {
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.reasons.length === 0"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "!('reason' in d)"
   confirm_assert_output_contains 'Installed MirrorOS in'
-  confirm_assert_output_contains 'Base system installed. Installation postconditions are not verified in this version (Story 2.6).'
+  confirm_assert_output_contains 'Base system installed. Configuration checks passed before the first restart.'
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.outcome === 'installed' && d.exit_status === 0 && d.not_started.length === 0"
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.plan_digest === JSON.parse(require('node:fs').readFileSync('${RUN_DIR}/plans/01/installation-plan.json', 'utf8')).digest.value"
   confirm_json_assert "${RUN_DIR}/engine/state.json" "d.status === 'installed'"
@@ -126,7 +126,7 @@ approve_plan_script() {
   [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.txt" ]
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.storage_option === 'ext4-systemd-boot' && Object.keys(d).length === 2"
-  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 4 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 5 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password,discovery_final,engine'"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "/^[0-9a-f]{64}$/.test(d.digest) && d.outcome === 'installed'"
@@ -136,6 +136,32 @@ approve_plan_script() {
   confirm_assert_gum_called 'input --password --show-help --prompt Confirm> '
   confirm_assert_private
   confirm_assert_log_plain
+}
+
+@test "the review shows the outcome of every hardware rule and no warning for supported hardware" {
+  approve_script
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 0 ]
+  confirm_assert_run 0 installed
+  grep -aqE 'Graphics +Kernel driver, nothing additional' "$STDOUT_PATH"
+  grep -aqE 'CPU microcode +Installs amd-ucode' "$STDOUT_PATH"
+  grep -aqE 'Battery +No battery detected' "$STDOUT_PATH"
+  grep -aqE 'Virtualization +Virtual machine' "$STDOUT_PATH"
+  confirm_assert_gum_not_called 'NVIDIA graphics device|CPU vendor is not'
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.format_version === 4 && d.hardware_selections.rule_outcomes.length === 4 && d.warnings.length === 0"
+}
+
+@test "an NVIDIA GPU and an unknown CPU vendor are warned about in the review and never block the installation" {
+  confirm_scenario_hardware 0x10de CentaurHauls
+  approve_script
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 0 ]
+  confirm_assert_run 0 installed
+  grep -aqE 'Graphics +NVIDIA detected, nouveau driver used' "$STDOUT_PATH"
+  grep -aqE 'CPU microcode +Not recognized, nothing installed' "$STDOUT_PATH"
+  confirm_assert_gum_called 'An NVIDIA graphics device was detected.'
+  confirm_assert_gum_called 'The CPU vendor is not AuthenticAMD or GenuineIntel'
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.warnings.map(w => w.code).join() === 'graphics_nvidia_nouveau,cpu_vendor_unknown' && d.hardware_selections.rule_packages.length === 0"
 }
 
 @test "accepted proposals keep their provenance and only a changed value becomes a choice" {
@@ -851,11 +877,30 @@ swap_scenario_hook() {
   confirm_assert_gum_called 'MirrorOS installation stopped'
   confirm_assert_gum_called 'Failed operation: install_packages'
   confirm_assert_gum_called 'The disk was partially modified and installation did not complete.'
-  confirm_assert_gum_called "Run directory: ${RUN_DIR}"
+  confirm_assert_gum_called 'Run directory:'
   confirm_assert_gum_called 'View full log Return to shell Restart Power off'
   confirm_assert_output_contains 'pacstrap: simulated failure'
   ! grep -qE '^systemctl (reboot|poweroff)' "${DOUBLE_STATE}/calls.log"
   confirm_assert_gum_not_called 'Installed MirrorOS'
+  confirm_assert_no_canary
+  confirm_assert_private
+}
+
+@test "failed postconditions show D20, exit 4, retain records, and unmount the target" {
+  : > "${DOUBLE_STATE}/postconditions-missing-kernel"
+  approve_script
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 4 ]
+  confirm_assert_run 4 not_verified
+  confirm_assert_reason postcondition_failed
+  confirm_assert_gum_called 'MirrorOS installation could not be verified'
+  confirm_assert_gum_called 'Failed check: kernel_installed'
+  confirm_assert_gum_called '/boot/vmlinuz-linux is missing'
+  confirm_assert_gum_called 'View full log Return to shell Restart Power off'
+  confirm_assert_gum_not_called 'Installed MirrorOS'
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+  [ -f "${RUN_DIR}/engine/engine-run.json" ]
+  ! grep -qE '^systemctl (reboot|poweroff)' "${DOUBLE_STATE}/calls.log"
   confirm_assert_no_canary
   confirm_assert_private
 }

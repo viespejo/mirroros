@@ -55,6 +55,10 @@ test('review-values prints the plan values and the plan reference, and nothing s
   assert.equal(values.hibernation, 'true');
   assert.equal(values.hibernation_label, 'Enabled (swapfile 4096 MiB)');
   assert.equal(values.swapfile_below_ram, 'false');
+  assert.equal(values.rule_graphics, 'Kernel driver, nothing additional');
+  assert.equal(values.rule_cpu_microcode, 'Installs amd-ucode');
+  assert.equal(values.rule_battery, 'No battery detected');
+  assert.equal(values.rule_virtualization, 'Virtual machine');
   assert.equal('swapfile_size' in values, false);
   assert.equal(values.format_locale, plan.choices.locale_categories.value.LC_TIME);
   assert.equal(values.plan_reference, plan.digest.value.slice(0, 12));
@@ -192,4 +196,19 @@ test('engine-summary prints the failed operation, whether the disk was touched, 
   assert.equal(run('engine-summary', write('run-blocked.json', before)).stdout, 'precheck\tfalse\t\n');
   const wiping = engineRun({ completed: [], failed_operation: { id: 'wipe_disk_signatures', command: ['wipefs'], child_exit_status: 1 } });
   assert.equal(run('engine-summary', write('run-wipe.json', wiping)).stdout.split('\t')[1], 'true');
+});
+
+test('review-warnings prints one line per plan warning, without the swapfile warning', () => {
+  assert.equal(run('review-warnings', write('quiet-plan.json', generate().plan)).stdout, '');
+  const nvidia = structuredClone(facts());
+  nvidia.effective['hardware.graphics'] = { value: [{ vendor: 'nvidia' }], source: 'detected' };
+  nvidia.effective['hardware.cpu.vendor'] = { value: 'Other', source: 'detected' };
+  const { plan } = generate({ factsDocument: nvidia, choices: { swapfile_size: 2048 } });
+  const result = run('review-warnings', write('warning-plan.json', plan));
+  assert.equal(result.status, 0, result.stderr);
+  const lines = result.stdout.trimEnd().split('\n');
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /NVIDIA/);
+  assert.match(lines[1], /CPU vendor/);
+  assert.ok(!/hibernation may be unavailable/.test(result.stdout));
 });

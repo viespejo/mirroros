@@ -68,6 +68,10 @@ Replace or reverse this decision if the maintainer changes the physical target a
 - [Epics](../epics.md)
 - [ADR 0003: Storage and Recovery Baseline](0003-storage-and-recovery-baseline.md)
 
+## Forward note
+
+Story 2.6 (plan 02-11) resolved the question this ADR left open: the `nvidia-discrete-graphics` and `hybrid-graphics` rule entries, and the planned `amd-integrated-graphics` entry, were removed from the architecture tree and replaced by the vendor-based rules `graphics`, `cpu-microcode`, `battery`, and `virtualization` under `hardware/rules/`, with no driver installed for NVIDIA or AMD dedicated graphics. The decisions of this ADR are unchanged. See the [Story 2.6 decision log](../technical-interviews/story-2-6-hardware-adaptation-postconditions_log.md) (DEC-003, DEC-004, DEC-010).
+
 ## Superseded by
 
 `None`

@@ -105,7 +105,7 @@ main() {
   read_password
   final_block
   execute_plan
-  finish installed 0
+  run_postconditions
 }
 
 main "$@"

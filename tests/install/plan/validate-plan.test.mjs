@@ -80,6 +80,14 @@ test('single-rule fixtures raise only their rule', () => {
     'machine_identity_mismatch--architecture': ['machine_identity_mismatch'],
     'machine_identity_mismatch--memory': ['machine_identity_mismatch'],
     'plan_format_unsupported--version-2': ['plan_format_unsupported'],
+    'plan_format_unsupported--version-3': ['plan_format_unsupported'],
+    'hardware_rules_mismatch--outcome': ['hardware_rules_mismatch'],
+    'hardware_rules_mismatch--package-added': ['hardware_rules_mismatch'],
+    'hardware_rules_mismatch--package-editable': ['hardware_rules_mismatch'],
+    'hardware_rules_mismatch--install-parameter': ['hardware_rules_mismatch'],
+    'hardware_rules_mismatch--warning-missing': ['hardware_rules_mismatch'],
+    'hardware_rules_mismatch--warning-added': ['hardware_rules_mismatch'],
+    'hardware_rules_mismatch--rule-order': ['hardware_rules_mismatch'],
     'hibernation_plan_mismatch--disabled-with-size': ['hibernation_plan_mismatch'],
     'hibernation_plan_mismatch--disabled-with-swapfile': ['hibernation_plan_mismatch'],
     'hibernation_plan_mismatch--disabled-with-resume': ['hibernation_plan_mismatch'],
@@ -140,7 +148,7 @@ test('non-objects, bad JSON, and unsupported versions are rejected', () => {
   assert.deepEqual(codes(parsePlanText('{not json').reasons), ['plan_not_json']);
   assert.deepEqual(codes(validatePlan({ format_version: 1 })), ['plan_format_unsupported']);
   assert.deepEqual(codes(validatePlan({ format_version: 2 })), ['plan_format_unsupported']);
-  assert.deepEqual(codes(validatePlan({ format_version: 4 })), ['plan_format_unsupported']);
+  assert.deepEqual(codes(validatePlan({ format_version: 3 })), ['plan_format_unsupported']);
   assert.deepEqual(codes(validatePlan({})), ['plan_format_unsupported']);
 });
 

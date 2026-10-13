@@ -1,10 +1,10 @@
 # Installation plan (`installation-plan.json`)
 
-`format_version: 3`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
+`format_version: 4`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
 (format 2), the installation policy, an optional override of a matched profile, and an optional choices file.
 It identifies the observed machine, its profile classification, and the target disk, plus the ordered
 declarative operations, every value with its provenance and source, the secret requirements by name, and the
-hardware-derived selections. It is bound to its inputs by a digest. Unknown fields are rejected by
+hardware-derived selections, including the outcome of every hardware rule. It is bound to its inputs by a digest. Unknown fields are rejected by
 `install/plan/validate-plan.mjs`.
 
 A plan does not require a matched profile: an unqualified machine produces a plan bound to its observed
@@ -24,17 +24,20 @@ Each document keeps its own constant; no constant is shared between unrelated do
 
 | Document | Constant | Value |
 | --- | --- | --- |
-| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `3` |
+| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `4` |
 | Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `3` |
 | Choices file (`--choices`) | `CHOICES_FORMAT_VERSION` | `3` |
 | Target facts | `FACTS_FORMAT_VERSION` | `2`, see [`target-facts.md`](target-facts.md) |
 | Plan override (`targets/<id>/overrides/plan.json`) | none: a flat object, unchanged | |
 
 The confirmation records have their own constant, see [`installation-confirmation.md`](installation-confirmation.md).
-Version `3` follows [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md): conditional hibernation fields,
-RAM-derived sizing, new operations, and a changed operation set must not reinterpret older documents.
+Version `3` followed [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md): conditional hibernation fields,
+RAM-derived sizing, new operations, and a changed operation set must not reinterpret older documents. Version `4`
+replaces the informational `detected_capabilities` with the rule outcomes of `hardware/rules/` and adds the
+separate list of rule-selected packages, so a format `3` plan cannot be read as a format `4` plan. The policy,
+choices-file, and facts constants are unchanged: the hardware rules read facts and add no policy value.
 
-A plan of format `1` or `2` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
+A plan of format `1`, `2`, or `3` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
 new target facts. Plans, policy snapshots, choices files, and evidence of earlier versions are never migrated or
 reinterpreted; the generator reads facts of format `2` only, and the facts format is unchanged.
 
@@ -59,12 +62,12 @@ proposal. Only a changed value is recorded with source `choice` (and, because th
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `3`. |
+| `format_version` | Always `4`. |
 | `target` | `machine`, `profile`, and `disk`. |
 | `choices` | Every resolved policy value, keyed by name. |
 | `operations` | The ordered declarative operations. |
 | `secret_requirements` | Ordered secret names, never values. |
-| `hardware_selections` | `selections` and `detected_capabilities`. |
+| `hardware_selections` | `selections`, `rule_outcomes`, and `rule_packages`. |
 | `warnings` | Entries with `code`, `message`, and `next_step`. May be empty. |
 | `facts_binding` | Where the facts came from. |
 | `policy_binding` | Which policy, matched-profile definition, and override were applied. |
@@ -230,7 +233,7 @@ is defined in [`installation-engine.md`](installation-engine.md).
 | `format_filesystems` | yes | Format the ESP as FAT32 and the root partition with the option's filesystem. Resolves `partition_uuids` (`blkid`). |
 | `create_btrfs_subvolumes` | no | Create the flat subvolumes of the option on the new filesystem, without `@swap` when `hibernation` is `false`. |
 | `mount_target` | no | Mount the root (with the subvolumes for Btrfs, and `@swap` only when `hibernation` is `true`) and the ESP under the target root. |
-| `install_packages` | no | Install `packages` (including `zram-generator`), the network package, and the option's additional packages. |
+| `install_packages` | no | Install `packages` (including `zram-generator`), the network package, and the option's additional packages, then the `rule_packages` selected by the hardware rules. Parameters: `packages` (the personal, network, and option packages, in that order) and `rule_packages` (the package names of `hardware_selections.rule_packages`, in plan order, possibly empty). The engine installs both lists in one transaction and reads no policy or rule. |
 | `generate_fstab` | no | Generate `/etc/fstab` by UUID. For Btrfs only subvolume paths are kept, never `subvolid=`. |
 | `configure_zram` | no | Deliver the zram-generator drop-in. Parameters: `destination`, `source_sha256`, `zram_size` (`ram`), `compression_algorithm` (`zstd`), and `swap_priority` (`100`). |
 | `configure_memory_reclaim` | no | Deliver the sysctl drop-in. Parameters: `destination`, `source_sha256`, and the four `vm.*` values. |
@@ -308,9 +311,46 @@ stored: the assistant collects it and hands it to the engine over a protected ch
 `single_eligible_disk`, only when preselected) and `boot_mode` (rule `uefi_boot_mode_check`, a check
 rather than a choice).
 
-`detected_capabilities` is informational: entries with `id`, `fact`, `value`, `rule` (`not_evaluated`),
-and `next_story` (`"2.6"`) for `graphics_vendor`, `battery_present`, `virtualization`, and
-`cpu_vendor`. None of them becomes a package or configuration in this stage.
+`rule_outcomes` replaces the format `3` `detected_capabilities`. It has exactly one entry per hardware rule, in
+the fixed order `graphics`, `cpu-microcode`, `battery`, `virtualization`. Each entry has:
+
+| Field | Description |
+| --- | --- |
+| `rule` | The rule id: `graphics`, `cpu-microcode`, `battery`, or `virtualization`. |
+| `fact` | The dotted path of the facts' `effective` view the rule read (`hardware.graphics`, `hardware.cpu.vendor`, `hardware.battery_present`, `hardware.virtualization`). |
+| `value` | The detected value as observed: the list of graphics vendors, the CPU vendor string, a boolean, or the virtualization string. `unknown` when the fact was not observed. |
+| `outcome` | The rule's result, from the table below. |
+| `explanation` | One sentence stating why the outcome follows from the value and what it changes in the plan. |
+
+Outcomes per rule:
+
+| Rule | Outcome | Condition | Plan effect |
+| --- | --- | --- | --- |
+| `graphics` | `kernel_driver_only` | Every detected device has vendor `amd`, `intel`, or `qemu_virtual`. | None. The kernel driver and `linux-firmware` already installed are enough; nothing additional is selected. No warning. |
+| `graphics` | `nvidia_nouveau_fallback` | At least one device has vendor `nvidia` and none is unrecognized. | None. The in-kernel `nouveau` driver is used; it is neither blacklisted nor configured. Warning `graphics_nvidia_nouveau`. |
+| `graphics` | `vendor_not_recognized` | Any device has vendor `unknown`, or no graphics device was observed. | None. Nothing is guessed. Warning `graphics_vendor_unknown`. |
+| `cpu-microcode` | `amd_microcode` | The CPU vendor is `AuthenticAMD`. | Rule package `amd-ucode`. |
+| `cpu-microcode` | `intel_microcode` | The CPU vendor is `GenuineIntel`. | Rule package `intel-ucode`. |
+| `cpu-microcode` | `vendor_not_recognized` | Any other vendor, or none observed. | None. Nothing is guessed. Warning `cpu_vendor_unknown`. |
+| `battery` | `battery_present`, `battery_absent`, or `not_observed` | The `battery_present` fact. | None. Informational only. No warning. |
+| `virtualization` | `virtual_machine`, `physical_machine`, or `not_observed` | A virtualization value other than `none`, the value `none`, or no value. | None. Informational only. No warning. |
+
+When the graphics rule sees several devices, the outcome is the most restrictive that applies: `vendor_not_recognized`
+over `nvidia_nouveau_fallback` over `kernel_driver_only`. The `explanation` names the vendors. No rule blocks
+installation, and no rule selects a driver, a Mesa or Vulkan package, a power-management tool, or a guest agent.
+
+`rule_packages` is the list of packages the rules selected, separate from the personal `packages` of `choices`.
+Each entry has `name`, `rule`, `provenance` (`hardware_detection`), `source` (`detected`), and `editable`
+(`false`). A rule package cannot be edited, removed, or added by a choices file or an override, and it is shown in
+review and in the rendered plan. With no matching rule it is an empty list. Every entry is justified by exactly
+one rule outcome whose `Plan effect` names that package, and a rule outcome never lists a package that is absent
+from `rule_packages`.
+
+The rules are evaluated at plan generation by the generic evaluator of `hardware/rules/`, in the fixed order
+above, from the facts only. Their warnings are appended to `warnings` after the policy-derived ones. A rule never
+modifies `install/plan/policy.json`, a target override, or another rule's result; a target override never changes
+a rule outcome. The origin of every plan entry is exposed by its labels: `source` `policy`, `detected`, `override`,
+or `choice` for `choices`, and the `rule` field for rule outcomes and rule packages.
 
 ### Bindings
 
@@ -415,7 +455,7 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | Code | Condition |
 | --- | --- |
 | `plan_not_json`, `plan_invalid_type`, `plan_non_integer_number` | Malformed document. |
-| `plan_format_unsupported` | `format_version` is not `3`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
+| `plan_format_unsupported` | `format_version` is not `4`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
 | `plan_field_missing`, `plan_label_missing` | A required field, or a `provenance`, `source`, or `editable` label, is missing. |
 | `plan_unknown_field` | A field outside this contract, including `approved` and `approval`. |
 | `plan_secret_value_present` | A secret-named key outside `secret_requirements`, or an extra field in a secret entry. |
@@ -432,6 +472,7 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | `disk_identity_mismatch`, `disk_not_eligible` | The disk does not match the `target_disk` choice or the bound facts, or is not eligible. |
 | `facts_binding_mismatch` | `facts_binding` contradicts `target`, or does not match the supplied facts document. |
 | `hibernation_plan_mismatch` | The hibernation choice and the plan contradict each other: a `swapfile_size`, `create_swapfile`, `@swap` subvolume or mount, `resume` kernel parameter, or `resume_offset` resolution with hibernation disabled, or any of them missing or inconsistent with hibernation enabled, or a swapfile size outside the RAM-derived range. |
+| `hardware_rules_mismatch` | `rule_outcomes` do not list the four rules in order, an outcome is not valid for its `value`, `rule_packages` is not exactly the set the outcomes name, a rule package lacks its labels or is `editable`, the `install_packages` `rule_packages` parameter differs from `hardware_selections.rule_packages`, or a rule warning is missing from or added to `warnings` against the outcomes. The validator re-derives these from the plan's own `value` fields with the shared rule module and reads no facts. |
 | `configuration_asset_mismatch` | A configuration operation's destination, `source_sha256`, or declared settings differ from the policy or the allowlisted source asset, or the zram package or `zswap.enabled=0` is missing. |
 | `plan_size_does_not_fit` | ESP, `root_minimum_bytes`, and `swapfile_size` (when present) exceed the disk size. |
 | `digest_mismatch` | The digest does not match the content. |
@@ -451,7 +492,17 @@ Generation reasons, reported with the same shape and exit `2` unless noted:
 | `lang_not_in_locales`, `plan_size_does_not_fit` | The choices contradict each other or the disk. The validator codes are reused. |
 | `output_exists` | `--output` already contains a plan. |
 
-Warnings: `disk_without_by_id`, `storage_option_experimental`, `swapfile_below_ram`, and `machine_unqualified`.
+Warnings: `disk_without_by_id`, `storage_option_experimental`, `swapfile_below_ram`, `machine_unqualified`, and the
+hardware-rule warnings `graphics_nvidia_nouveau`, `graphics_vendor_unknown`, and `cpu_vendor_unknown`.
+`graphics_nvidia_nouveau` states in its `message` that an NVIDIA graphics device was detected, that MirrorOS does
+not install its driver, and that the in-kernel `nouveau` driver will be used; its `next_step` states that the user
+may install the NVIDIA driver after installation, without a MirrorOS guarantee, and that MirrorOS does not
+blacklist `nouveau`. `graphics_vendor_unknown` states that MirrorOS does not recognize the graphics hardware (or
+observed none) and installs nothing for it; its `next_step` states that the kernel's generic display support is
+used and that drivers may be installed after installation. `cpu_vendor_unknown` states that the CPU vendor is not
+`AuthenticAMD` or `GenuineIntel`, or was not detected, and that no microcode package is installed; its `next_step`
+states that the user may install the microcode package of the vendor after installation. None of the three blocks
+installation.
 `swapfile_below_ram` is present exactly when hibernation is enabled and the size is below raw RAM; its `message`
 states that hibernation may be unavailable under large memory workloads and depends on used memory and free
 swapfile space, and its `next_step` states that the default size is not a guarantee either. `machine_unqualified` is present

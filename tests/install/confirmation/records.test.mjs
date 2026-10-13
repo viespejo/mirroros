@@ -30,8 +30,8 @@ test('the valid fixtures pass', () => {
   assert.deepEqual(validateApprovalRecord(fixture('valid-approval.json')), []);
 });
 
-test('the records are version 4 and the run record is install-run.json', () => {
-  assert.equal(RECORD_FORMAT_VERSION, 4);
+test('the records are version 5 and the run record is install-run.json', () => {
+  assert.equal(RECORD_FORMAT_VERSION, 5);
   assert.equal(RUN_RECORD_FILE, 'install-run.json');
   assert.equal(APPROVAL_RECORD_FILE, 'approval-record.json');
 });
@@ -43,8 +43,8 @@ test('records of the earlier format and the fabricated target id are rejected', 
   assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), target_id: 'reference-vm' }).some(item => item.includes('target_id')));
 });
 
-test('records of versions 2 and 3 are rejected, and memory is a positive integer in the machine projection', () => {
-  for (const version of [2, 3]) {
+test('records of versions 2, 3, and 4 are rejected, and memory is a positive integer in the machine projection', () => {
+  for (const version of [2, 3, 4]) {
     assert.ok(validateRunRecord({ ...fixture('valid-run.json'), format_version: version }).some(item => item.includes('format_version')));
     assert.ok(validateApprovalRecord({ ...fixture('valid-approval.json'), format_version: version }).some(item => item.includes('format_version')));
   }
@@ -131,7 +131,7 @@ test('secret-like keys are rejected at any depth', () => {
 
 test('exit status must agree with the outcome and 0 is valid only for installed', () => {
   assert.ok(validateRunRecord(fixture('invalid-run-exit-status.json')).length > 0);
-  const table = { installed: 0, cancelled: 3, invalidated: 2, blocked: 2 };
+  const table = { installed: 0, not_verified: 4, cancelled: 3, invalidated: 2, blocked: 2 };
   for (const [outcome, status] of Object.entries(table)) {
     const run = { ...fixture('valid-run.json'), outcome, exit_status: status };
     assert.deepEqual(validateRunRecord(run), [], outcome);

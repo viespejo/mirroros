@@ -6,7 +6,7 @@ ENGINE_PLAN_FIXTURES="${ENGINE_SOURCE_ROOT}/tests/fixtures/plan"
 ENGINE_CANARY='PLANTED-ENGINE-SECRET-0001'
 ENGINE_COMMIT='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
-  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep)
+  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep findmnt pacman lsinitcpio lsattr)
 
 ENGINE_STATUS=0
 ENGINE_PASSWORD="$ENGINE_CANARY"
@@ -25,6 +25,7 @@ engine_setup() {
   cp -a "${ENGINE_SOURCE_ROOT}/install" "${CODE_ROOT}/install"
   mkdir -p "${CODE_ROOT}/hardware"
   cp -a "${ENGINE_SOURCE_ROOT}/hardware/discovery" "${CODE_ROOT}/hardware/discovery"
+  cp -a "${ENGINE_SOURCE_ROOT}/hardware/rules" "${CODE_ROOT}/hardware/rules"
   printf '{\n  "commit": "%s",\n  "dirty": false\n}\n' "$ENGINE_COMMIT" > "${CODE_ROOT}/identity.json"
   for tool in "${ENGINE_TOOLS[@]}"; do
     ln -s "${ENGINE_SUPPORT_DIR}/doubles/engine-double" "${DOUBLE_BIN}/${tool}"

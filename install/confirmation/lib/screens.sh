@@ -331,9 +331,13 @@ root_account_form() {
 review_rows() {
   local field value
   while IFS= read -r field && IFS= read -r value; do
-    printf '%s%-12s %s\n' "$PADDING_LEFT_SPACES" "$field" "$value"
+    printf '%s%-14s %s\n' "$PADDING_LEFT_SPACES" "$field" "$value"
   done < <(printf '%s\n' \
     Machine "${FLOW_REVIEW[machine]}" \
+    Graphics "${FLOW_REVIEW[rule_graphics]}" \
+    'CPU microcode' "${FLOW_REVIEW[rule_cpu_microcode]}" \
+    Battery "${FLOW_REVIEW[rule_battery]}" \
+    Virtualization "${FLOW_REVIEW[rule_virtualization]}" \
     Disk "${FLOW_REVIEW[disk]}" \
     Storage "$(storage_label_for "${FLOW_REVIEW[storage_option]}" "${FLOW_REVIEW[storage_tier]}")" \
     Hibernation "${FLOW_REVIEW[hibernation_label]}" \
@@ -352,13 +356,16 @@ review_rows() {
 # The review: it generates (or regenerates) and validates the plan on entry, then offers confirmation,
 # inspection of the complete plan, or Back. Nothing here authorizes anything.
 review_form() {
-  local choice status complete
+  local choice status complete warning
   flow_ensure_plan || return $?
   flow_reached review
   flow_load_review
   while true; do
     review_rows
     echo
+    while IFS= read -r warning; do
+      gum style --foreground 3 --padding "$PADDING" "$warning"
+    done < <(flow_assistant review-warnings "$FLOW_PLAN_FILE")
     if [[ ${FLOW_REVIEW[hibernation]} == false ]]; then
       gum style --foreground 8 --padding "$PADDING" 'Hibernation is disabled: no swapfile will be created.'
     fi

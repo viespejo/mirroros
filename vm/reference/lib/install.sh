@@ -255,7 +255,7 @@ install_remove_extra_files() {
 }
 
 # Validates the run-bound guest report against the case's expectations and retains the guest evidence under
-# install/ and the non-gating observation under observation/.
+# install/ and the observations under observation/; selected configuration checks are gating.
 # Statuses: 0 expected outcome, 4 unexpected outcome, 5 report missing or inconsistent.
 install_evaluate_report() {
   local report_path="$1"
@@ -324,6 +324,9 @@ if (errors.length === 0) {
   const run = parse('install-run.json');
   const approval = parse('approval-record.json');
   const engine = parse('engine/engine-run.json');
+  const plan = parse('plans/01/installation-plan.json');
+  const hostVendor = /^vendor_id\s*:\s*(\S+)/m.exec(readFileSync('/proc/cpuinfo', 'utf8'))?.[1];
+  const microcode = { AuthenticAMD: ['amd-ucode', 'AuthenticAMD.bin'], GenuineIntel: ['intel-ucode', 'GenuineIntel.bin'] }[hostVendor];
   const entries = install.observation['boot-entries.txt'] ?? '';
   const allNames = [...Object.keys(files), ...Object.keys(install.observation)];
   if (allNames.some(name => name.split('/').some(part => !part || part === '.' || part === '..')
@@ -338,13 +341,16 @@ if (errors.length === 0) {
     preparation_succeeded: report.exit_status === 0,
     exits_as_expected: install.exit_status === expectedExit && run?.exit_status === expectedExit,
     outcomes_as_expected: run?.outcome === expectedOutcome && approval?.outcome === expectedOutcome,
-    records_format_4: run?.format_version === 4 && approval?.format_version === 4,
+    records_format_5: run?.format_version === 5 && approval?.format_version === 5,
+    plan_format_4: plan?.format_version === 4,
     records_agree: run?.run_id === approval?.run_id && run?.final_digest === approval?.digest,
     evidence_complete: required.every(name => typeof files[name] === 'string'),
     engine_record_as_expected: engineExpected
-      ? engine?.outcome === expectedOutcome && engine?.exit_status === expectedExit
+      ? engine?.format_version === 2 && engine?.outcome === expectedOutcome && engine?.exit_status === expectedExit
         && (expectedOutcome === 'installed'
           ? engine.not_started?.length === 0 && engine.failed_operation === undefined
+            && engine.postconditions?.status === 'passed' && engine.postconditions.failed_checks?.length === 0
+            && engine.postconditions.checks?.length > 0 && engine.postconditions.checks.every(check => check.status === 'passed')
           : engine.failed_operation?.id === expectedFailedOperation && engine.not_started?.length > 0)
       : !Object.keys(files).some(name => name.startsWith('engine/')),
     resume_as_expected: expectedOutcome !== 'installed'
@@ -353,6 +359,9 @@ if (errors.length === 0) {
           && /resume_offset=\d+/.test(entries) && /resume=UUID=/.test(entries)
         : engine?.resolved?.resume_offset === undefined && !/resume/.test(entries)),
     zswap_disabled: expectedOutcome !== 'installed' || /zswap\.enabled=0/.test(entries),
+    microcode_as_expected: expectedOutcome !== 'installed' || (microcode !== undefined
+      && plan?.hardware_selections?.rule_packages?.some(item => item.name === microcode[0])
+      && (install.observation['microcode.txt'] ?? '').split(/\r?\n/).some(line => line.trim() === `kernel/x86/microcode/${microcode[1]}`)),
     private_permissions: install.private_permissions === true,
     plain_logs: ['install.log', 'engine/engine.log'].every(name => typeof files[name] !== 'string' || !files[name].includes('\u001b')),
   };
@@ -443,17 +452,22 @@ install_login_driver() {
   local screen_path="$6"
   shift 6
 
+  # shellcheck disable=SC2153 # EVIDENCE_RUN_DIR is assigned by discovery_run_prepare.
   MIRROROS_LOGIN_CANARY="$INSTALL_CANARY" node --input-type=module - "$socket_path" "$serial_path" "$qemu_pid" \
     "$deadline_seconds" "$nonce" "$REFERENCE_VM_LOGIN_FIRST_WAIT_SECONDS" "$REFERENCE_VM_LOGIN_INTERVAL_SECONDS" \
-    "$screen_path" "$@" <<'NODE'
+    "$screen_path" "${EVIDENCE_RUN_DIR}/install/plans/01/installation-plan.json" "$@" <<'NODE'
 import { connect } from 'node:net';
 import { readFileSync, existsSync } from 'node:fs';
 
-const [socketPath, serialPath, pidText, deadlineText, nonce, firstWaitText, intervalText, screenPath, ...users] = process.argv.slice(2);
+const [socketPath, serialPath, pidText, deadlineText, nonce, firstWaitText, intervalText, screenPath, planPath, ...users] = process.argv.slice(2);
+const plan = JSON.parse(readFileSync(planPath, 'utf8'));
+const sysctlKeys = ['vm.swappiness', 'vm.page-cluster', 'vm.watermark_scale_factor', 'vm.watermark_boost_factor'];
+const memory = plan.operations.find(item => item.kind === 'configure_memory_reclaim').parameters;
+const zram = plan.operations.find(item => item.kind === 'configure_zram').parameters;
 const canary = process.env.MIRROROS_LOGIN_CANARY;
 delete process.env.MIRROROS_LOGIN_CANARY;
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const keys = { ' ': 'spc', '-': 'minus', '>': 'shift-dot', '/': 'slash', $: 'shift-4', '(': 'shift-9', ')': 'shift-0', "'": 'apostrophe', '|': 'shift-backslash' };
+const keys = { '.': 'dot', '_': 'shift-minus', ' ': 'spc', '-': 'minus', '>': 'shift-dot', '/': 'slash', $: 'shift-4', '(': 'shift-9', ')': 'shift-0', "'": 'apostrophe', '|': 'shift-backslash', ';': 'semicolon' };
 const alive = () => { try { process.kill(Number(pidText), 0); return true; } catch { return false; } };
 const serial = () => (existsSync(serialPath) ? readFileSync(serialPath, 'utf8') : '');
 const deadline = Date.now() + Number(deadlineText) * 1000;
@@ -487,6 +501,7 @@ const enter = async socket => {
 };
 
 const results = {};
+let firstBoot = null;
 const socket = await connectMonitor();
 if (socket !== null) {
   await sleep(Number(firstWaitText) * 1000);
@@ -507,6 +522,24 @@ if (socket !== null) {
       await sleep(3000);
       results[user] = serial().includes(`login-${nonce}-${user}`);
       if (results[user]) {
+        if (firstBoot === null) {
+          await type(socket, `echo ${canary}|sudo -S sh -c '(echo boot-${nonce}-begin; cat /sys/module/zswap/parameters/enabled; sysctl -n ${sysctlKeys.join(' ')}; cat /proc/swaps; echo boot-${nonce}-end)>/dev/ttyS0'`);
+          await enter(socket);
+          while (Date.now() < deadline && alive() && !serial().includes(`boot-${nonce}-end`)) await sleep(500);
+          const block = serial().split(`boot-${nonce}-begin`).at(-1).split(`boot-${nonce}-end`)[0].trim().split(/\r?\n/);
+          const swaps = block.slice(6).filter(line => line.trim() !== '').map(line => line.trim().split(/\s+/));
+          const swapfile = plan.choices.storage_option.value === 'ext4-systemd-boot' ? '/swapfile' : '/swap/swapfile';
+          const hibernation = plan.choices.hibernation.value;
+          const checks = {
+            zswap_disabled: block[0] === 'N',
+            memory_sysctl_as_expected: sysctlKeys.every((key, index) => block[index + 1] === String(memory[key])),
+            zram_active: swaps.some(row => row[0] === '/dev/zram0' && row[1] === 'partition' && Number(row[2]) > 0 && Number(row[4]) === zram.swap_priority),
+            swap_as_expected: swaps.length === (hibernation ? 2 : 1)
+              && swaps.filter(row => row[0] === '/dev/zram0').length === 1
+              && (hibernation ? swaps.some(row => row[0] === swapfile && row[1] === 'file' && Number(row[2]) > 0 && row[4] === '0') : true),
+          };
+          firstBoot = { ...checks, ok: serial().includes(`boot-${nonce}-end`) && Object.values(checks).every(Boolean) };
+        }
         socket.write(`screendump ${screenPath}\n`);
         await sleep(1000);
         await type(socket, 'exit');
@@ -521,13 +554,13 @@ if (socket !== null) {
   }
   socket.destroy();
 }
-process.stdout.write(JSON.stringify({ monitor_connected: socket !== null, qemu_alive: alive(), logins: results }));
-process.exitCode = users.every(user => results[user] === true) ? 0 : 1;
+process.stdout.write(JSON.stringify({ monitor_connected: socket !== null, qemu_alive: alive(), logins: results, first_boot: firstBoot }));
+process.exitCode = users.every(user => results[user] === true) && firstBoot?.ok === true ? 0 : 1;
 NODE
 }
 
 # Stops the first boot, boots the disk alone, and drives the logins. Sets INSTALL_LOGIN_JSON.
-# Statuses: 0 every expected login succeeded, 4 a login failed, 5 the VM could not be handled.
+# Statuses: 0 logins and selected first-boot checks passed, 4 a gate failed, 5 the VM could not be handled.
 install_run_disk_boot() {
   local iso_path="$1"
   # shellcheck disable=SC2153 # EVIDENCE_RUN_DIR is set by discovery_run_prepare.
@@ -555,7 +588,7 @@ install_run_disk_boot() {
   [[ -n "$INSTALL_LOGIN_JSON" ]] || INSTALL_LOGIN_JSON='null'
   outcome_record_tool_status login_driver "$status"
   if [[ "$status" -ne 0 ]]; then
-    printf 'MirrorOS qualify-install: not every expected login succeeded on the installed disk; not qualified.\n' >&2
+    printf 'MirrorOS qualify-install: a login or selected first-boot check failed on the installed disk; not qualified.\n' >&2
     return 4
   fi
 }

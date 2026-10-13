@@ -1,7 +1,7 @@
 import { CHOICES_FORMAT_VERSION, PROFILE_STATUSES } from '../plan/validate-plan.mjs';
 import { OUTCOMES } from './outcomes.mjs';
 
-export const RECORD_FORMAT_VERSION = 4;
+export const RECORD_FORMAT_VERSION = 5;
 export const ENTRIES = ['guided', 'plan_file'];
 export const STAGES = ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation', 'password', 'discovery_final', 'engine'];
 

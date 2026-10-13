@@ -1,0 +1,69 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+umask 077
+
+# Read-only postconditions checker (contracts/installation-postconditions.md). It is invoked only by the
+# installation engine after the last operation and before the terminal cleanup, while the target is still
+# mounted. It observes the target with native read-only queries and lets evaluate.mjs compare the observations
+# with the approved plan. It never writes, mounts, enables, regenerates, or repairs anything.
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+exec < /dev/null
+
+usage_error() {
+  printf 'MirrorOS postconditions: %s\n' "$1" >&2
+  printf '%s\n' 'Usage: install/postconditions/check --plan <file> --digest <hex> --target-root <dir> (internal).' >&2
+  exit 2
+}
+
+for library in common observe; do
+  # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
+  source "${SCRIPT_DIR}/lib/${library}.sh" 2> /dev/null || {
+    printf 'MirrorOS postconditions: the embedded checker code is damaged: lib/%s.sh could not be loaded.\n' "$library" >&2
+    exit 6
+  }
+done
+
+PLAN_FILE=''
+DIGEST=''
+TARGET_ROOT=''
+
+parse_arguments() {
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --plan)
+        [[ "$#" -ge 2 && -z "$PLAN_FILE" ]] || usage_error '--plan requires one file.'
+        PLAN_FILE="$2"
+        shift 2
+        ;;
+      --digest)
+        [[ "$#" -ge 2 && -z "$DIGEST" ]] || usage_error '--digest requires one value.'
+        DIGEST="$2"
+        shift 2
+        ;;
+      --target-root)
+        [[ "$#" -ge 2 && -z "$TARGET_ROOT" ]] || usage_error '--target-root requires one directory.'
+        TARGET_ROOT="$2"
+        shift 2
+        ;;
+      *)
+        usage_error "unsupported argument: $1"
+        ;;
+    esac
+  done
+  [[ -n "$PLAN_FILE" && -n "$DIGEST" && -n "$TARGET_ROOT" ]] || usage_error '--plan, --digest, and --target-root are required.'
+  [[ -f "$PLAN_FILE" && -r "$PLAN_FILE" ]] || usage_error "--plan is not a readable file: ${PLAN_FILE}"
+  [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]] || usage_error '--digest must be a 64-digit lowercase hexadecimal value.'
+  [[ "$TARGET_ROOT" == /* && -d "$TARGET_ROOT" ]] || usage_error "--target-root is not an absolute directory: ${TARGET_ROOT}"
+  TARGET_ROOT="${TARGET_ROOT%/}"
+}
+
+main() {
+  local status=0
+  parse_arguments "$@"
+  # The plan is validated before anything is inspected: an invalid plan or a digest mismatch exits 2.
+  node "${SCRIPT_DIR}/evaluate.mjs" validate --plan "$PLAN_FILE" --digest "$DIGEST" || exit $?
+  node "${SCRIPT_DIR}/evaluate.mjs" evaluate --plan "$PLAN_FILE" --digest "$DIGEST" < <(collect_observations 2> /dev/null) || status=$?
+  exit "$status"
+}
+
+main "$@"

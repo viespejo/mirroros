@@ -1,6 +1,7 @@
 // `failed` also admits 128+n: a signal that arrived during the engine phase ends the run as failed.
 export const OUTCOMES = {
   installed: [0],
+  not_verified: [4],
   cancelled: [3],
   invalidated: [2],
   blocked: [2],

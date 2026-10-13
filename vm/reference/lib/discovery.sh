@@ -29,6 +29,7 @@ DISCOVERY_OVERLAY_PATHS=(
   'operations/lib/lifecycle-discovery.sh'
   'install'
   'hardware/discovery'
+  'hardware/rules'
   'targets'
 )
 

@@ -64,7 +64,7 @@ if [[ "$monitor" == unix:* ]]; then
 const { createServer } = require('node:net');
 const { appendFileSync } = require('node:fs');
 const [socketPath, serialPath, mode] = process.argv.slice(2);
-const names = { spc: ' ', minus: '-', 'shift-dot': '>', slash: '/', 'shift-4': '$', 'shift-9': '(', 'shift-0': ')', apostrophe: "'", 'shift-backslash': '|' };
+const names = { dot: '.', 'shift-minus': '_', semicolon: ';', spc: ' ', minus: '-', 'shift-dot': '>', slash: '/', 'shift-4': '$', 'shift-9': '(', 'shift-0': ')', apostrophe: "'", 'shift-backslash': '|' };
 let line = '';
 const lines = [];
 createServer(socket => {
@@ -82,6 +82,19 @@ createServer(socket => {
       if (line === 'exit') lines.length = 0;
       else if (line !== '') lines.push(line);
       line = '';
+      if (lines.length === 1 && lines[0].includes('boot-')) {
+        const command = lines.pop();
+        const nonce = /echo boot-([0-9a-f]+)-begin/.exec(command)?.[1];
+        const bad = process.env.REFERENCE_INSTALL_BOOT_BAD;
+        if (nonce !== undefined && bad !== 'missing'
+          && command.includes('sysctl -n vm.swappiness vm.page-cluster vm.watermark_scale_factor vm.watermark_boost_factor;')
+          && command.endsWith(")>/dev/ttyS0'")) {
+          const hibernation = ['default', 'ext4'].includes(process.env.REFERENCE_INSTALL_CASE);
+          const swapfile = process.env.REFERENCE_INSTALL_CASE === 'ext4' ? '/swapfile' : '/swap/swapfile';
+          appendFileSync(serialPath, `boot-${nonce}-begin\n${bad === 'zswap' ? 'Y' : 'N'}\n${bad === 'sysctl' ? '60' : '180'}\n0\n125\n0\nFilename Type Size Used Priority\n${bad === 'zram' ? '' : '/dev/zram0 partition 2097148 0 100\n'}${hibernation && bad !== 'swap' ? `${swapfile} file 4194300 0 0\n` : ''}boot-${nonce}-end\n`);
+        }
+        continue;
+      }
       if (lines.length === 3) {
         const [user, password, typed] = lines.splice(0, 3);
         // The marker command must go through sudo with the password on stdin, as a normal user cannot write the port.
@@ -106,19 +119,26 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
       const [runId, name, bad, canary] = process.argv.slice(1);
       const digest = "a".repeat(64);
       const expected = {
-        default: [0, "installed"], "limine-nohib": [0, "installed"], ext4: [0, "installed"], failure: [5, "failed"], "cancel-password": [3, "cancelled"],
+        default: [0, "installed"], "limine-nohib": [0, "installed"], ext4: [0, "installed"], "btrfs-rescue": [0, "installed"], failure: [5, "failed"], "cancel-password": [3, "cancelled"],
       }[name];
       const exit = bad === "wrong-exit" ? 1 : expected[0];
-      const common = { format_version: 4, run_id: "install-run", outcome: expected[1] };
+      const common = { format_version: bad === "old-record" ? 4 : 5, run_id: "install-run", outcome: expected[1] };
+      const vendor = /^vendor_id\s*:\s*(\S+)/m.exec(require("node:fs").readFileSync("/proc/cpuinfo", "utf8"))?.[1];
+      const microcode = vendor === "AuthenticAMD" ? ["amd-ucode", "AuthenticAMD.bin"] : ["intel-ucode", "GenuineIntel.bin"];
+      const plan = { format_version: 4, choices: { storage_option: { value: name === "ext4" ? "ext4-systemd-boot" : "btrfs-limine" }, hibernation: { value: name === "default" || name === "ext4" } },
+        hardware_selections: { rule_packages: [{ name: microcode[0] }] }, operations: [
+          { kind: "configure_zram", parameters: { swap_priority: 100 } },
+          { kind: "configure_memory_reclaim", parameters: { "vm.swappiness": 180, "vm.page-cluster": 0, "vm.watermark_scale_factor": 125, "vm.watermark_boost_factor": 0 } },
+        ] };
       const files = {
         "install-run.json": JSON.stringify({ ...common, exit_status: exit, final_digest: digest }),
         "approval-record.json": JSON.stringify({ ...common, digest }),
         "install.log": bad === "canary-leak" ? `password was ${canary}\n` : "plain log\n",
         "discovery/initial/target-facts.json": "{}",
-        "plans/01/installation-plan.json": "{}",
+        "plans/01/installation-plan.json": JSON.stringify(plan),
       };
       if (expected[1] !== "cancelled" && bad !== "missing-engine") {
-        const engine = { format_version: 1, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
+        const engine = { format_version: 2, postconditions: { status: bad === "postconditions" ? "failed" : "passed", failed_checks: [], checks: [{ id: "kernel_installed", status: "passed" }] }, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
         const hibernating = name === "ext4" || name === "default";
         if (hibernating) engine.resolved = { resume_offset: bad === "no-resume" ? undefined : 1234 };
         if (name === "failure") { engine.failed_operation = { id: "install_packages", command: ["pacstrap"] }; engine.not_started = ["generate_fstab"]; }
@@ -130,6 +150,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
       const observation = hibernation && bad !== "no-resume"
         ? { "boot-entries.txt": "options root=UUID=x rw zswap.enabled=0 resume=UUID=x resume_offset=1234\n" }
         : name === "failure" || name === "cancel-password" ? {} : { "boot-entries.txt": "options root=UUID=x rw zswap.enabled=0\n" };
+      if (expected[1] === "installed") observation["microcode.txt"] = bad === "microcode" ? "" : `kernel/x86/microcode/${microcode[1]}\n`;
       process.stdout.write(JSON.stringify({
         schema_version: 1, run_id: runId, target: "reference-vm", exit_status: 0, facts: null, error: null, stderr_tail: "",
         install: { name, exit_status: exit, files, observation, private_permissions: true, driver_tail: "" },
@@ -229,7 +250,7 @@ install_result_field() {
   use_matching_bundle
   local case_name
 
-  for case_name in default limine-nohib; do
+  for case_name in default limine-nohib btrfs-rescue; do
     rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence" "${REFERENCE_REPOSITORY_ROOT}/build"
     export REFERENCE_INSTALL_CASE="$case_name"
     reference_invoke_install --case "$case_name" "$REFERENCE_BUNDLE_DIR"
@@ -237,6 +258,8 @@ install_result_field() {
     [ "$(install_result_field boot.logins.mirroros)" == 'true' ]
     [ "$(install_result_field counted)" == 'true' ]
     [ "$(install_result_field install.resume_as_expected)" == 'true' ]
+    [ "$(install_result_field install.microcode_as_expected)" == 'true' ]
+    [ "$(install_result_field boot.first_boot.ok)" == 'true' ]
   done
 }
 
@@ -366,6 +389,33 @@ install_result_field() {
   reference_invoke_install --case ext4 "$REFERENCE_BUNDLE_DIR"
   [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
   [ "$(install_result_field install.resume_as_expected)" == 'false' ]
+}
+
+@test "old records, failed postconditions, or missing host microcode prevent qualification" {
+  use_matching_bundle
+  local bad
+  for bad in old-record postconditions microcode; do
+    rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence" "${REFERENCE_REPOSITORY_ROOT}/build"
+    export REFERENCE_INSTALL_CASE=ext4 REFERENCE_INSTALL_BAD="$bad"
+    reference_invoke_install --case ext4 "$REFERENCE_BUNDLE_DIR"
+    [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
+    [ "$(install_result_field counted)" == 'false' ]
+    [ "$(install_result_field failed_stage)" == 'installation-outcome' ]
+  done
+}
+
+@test "each selected first-boot observation is gating, including a missing report" {
+  use_matching_bundle
+  local bad
+  for bad in zswap sysctl zram swap missing; do
+    rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence" "${REFERENCE_REPOSITORY_ROOT}/build"
+    export REFERENCE_INSTALL_CASE=ext4 REFERENCE_INSTALL_BOOT_BAD="$bad"
+    reference_invoke_install --case ext4 "$REFERENCE_BUNDLE_DIR"
+    [ "$REFERENCE_COMMAND_STATUS" -eq 4 ]
+    [ "$(install_result_field counted)" == 'false' ]
+    [ "$(install_result_field failed_stage)" == 'disk-boot-login' ]
+    [ "$(install_result_field boot.first_boot.ok)" == 'false' ]
+  done
 }
 
 @test "a run canary found in the guest evidence keeps the run private and yields 2" {

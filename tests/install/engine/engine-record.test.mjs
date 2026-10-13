@@ -10,13 +10,22 @@ import {
   operationsOf,
   parseOptions,
   validateRun,
+  verifyPostconditions,
   validateState,
   writeAtomic,
 } from '../../../install/engine/engine-record.mjs';
+import { applicableChecks } from '../../../install/postconditions/evaluate.mjs';
 import { engineRecordPath, planText, runNode } from './helpers.mjs';
 
 const NOW = '2026-10-12T10:00:00Z';
 const text = planText('valid', 'ext4-systemd-boot--password');
+const PASSED = { format_version: 1, status: 'passed', checks: [{ id: 'kernel_installed', status: 'passed' }], failed_checks: [] };
+const FAILED = {
+  format_version: 1,
+  status: 'failed',
+  checks: [{ id: 'kernel_installed', status: 'failed', detail: '/boot/vmlinuz-linux is missing' }, { id: 'mounts_active', status: 'passed' }],
+  failed_checks: ['kernel_installed'],
+};
 
 test('the state lists every operation with its status and the position of the current one', () => {
   const operations = operationsOf(text);
@@ -72,8 +81,11 @@ test('resolved values, mirrors, constants, and cleanup results are recorded', ()
 });
 
 test('a run is never valid as installed with a reason, a pending operation, or a non-zero status', () => {
-  const installed = { format_version: 1, started_at: NOW, finished_at: NOW, outcome: 'installed', exit_status: 0, reasons: [], completed: [], not_started: [] };
+  const installed = { format_version: 2, started_at: NOW, finished_at: NOW, outcome: 'installed', exit_status: 0, reasons: [], completed: [], not_started: [], postconditions: PASSED };
   assert.deepEqual(validateRun(installed), []);
+  assert.notDeepEqual(validateRun({ ...installed, postconditions: undefined }), []);
+  assert.notDeepEqual(validateRun({ ...installed, postconditions: FAILED }), []);
+  assert.notDeepEqual(validateRun({ ...installed, format_version: 1 }), []);
   assert.notDeepEqual(validateRun({ ...installed, not_started: ['x'] }), []);
   assert.notDeepEqual(validateRun({ ...installed, exit_status: 5 }), []);
   assert.notDeepEqual(validateRun({ ...installed, outcome: 'failed', exit_status: 0 }), []);
@@ -83,7 +95,7 @@ test('a run is never valid as installed with a reason, a pending operation, or a
 test('a document with a secret-looking field is never written', () => {
   const directory = mkdtempSync(join(tmpdir(), 'engine-record-'));
   try {
-    const run = { format_version: 1, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 5, reasons: [], completed: [], not_started: [], account_password: 'x' };
+    const run = { format_version: 2, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 5, reasons: [], completed: [], not_started: [], account_password: 'x' };
     assert.throws(() => writeAtomic(join(directory, 'engine-run.json'), run, validateRun), /secret/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -109,4 +121,81 @@ test('the command line writes both records atomically with private permissions',
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('the state of the postconditions phase has current postconditions and an index equal to the total', () => {
+  const operations = operationsOf(text);
+  const state = buildState({ operations, status: 'running', current: 'postconditions', completed: operations.map(item => item.id), now: NOW });
+  assert.deepEqual(validateState(state), []);
+  assert.equal(state.current, 'postconditions');
+  assert.equal(state.index, state.total);
+  assert.ok(state.operations.every(item => item.status === 'completed'));
+  assert.equal(state.format_version, 2);
+  assert.deepEqual(validateState(buildState({ operations, status: 'not_verified', completed: operations.map(item => item.id), now: NOW })), []);
+});
+
+test('a not_verified run exits 4 with one postcondition_failed reason per failed check and the stored result', () => {
+  const operations = operationsOf(text).map(item => item.id);
+  const result = {
+    format_version: 1,
+    status: 'failed',
+    checks: [
+      { id: 'kernel_installed', status: 'failed', detail: '/boot/vmlinuz-linux is missing' },
+      { id: 'mounts_active', status: 'passed' },
+      { id: 'zram_configuration', status: 'failed', detail: 'the zram drop-in lacks "zram-size = ram"' },
+    ],
+    failed_checks: ['kernel_installed', 'zram_configuration'],
+  };
+  const options = parseOptions([
+    '--started', NOW, '--outcome', 'not_verified', '--exit', '4', '--completed', operations.join(','), '--postconditions', JSON.stringify(result),
+  ]);
+  const run = buildRun({ planText: text, options, now: NOW });
+  assert.deepEqual(validateRun(run), []);
+  assert.deepEqual(run.postconditions, result);
+  assert.deepEqual(run.reasons.map(item => item.code), ['postcondition_failed', 'postcondition_failed']);
+  assert.deepEqual(run.reasons.map(item => item.operation), ['postconditions', 'postconditions']);
+  assert.match(run.reasons[0].message, /kernel_installed.*vmlinuz-linux is missing/);
+  assert.match(run.reasons[1].message, /zram_configuration/);
+  assert.deepEqual(run.not_started, []);
+  assert.notDeepEqual(validateRun({ ...run, exit_status: 5 }), []);
+  assert.notDeepEqual(validateRun({ ...run, outcome: 'failed' }), []);
+  assert.notDeepEqual(validateRun({ ...run, reasons: [] }), []);
+  assert.notDeepEqual(validateRun({ ...run, postconditions: PASSED }), []);
+  assert.notDeepEqual(validateRun({ ...run, not_started: ['configure_zram'] }), []);
+});
+
+test('exit 4 belongs to not_verified alone and a stored result must itself be valid', () => {
+  const failed = { format_version: 2, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 4, reasons: [], completed: [], not_started: [] };
+  assert.notDeepEqual(validateRun(failed), []);
+  const installed = { ...failed, outcome: 'installed', exit_status: 0, postconditions: { ...PASSED, checks: [{ id: 'unknown_check', status: 'passed' }] } };
+  assert.notDeepEqual(validateRun(installed), []);
+  assert.notDeepEqual(validateRun({ ...installed, postconditions: { ...PASSED, checks: [{ id: 'kernel_installed', status: 'passed', detail: 'x' }] } }), []);
+});
+
+test('verifyPostconditions accepts only a result that is valid for the plan and agrees with the checker status', () => {
+  const plan = JSON.parse(text);
+  const checks = applicableChecks(plan).map(id => ({ id, status: 'passed' }));
+  const passed = { format_version: 1, status: 'passed', checks, failed_checks: [] };
+  const failed = {
+    format_version: 1,
+    status: 'failed',
+    checks: checks.map((check, index) => (index === 0 ? { ...check, status: 'failed', detail: 'missing' } : check)),
+    failed_checks: [checks[0].id],
+  };
+  assert.equal(verifyPostconditions({ planText: text, result: JSON.stringify(passed), exit: '0' }), 'valid:');
+  assert.equal(verifyPostconditions({ planText: text, result: JSON.stringify(failed), exit: '4' }), `valid:${checks[0].id}`);
+  assert.equal(verifyPostconditions({ planText: text, result: JSON.stringify(passed), exit: '4' }), 'invalid');
+  assert.equal(verifyPostconditions({ planText: text, result: JSON.stringify(failed), exit: '0' }), 'invalid');
+  assert.equal(verifyPostconditions({ planText: text, result: JSON.stringify({ ...passed, checks: checks.slice(1) }), exit: '0' }), 'invalid');
+  assert.equal(verifyPostconditions({ planText: text, result: 'not json', exit: '0' }), 'invalid');
+  assert.equal(verifyPostconditions({ planText: text, result: undefined, exit: '0' }), 'invalid');
+});
+
+test('the command line verifies a postconditions result without an output directory', () => {
+  const plan = JSON.parse(text);
+  const checks = applicableChecks(plan).map(id => ({ id, status: 'passed' }));
+  const passed = { format_version: 1, status: 'passed', checks, failed_checks: [] };
+  const verdict = runNode(engineRecordPath, ['verify-postconditions', '--result', JSON.stringify(passed), '--exit', '0'], text);
+  assert.equal(verdict.status, 0, verdict.stderr);
+  assert.equal(verdict.stdout, 'valid:');
 });

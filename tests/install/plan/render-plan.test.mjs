@@ -118,7 +118,11 @@ test('experimental options and detected capabilities are explained', () => {
   const text = renderPlan(generate({ policyOverride: experimental }).plan);
   assert.match(text, /tier experimental/);
   assert.match(text, /storage_option_experimental: .*experimental/);
-  assert.match(text, /rule not_evaluated; next story 2\.6/);
+  assert.match(text, /Hardware rule outcomes:/);
+  assert.match(text, /graphics: kernel_driver_only\n\s+fact hardware\.graphics; detected qemu_virtual/);
+  assert.match(text, /cpu-microcode: amd_microcode/);
+  assert.match(text, /amd-ucode: rule cpu-microcode; provenance hardware_detection; not editable/);
+  assert.doesNotMatch(text, /not_evaluated|next story/);
   assert.match(renderPlan(planFor('ext4-systemd-boot', 'locked')), /7\. Warnings\n=+\n {2}None\./);
 });
 

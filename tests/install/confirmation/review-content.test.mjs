@@ -11,6 +11,8 @@ import {
   formatSize,
   hibernationLabel,
   machineLabel,
+  reviewWarnings,
+  ruleRows,
   swapfileWarning,
 } from '../../../install/confirmation/review-content.mjs';
 import { renderPlan } from '../../../install/plan/render-plan.mjs';
@@ -22,7 +24,7 @@ const rows = subject => Object.fromEntries(compactReview(subject));
 test('the compact review shows the machine, disk, answers, and the plan reference', () => {
   const subject = plan({ hostname: 'laptop', swapfile_size: 2048 });
   assert.deepEqual(compactReview(subject).map(([label]) => label), [
-    'Machine', 'Disk', 'Storage', 'Hibernation', 'Timezone', 'Language', 'Formats', 'Locales',
+    'Machine', 'Graphics', 'CPU microcode', 'Battery', 'Virtualization', 'Disk', 'Storage', 'Hibernation', 'Timezone', 'Language', 'Formats', 'Locales',
     'Username', 'Root', 'Hostname', 'Keyboard', 'Plan reference',
   ]);
   const shown = rows(subject);
@@ -181,4 +183,38 @@ test('the below-memory warning persists in the review content only for a reduced
   assert.equal(swapfileWarning(reduced).code, 'swapfile_below_ram');
   assert.match(completePlanText(reduced), /swapfile_below_ram:/);
   assert.match(completePlanText(plan({ hibernation: false })), /Hibernation is disabled: no swapfile will be created\./);
+});
+
+test('the review shows the outcome of every hardware rule in one line, before the disk', () => {
+  const subject = plan();
+  assert.deepEqual(ruleRows(subject), [
+    ['Graphics', 'Kernel driver, nothing additional'],
+    ['CPU microcode', 'Installs amd-ucode'],
+    ['Battery', 'No battery detected'],
+    ['Virtualization', 'Virtual machine'],
+  ]);
+  const labels = compactReview(subject).map(([label]) => label);
+  assert.deepEqual(labels.slice(0, 6), ['Machine', 'Graphics', 'CPU microcode', 'Battery', 'Virtualization', 'Disk']);
+});
+
+test('the review rows follow the rule outcomes of other hardware and never hide a warning', () => {
+  const nvidia = clone(facts());
+  nvidia.effective['hardware.graphics'] = { value: [{ vendor: 'nvidia' }], source: 'detected' };
+  nvidia.effective['hardware.cpu.vendor'] = { value: 'GenuineIntel', source: 'detected' };
+  nvidia.effective['hardware.battery_present'] = { value: true, source: 'detected' };
+  nvidia.effective['hardware.virtualization'] = { value: 'none', source: 'detected' };
+  const subject = plan({}, nvidia);
+  assert.deepEqual(ruleRows(subject).map(([, value]) => value), [
+    'NVIDIA detected, nouveau driver used', 'Installs intel-ucode', 'Battery detected', 'Physical machine',
+  ]);
+  assert.deepEqual(reviewWarnings(subject).map(item => item.code), ['graphics_nvidia_nouveau']);
+  assert.match(completePlanText(subject), /graphics_nvidia_nouveau:/);
+  assert.match(completePlanText(subject), /Hardware rule outcomes:/);
+});
+
+test('the swapfile warning keeps its own text and is not repeated among the review warnings', () => {
+  const reduced = plan({ swapfile_size: 2048 });
+  assert.equal(swapfileWarning(reduced).code, 'swapfile_below_ram');
+  assert.deepEqual(reviewWarnings(reduced), []);
+  assert.deepEqual(reviewWarnings(plan()), []);
 });

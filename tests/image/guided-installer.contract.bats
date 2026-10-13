@@ -85,7 +85,7 @@ run_startup() {
 
 @test "profile permissions list every executable entry point as 0:0:755 and add no setuid" {
   local path
-  for path in operations/install install/confirmation/confirm-plan install/confirmation/live-startup install/engine/apply; do
+  for path in operations/install install/confirmation/confirm-plan install/confirmation/live-startup install/engine/apply install/postconditions/check; do
     grep -Fq "[\"/usr/local/lib/mirroros/${path}\"]=\"0:0:755\"" "$PROFILEDEF"
   done
   ! grep -Eq '"[0-9]+:[0-9]+:[4-7][0-7]{3}"' "$PROFILEDEF"

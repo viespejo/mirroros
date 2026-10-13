@@ -14,6 +14,7 @@ SOURCE_CAPTURE_EMBEDDED_PATHS=(
   'operations/lib/lifecycle-discovery.sh'
   'install'
   'hardware/discovery'
+  'hardware/rules'
   'targets'
 )
 # shellcheck disable=SC2034 # Consumed by publication.sh metadata collection.

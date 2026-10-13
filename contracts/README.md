@@ -10,10 +10,11 @@ reserves final schemas until that evidence exists, so no formal `*.schema.json` 
 | [`installation-plan.md`](installation-plan.md) | `install/plan/` | `install/plan/validate-plan.mjs`, `tests/install/plan/` |
 | [`installation-confirmation.md`](installation-confirmation.md) | `install/confirmation/` | `install/confirmation/validate-records.mjs`, `tests/install/confirmation/` |
 | [`installation-engine.md`](installation-engine.md) | `install/engine/` | `install/engine/load-plan.mjs`, `install/engine/engine-record.mjs`, `tests/install/engine/` |
+| [`installation-postconditions.md`](installation-postconditions.md) | `install/postconditions/` | `install/postconditions/evaluate.mjs`, `tests/install/postconditions/` |
 
-Target facts are `format_version` `2`; installation plans are `format_version` `3`; installation-confirmation
-records are `format_version` `4`; the engine's run record and state file are `format_version` `1`; an earlier
-version is rejected, never migrated. Each document keeps its own version constant. See
+Target facts are `format_version` `2`; installation plans are `format_version` `4`; installation-confirmation
+records are `format_version` `5`; the engine's run record and state file are `format_version` `2`; the
+postconditions result is `format_version` `1`; an earlier version is rejected, never migrated. Each document keeps its own version constant. See
 [ADR 0006](../docs/adr/0006-guided-live-installation-boundaries.md),
 [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md),
 [ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md), and
