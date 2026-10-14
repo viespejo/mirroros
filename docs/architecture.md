@@ -107,7 +107,8 @@ Arch Linux distribution lifecycle and local system-configuration tooling, based 
 - Treat Python as an upstream runtime only unless an accepted ADR authorizes project-owned Python integration.
 - Keep Lua local to tools that already use it.
 - Begin with small, explicit scripts and documented commands.
-- Adopt Ansible, Stow, chezmoi, or another abstraction only after a bounded prototype demonstrates a clear advantage.
+- Apply the environment with bounded Bash scripts over native formats; Ansible is not selected ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)).
+- Adopt Stow, chezmoi, or another abstraction only after a bounded prototype demonstrates a clear advantage.
 - Keep independently maintained application configurations, including Neovim and Pi, in their existing repositories.
 - Use official Arch repositories first and treat AUR packages as explicitly reviewed external sources.
 - Defer Chaotic-AUR and CachyOS repositories until a measured requirement justifies their additional trust and maintenance surface.
@@ -230,7 +231,7 @@ Exact repository paths and privilege boundaries may be refined by the first impl
 - Use UEFI, GPT, an unencrypted root with the storage option selected under [ADR 0003](adr/0003-storage-and-recovery-baseline.md) (Btrfs with Snapper and Limine by default, per [ADR 0009](adr/0009-storage-option-promotion-and-esp-size.md)), zram for everyday swap, and an optional resizeable swapfile supporting hibernation, an essential capability enabled by default ([ADR 0007](adr/0007-zram-and-hibernation-policy.md)).
 - Qualify artifacts through QEMU/KVM before physical installation.
 - Install through native Arch commands, as selected by [ADR 0002](adr/0002-installation-engine-selection.md) after an Archinstall JSON/CLI versus native Arch commands spike.
-- Resolve the convergence mechanism through a shell versus Ansible local-mode spike and ADR.
+- Apply the environment through bounded Bash scripts over native formats, as selected by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md) without a shell versus Ansible spike.
 - Require package provenance, secret scanning, capability verification, and retained evidence before artifact promotion.
 
 **Important Decisions:**
@@ -261,7 +262,7 @@ Exact repository paths and privilege boundaries may be refined by the first impl
 
 MirrorOS uses no application database. Version-controlled text declarations are authoritative, while generated plans, artifacts, logs, and verification reports are derived operational data.
 
-**Declaration strategy:** Use upstream-native formats with a minimal capability inventory rather than a universal MirrorOS schema. Archiso package lists, pacman configuration, systemd units, installer configuration, and application-native files retain their established semantics.
+**Declaration strategy:** Use upstream-native formats with a human-readable MVP scope list ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)) rather than a universal MirrorOS schema. Archiso package lists, pacman configuration, systemd units, installer configuration, and application-native files retain their established semantics.
 
 **Precedence:**
 
@@ -283,7 +284,7 @@ Hardware detection may select applicable configuration, but target-specific over
 - Operational evidence: Allowlisted, retained according to policy, and secret-scanned.
 - Verification results: Generated from one shared result model.
 
-**Capability inventory:** A minimal inventory relates each capability to its implementation, package provenance, dependencies, and verification checks. It does not replace the native configuration owned by each tool.
+**MVP scope list:** A human-readable list of the software and capabilities of the MVP environment, plus the frequent-action list, is frozen by Story 4.1 in place of a formal capability inventory ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)). It does not replace the native configuration owned by each tool.
 
 **Migration strategy:** Schema and configuration changes use ordinary version-controlled changes and explicit migrations only when existing installed state requires transformation. No database migration framework is introduced.
 
@@ -530,7 +531,7 @@ Hibernation validation covers swapfile resume configuration, offset recalculatio
 **Technology gates:**
 
 - The installation-engine gate is resolved: native Arch installation commands, recorded in [ADR 0002](adr/0002-installation-engine-selection.md).
-- Compare minimal shell against Ansible local mode using one representative end-to-end capability.
+- The configuration-mechanism gate is resolved: bounded Bash scripts over native formats, recorded in [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md); no shell versus Ansible comparison is run.
 - Begin dotfile integration with explicit Git checkouts and links; evaluate Stow or chezmoi only after demonstrated repetition or machine-specific complexity.
 - Begin orchestration with documented scripts; add Make, Just, or a unified CLI only after the real command graph demonstrates value.
 
@@ -559,8 +560,8 @@ Hibernation validation covers swapfile resume configuration, offset recalculatio
 3. Implement Arch host and KVM/OVMF preflight validation.
 4. Build and boot the minimal ISO with networking and traceable metadata.
 5. Execute the installation-engine comparison and record its ADR.
-6. Execute the convergence-mechanism comparison and record its ADR.
-7. Freeze the capability inventory and prototype the shared verification model.
+6. Apply the configuration mechanism selected by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md) through bounded Bash scripts.
+7. Freeze the human-readable MVP scope list and prototype the shared verification model.
 8. Integrate package provenance and independent configuration repositories.
 9. Implement portable system, target hardware, desktop, NVIDIA, swapfile, and hibernation capabilities.
 10. Complete clean end-to-end VM reconstruction and artifact promotion.
@@ -569,13 +570,13 @@ Hibernation validation covers swapfile resume configuration, offset recalculatio
 **Cross-Component Dependencies:**
 
 - The selected installation engine must implement the shared plan, confirmation, cancellation, diagnostic, and evidence contracts.
-- The selected convergence mechanism must preserve privilege boundaries and implement postcondition-based idempotency.
+- The configuration mechanism selected by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md) must preserve privilege boundaries and implement postcondition-based idempotency.
 - Swapfile creation or resizing requires resume configuration recalculation and renewed hibernation verification.
 - Kernel and NVIDIA choices directly affect graphical readiness, suspension, hibernation, and artifact qualification.
 - Capability verification depends on the package inventory, configuration modules, and hardware selections but remains independently invocable.
 - Known-good promotion depends on every preceding validation state; successful build or boot alone is insufficient.
 - Unencrypted storage increases dependence on external backups and accepted physical-access risk.
-- Native configuration formats remain authoritative; the capability inventory links responsibilities without replacing them.
+- Native configuration formats remain authoritative; the MVP scope list names responsibilities without replacing them.
 
 ## Implementation Patterns & Consistency Rules
 
@@ -932,7 +933,7 @@ result: passed
 - Logging complete environments, credentials, or installer directories.
 - Treating a completion marker or exit code zero as proof of readiness.
 - Automatically retrying partitioning or installation.
-- Selecting Archinstall, Ansible, CachyOS, Stow, or chezmoi inside an unrelated story before its gate and ADR.
+- Selecting Archinstall, Ansible, CachyOS, Stow, or chezmoi inside an unrelated story before its gate and ADR; Ansible is not selected ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)).
 
 ## Project Structure & Boundaries
 
@@ -1052,7 +1053,6 @@ mirroros/
 │       └── check
 │
 ├── inventory/
-│   ├── capabilities.json
 │   ├── packages.json
 │   └── external-sources.json
 │
@@ -1157,20 +1157,11 @@ mirroros/
 │   │   ├── btrfs-rescue/
 │   │   ├── btrfs-limine/
 │   │   └── # Results: evidence/prototypes/storage/<variant>/<run-id>/
-│   ├── frontend/
-│   │   ├── README.md
-│   │   ├── run
-│   │   ├── lib/
-│   │   └── # Results: evidence/prototypes/frontend/contract-check/<run-id>/
-│   └── convergence/
-│       ├── shell/
-│       │   ├── README.md
-│       │   ├── apply
-│       │   └── results/            # Generated, ignored, and secret-scanned
-│       └── ansible-local/
-│           ├── README.md
-│           ├── playbook.yml
-│           └── results/            # Generated, ignored, and secret-scanned
+│   └── frontend/
+│       ├── README.md
+│       ├── run
+│       ├── lib/
+│       └── # Results: evidence/prototypes/frontend/contract-check/<run-id>/
 │
 ├── tests/
 │   ├── fixtures/
@@ -1191,7 +1182,6 @@ mirroros/
 │   │   ├── image-build/
 │   │   ├── image-boot/
 │   │   ├── safe-cancellation/
-│   │   ├── configuration-convergence/
 │   │   └── hibernation/
 │   └── end-to-end/
 │       ├── clean-reconstruction/
@@ -1280,7 +1270,7 @@ Checks are grouped by capability domain and return the shared three-state model.
 
 **Inventory Boundary:**
 
-`inventory/` links capabilities to implementation, packages, sources, dependencies, and verification checks. It does not generate or replace native Arch, systemd, application, or installer configuration.
+`inventory/` is reserved for package and external-source provenance records; no formal capability inventory exists ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)). It does not generate or replace native Arch, systemd, application, or installer configuration.
 
 **Prototype Boundary:**
 
@@ -1289,7 +1279,7 @@ Checks are grouped by capability domain and return the shared three-state model.
 - Production code cannot import or source it.
 - Each prototype records its question, fixed scenario, criteria, and result.
 - Python project code remains forbidden in the Archinstall JSON/CLI prototype.
-- Ansible is permitted only inside its convergence prototype until an ADR selects it.
+- Ansible is not selected and has no prototype directory ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)); adopting it requires a new ADR.
 - A winning approach is implemented through the stable production boundary rather than promoted by directory rename without review.
 
 **External Repository Boundary:**
@@ -1312,7 +1302,7 @@ Neovim, Pi, and other independent repositories remain authoritative. Their capab
 | FR10–FR19: installation planning and safety | `install/` | `contracts/`, `tests/install/`, `prototypes/installation/` |
 | FR20–FR31: environment declarations | `capabilities/`, `inventory/` | `operations/configure`, external repositories |
 | FR32–FR36: hardware adaptation | `hardware/`, `targets/` | `tests/hardware/`, `verify/checks/hardware/` |
-| FR37–FR45: verification and reporting | `verify/`, `contracts/verification-result.schema.json` | `inventory/capabilities.json`, `evidence/` |
+| FR37–FR45: verification and reporting | `verify/`, `contracts/verification-result.schema.json` | `evidence/` |
 | FR46–FR53: diagnostics and recovery | `operations/lib/`, `evidence/` | `docs/procedures/recovery.md`, `tests/integration/` |
 | FR54–FR65: evolution and maintainability | `capabilities/`, `docs/adr/` | `tests/`, external configuration repositories |
 
@@ -1371,7 +1361,7 @@ Git-tracked source
 → installation plan and digest
 → explicit authorization
 → installed target
-→ capability convergence
+→ environment configuration
 → verification results
 → retained evidence
 → known-good promotion
@@ -1470,7 +1460,7 @@ The architecture is internally compatible:
 - Bash owns native Arch integration and bounded system operations.
 - JavaScript ESM on Node.js owns non-trivial structured plans, hardware normalization, and verification aggregation.
 - Python remains an upstream implementation detail unless an accepted ADR authorizes project-owned integration.
-- Installation and convergence choices remain behind explicit prototype and ADR gates.
+- Installation and configuration choices are recorded in ADRs ([ADR 0002](adr/0002-installation-engine-selection.md), [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)); changing them requires a new ADR.
 - Native formats remain authoritative while minimal JSON contracts provide cross-stage interoperability.
 - UEFI, the default Btrfs, Snapper, and Limine option ([ADR 0009](adr/0009-storage-option-promotion-and-esp-size.md)), zram, and hibernation with its optional resizeable swapfile form a compatible target-system baseline ([ADR 0007](adr/0007-zram-and-hibernation-policy.md)); the Btrfs options are selectable under [ADR 0003](adr/0003-storage-and-recovery-baseline.md).
 - Official Arch `linux` remains the qualification kernel while CachyOS remains an isolated experiment.
@@ -1485,7 +1475,7 @@ Implementation patterns reinforce the selected decisions:
 - Process rules preserve upstream diagnostics and normalized lifecycle outcomes.
 - Data rules support atomic plans, digests, evidence, and three-state verification.
 - Language authority rules prevent research references from becoming accidental technology selections.
-- Prototype rules prevent Archinstall, Ansible, Python, or CachyOS candidates from leaking into production.
+- Prototype rules prevent Archinstall, Python, or CachyOS candidates from leaking into production; Ansible is not selected ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)).
 - Ownership rules prevent duplicate package, configuration, or verification authority.
 
 **Structure Alignment:**
@@ -1508,7 +1498,7 @@ It also supports safe cancellation, recovery, evolution, clean reconstruction, a
 
 - FR1–FR9 are supported by `operations/`, `image/`, `vm/`, contracts, and evidence.
 - FR10–FR19 are supported by installation discovery, plan generation, target-bound confirmation, engine boundaries, and cancellation tests.
-- FR20–FR31 are supported by capability modules, inventory, package provenance, external configuration repositories, and convergence gates.
+- FR20–FR31 are supported by capability modules, the MVP scope list, package provenance, external configuration repositories, and the configuration mechanism of [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md).
 - FR32–FR36 are supported by hardware discovery, capability rules, and explicit target overrides.
 - FR37–FR45 are supported by the verification catalog, shared result model, human and JSON reports, and retained evidence.
 - FR46–FR53 are supported by stage-specific diagnostics, bounded retries, persistent evidence, recovery procedures, and independent rescue requirements.
@@ -1524,7 +1514,7 @@ All 65 functional requirements have an architectural owner.
 - Portability is intentionally bounded to one reference VM and one Framework Laptop 13 Pro target.
 - Maintainability is addressed through upstream-first integration, minimal profile changes, language constraints, ownership boundaries, and prototype gates.
 - Operational transparency is addressed through stable exit statuses, preserved upstream diagnostics, persistent logs, and explicit artifact metadata.
-- Visual and keyboard requirements have structural owners under desktop capabilities but require the MVP capability inventory to freeze their exact acceptance checks.
+- Visual and keyboard requirements have structural owners under desktop capabilities but require the MVP scope list to freeze their exact acceptance checks.
 
 All 52 non-functional requirements are architecturally supported.
 
@@ -1534,7 +1524,7 @@ All 52 non-functional requirements are architecturally supported.
 
 Decisions required for the first implementation gate are complete: starter profile, build environment, language policy, licensing, source and evidence authority, privilege and security boundaries, naming and process conventions, VM qualification path, and initial kernel and storage policy.
 
-Installation engine, convergence mechanism, and final schemas remain intentionally gated rather than accidentally unspecified.
+The configuration mechanism is resolved by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md); the installation engine and final schemas remain intentionally gated rather than accidentally unspecified.
 
 **Structure Completeness:**
 
@@ -1551,8 +1541,8 @@ Agents have explicit rules for technology authority, Bash and JavaScript selecti
 **Important Gated Work:**
 
 1. Populate `install/engine/apply` with the native Arch installation engine selected by [ADR 0002](adr/0002-installation-engine-selection.md), under the execution boundary of [ADR 0008](adr/0008-installation-engine-execution-boundary.md); the engine invokes the read-only `install/postconditions/` suite before cleanup, and runtime readiness verification remains gated to Epic 5.
-2. Complete the shell versus Ansible convergence prototype and ADR.
-3. Freeze the exact MVP capability inventory before broad environment implementation.
+2. Apply the configuration mechanism selected by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md) through bounded Bash scripts.
+3. Freeze the human-readable MVP scope list before broad environment implementation.
 4. Define installation, execution, and verification schemas through their prototypes and contract tests.
 5. Capture actual Framework Laptop 13 Pro PCI, USB, firmware, storage, and graphics topology before final hardware rules.
 6. Validate swapfile hibernation and hybrid AMD/NVIDIA behavior on physical hardware.
@@ -1647,8 +1637,8 @@ These are implementation gates, not missing architecture decisions.
 
 **Areas for Future Enhancement:**
 
-- Exact capability inventory and keyboard-action catalog.
-- Selected installation and convergence engines.
+- Exact MVP scope list and keyboard-action catalog.
+- Selected installation engine; a replacement configuration mechanism only through a new ADR ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)).
 - Final contract schemas.
 - Physical hardware facts and qualification evidence.
 - Known-good package-retention mechanism.

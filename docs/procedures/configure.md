@@ -19,19 +19,19 @@ These invocations make no changes, use no privilege, and invoke no domain tool. 
 
 ### Purpose
 
-Apply the declared environment configuration through capability modules, independently of image construction and base-system installation, and converge the target toward that declaration. Selection of the production convergence mechanism remains gated on its prototype and ADR.
+Prepare the complete MVP environment, including system, desktop, and user tools, on a newly installed system through bounded Bash scripts and native Arch and application formats ([ADR 0010](../adr/0010-environment-configuration-mechanism-and-scope.md)). The stage is independently invocable, and the guided installation runs it before the first normal reboot so that no required setup is deferred to post-login background work. `configure` checks its own postconditions; independent readiness verification remains the role of `verify`. Remaining details are owned by Story 4.2.
 
 ### Prerequisites
 
-A prepared target system and applicable declarations are expected. The exact supported target state, prerequisites, package and network requirements, and privilege boundaries are **Pending**.
+A newly installed target system is expected. The exact supported target state, prerequisites, package and network requirements, and privilege boundaries are **Pending**.
 
 ### Inputs
 
-Version-controlled capability declarations, applicable hardware choices and target overrides, and runtime-only secret or private inputs where required are architectural input categories. Their exact formats, selection interface, and requirements are **Pending**.
+Native Arch and application configuration, applicable hardware choices and target overrides, and runtime-only secret or private inputs where required are architectural input categories. Their exact selection interface and requirements are **Pending**.
 
 ### Consequential effects
 
-Configuration is expected to change declared system or user state. The exact changes, privilege separation, idempotency guarantees, and generated paths are **Pending**. The current help-only interface makes no changes.
+Configuration is expected to change system and user state to complete the MVP environment. The exact changes, privilege separation, rerun guarantees, and generated paths are **Pending**. The current help-only interface makes no changes.
 
 ### Evidence
 
@@ -39,7 +39,7 @@ Architecture requires run-associated evidence with source and tool metadata, non
 
 ### Failure and recovery
 
-The selected convergence mechanism, module-level recovery, and safe retry behavior are **Pending**. A future implementation must preserve failures and must not report success after incomplete application. For the current help-only interface, restore a damaged checkout from Git or reclone it if the shared helper cannot be loaded.
+The exact recovery steps and failure reporting are **Pending**. A future implementation must be safe to rerun in full after an interruption, must identify the failed step, must preserve failures, and must not report a ready environment after a configuration failure. For the current help-only interface, restore a damaged checkout from Git or reclone it if the shared helper cannot be loaded.
 
 ## Normalized outcomes
 

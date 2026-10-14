@@ -156,8 +156,8 @@ NFR52: A task must have a documented manual or assisted process and demonstrated
 - Use independently invocable documented lifecycle scripts for build, test, install, configure, verify, and clean; do not introduce a unified CLI or task runner unless evidence demonstrates recurring value.
 - Use Bash for native Arch integration and JavaScript ESM on Node.js only for non-trivial structured logic; project-owned Python is forbidden unless an accepted ADR explicitly authorizes it.
 - Complete and record the Archinstall JSON/CLI versus native Arch-command installation prototype and ADR before populating the production installation-engine boundary.
-- Complete and record the shell versus Ansible local-mode convergence prototype and ADR before selecting a production configuration mechanism; Ansible is confined to its prototype until selected.
-- Freeze the exact MVP capability inventory and verification checks before broad desktop and workflow implementation.
+- Configure the environment with bounded Bash scripts over native Arch and application formats, as decided by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md); Ansible is not selected and no convergence prototype is run.
+- Freeze the human-readable MVP scope list and the frequent-action list in Story 4.1 before broad desktop and workflow implementation.
 - Implement a synchronous local pipeline with explicit process, file, exit-status, plan, evidence, and target-root contracts; preserve upstream diagnostics and original child exit status.
 - Use normalized lifecycle exit statuses: success (0), invalid input/precondition (2), cancellation (3), verification not ready (4), execution failure (5), and internal contract failure (6).
 - Generate reviewable installation plans containing target identity, discovery facts, proposed operations, default provenance, secret requirements, and a content digest; confirmation is bound to that digest and expires when plan or target state changes.
@@ -200,16 +200,16 @@ FR16: Epic 2 - Cancel safely at confirmation boundaries.
 FR17: Epic 2 - Install the base operating system.
 FR18: Epic 2 - Configure before first normal reboot.
 FR19: Epic 2 - Withhold success until verification runs.
-FR20: Epic 3 - Define the MVP capability inventory.
-FR21: Epic 3 - Declare packages and their provenance.
-FR22: Epic 3 - Declare required services.
+FR20: Epic 4 - Define the MVP capability inventory.
+FR21: Epic 4 - Declare packages and their provenance.
+FR22: Epic 4 - Declare required services.
 FR23: Epic 4 - Declare graphical and daily-work tooling configuration.
-FR24: Epic 3 - Organize independently applicable capability modules.
-FR25: Epic 3 - Validate declarations before consequential changes.
-FR26: Epic 3 - Apply environment independently of image and installation.
-FR27: Epic 3 - Reapply configuration without duplication.
-FR28: Epic 3 - Separate portable, hardware, privileged, secret, and private concerns.
-FR29: Epic 3 - Resolve secrets without storing their values.
+FR24: Epic 4 - Organize independently applicable capability modules.
+FR25: Epic 4 - Validate declarations before consequential changes.
+FR26: Epic 4 - Apply environment independently of image and installation.
+FR27: Epic 4 - Reapply configuration without duplication.
+FR28: Epic 4 - Separate portable, hardware, privileged, secret, and private concerns.
+FR29: Epic 4 - Resolve secrets without storing their values.
 FR30: Epic 4 - Reach first graphical login with the MVP environment applied.
 FR31: Epic 4 - Replace desktop or workflow components independently.
 FR32: Epic 2 - Detect supported hardware capabilities.
@@ -241,9 +241,9 @@ FR57: Epic 6 - Apply validated changes without reinstalling.
 FR58: Epic 6 - Preserve evolution history and rationale.
 FR59: Epic 6 - Return migration and recovery fixes to source.
 FR60: Epic 6 - Complete VM validation before physical migration.
-FR61: Epic 3 - Declare module prerequisites.
-FR62: Epic 3 - Organize modules by user capability.
-FR63: Epic 3 - Separate stable from fast-changing declarations.
+FR61: Epic 4 - Declare module prerequisites.
+FR62: Epic 4 - Organize modules by user capability.
+FR63: Epic 4 - Separate stable from fast-changing declarations.
 FR64: Epic 4 - Provide keyboard-accessible frequent actions.
 FR65: Epic 4 - Validate provisional desktop capabilities.
 
@@ -257,13 +257,13 @@ The user can research critical choices, build a traceable minimal installation m
 The user can inspect a supported VM or laptop, review and edit an explainable installation plan, safely approve it, and install a base system with appropriate hardware adaptation.
 **FRs covered:** FR10–FR19, FR32–FR36
 
-### Epic 3: Define and Converge the Portable Environment
-The user can declare, validate, apply, and safely reapply portable system capabilities while keeping private, privileged, and hardware-specific concerns separate.
-**FRs covered:** FR20–FR22, FR24–FR29, FR61–FR63
+### Epic 3: Retired — Merged into Epic 4
+Epic 3 was merged into Epic 4; its work is delivered by Stories 4.1–4.3. The number is preserved so that accepted ADRs and prototypes that reference Epic 3 remain valid.
+**FRs covered:** None (see Epic 4)
 
 ### Epic 4: Restore a Ready Daily-Work Environment
-The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use.
-**FRs covered:** FR23, FR30, FR31, FR64, FR65
+The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use. The epic defines the MVP environment scope and applies the complete environment through `configure` before the first normal reboot.
+**FRs covered:** FR20–FR31, FR61–FR65
 
 ### Epic 5: Verify Readiness and Recover from Failures
 The user can independently verify every declared capability, understand readiness outcomes, retain diagnostic evidence, and safely diagnose, retry, or recover from failures.
@@ -559,53 +559,118 @@ So that the target is bootable without coupling portable configuration to one de
 **Then** bootloader, mounts, installed kernel, network prerequisites, zram and memory settings, and, when hibernation is enabled, swapfile and resume configuration are checked
 **And** completion is withheld on failure while the target remains diagnosable and recoverable.
 
-## Epic 3: Define and Converge the Portable Environment
+## Epic 3: Retired — Merged into Epic 4
 
-The user can declare, validate, apply, and safely reapply portable system capabilities while keeping private, privileged, and hardware-specific concerns separate.
+Epic 3 was merged into Epic 4 and has no stories of its own. Configuration is not an independent user outcome: a base configuration without the desktop has no standalone value, so the work is delivered as part of the ready daily-work environment. The configuration mechanism is decided by [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md). The section is kept in place so that epic numbers and the references in accepted ADRs remain valid.
 
-### Story 3.1: Freeze the MVP Capability Inventory
+| Former story | Destination |
+|---|---|
+| 3.1 Freeze the MVP Capability Inventory | Story 4.1 |
+| 3.2 Record Package and External Source Provenance | Story 4.3 |
+| 3.3 Select the Convergence Mechanism Through a Bounded Spike | Removed (resolved by ADR 0010) |
+| 3.4 Validate Modular Environment Declarations | Story 4.2 |
+| 3.5 Apply Capabilities with Bounded Privilege and Runtime Secrets | Story 4.2 |
+| 3.6 Prove Configuration Convergence | Story 4.2 |
 
-**Requirements:** FR20, FR24, FR61, FR62, FR63
+The Story 3.2 obligations cited by ADRs 0003, 0008, and 0009 are carried by Story 4.3.
+
+## Epic 4: Restore a Ready Daily-Work Environment
+
+The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use. The epic defines the MVP environment scope and applies the complete environment through `configure` before the first normal reboot.
+
+### Story 4.1: Define the MVP Environment Scope
+
+**Requirements:** FR20, FR62, FR63, FR64
 
 As the MirrorOS maintainer,
-I want a capability-oriented inventory with explicit dependencies,
+I want a human-readable list of the software and capabilities of the MVP environment together with the frequent-action list,
 So that the intended daily environment is finite, reviewable, and independent of current providers.
 
 **Acceptance Criteria:**
 
 **Given** the approved MVP scope
-**When** I define the inventory
-**Then** every required capability has a stable dot-separated identifier, purpose, owner, dependencies, implementation reference, and verification reference
-**And** identifiers describe user intent rather than replaceable tools wherever practical.
+**When** I write the scope list
+**Then** it names every piece of software and every capability the ready environment requires, grouped by stable responsibility
+**And** it is human-readable and defines no formal inventory schema, identifier grammar, or dependency graph, as decided by ADR 0010.
 
 **Given** capabilities change at different rates
-**When** the inventory and modules are organized
-**Then** stable system, hardware, desktop, workflow, development, user, and visual responsibilities remain separable
-**And** Niri is represented as a provider of `desktop.compositor`, not as the architectural capability.
+**When** the scope list is organized
+**Then** stable system, hardware, desktop, workflow, development, user, and visual responsibilities remain separately identifiable
+**And** Niri is listed as the provisional compositor provider, not as the architectural capability.
 
-**Given** an undeclared or circular prerequisite exists
-**When** inventory validation runs
-**Then** it fails before configuration changes begin
-**And** the diagnostic identifies the affected capabilities and correction required.
+**Given** the scope list and the frequent-action list are frozen
+**When** later stories and Story 5.1 need the scope of the environment
+**Then** they take it from this list instead of redefining it
+**And** any change to the frozen scope is an explicit, reviewed update.
 
-### Story 3.2: Record Package and External Source Provenance
+### Story 4.2: Apply the Environment Through Configure
 
-**Requirements:** FR21, FR28
+**Requirements:** FR22, FR24, FR25, FR26, FR27, FR28, FR29, FR61
+
+As the MirrorOS user,
+I want one configuration stage that applies the complete MVP environment to a newly installed system,
+So that the system is ready to use at its first normal login and I can safely rerun the stage.
+
+**Acceptance Criteria:**
+
+**Given** the MVP scope from Story 4.1 and a newly installed system
+**When** configuration completes
+**Then** the complete environment, including system, desktop, and user tools, is applied as one outcome before the first normal reboot
+**And** no required setup is deferred to post-login background work.
+
+**Given** the configuration stage is needed outside the guided installation
+**When** I invoke `operations/configure` independently of the image and the installation
+**Then** it applies the environment through bounded Bash scripts over native Arch and application formats, as decided by ADR 0010
+**And** `operations/configure` remains the documented entry point, with each script stating its prerequisites.
+
+**Given** the inputs and declarations for the environment
+**When** validation runs before any change
+**Then** required references, ownership, prerequisites, and supported values are checked, and two owners of the same package, file, service, or artifact fail with both owners identified
+**And** no configuration operation begins, and no proprietary schema replaces native Arch and application formats.
+
+**Given** portable, hardware-specific, privileged, secret, and private concerns
+**When** their locations are inspected
+**Then** they remain independently identifiable and removable
+**And** no committed declaration contains a secret value or personal content.
+
+**Given** a step requires elevated privilege or a secret
+**When** it runs
+**Then** privilege is limited to the operations that require it and commands use fixed argument arrays without `eval` or configuration-derived shell concatenation
+**And** secrets are supplied at runtime through a protected prompt, descriptor, or permission-restricted temporary file, removed after use, and a missing external secret produces an actionable blocked outcome without leaking values.
+
+**Given** the environment is already in its declared state
+**When** configuration is rerun
+**Then** no unnecessary mutation or duplicated state occurs and the same postconditions are verified and reported as already satisfied
+**And** a deliberately broken postcondition receives only the bounded required correction, leaving unrelated files, services, and packages unchanged.
+
+**Given** a configuration run was interrupted or failed
+**When** I rerun the complete stage
+**Then** the rerun is safe and the failed step is identified
+**And** secret-scanned evidence records inspected and changed outcomes without private values.
+
+**Given** configuration checks its own postconditions
+**When** a step fails or a postcondition is not met
+**Then** the stage ends with a failure outcome that identifies the failed step
+**And** the failure is never presented as a ready environment, while independent readiness verification remains the responsibility of Epic 5.
+
+### Story 4.3: Record Package and External Source Provenance
+
+**Requirements:** FR21, FR28, NFR12
 
 As the MirrorOS maintainer,
-I want every package and external artifact tied to a capability and source,
-So that the environment's supply chain is reviewable and reproducible.
+I want every package and external artifact tied to a source and a review,
+So that the environment's supply chain is reviewable.
 
 **Acceptance Criteria:**
 
 **Given** an installed package or external artifact is declared
-**When** provenance validation runs
-**Then** it records name, version or resolution rule, source class, repository or URL, identity/checksum evidence, owning capability, and review responsibility
-**And** 100 percent of declared installed packages have provenance.
+**When** provenance is recorded
+**Then** it captures name, source class, repository or URL, identity or checksum evidence where the source offers it, and the review responsibility
+**And** 100 percent of declared installed packages have provenance, without pinning package versions beyond what an accepted ADR requires.
 
 **Given** an AUR package is accepted
 **When** it is prepared
-**Then** its `PKGBUILD` identity and review are recorded and the package is built unprivileged
+**Then** its `PKGBUILD` is explicitly reviewed, its identity is recorded, and the package is built unprivileged
 **And** Chaotic-AUR and unapproved third-party repositories remain disabled.
 
 **Given** an independent application configuration repository is integrated
@@ -613,111 +678,12 @@ So that the environment's supply chain is reviewable and reproducible.
 **Then** the authoritative repository is explicitly checked out and linked or configured
 **And** its configuration tree and credentials are not copied into MirrorOS source.
 
-### Story 3.3: Select the Convergence Mechanism Through a Bounded Spike
+**Given** ADRs 0003, 0008, and 0009 route obligations to the former Story 3.2
+**When** this story is complete
+**Then** the AUR sources of the Limine snapshot tools are pinned and reviewed, and the response to Gradle dependencies pinned by version only is recorded
+**And** the post-installation update path is defined, with `yay` used with review and unprivileged build on the installed system.
 
-**Requirements:** NFR37, NFR38, NFR46, architecture convergence gate
-
-As the MirrorOS maintainer,
-I want to compare shell and Ansible local mode on the same representative capability,
-So that I can choose the smallest sustainable convergence mechanism after learning how each behaves.
-
-**Acceptance Criteria:**
-
-**Given** one capability containing a package, service, privileged file, user file, and readiness check
-**When** shell and Ansible prototypes apply it
-**Then** both demonstrate first-run changes, second-run behavior, failure diagnostics, privilege scope, and postcondition checks
-**And** Ansible remains confined to its prototype unless selected by ADR.
-
-**Given** the prototypes are complete
-**When** they are evaluated
-**Then** dry-run or diff quality, dependencies, readability, code volume, replacement cost, and maintenance burden are recorded
-**And** successful exit alone is not accepted as proof of convergence.
-
-**Given** a winner is selected
-**When** the ADR is accepted
-**Then** production capability modules use only the selected mechanism
-**And** the losing prototype remains non-production evidence rather than a parallel supported path.
-
-### Story 3.4: Validate Modular Environment Declarations
-
-**Requirements:** FR25, FR28, FR61
-
-As the MirrorOS user,
-I want environment declarations validated before mutation,
-So that malformed or conflicting intent cannot partially configure the machine.
-
-**Acceptance Criteria:**
-
-**Given** capability, package, service, hardware, target, secret-reference, and private-state declarations
-**When** validation runs
-**Then** required fields, references, ownership, dependencies, supported values, and precedence are checked
-**And** native Arch and application formats remain authoritative rather than being replaced by a proprietary schema.
-
-**Given** two layers claim authoritative ownership of the same package, file, service, or artifact
-**When** validation runs
-**Then** the conflict fails with both owners identified
-**And** no configuration operation begins.
-
-**Given** public, hardware-specific, privileged, visual, private, and secret-reference concerns are reviewed
-**When** their locations are inspected
-**Then** they remain independently identifiable and removable
-**And** no committed declaration contains a secret value or personal content.
-
-### Story 3.5: Apply Capabilities with Bounded Privilege and Runtime Secrets
-
-**Requirements:** FR22, FR24, FR26, FR28, FR29
-
-As the MirrorOS user,
-I want to apply selected capability modules independently of installation,
-So that my environment can converge safely without rebuilding the image or reinstalling the system.
-
-**Acceptance Criteria:**
-
-**Given** validated declarations and satisfied prerequisites
-**When** I invoke configuration for all or selected capabilities
-**Then** modules run in dependency order using validate, inspect, change, verify, and evidence phases
-**And** unrelated capability modules are not executed.
-
-**Given** a module includes system and user operations
-**When** it applies changes
-**Then** privilege is elevated only around operations that require it and user configuration runs as the target user
-**And** commands use fixed argument arrays without `eval` or configuration-derived shell concatenation.
-
-**Given** a capability requires a secret
-**When** its reference is resolved at runtime
-**Then** the value is supplied through a protected prompt, descriptor, or permission-restricted temporary file and removed after use
-**And** missing external secrets produce an actionable blocked outcome without leaking values.
-
-### Story 3.6: Prove Configuration Convergence
-
-**Requirements:** FR27
-
-As the MirrorOS user,
-I want repeated configuration to make no unintended changes,
-So that I can safely reapply the environment throughout its lifetime.
-
-**Acceptance Criteria:**
-
-**Given** a capability is already in its declared state
-**When** its configuration is applied again
-**Then** no unnecessary mutation or duplicate declaration occurs
-**And** the same postcondition is verified and reported as already converged.
-
-**Given** a declared postcondition is deliberately broken
-**When** configuration runs
-**Then** only the bounded required correction is applied
-**And** unrelated files, services, packages, and modules remain unchanged.
-
-**Given** the complete configured environment
-**When** the second-run convergence test executes
-**Then** it reports zero unintended changes and zero duplicated state
-**And** secret-scanned evidence records inspected and changed outcomes without private values.
-
-## Epic 4: Restore a Ready Daily-Work Environment
-
-The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use.
-
-### Story 4.1: Provide a Replaceable Graphical Session
+### Story 4.4: Provide a Replaceable Graphical Session
 
 **Requirements:** FR23, FR30, FR31
 
@@ -734,7 +700,7 @@ So that I can begin daily work while preserving the freedom to replace the compo
 
 **Given** the compositor provider is disabled or replaced
 **When** configuration validation runs
-**Then** installation, hardware, terminal, development, and unrelated workflow modules require no redesign
+**Then** installation, hardware, terminal, development, and unrelated workflow configuration require no redesign
 **And** missing provider dependencies are reported before mutation.
 
 **Given** graphical startup fails
@@ -742,7 +708,7 @@ So that I can begin daily work while preserving the freedom to replace the compo
 **Then** the responsible service or provider and actionable diagnostic evidence are identified
 **And** the system is not represented as graphically ready.
 
-### Story 4.2: Restore the Terminal-Centric Workflow
+### Story 4.5: Restore the Terminal-Centric Workflow
 
 **Requirements:** FR23, FR30, FR64
 
@@ -753,7 +719,7 @@ So that my primary working environment is immediately familiar and productive.
 **Acceptance Criteria:**
 
 **Given** the user session is available
-**When** terminal workflow modules apply
+**When** terminal workflow configuration is applied
 **Then** the declared terminal emulator, shell, Tmux, fonts, packages, and user configuration are installed from their authoritative sources
 **And** user files are applied without running the complete process as root.
 
@@ -767,7 +733,7 @@ So that my primary working environment is immediately familiar and productive.
 **Then** no duplicate links, shell entries, plugins, or sessions are created
 **And** provider-specific failures identify an actionable next step.
 
-### Story 4.3: Enable Core Wayland Desktop Operations
+### Story 4.6: Enable Core Wayland Desktop Operations
 
 **Requirements:** FR23, FR64, FR65
 
@@ -792,7 +758,7 @@ So that ordinary graphical tasks function in the provisional Wayland environment
 **Then** the expected output is created without secret-bearing metadata, or an actionable error is shown
 **And** screenshot configuration remains independent of the compositor provider where practical.
 
-### Story 4.4: Provide Keyboard-Accessible Desktop Controls
+### Story 4.7: Provide Keyboard-Accessible Desktop Controls
 
 **Requirements:** FR23, FR64, FR65
 
@@ -802,7 +768,7 @@ So that frequent actions remain efficient without unnecessary persistent UI.
 
 **Acceptance Criteria:**
 
-**Given** the frozen frequent-action inventory
+**Given** the frequent-action list frozen by Story 4.1
 **When** launcher, compositor, bar, and notification configuration are applied
 **Then** every listed action has a documented keyboard-accessible path
 **And** conflicting or missing bindings fail validation.
@@ -817,7 +783,7 @@ So that frequent actions remain efficient without unnecessary persistent UI.
 **Then** launching, navigation, status, and notification behavior continue to work
 **And** visual customization remains independently reversible.
 
-### Story 4.5: Restore Development Tooling
+### Story 4.8: Restore Development Tooling
 
 **Requirements:** FR23, FR30, FR65
 
@@ -827,7 +793,7 @@ So that I can resume development without restoring personal content into MirrorO
 
 **Acceptance Criteria:**
 
-**Given** the development capability modules are selected
+**Given** the development tooling in the MVP scope
 **When** configuration runs
 **Then** declared packages, services, external repositories, links, and native application configuration are applied with recorded provenance
 **And** Neovim, Pi, and other independent repositories remain authoritative for their own configuration.
@@ -838,11 +804,11 @@ So that I can resume development without restoring personal content into MirrorO
 **And** absent credentials, repositories, or personal data are identified as external dependencies rather than copied or fabricated.
 
 **Given** an external configuration checkout cannot be obtained
-**When** its module runs
+**When** its configuration step runs
 **Then** the affected capability fails or is externally blocked with a next step
 **And** unrelated development and desktop capabilities continue according to their dependencies.
 
-### Story 4.6: Restore Browser Capability
+### Story 4.9: Restore Browser Capability
 
 **Requirements:** FR23, FR30, FR65
 
@@ -853,7 +819,7 @@ So that web-based daily work is available without embedding accounts or authenti
 **Acceptance Criteria:**
 
 **Given** the browser capability is selected
-**When** its module applies
+**When** its configuration is applied
 **Then** the declared browser package, non-secret policy, desktop integration, and provenance are configured
 **And** accounts, profiles, credentials, authenticated sessions, and personal browsing data remain external.
 
@@ -864,10 +830,10 @@ So that web-based daily work is available without embedding accounts or authenti
 
 **Given** the browser provider is replaced
 **When** declarations are updated and applied
-**Then** unrelated graphical and workflow modules require no redesign
+**Then** unrelated graphical and workflow configuration requires no redesign
 **And** provider-specific checks and provenance are updated with the replacement.
 
-### Story 4.7: Deliver a Coherent First Graphical Login
+### Story 4.10: Deliver a Coherent First Graphical Login
 
 **Requirements:** FR30, FR31, FR64, FR65
 
@@ -892,6 +858,7 @@ So that first boot is not a hidden second installation or onboarding phase.
 **Then** the environment is not represented as fully ready
 **And** the affected capability and next action are available for independent verification.
 
+
 ## Epic 5: Verify Readiness and Recover from Failures
 
 The user can independently verify every declared capability, understand readiness outcomes, retain diagnostic evidence, and safely diagnose, retry, or recover from failures.
@@ -906,7 +873,7 @@ So that readiness is measured consistently rather than inferred from completed c
 
 **Acceptance Criteria:**
 
-**Given** the frozen capability inventory
+**Given** the MVP scope frozen by Story 4.1
 **When** verification definitions are validated
 **Then** every required capability has one or more owned checks, dependencies, and actionable result guidance
 **And** verification checks do not mutate desired system state.

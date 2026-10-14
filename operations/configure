@@ -14,10 +14,10 @@ fi
 
 if lifecycle_discovery_main \
   'configure' \
-  'Apply declared capability modules and converge the target environment toward the version-controlled configuration.' \
-  'A prepared target and applicable declarations are expected; exact target, package, network, and privilege requirements are Pending.' \
-  'Capability declarations, applicable hardware choices, target overrides, and runtime-only private inputs are expected; exact formats and selection details are Pending.' \
-  'A future configuration run changes declared system or user state; exact changes and safeguards are Pending. The current command makes no changes.' \
+  'Prepare the complete MVP environment on a newly installed system through bounded Bash scripts and native formats, as an independent stage that the guided installation runs before the first normal reboot; details are owned by Story 4.2.' \
+  'A newly installed target system is expected; exact target, package, network, and privilege requirements are Pending.' \
+  'Native Arch and application configuration, applicable hardware choices, target overrides, and runtime-only private inputs are expected; exact selection details are Pending.' \
+  'A future configuration run changes system and user state to complete the MVP environment; exact changes and safeguards are Pending. The current command makes no changes.' \
   'Run-associated output belongs under evidence/; the exact path and format are Pending, and this command creates none.' \
   "$@"; then
   exit 0
