@@ -31,6 +31,10 @@ install_systemd_boot() {
   printf 'title MirrorOS\nlinux /vmlinuz-linux\ninitrd /initramfs-linux.img\noptions %s\n' "$cmdline" \
     | put_file 0644 /boot/loader/entries/mirroros.conf
   if [[ "$(param options.fallback_entry)" == true ]]; then
+    # The distribution's preset may generate only the default image; the approved fallback must be explicit.
+    printf 'ALL_kver="/boot/vmlinuz-linux"\nPRESETS=("default" "fallback")\ndefault_image="/boot/initramfs-linux.img"\nfallback_image="/boot/initramfs-linux-fallback.img"\nfallback_options="-S autodetect"\n' \
+      | put_file 0644 /etc/mkinitcpio.d/linux.preset
+    chroot_run mkinitcpio -p linux
     printf 'title MirrorOS (fallback initramfs)\nlinux /vmlinuz-linux\ninitrd /initramfs-linux-fallback.img\noptions %s\n' "$cmdline" \
       | put_file 0644 /boot/loader/entries/mirroros-fallback.conf
   fi

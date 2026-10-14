@@ -80,6 +80,26 @@ teardown() {
   [ -f "${RUN_ROOT}/target/boot/loader/entries/mirroros-fallback.conf" ]
 }
 
+@test "the planned fallback is generated explicitly with a persistent Linux preset" {
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ -s "${RUN_ROOT}/target/boot/initramfs-linux-fallback.img" ]
+  grep -qx 'PRESETS=("default" "fallback")' "${RUN_ROOT}/target/etc/mkinitcpio.d/linux.preset"
+  grep -qx 'fallback_image="/boot/initramfs-linux-fallback.img"' "${RUN_ROOT}/target/etc/mkinitcpio.d/linux.preset"
+  grep -qx 'fallback_options="-S autodetect"' "${RUN_ROOT}/target/etc/mkinitcpio.d/linux.preset"
+  [ "$(engine_json postconditions.status)" = passed ]
+}
+
+@test "fallback generation failure stops the bootloader operation and cleans up" {
+  : > "${DOUBLE_STATE}/mkinitcpio-fail"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 5 ]
+  [ "$(engine_json outcome)" = failed ]
+  [ "$(engine_json failed_operation.id)" = install_bootloader ]
+  [ "$(engine_json cleanup.umount)" = ok ]
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
+}
+
 @test "the records and the log are private and plain" {
   engine_run
   [ "$ENGINE_STATUS" -eq 0 ]

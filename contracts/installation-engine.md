@@ -149,7 +149,12 @@ when the engine ends. A password is never retried or re-read.
   hibernation is enabled, `<resume_offset>` replaced by the resolved offset. For `btrfs-rescue` the options also
   carry `rootflags=subvol=@`. `zswap.enabled=0` is always present.
 - When `bootloader_options.fallback_entry` is `true`, `/boot/loader/entries/mirroros-fallback.conf` with the title
-  `MirrorOS (fallback initramfs)` and `initrd /initramfs-linux-fallback.img`, with the same options.
+  `MirrorOS (fallback initramfs)` and `initrd /initramfs-linux-fallback.img`, with the same options. Before
+  writing that entry, the engine writes `/etc/mkinitcpio.d/linux.preset` with `ALL_kver="/boot/vmlinuz-linux"`,
+  `PRESETS=("default" "fallback")`, `default_image="/boot/initramfs-linux.img"`,
+  `fallback_image="/boot/initramfs-linux-fallback.img"`, and `fallback_options="-S autodetect"`, then runs
+  `mkinitcpio -p linux` inside the target. This preserves the distribution's default hooks and makes both image
+  generation and future kernel-update regeneration independent of whether the shipped preset includes fallback.
 
 Check: the files exist with the expected content, no `resume=` or `resume_offset=` appears when hibernation is
 disabled, and `bootctl status` inside the chroot reports the loader installed. The initramfs policy is the

@@ -202,7 +202,6 @@ case "$name" in
     fi
     printf 'kernel\n' > "${target}/boot/vmlinuz-linux"
     printf 'initramfs\n' > "${target}/boot/initramfs-linux.img"
-    printf 'initramfs\n' > "${target}/boot/initramfs-linux-fallback.img"
     cp -- "${root}/etc/pacman.d/mirrorlist" "${target}/etc/pacman.d/mirrorlist"
     : > "${target}/usr/share/zoneinfo/Europe/Madrid"
     # The shipped file keeps two trailing blanks on every commented entry.
@@ -219,6 +218,13 @@ case "$name" in
     command_name="${2:-}"
     case "$command_name" in
       pacman) printf 'base 3-1\nlinux 6.1-1\n' ;;
+      mkinitcpio)
+        [[ "${3:-}" == -p && "${4:-}" == linux ]] || exit 1
+        [[ ! -f "${state}/mkinitcpio-fail" ]] || exit 1
+        grep -qx 'PRESETS=("default" "fallback")' "${target}/etc/mkinitcpio.d/linux.preset" || exit 1
+        grep -qx 'fallback_options="-S autodetect"' "${target}/etc/mkinitcpio.d/linux.preset" || exit 1
+        printf 'initramfs\n' > "${target}/boot/initramfs-linux-fallback.img"
+        ;;
       useradd)
         arguments=("${@:3}")
         account="${arguments[${#arguments[@]}-1]}"
