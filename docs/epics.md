@@ -163,7 +163,7 @@ NFR52: A task must have a documented manual or assisted process and demonstrated
 - Generate reviewable installation plans containing target identity, discovery facts, proposed operations, default provenance, secret requirements, and a content digest; confirmation is bound to that digest and expires when plan or target state changes.
 - Use UEFI, GPT, an unencrypted root filesystem with the storage option selected under [ADR 0003](adr/0003-storage-and-recovery-baseline.md) (Btrfs with Snapper and Limine by default, per [ADR 0009](adr/0009-storage-option-promotion-and-esp-size.md)), zram for everyday swap, and an optional resizeable swapfile; hibernation is an MVP capability, enabled by default and disableable per installation under [ADR 0007](adr/0007-zram-and-hibernation-policy.md), including resume-offset maintenance and repeated validation with hybrid AMD/NVIDIA graphics.
 - Keep Secure Boot disabled for the MVP; use the official Arch `linux` kernel for initial qualification, with CachyOS kernel evaluation isolated as a reversible experiment.
-- Separate image, installation, hardware, target override, system capability, user capability, visual capability, verification, inventory, and prototype ownership; Niri remains a replaceable compositor provider.
+- Separate image, installation, hardware, target override, system capability, user capability, visual capability, verification, inventory, and prototype ownership; Hyprland remains a replaceable compositor provider.
 - Treat native Arch and application formats as authoritative; do not create a proprietary configuration schema or database.
 - Keep Neovim, Pi, and other independent application repositories authoritative; integrate them through explicit clone/link/configuration operations rather than copied configuration trees.
 - Record source identity, tool versions, repositories, resolved package manifests, checksums, VM configuration, stage durations, and secret-scanned allowlisted logs in per-run evidence.
@@ -590,13 +590,13 @@ So that the intended daily environment is finite, reviewable, and independent of
 
 **Given** the approved MVP scope
 **When** I write the scope list
-**Then** it names every piece of software and every capability the ready environment requires, grouped by stable responsibility
+**Then** it names every capability the ready environment requires, the providers already selected, and the owning story of each open provider choice, grouped by stable responsibility
 **And** it is human-readable and defines no formal inventory schema, identifier grammar, or dependency graph, as decided by ADR 0010.
 
 **Given** capabilities change at different rates
 **When** the scope list is organized
 **Then** stable system, hardware, desktop, workflow, development, user, and visual responsibilities remain separately identifiable
-**And** Niri is listed as the provisional compositor provider, not as the architectural capability.
+**And** Hyprland is listed as the provisional compositor provider, not as the architectural capability, as decided by ADR 0011.
 
 **Given** the scope list and the frequent-action list are frozen
 **When** later stories and Story 5.1 need the scope of the environment
@@ -688,15 +688,15 @@ So that the environment's supply chain is reviewable.
 **Requirements:** FR23, FR30, FR31
 
 As the MirrorOS user,
-I want a working graphical session with Niri as a provisional provider,
+I want a working graphical session with Hyprland as a provisional provider,
 So that I can begin daily work while preserving the freedom to replace the compositor.
 
 **Acceptance Criteria:**
 
 **Given** the portable base and supported graphics adaptation are applied
 **When** the installed system starts normally
-**Then** the declared display/session services present a functional Niri graphical session
-**And** Niri-specific packages and configuration remain isolated beneath the compositor provider boundary.
+**Then** the declared display/session services present a functional Hyprland graphical session
+**And** Hyprland-specific packages and configuration remain isolated beneath the compositor provider boundary.
 
 **Given** the compositor provider is disabled or replaced
 **When** configuration validation runs

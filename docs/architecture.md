@@ -43,7 +43,7 @@ The PRD defines 52 non-functional requirements across six categories:
 - **Performance (NFR1–NFR5):** The provisional reconstruction target is under two hours, measured under documented conditions, with visible progress for long-running operations.
 - **Security and privacy (NFR6–NFR14):** The repository and generated artifacts must remain free of secrets and personal content. Privileges must be narrowly bounded, destructive targets explicitly confirmed, package provenance complete, and artifacts traceable to source state.
 - **Reliability and recoverability (NFR15–NFR26):** Clean-clone builds, VM qualification, configuration idempotency, explicit verification states, bounded failures, safe retries, persistent diagnostics, zero undocumented steps, and an independent rescue path are acceptance conditions.
-- **Portability and compatibility (NFR27–NFR33):** MVP compatibility is deliberately limited to one VM and one laptop. Experimental admission of other machines is not qualification or a support commitment. Hardware adaptation and Niri-specific configuration must remain isolated, while artifact metadata must preserve enough upstream state for diagnosis.
+- **Portability and compatibility (NFR27–NFR33):** MVP compatibility is deliberately limited to one VM and one laptop. Experimental admission of other machines is not qualification or a support commitment. Hardware adaptation and Hyprland-specific configuration ([ADR 0011](adr/0011-hyprland-compositor-provider.md)) must remain isolated, while artifact metadata must preserve enough upstream state for diagnosis.
 - **Maintainability and simplicity (NFR34–NFR40):** One maintainer must be able to understand and operate the complete lifecycle. Custom abstractions require demonstrated recurring value, and proprietary configuration formats are disfavored.
 - **Upstream integration and operational transparency (NFR41–NFR52):** Upstream failures must retain diagnostic fidelity, wrappers must preserve failure semantics, lifecycle outcomes require stable exit statuses, and architecture commitments remain gated by research and prototype evidence.
 
@@ -75,7 +75,7 @@ MirrorOS has a narrow product and organizational scope but significant systems-e
 - Existing tools and supported configuration mechanisms take precedence over custom applications, services, formats, or control planes.
 - Destructive operations cannot become unattended through a generic automation flag.
 - Secrets, personal content, credentials, repositories, and authenticated sessions remain external to the repository and generated image.
-- Niri is a provisional desktop default and cannot become an architectural dependency.
+- Hyprland is a provisional desktop default ([ADR 0011](adr/0011-hyprland-compositor-provider.md)) and cannot become an architectural dependency.
 - Final choices for orchestration, installation integration, configuration management, and package-state strategy are blocked by the comparative research and validation-prototype gate.
 - Network access, Arch repositories, optional AUR or external package sources, source control, artifact storage, and an independent rescue medium are operational dependencies.
 
@@ -284,7 +284,7 @@ Hardware detection may select applicable configuration, but target-specific over
 - Operational evidence: Allowlisted, retained according to policy, and secret-scanned.
 - Verification results: Generated from one shared result model.
 
-**MVP scope list:** A human-readable list of the software and capabilities of the MVP environment, plus the frequent-action list, is frozen by Story 4.1 in place of a formal capability inventory ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)). It does not replace the native configuration owned by each tool.
+**MVP scope list:** A human-readable list of the software and capabilities of the MVP environment, plus the frequent-action list, is frozen by Story 4.1 in place of a formal capability inventory ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)). It does not replace the native configuration owned by each tool. The list is maintained in [docs/mvp-scope.md](mvp-scope.md).
 
 **Migration strategy:** Schema and configuration changes use ordinary version-controlled changes and explicit migrations only when existing installed state requires transformation. No database migration framework is introduced.
 
@@ -470,7 +470,7 @@ MirrorOS introduces no custom TUI. [Gum](https://github.com/charmbracelet/gum) i
 
 **Desktop boundary:**
 
-- Niri and related desktop components are configured capabilities, not a MirrorOS management console.
+- Hyprland ([ADR 0011](adr/0011-hyprland-compositor-provider.md)) and related desktop components are configured capabilities, not a MirrorOS management console.
 - No control panel, welcome application, or management daemon is introduced.
 - The first graphical session is either ready or represented accurately by explicit verification results.
 
@@ -526,7 +526,7 @@ Promotion evidence records source state, tool versions, repositories, resolved p
 11. Repeated hibernation and resume.
 12. Physical qualification with independent rescue access.
 
-Hibernation validation covers swapfile resume configuration, offset recalculation after resizing, Niri, hybrid AMD/NVIDIA graphics, video-memory preservation, and graphical workloads across repeated cycles.
+Hibernation validation covers swapfile resume configuration, offset recalculation after resizing, Hyprland, hybrid AMD/NVIDIA graphics, video-memory preservation, and graphical workloads across repeated cycles.
 
 **Technology gates:**
 
@@ -615,7 +615,8 @@ Technology mentions do not imply technology selection.
 | Bash | Selected | Default for Arch integration and bounded system scripting |
 | JavaScript ESM on Node.js | Selected for structured lifecycle data | Plan processing, hardware normalization, verification aggregation, and other non-trivial structured logic |
 | Python | Not selected for project-owned code | Upstream runtime dependency only unless an accepted ADR approves Archinstall API/plugin integration |
-| Lua | Tool-local only | Existing Neovim, Niri, or other tool-owned configuration |
+| Lua | Tool-local only | Existing Neovim, Hyprland, or other tool-owned configuration |
+| QML | Selected for the owned desktop shell only | Quickshell configuration of the MirrorOS-owned desktop shell, bounded by [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md) |
 | Gum | Selected for interactive presentation | Presents and collects input only, under the wrappers of [ADR 0004](adr/0004-interactive-presentation-with-gum.md); not part of the plan, its digest, or `install/engine/apply` |
 
 Invoking the packaged Archinstall CLI does not authorize project-owned Python code.
@@ -682,7 +683,8 @@ Use the smallest language appropriate to the responsibility:
 1. Bash for direct Arch integration, process composition, mounts, package operations, systemd operations, and small bounded scripts.
 2. JavaScript ESM on Node.js for non-trivial structured data, plan generation, validation, result aggregation, and evidence reporting.
 3. Python only when an approved ADR requires Archinstall API/plugin integration or another upstream Python interface.
-4. Lua remains local to tools that already use it, such as Neovim or Niri configuration.
+4. Lua remains local to tools that already use it, such as Neovim or Hyprland configuration.
+5. QML is used only for the MirrorOS-owned Quickshell desktop shell, bounded by [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md).
 
 Do not rewrite simple shell operations in JavaScript for uniformity. Do not retain complex parsing or state models in Bash when JavaScript materially reduces risk.
 
@@ -1064,7 +1066,7 @@ mirroros/
 │   ├── desktop/
 │   │   ├── compositor/
 │   │   │   └── providers/
-│   │   │       └── niri/
+│   │   │       └── hyprland/
 │   │   ├── terminal/
 │   │   ├── portal/
 │   │   ├── clipboard/
@@ -1252,7 +1254,7 @@ Each capability may contain only the responsibility-specific material it needs:
 - External repository integration.
 - Postcondition metadata.
 
-Niri is placed below `desktop/compositor/providers/` because it is a replaceable provider, not the architectural capability itself.
+Hyprland ([ADR 0011](adr/0011-hyprland-compositor-provider.md)) is placed below `desktop/compositor/providers/` because it is a replaceable provider, not the architectural capability itself.
 
 **Hardware and Target Boundaries:**
 
@@ -1631,13 +1633,13 @@ These are implementation gates, not missing architecture decisions.
 - Production and prototype code are physically separated.
 - Destructive operations have explicit plan and authorization boundaries.
 - Verification, provenance, evidence, recovery, and hibernation are foundational rather than deferred concerns.
-- Capability-oriented structure keeps Niri, kernels, installers, and configuration tools replaceable.
+- Capability-oriented structure keeps Hyprland, kernels, installers, and configuration tools replaceable.
 - Language choices are explicit and enforceable.
 - Scope remains sustainable for one maintainer.
 
 **Areas for Future Enhancement:**
 
-- Exact MVP scope list and keyboard-action catalog.
+- Keyboard bindings for the frequent-action list (Story 4.7).
 - Selected installation engine; a replacement configuration mechanism only through a new ADR ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)).
 - Final contract schemas.
 - Physical hardware facts and qualification evidence.
