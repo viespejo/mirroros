@@ -1639,7 +1639,7 @@ These are implementation gates, not missing architecture decisions.
 
 **Areas for Future Enhancement:**
 
-- Keyboard bindings for the frequent-action list (Story 4.7).
+- Keyboard bindings for the frequent-action list (conventions in Story 4.3; frozen by Story 4.8).
 - Selected installation engine; a replacement configuration mechanism only through a new ADR ([ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md)).
 - Final contract schemas.
 - Physical hardware facts and qualification evidence.

@@ -6,7 +6,7 @@ frequent actions. It is owned by Story 4.1 and replaces a formal capability inve
 [ADR 0010](adr/0010-environment-configuration-mechanism-and-scope.md). It defines no schema, identifier grammar, or
 dependency graph.
 
-Stories 4.2–4.10 and Story 5.1 consume this document. The scope is the minimum needed for daily work and does not
+Stories 4.2–4.8 and Story 5.1 consume this document. The scope is the minimum needed for daily work and does not
 aim at parity with any existing machine. Native configuration formats stay authoritative; this document names
 responsibilities and does not replace the configuration owned by each tool.
 
@@ -39,9 +39,9 @@ project-owned QML.
 | Wired and Wi-Fi network | installation | NetworkManager | Source: `install/plan/policy.json` |
 | Time, locale, and console keyboard | installation | Per installation policy | Source: `install/plan/policy.json` |
 | Administrative privilege | installation | sudo | Source: `install/plan/policy.json` |
-| Audio | configure | open — selected by Story 4.6 | |
-| Bluetooth | configure | open — selected by Story 4.6 | |
-| Package updates with AUR review | configure | yay | Story 4.3 |
+| Audio | configure | open — selected by Story 4.4 | |
+| Bluetooth | configure | open — selected by Story 4.4 | |
+| Package updates with AUR review | configure | yay | Story 4.7 |
 
 ### Hardware
 
@@ -50,7 +50,7 @@ project-owned QML.
 | CPU microcode | installation | Per hardware rules | Source: `hardware/rules/` |
 | Graphics | installation | Per hardware rules | Source: `hardware/rules/` |
 | Virtual machine guest support | installation | Per hardware rules | Source: `hardware/rules/` |
-| Brightness, media keys, battery, lid, and suspend | configure | open — selected by Story 4.6 | |
+| Brightness, media keys, battery, lid, and suspend | configure | open — selected by Story 4.4 | |
 
 ### Desktop
 
@@ -59,56 +59,56 @@ project-owned QML.
 | Wayland compositor and graphical session | configure | Hyprland (provisional) | [ADR 0011](adr/0011-hyprland-compositor-provider.md); Hyprland is the provider, not the architectural capability |
 | Graphical login | configure | SDDM with its greeter on Hyprland and a small owned QML theme | Sessions always start through `uwsm start hyprland.desktop`; password login, no autologin |
 | Desktop shell: bar, launcher, notifications, OSD, and session menu | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); bounded to these surfaces |
-| Screen lock and idle | configure | open — selected by Story 4.7 | Never project-owned QML |
-| Polkit authentication agent | configure | open — selected by Story 4.6 | Never project-owned QML |
-| Desktop portals | configure | open — selected by Story 4.6 | |
-| Clipboard and history | configure | open — selected by Story 4.6 | |
-| Screenshots | configure | open — selected by Story 4.6 | |
-| Keyboard shortcuts | configure | Hyprland native configuration | Bindings belong to Story 4.7 |
+| Screen lock and idle | configure | open — selected by Story 4.3 | Never project-owned QML |
+| Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
+| Desktop portals | configure | open — selected by Story 4.5 | |
+| Clipboard and history | configure | open — selected by Story 4.5 | |
+| Screenshots | configure | open — selected by Story 4.5 | |
+| Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3; each slice binds its own actions |
 
 ### Workflow
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Terminal | configure | open — selected by Story 4.5 | |
-| Interactive shell | configure | open — selected by Story 4.5 | |
+| Terminal | configure | open — selected by Story 4.2 | |
+| Interactive shell | configure | open — selected by Story 4.2 | |
 | Terminal multiplexer | configure | tmux | |
 | File manager | configure | open — selected by Story 4.5 | |
-| Browser | configure | open — selected by Story 4.9 | |
+| Browser | configure | open — selected by Story 4.5 | |
 
 ### Development
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
 | Version control | configure | Git | |
-| Editor | configure | Neovim | Package delivered by installation; configuration applied by `configure` from an external configuration repository (Story 4.8) |
-| Coding agent | configure | Pi | Configuration applied from an external configuration repository (Story 4.8) |
-| Container runtime | configure | Docker | Story 4.8 |
-| Command-line search utilities | configure | open — selected by Story 4.8 | |
-| Node.js runtime for Pi and `verify` | configure | open — selected by Story 4.8 | |
+| Editor | configure | Neovim | Package delivered by installation; configuration applied by `configure` from an external configuration repository (Story 4.6) |
+| Coding agent | configure | Pi | Configuration applied from an external configuration repository (Story 4.6) |
+| Container runtime | configure | Docker | Story 4.6 |
+| Command-line search utilities | configure | open — selected by Story 4.6 | |
+| Node.js runtime for Pi and `verify` | configure | open — selected by Story 4.6 | |
 
 ### User
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
 | User account | installation | Per installation policy | Source: `install/plan/policy.json` |
-| User configuration linked from external repositories | configure | Per owning story | Linked, not copied (Stories 4.3 and 4.8) |
+| User configuration linked from external repositories | configure | Per owning story | Linked, not copied (Epic 4 common contract and Story 4.6) |
 | Secrets and private state | external | None | Never stored in MirrorOS |
 
 ### Visual
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Typography | configure | open — selected by Story 4.10 | |
-| Coherent color palette across components | configure | open — selected by Story 4.10 | |
+| Typography | configure | open — selected by Story 4.8 | |
+| Coherent color palette across components | configure | open — selected by Story 4.8 | |
 | SDDM greeter theme | configure | Owned QML theme | Designed so that it can later match a boot splash |
-| Cursor and icons | configure | open — selected by Story 4.10 | |
+| Cursor and icons | configure | open — selected by Story 4.8 | |
 
 ## Frequent-action list
 
 The frequent actions of the daily environment, at action level. Key bindings are not part of this list; they belong
-to Story 4.7. Actions inside tmux, Neovim, Pi, and the browser are owned by their own configuration and are not
-listed here.
+to the slice that delivers each action, under the binding conventions owned by Story 4.3. Actions inside tmux,
+Neovim, Pi, and the browser are owned by their own configuration and are not listed here.
 
 **Session and power**
 
@@ -176,13 +176,13 @@ Changes to this document are classified as reviewed updates or scope changes.
 **Reviewed updates:**
 
 - Selecting an open provider, by the story that owns it.
-- Adjusting the frequent actions before Story 4.7 completes.
+- Adjusting the frequent actions before Story 4.8 completes.
 
 **Scope changes:**
 
 - Adding or removing a capability.
 - Changing an installation-delivered capability.
-- Changing the frequent actions after Story 4.7 completes.
+- Changing the frequent actions after Story 4.8 completes.
 
 Every change is a git commit that cites the owning story. A scope change also cites its justification: the story,
 an ADR when a normative decision is affected, or the Story 6.5 evolution path. This document keeps no in-document

@@ -258,11 +258,11 @@ The user can inspect a supported VM or laptop, review and edit an explainable in
 **FRs covered:** FR10–FR19, FR32–FR36
 
 ### Epic 3: Retired — Merged into Epic 4
-Epic 3 was merged into Epic 4; its work is delivered by Stories 4.1–4.3. The number is preserved so that accepted ADRs and prototypes that reference Epic 3 remain valid.
+Epic 3 was merged into Epic 4; its work is delivered by Story 4.1, Story 4.2 and the Epic 4 common contract, and Story 4.7. The number is preserved so that accepted ADRs and prototypes that reference Epic 3 remain valid.
 **FRs covered:** None (see Epic 4)
 
 ### Epic 4: Restore a Ready Daily-Work Environment
-The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use. The epic defines the MVP environment scope and applies the complete environment through `configure` before the first normal reboot.
+The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use. The epic defines the MVP environment scope, then delivers the environment through a walking skeleton, vertical slices, and a closure story applied through `configure` before the first normal reboot.
 **FRs covered:** FR20–FR31, FR61–FR65
 
 ### Epic 5: Verify Readiness and Recover from Failures
@@ -566,21 +566,77 @@ Epic 3 was merged into Epic 4 and has no stories of its own. Configuration is no
 | Former story | Destination |
 |---|---|
 | 3.1 Freeze the MVP Capability Inventory | Story 4.1 |
-| 3.2 Record Package and External Source Provenance | Story 4.3 |
+| 3.2 Record Package and External Source Provenance | Story 4.7 |
 | 3.3 Select the Convergence Mechanism Through a Bounded Spike | Removed (resolved by ADR 0010) |
-| 3.4 Validate Modular Environment Declarations | Story 4.2 |
-| 3.5 Apply Capabilities with Bounded Privilege and Runtime Secrets | Story 4.2 |
-| 3.6 Prove Configuration Convergence | Story 4.2 |
+| 3.4 Validate Modular Environment Declarations | Story 4.2 and the Epic 4 common contract |
+| 3.5 Apply Capabilities with Bounded Privilege and Runtime Secrets | Story 4.2 and the Epic 4 common contract |
+| 3.6 Prove Configuration Convergence | Story 4.2 and the Epic 4 common contract |
 
-The Story 3.2 obligations cited by ADRs 0003, 0008, and 0009 are carried by Story 4.3.
+The Story 3.2 obligations cited by ADRs 0003, 0008, and 0009 are carried by Story 4.7.
 
 ## Epic 4: Restore a Ready Daily-Work Environment
 
 The user reaches first graphical login with a keyboard-accessible, cohesive daily environment—including the provisional desktop stack and declared development workflow—already ready to use. The epic defines the MVP environment scope and applies the complete environment through `configure` before the first normal reboot.
 
+The epic follows a walking skeleton, vertical slices, and a closure story. Story 4.1 defines the scope. Story 4.2 is the walking skeleton: a minimal usable graphical login applied through `configure`, which establishes the mechanism. Stories 4.3–4.7 are predefined vertical slices, each delivering one user-visible capability group end to end. Story 4.8 is the closure story: visual coherence, the frozen-scope coverage check, and the first-login outcome. Machinery grows only when a slice consumes it.
+
+Providers are selected from the maintainer's exploration in a private VM laboratory and recorded as reviewed updates of `docs/mvp-scope.md`. The exploration itself stays outside the product; a story's plan registers a choice once the VM proves it.
+
+**Common contract.** Each slice applies the following to what it applies, and its criteria cite this contract instead of repeating it:
+
+- Bounded Bash `configure` scripts over native Arch and application formats, as decided by ADR 0010.
+- Provenance for every package and external artifact: name, source class, repository or URL, identity or checksum evidence where the source offers it, and review responsibility.
+- AUR `PKGBUILD` files reviewed and built unprivileged.
+- External configuration repositories checked out or linked, never copied.
+- Narrow privilege, with user configuration not run as root.
+- `configure` checks the slice's postconditions.
+- A full rerun on a configured system makes no unnecessary mutation.
+- A clean installation plus `configure` in the reference VM succeeds without manual steps.
+- `docs/mvp-scope.md` records the providers the slice selects.
+- No secret or personal content is committed.
+- The slice works in both execution contexts defined by Story 4.2: the running installed system and a target root invoked by the guided installer. In the installer context, systemd units can be enabled but not started, user configuration runs through `runuser` or an equivalent, and unprivileged AUR builds happen inside the target.
+- The slice's frequent actions have keyboard paths, under the binding conventions owned by Story 4.3.
+
+**Mechanism properties.** Story 4.2 establishes these once, and later slices inherit them:
+
+- An independent `operations/configure` entry point.
+- Prerequisite validation before mutation.
+- A failure outcome that identifies the failed step and is never presented as ready.
+- Interruption-safe rerun.
+- Secret-free evidence.
+
+**Conditional clauses.** The first slice that needs each clause implements it, and later slices inherit it:
+
+- Runtime secret supply through a protected prompt, descriptor, or permission-restricted temporary file, removed after use, with an actionable blocked outcome and no leaked value when an external secret is missing.
+- Detection of two owners of the same package, file, or service, failing with both owners identified.
+
+**Ordering and numbering.**
+
+- The order is indicative: Story 4.2 comes first and Story 4.8 comes last.
+- Intermediate stories may be reordered, split, or merged as a reviewed update of `docs/epics.md`, committed with the VM evidence that shows a better cut.
+- Story numbers are stable identifiers, not positions, so reordering does not renumber.
+- A split adds numbers after the highest existing one, and Story 4.8 stays the closure story.
+- A merge retires a number and leaves a "Merged into 4.x" note.
+
+### Former Epic 4 Numbering
+
+Numbers 4.3–4.8 are reused by this restructure. Accepted ADRs 0010, 0011, and 0012 keep the former numbers; this table translates them.
+
+| Former story | Destination |
+|---|---|
+| 4.2 | Story 4.2 and the common contract |
+| 4.3 | Common contract, Story 4.6, and Story 4.7 |
+| 4.4 | Story 4.2 |
+| 4.5 | Story 4.2 (terminal, shell, Tmux) and Story 4.5 (file manager) |
+| 4.6 | Story 4.4 and Story 4.5 |
+| 4.7 | Story 4.3 |
+| 4.8 | Story 4.6 |
+| 4.9 | Story 4.5 |
+| 4.10 | Story 4.8 |
+
 ### Story 4.1: Define the MVP Environment Scope
 
-**Requirements:** FR20, FR62, FR63, FR64
+**Requirements:** FR20, FR62, FR63
 
 As the MirrorOS maintainer,
 I want a human-readable list of the software and capabilities of the MVP environment together with the frequent-action list,
@@ -603,179 +659,89 @@ So that the intended daily environment is finite, reviewable, and independent of
 **Then** they take it from this list instead of redefining it
 **And** any change to the frozen scope is an explicit, reviewed update.
 
-### Story 4.2: Apply the Environment Through Configure
+### Story 4.2: Reach a Minimal Graphical Login Through Configure
 
-**Requirements:** FR22, FR24, FR25, FR26, FR27, FR28, FR29, FR61
-
-As the MirrorOS user,
-I want one configuration stage that applies the complete MVP environment to a newly installed system,
-So that the system is ready to use at its first normal login and I can safely rerun the stage.
-
-**Acceptance Criteria:**
-
-**Given** the MVP scope from Story 4.1 and a newly installed system
-**When** configuration completes
-**Then** the complete environment, including system, desktop, and user tools, is applied as one outcome before the first normal reboot
-**And** no required setup is deferred to post-login background work.
-
-**Given** the configuration stage is needed outside the guided installation
-**When** I invoke `operations/configure` independently of the image and the installation
-**Then** it applies the environment through bounded Bash scripts over native Arch and application formats, as decided by ADR 0010
-**And** `operations/configure` remains the documented entry point, with each script stating its prerequisites.
-
-**Given** the inputs and declarations for the environment
-**When** validation runs before any change
-**Then** required references, ownership, prerequisites, and supported values are checked, and two owners of the same package, file, service, or artifact fail with both owners identified
-**And** no configuration operation begins, and no proprietary schema replaces native Arch and application formats.
-
-**Given** portable, hardware-specific, privileged, secret, and private concerns
-**When** their locations are inspected
-**Then** they remain independently identifiable and removable
-**And** no committed declaration contains a secret value or personal content.
-
-**Given** a step requires elevated privilege or a secret
-**When** it runs
-**Then** privilege is limited to the operations that require it and commands use fixed argument arrays without `eval` or configuration-derived shell concatenation
-**And** secrets are supplied at runtime through a protected prompt, descriptor, or permission-restricted temporary file, removed after use, and a missing external secret produces an actionable blocked outcome without leaking values.
-
-**Given** the environment is already in its declared state
-**When** configuration is rerun
-**Then** no unnecessary mutation or duplicated state occurs and the same postconditions are verified and reported as already satisfied
-**And** a deliberately broken postcondition receives only the bounded required correction, leaving unrelated files, services, and packages unchanged.
-
-**Given** a configuration run was interrupted or failed
-**When** I rerun the complete stage
-**Then** the rerun is safe and the failed step is identified
-**And** secret-scanned evidence records inspected and changed outcomes without private values.
-
-**Given** configuration checks its own postconditions
-**When** a step fails or a postcondition is not met
-**Then** the stage ends with a failure outcome that identifies the failed step
-**And** the failure is never presented as a ready environment, while independent readiness verification remains the responsibility of Epic 5.
-
-### Story 4.3: Record Package and External Source Provenance
-
-**Requirements:** FR21, FR28, NFR12
-
-As the MirrorOS maintainer,
-I want every package and external artifact tied to a source and a review,
-So that the environment's supply chain is reviewable.
-
-**Acceptance Criteria:**
-
-**Given** an installed package or external artifact is declared
-**When** provenance is recorded
-**Then** it captures name, source class, repository or URL, identity or checksum evidence where the source offers it, and the review responsibility
-**And** 100 percent of declared installed packages have provenance, without pinning package versions beyond what an accepted ADR requires.
-
-**Given** an AUR package is accepted
-**When** it is prepared
-**Then** its `PKGBUILD` is explicitly reviewed, its identity is recorded, and the package is built unprivileged
-**And** Chaotic-AUR and unapproved third-party repositories remain disabled.
-
-**Given** an independent application configuration repository is integrated
-**When** its capability is applied
-**Then** the authoritative repository is explicitly checked out and linked or configured
-**And** its configuration tree and credentials are not copied into MirrorOS source.
-
-**Given** ADRs 0003, 0008, and 0009 route obligations to the former Story 3.2
-**When** this story is complete
-**Then** the AUR sources of the Limine snapshot tools are pinned and reviewed, and the response to Gradle dependencies pinned by version only is recorded
-**And** the post-installation update path is defined, with `yay` used with review and unprivileged build on the installed system.
-
-### Story 4.4: Provide a Replaceable Graphical Session
-
-**Requirements:** FR23, FR30, FR31
+**Requirements:** FR22, FR23, FR24, FR25, FR26, FR27, FR28, FR30, FR31, FR61, FR65
 
 As the MirrorOS user,
-I want a working graphical session with Hyprland as a provisional provider,
-So that I can begin daily work while preserving the freedom to replace the compositor.
+I want `configure` to bring a newly installed system to a minimal usable graphical login,
+So that I can log in and work in a terminal at the first normal reboot and every later slice has a working base to extend.
 
 **Acceptance Criteria:**
 
-**Given** the portable base and supported graphics adaptation are applied
-**When** the installed system starts normally
-**Then** the declared display/session services present a functional Hyprland graphical session
-**And** Hyprland-specific packages and configuration remain isolated beneath the compositor provider boundary.
-
-**Given** the compositor provider is disabled or replaced
-**When** configuration validation runs
-**Then** installation, hardware, terminal, development, and unrelated workflow configuration require no redesign
-**And** missing provider dependencies are reported before mutation.
-
-**Given** graphical startup fails
-**When** session postconditions run
-**Then** the responsible service or provider and actionable diagnostic evidence are identified
-**And** the system is not represented as graphically ready.
-
-### Story 4.5: Restore the Terminal-Centric Workflow
-
-**Requirements:** FR23, FR30, FR64
-
-As the MirrorOS user,
-I want my terminal, shell, and Tmux capabilities configured at first login,
-So that my primary working environment is immediately familiar and productive.
-
-**Acceptance Criteria:**
-
-**Given** the user session is available
-**When** terminal workflow configuration is applied
-**Then** the declared terminal emulator, shell, Tmux, fonts, packages, and user configuration are installed from their authoritative sources
-**And** user files are applied without running the complete process as root.
-
-**Given** the first graphical login
-**When** I launch the terminal and start Tmux through documented keyboard paths
-**Then** the configured shell initializes successfully and Tmux can create and manage a session
-**And** missing private state or credentials do not prevent the base workflow from functioning.
-
-**Given** terminal workflow configuration is reapplied
-**When** it is already correct
-**Then** no duplicate links, shell entries, plugins, or sessions are created
-**And** provider-specific failures identify an actionable next step.
-
-### Story 4.6: Enable Core Wayland Desktop Operations
-
-**Requirements:** FR23, FR64, FR65
-
-As the MirrorOS user,
-I want portals, clipboard, screenshots, and browser-facing desktop integration to work,
-So that ordinary graphical tasks function in the provisional Wayland environment.
-
-**Acceptance Criteria:**
+**Given** a newly installed system and the MVP scope from Story 4.1
+**When** `configure` completes
+**Then** SDDM with its stock theme presents a password login without autologin, and a session started through `uwsm start hyprland.desktop` opens Hyprland with minimal native configuration
+**And** the minimal bindings open a terminal, close a window, and exit the session, and Story 4.3 may adjust them.
 
 **Given** the graphical session is running
-**When** portal-dependent operations are invoked
-**Then** the selected portal services match the compositor session and provide required file-selection or desktop integration behavior
-**And** service ownership and environment propagation are documented and verifiable.
+**When** I open a terminal through the minimal binding
+**Then** a terminal emulator starts an interactive shell and Tmux can create and manage a session
+**And** the terminal and interactive-shell providers are selected from VM exploration and recorded in `docs/mvp-scope.md`, while the file manager, the owned SDDM theme, and Quickshell belong to later slices.
 
-**Given** content is copied between supported terminal and graphical applications
-**When** clipboard operations are performed
-**Then** copy and paste work through a keyboard-accessible path
-**And** clipboard tooling does not introduce an unapproved resident management service.
+**Given** the compositor is the provisional provider decided by ADR 0011
+**When** Hyprland is disabled or replaced
+**Then** Hyprland-specific packages and configuration are isolated beneath the compositor provider boundary
+**And** installation, hardware, terminal, and unrelated workflow configuration require no redesign, and missing provider dependencies are reported before mutation.
 
-**Given** a screenshot is requested through the declared shortcut
-**When** capture completes or fails
-**Then** the expected output is created without secret-bearing metadata, or an actionable error is shown
-**And** screenshot configuration remains independent of the compositor provider where practical.
+**Given** the configuration stage is needed outside the guided installation
+**When** I invoke `operations/configure` against the running installed system
+**Then** it applies the skeleton through bounded Bash scripts under the Epic 4 common contract
+**And** each script states its prerequisites.
 
-### Story 4.7: Provide Keyboard-Accessible Desktop Controls
+**Given** the guided installer has completed the base installation
+**When** it invokes `configure` against the target root before the first normal reboot
+**Then** the skeleton is applied inside the target with systemd units enabled but not started, user configuration run through `runuser` or an equivalent, and unprivileged AUR builds performed inside the target
+**And** the installation does not report readiness when `configure` fails.
+
+**Given** the inputs and prerequisites of a `configure` run
+**When** validation runs before any change
+**Then** required references and prerequisites are checked
+**And** no configuration operation begins on failure.
+
+**Given** a step fails or a postcondition is not met
+**When** the stage ends
+**Then** the outcome identifies the failed step and is never presented as a ready environment
+**And** independent readiness verification remains the responsibility of Epic 5.
+
+**Given** a run was interrupted or failed
+**When** I rerun the complete stage
+**Then** the rerun is safe and the failed step is identified, and on an already configured system it makes no unnecessary mutation and reports the postconditions as already satisfied
+**And** secret-scanned evidence records inspected and changed outcomes without private values.
+
+### Story 4.3: Provide the Desktop Shell and Session Control
 
 **Requirements:** FR23, FR64, FR65
 
 As the MirrorOS user,
-I want launching, navigation, window management, status, and notifications available through coherent controls,
-So that frequent actions remain efficient without unnecessary persistent UI.
+I want a bar, launcher, notifications, status display, session menu, and screen lock with coherent keyboard bindings,
+So that frequent desktop actions are efficient without unnecessary persistent UI.
 
 **Acceptance Criteria:**
 
-**Given** the frequent-action list frozen by Story 4.1
-**When** launcher, compositor, bar, and notification configuration are applied
-**Then** every listed action has a documented keyboard-accessible path
+**Given** the walking skeleton from Story 4.2
+**When** the shell slice is applied under the Epic 4 common contract
+**Then** the owned Quickshell surfaces decided by ADR 0012 provide the bar, launcher, notifications, on-screen display, and session menu
+**And** the screen locker is not an owned Quickshell surface.
+
+**Given** the session is idle or I request a lock
+**When** the lock and idle behavior runs
+**Then** the session locks and unlocking requires the user's credential
+**And** no secret is committed or logged.
+
+**Given** the binding conventions
+**When** they are written
+**Then** they define the modifier scheme and the translation from the maintainer's i3 configuration recorded by Story 4.1, and a shortcut reference lists the bindings
 **And** conflicting or missing bindings fail validation.
 
 **Given** the graphical session is healthy
-**When** I use the launcher, window controls, bar, and notifications
-**Then** each component performs its declared capability and remains quiet when no intervention is required
+**When** I manage windows, workspaces, monitors, and the scratchpad
+**Then** each action works through a documented keyboard path
+**And** the minimal bindings from Story 4.2 are adjusted without breaking the skeleton.
+
+**Given** the shell components are running
+**When** no intervention is required
+**Then** each component remains quiet
 **And** color is not the sole means of communicating state.
 
 **Given** visual settings are removed
@@ -783,81 +749,170 @@ So that frequent actions remain efficient without unnecessary persistent UI.
 **Then** launching, navigation, status, and notification behavior continue to work
 **And** visual customization remains independently reversible.
 
-### Story 4.8: Restore Development Tooling
+### Story 4.4: Control Hardware and Connectivity
 
-**Requirements:** FR23, FR30, FR65
+**Requirements:** FR23, FR31
 
 As the MirrorOS user,
-I want Git, Neovim, Pi, and required development tools available,
+I want audio, Bluetooth, brightness, battery, lid, and power behavior to work in daily use,
+So that the laptop behaves as an everyday machine.
+
+**Acceptance Criteria:**
+
+**Given** the graphical session is running
+**When** the hardware slice is applied under the Epic 4 common contract
+**Then** audio, Bluetooth, brightness, media keys, battery status, lid behavior, and suspend and hibernate work in daily use
+**And** their frequent actions have keyboard paths.
+
+**Given** I need a wireless connection
+**When** I connect Wi-Fi or Bluetooth through the shell or a terminal interface
+**Then** the connection is established with its frequent actions bound
+**And** no credential is committed or logged.
+
+**Given** a capability cannot be exercised in the reference VM, such as audio
+**When** the slice is verified
+**Then** the capability is recorded as pending target-laptop validation
+**And** it is not claimed as working.
+
+**Given** a hardware provider is replaced
+**When** declarations are updated and applied
+**Then** unrelated desktop and workflow configuration requires no redesign
+**And** provider-specific checks and provenance are updated with the replacement.
+
+### Story 4.5: Integrate Desktop Operations and Graphical Applications
+
+**Requirements:** FR23, FR31, FR65
+
+As the MirrorOS user,
+I want portals, clipboard, screenshots, a file manager, and a browser to work,
+So that ordinary graphical tasks function in the provisional Wayland environment.
+
+**Acceptance Criteria:**
+
+**Given** the graphical session is running
+**When** portal-dependent operations and privileged desktop actions are invoked
+**Then** the selected portal services match the compositor session and provide file-selection and desktop integration behavior, and a polkit agent serves authorization requests
+**And** service ownership and environment propagation are documented and verifiable.
+
+**Given** content is copied between supported terminal and graphical applications
+**When** clipboard operations are performed, including history
+**Then** copy, paste, and history work through keyboard-accessible paths
+**And** clipboard tooling does not introduce an unapproved resident management service.
+
+**Given** a screenshot is requested through the declared shortcut
+**When** capture completes or fails
+**Then** the expected output is created without secret-bearing metadata, or an actionable error is shown
+**And** screenshot configuration remains independent of the compositor provider where practical.
+
+**Given** the graphical session is ready
+**When** I launch the file manager and the browser through their documented keyboard paths
+**Then** each starts successfully, and portal, clipboard, and file-selection integrations work as declared
+**And** the providers are selected from VM exploration and recorded in `docs/mvp-scope.md`.
+
+**Given** the browser capability is configured
+**When** its non-secret policy and desktop integration are applied
+**Then** accounts, profiles, credentials, authenticated sessions, and personal browsing data remain external
+**And** missing external account state does not make the browser capability itself fail.
+
+**Given** a provider in this slice is replaced
+**When** declarations are updated and applied
+**Then** unrelated graphical and workflow configuration requires no redesign
+**And** provider-specific checks and provenance are updated with the replacement.
+
+### Story 4.6: Restore Development Tooling
+
+**Requirements:** FR21, FR23, FR29
+
+As the MirrorOS user,
+I want Git, Neovim, Pi, Docker, Node.js, and command-line search utilities available,
 So that I can resume development without restoring personal content into MirrorOS.
 
 **Acceptance Criteria:**
 
 **Given** the development tooling in the MVP scope
-**When** configuration runs
+**When** the development slice is applied under the Epic 4 common contract
 **Then** declared packages, services, external repositories, links, and native application configuration are applied with recorded provenance
-**And** Neovim, Pi, and other independent repositories remain authoritative for their own configuration.
+**And** Neovim, Pi, and other independent repositories are checked out or linked and remain authoritative for their own configuration.
 
 **Given** first login is complete
-**When** I launch Git, Neovim, Pi, and declared development tools
+**When** I launch Git, Neovim, Pi, and the declared development tools
 **Then** each starts with its intended non-secret configuration and required integrations
 **And** absent credentials, repositories, or personal data are identified as external dependencies rather than copied or fabricated.
+
+**Given** this slice is the indicative first consumer of the runtime-secret conditional clause
+**When** a step needs an external secret
+**Then** the secret is supplied at runtime as the Epic 4 common contract describes, and a missing secret produces an actionable blocked outcome without leaking values
+**And** the clause moves to another slice as a reviewed update if that slice needs secrets first.
 
 **Given** an external configuration checkout cannot be obtained
 **When** its configuration step runs
 **Then** the affected capability fails or is externally blocked with a next step
 **And** unrelated development and desktop capabilities continue according to their dependencies.
 
-### Story 4.9: Restore Browser Capability
+### Story 4.7: Update the System Safely
 
-**Requirements:** FR23, FR30, FR65
+**Requirements:** FR21, NFR12
 
-As the MirrorOS user,
-I want a configured browser capability in the graphical environment,
-So that web-based daily work is available without embedding accounts or authenticated sessions.
+As the MirrorOS maintainer,
+I want the post-installation update path to be reviewed and bounded,
+So that the installed system's supply chain stays reviewable after first login.
 
 **Acceptance Criteria:**
 
-**Given** the browser capability is selected
-**When** its configuration is applied
-**Then** the declared browser package, non-secret policy, desktop integration, and provenance are configured
-**And** accounts, profiles, credentials, authenticated sessions, and personal browsing data remain external.
+**Given** the installed system needs AUR packages
+**When** `yay` is used
+**Then** each `PKGBUILD` is explicitly reviewed, its identity is recorded, and the package is built unprivileged
+**And** Chaotic-AUR and unapproved third-party repositories remain disabled.
 
-**Given** the graphical session is ready
-**When** I launch the browser through its documented keyboard path
-**Then** it starts successfully and portal, clipboard, and file-selection integrations work as declared
-**And** missing external account state does not make the browser capability itself fail.
+**Given** ADRs 0003, 0008, and 0009 route obligations to the former Story 3.2
+**When** this story is complete
+**Then** the AUR sources of the two Limine snapshot tools are pinned and reviewed, and their post-installation update path is defined
+**And** the update path does not bypass review or build privileged.
 
-**Given** the browser provider is replaced
-**When** declarations are updated and applied
-**Then** unrelated graphical and workflow configuration requires no redesign
-**And** provider-specific checks and provenance are updated with the replacement.
+**Given** Gradle dependencies are pinned by version only
+**When** this story is complete
+**Then** the response to that exposure is recorded
+**And** the record states what remains unverified.
 
-### Story 4.10: Deliver a Coherent First Graphical Login
+**Given** packages are declared
+**When** their versions are inspected
+**Then** package versions are not pinned beyond what an accepted ADR requires
+**And** every package introduced by this slice has provenance under the Epic 4 common contract.
+
+### Story 4.8: Deliver a Coherent First Graphical Login
 
 **Requirements:** FR30, FR31, FR64, FR65
 
 As the MirrorOS user,
-I want the first normal login to open into the declared daily environment,
+I want the first normal login to open into the declared daily environment with a coherent look,
 So that first boot is not a hidden second installation or onboarding phase.
 
 **Acceptance Criteria:**
+
+**Given** supported desktop components render
+**When** typography, color, cursor, icons, and the login screen are inspected
+**Then** the owned SDDM theme and the declared typography, palette, cursor, and icons are used without an additional theming framework
+**And** each maintained deviation from upstream defaults has daily value or negligible maintenance cost.
+
+**Given** all slices are complete
+**When** the frequent-action list is frozen
+**Then** every listed action has a documented keyboard-accessible path, which verifies FR64
+**And** any later change to the list is an explicit, reviewed update.
+
+**Given** the frozen scope in `docs/mvp-scope.md`
+**When** the coverage check runs
+**Then** every capability is delivered or explicitly pending target-laptop availability
+**And** no capability is silently omitted.
 
 **Given** installation and environment configuration have completed
 **When** the installation medium is removed and the machine reboots
 **Then** the system reaches graphical login and starts the declared environment without a welcome application, setup assistant, or background management daemon
 **And** no undocumented configuration action is required before use.
 
-**Given** supported desktop components render
-**When** typography, color, and density are inspected
-**Then** declared choices are used without an additional theming framework
-**And** each maintained deviation from upstream defaults has daily value or negligible maintenance cost.
-
 **Given** one required daily capability is unavailable
 **When** first-login postconditions run
 **Then** the environment is not represented as fully ready
 **And** the affected capability and next action are available for independent verification.
-
 
 ## Epic 5: Verify Readiness and Recover from Failures
 
