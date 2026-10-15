@@ -148,7 +148,10 @@ The screens and their order are the reference's, with the integration difference
    [Password hand-over](#password-hand-over)).
 9. **Final revalidation into `discovery/final/`.** Rediscovery, then the safety comparison and a digest re-check
    of the plan file on disk. A failed revalidation is `invalidated` and discards the password.
-10. **Engine.** One invocation of the engine, with the progress screen (D17) while it runs and then the success
+10. **Engine.** The live mirrorlist first receives the regional selection of
+    [ADR 0013](../docs/adr/0013-regional-live-mirror-selection.md) from the plan's time zone, logged in
+    `install.log`; it is recorded, not confirmed, and any doubt leaves it unchanged without stopping the run.
+    Then one invocation of the engine, with the progress screen (D17) while it runs and then the success
     (D18), failure (D19), `not_verified` (D20), or `not_configured` (D22) screen.
 
 Going back from any screen after confirmation, including Esc at the password screen, clears the approval;

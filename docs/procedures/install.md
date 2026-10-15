@@ -171,7 +171,7 @@ Coordinate target discovery, reviewable installation planning, confirmation, and
 
 ### Prerequisites
 
-A completed reference-VM reconstruction must precede physical installation. An external backup, independent rescue medium, and known-good ISO are architectural prerequisites before physical migration. The discovery, planning, and confirmation prerequisites are documented above. The engine runs as root in the live session (ADR 0006, ADR 0008), needs the live package keyring to be ready, and needs working mirrors: the live mirror list is used unchanged, with signatures always verified.
+A completed reference-VM reconstruction must precede physical installation. An external backup, independent rescue medium, and known-good ISO are architectural prerequisites before physical migration. The discovery, planning, and confirmation prerequisites are documented above. The engine runs as root in the live session (ADR 0006, ADR 0008), needs the live package keyring to be ready, and needs working mirrors, with signatures always verified. Just before the engine, the assistant moves the mirrors of the plan's time-zone country first and Worldwide second in the live mirror list ([ADR 0013](../adr/0013-regional-live-mirror-selection.md)); the result is logged in `install.log`. A mirror given with the `mirror=` boot parameter, or a list without that country's servers, is left unchanged. The engine then uses the live mirror list unchanged.
 
 ### Inputs
 

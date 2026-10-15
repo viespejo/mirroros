@@ -659,6 +659,18 @@ flow_revalidate() {
   flow_plan_field digest-prefix digest_recheck
 }
 
+# The regional selection of the live mirrorlist from the plan's time zone (ADR 0013), after the final revalidation
+# and before the engine. The mirrorlist is recorded, not confirmed; any problem leaves it unchanged and is only logged.
+flow_regional_mirrors() {
+  local timezone result root="${MIRROROS_DISCOVERY_ROOT:-}"
+
+  timezone="$(flow_assistant get "$FLOW_PLAN_FILE" choices.timezone.value 2> /dev/null)" || timezone=''
+  result="$(flow_assistant regional-mirrors "$timezone" "${root:-/}" 2> "$FLOW_STDERR")" ||
+    result='unchanged: the selection helper failed'
+  flow_log "regional mirrors: ${result}"
+  flow_log_diagnostics
+}
+
 # The progress screen is redrawn only when the engine's state changed since the last drawing.
 flow_engine_progress() {
   local line completed total position description packages
@@ -818,5 +830,6 @@ flow_main() {
   flow_enter_interactive
   flow_screens
   flow_revalidate
+  flow_regional_mirrors
   flow_engine
 }

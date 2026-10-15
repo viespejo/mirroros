@@ -13,6 +13,7 @@ readonly REQUIRED_FILES=(
   install/confirmation/edit-choices.mjs
   install/confirmation/instructions/live-wifi.txt
   install/confirmation/outcomes.mjs
+  install/confirmation/regional-mirrors.mjs
   install/confirmation/review-content.mjs
   install/confirmation/validate-records.mjs
   install/confirmation/write-records.mjs

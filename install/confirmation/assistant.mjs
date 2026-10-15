@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { loadFacts } from '../plan/generate-plan.mjs';
 import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_VALID } from '../plan/validate-plan.mjs';
 import { standardReason } from './outcomes.mjs';
+import { applyRegionalMirrors } from './regional-mirrors.mjs';
 import { digestPrefix, hibernationLabel, machineLabel, reviewWarnings, ruleRows, swapfileWarning } from './review-content.mjs';
 import { detectedMemoryBytes, memoryUnavailableReason } from '../plan/generate-plan.mjs';
 
@@ -229,9 +230,18 @@ function engineSummary([path]) {
   return EXIT_VALID;
 }
 
+// The regional selection of the live mirrorlist (ADR 0013), as one line for install.log. It never fails the run.
+function regionalMirrors([timezone, root]) {
+  const result = applyRegionalMirrors(root, timezone);
+  const detail = result.status === 'selected' ? `${result.section}, ${result.servers} active servers first` : result.reason;
+  process.stdout.write(`${result.status}: ${oneLine(detail)}\n`);
+  return EXIT_VALID;
+}
+
 const COMMANDS = {
   get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'review-warnings': reviewWarningLines, 'reasons-text': reasonsText,
   recoverable, reason: reasonList, 'engine-progress': engineProgress, 'engine-summary': engineSummary,
+  'regional-mirrors': regionalMirrors,
 };
 
 const [command, ...args] = process.argv.slice(2);
