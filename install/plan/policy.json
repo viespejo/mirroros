@@ -85,7 +85,7 @@
       "editable": false
     },
     "packages": {
-      "value": ["base", "linux", "linux-firmware", "zram-generator", "sudo", "neovim", "man-db", "man-pages"],
+      "value": ["base", "linux", "linux-firmware", "zram-generator", "sudo", "neovim", "man-db", "man-pages", "xkeyboard-config"],
       "provenance": "personal_preference",
       "editable": false
     },

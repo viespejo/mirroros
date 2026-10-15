@@ -70,8 +70,8 @@ project-owned QML.
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Terminal | configure | open — selected by Story 4.2 | |
-| Interactive shell | configure | open — selected by Story 4.2 | |
+| Terminal | configure | foot | Selected by Story 4.2 |
+| Interactive shell | configure | bash with Starship | Selected by Story 4.2 |
 | Terminal multiplexer | configure | tmux | |
 | File manager | configure | open — selected by Story 4.5 | |
 | Browser | configure | open — selected by Story 4.5 | |
@@ -99,7 +99,7 @@ project-owned QML.
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Typography | configure | open — selected by Story 4.8 | |
+| Typography | configure | open — selected by Story 4.8 | Story 4.2 uses provisional `ttf-jetbrains-mono-nerd`; Story 4.8 may replace it |
 | Coherent color palette across components | configure | open — selected by Story 4.8 | |
 | SDDM greeter theme | configure | Owned QML theme | Designed so that it can later match a boot splash |
 | Cursor and icons | configure | open — selected by Story 4.8 | |

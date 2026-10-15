@@ -71,7 +71,7 @@ MirrorOS installation plan (format 4)
       predefined_connections=false
       provenance personal_preference; source policy
   packages: base, linux, linux-firmware, zram-generator, sudo, neovim, man-db,
-      man-pages
+      man-pages, xkeyboard-config
       provenance personal_preference; source policy
   pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
       provenance personal_preference; source policy
@@ -146,7 +146,7 @@ MirrorOS installation plan (format 4)
       Install the base package set, zram-generator, the packages of the storage
       option, and the packages selected by the hardware rules.
       packages: base, linux, linux-firmware, zram-generator, sudo, neovim,
-        man-db, man-pages, networkmanager
+        man-db, man-pages, xkeyboard-config, networkmanager
       rule_packages: amd-ucode
   07. configure_zram
       Deliver the zram-generator drop-in: one zram device sized to memory,
@@ -265,11 +265,11 @@ MirrorOS installation plan (format 4)
 
 8. Digest and bindings
 ======================
-  Digest (sha256)   5b73ea1979fa283191da3f847a8b71779d53b69b9f82be9edc53887a27ebbc46
+  Digest (sha256)   0de8553c3821dd6ae0edbbe1b2a467ac3e85181fd3d2b4d29a2731779c431940
   Facts sha256      b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11
   Facts run         20261007T120000Z-11111111-2222-4333-8444-555555555555
   Code commit       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (dirty false)
-  Policy sha256     343fc65dcfb7ed9dfa6941b96a6556025b824f6e0b5c77205a6b73eea4c921d6
+  Policy sha256     9ac6ed0b352b7232eb336fb9a970e6bf38b2be7b5e26cfe52fcc357754bda2f2
   Profile sha256    07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca
   Override sha256   0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242
 

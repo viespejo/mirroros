@@ -3,8 +3,10 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
+CODE_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+CAPABILITIES_DIR="$CODE_ROOT/capabilities"
 
-# shellcheck disable=SC1090 # The helper path is resolved from BASH_SOURCE to support arbitrary working directories and paths with spaces.
+# shellcheck disable=SC1090 # Resolved from BASH_SOURCE for arbitrary working directories.
 if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
   printf '%s\n' \
     'MirrorOS: incomplete or damaged checkout; the lifecycle discovery helper could not be loaded.' \
@@ -12,15 +14,59 @@ if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
   exit 6
 fi
 
-if lifecycle_discovery_main \
-  'configure' \
-  'Prepare the complete MVP environment on a newly installed system through bounded Bash scripts and native formats, as an independent stage that the guided installation runs before the first normal reboot; details are owned by Story 4.2.' \
-  'A newly installed target system is expected; exact target, package, network, and privilege requirements are Pending.' \
-  'Native Arch and application configuration, applicable hardware choices, target overrides, and runtime-only private inputs are expected; exact selection details are Pending.' \
-  'A future configuration run changes system and user state to complete the MVP environment; exact changes and safeguards are Pending. The current command makes no changes.' \
-  'Run-associated output belongs under evidence/; the exact path and format are Pending, and this command creates none.' \
-  "$@"; then
-  exit 0
-else
-  exit "$?"
+for library in common validate packages files units evidence; do
+  library_path="$CAPABILITIES_DIR/lib/$library.sh"
+  # shellcheck disable=SC1090 # The six required libraries are checked before loading.
+  if [[ ! -f "$library_path" ]] || ! bash -n "$library_path" || ! source "$library_path"; then
+    printf '%s\n' 'MirrorOS: incomplete or damaged checkout; configure capability helpers could not be loaded.' \
+      'Restore capabilities/ from Git or re-clone the repository.' >&2
+    exit 6
+  fi
+done
+# shellcheck disable=SC1091 # Loaded from the checked checkout root.
+if [[ ! -f "$CAPABILITIES_DIR/configure-steps" ]] || ! bash -n "$CAPABILITIES_DIR/configure-steps" ||
+  ! source "$CAPABILITIES_DIR/configure-steps"; then
+  printf '%s\n' 'MirrorOS: incomplete or damaged checkout; configure-steps could not be loaded.' \
+    'Restore capabilities/ from Git or re-clone the repository.' >&2
+  exit 6
 fi
+for step in "${CFG_STEPS[@]}"; do
+  if [[ ! "$step" =~ ^[a-z0-9/-]+$ || "$step" == /* || "$step" == *..* ||
+    ! -r "$CAPABILITIES_DIR/$step/apply" || ! -r "$CAPABILITIES_DIR/$step/packages" ]] ||
+    ! bash -n "$CAPABILITIES_DIR/$step/apply"; then
+    printf '%s\n' 'MirrorOS: incomplete or damaged checkout; a listed capability is missing or invalid.' \
+      'Restore capabilities/ from Git or re-clone the repository.' >&2
+    exit 6
+  fi
+done
+
+if [[ "$#" == 1 && "$1" == --help ]]; then
+  lifecycle_discovery_main \
+    'configure' \
+    'Configure minimal graphical login and user tools on the running installed system. Installer context: Pending, plan 02-16.' \
+    'Root via sudo, a non-root target user, base tools, sync databases, and xkeyboard-config layout data.' \
+    '--user <name> (default SUDO_USER), --refresh, --output <absent-or-empty-dir>, --help.' \
+    'Install missing packages, preserve user-owned files, configure user files through runuser, enable SDDM without starting it, and select graphical.target. Safe full rerun.' \
+    '/var/log/mirroros/configure/<run-id>/ or --output; private configure.log, configure-run.tsv, packages.tsv. No secrets.' \
+    "$@"
+  exit 0
+fi
+
+if ! cfg_parse "$@"; then exit 2; fi
+validation_status=0
+cfg_validate || validation_status=$?
+# Evidence and lock metadata are infrastructure, not package/file/unit/user convergence mutations.
+# An unprivileged rejection cannot create root-owned evidence; report it without privilege escalation.
+if [[ "$(id -u)" == 0 ]]; then
+  if ! cfg_evidence_init; then
+    printf '%s\n' 'MirrorOS configure: evidence could not be created; use an absent or empty writable --output directory.' >&2
+    if (( validation_status == 0 )); then exit 2; fi
+  fi
+fi
+if (( validation_status != 0 )); then
+  if (( CFG_EVIDENCE )); then
+    printf '%s\n' "${CFG_ERRORS[@]}" >> "$CFG_OUTPUT/configure.log"
+  fi
+  cfg_finish 2 'validation failed; resolve every listed problem'
+fi
+cfg_execute

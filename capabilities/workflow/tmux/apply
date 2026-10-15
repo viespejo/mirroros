@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+# Prerequisites: validated package declarations.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, STEP_DIR and shared helpers.
+# Postconditions: tmux installed; no configuration file is introduced.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"

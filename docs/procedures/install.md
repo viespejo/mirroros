@@ -181,6 +181,10 @@ A selected target, discovered target state, and a reviewable plan are architectu
 
 Installation is expected to modify the selected target and may include destructive storage operations. The architecture requires explicit target-bound confirmation for destructive actions; after the confirmation, the password, and the final revalidation, the engine wipes the confirmed disk, creates a GPT with a 2 GiB FAT32 ESP and an unencrypted root, installs the base packages with `pacstrap`, and configures the system from the plan. Discovery, planning, and the confirmation steps before the engine do not modify the target.
 
+The base package selection explicitly includes `xkeyboard-config`, the XKB keyboard definitions also used by
+Wayland. This lets `configure` validate the system layout against `base.lst` before changing packages or
+configuration files; it does not enable an X11 server.
+
 ### Evidence
 
 Architecture requires run-associated evidence identifying source, target-relevant non-secret context, stage outcome, diagnostics, and generated reports. Discovery, plan, and confirmation evidence are documented above; the engine adds `engine/` to the run directory. Evidence stays local, private, and uncommitted.

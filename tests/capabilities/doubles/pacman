@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'pacman %s\n' "$*" >> "$CFG_TEST_CALLS"
+mode="$1"
+shift
+case "$mode" in
+  -Sp)
+    package="${!#}"
+    name="${package#*/}"
+    repository="${package%%/*}"
+    [[ "${CFG_TEST_PACKAGE_ABSENT:-0}" != 1 ]] || exit 1
+    printf '%s %s 1.0-1\n' "${CFG_TEST_REPOSITORY:-$repository}" "$name" ;;
+  -Q)
+    name="${!#}"
+    [[ -e "$CFG_TEST_INSTALLED/$name" || "${CFG_TEST_ALL_INSTALLED:-0}" == 1 ]] || exit 1
+    printf '%s 1.0-1\n' "$name" ;;
+  -Qu)
+    printf '%s' "${CFG_TEST_UPGRADES:-}"
+    exit "${CFG_TEST_QUERY_STATUS:-0}" ;;
+  -S|-Syu)
+    [[ "${CFG_TEST_INSTALL_FAIL:-0}" != 1 ]] || exit 17
+    for package in "$@"; do
+      [[ "$package" != -* ]] || continue
+      : > "$CFG_TEST_INSTALLED/${package#*/}"
+    done ;;
+  *) printf 'Unexpected pacman mode: %s\n' "$mode" >&2; exit 97 ;;
+esac

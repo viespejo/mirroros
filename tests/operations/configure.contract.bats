@@ -1,74 +1,89 @@
-load lifecycle-discovery
+load ../capabilities/support
 
-setup() {
-  lifecycle_setup
+setup() { cfg_test_setup; }
+teardown() { cfg_test_teardown; }
+
+@test "configure help describes the running-system contract without mutation" {
+  run "$CFG_TEST_ENTRY" --help
+  [ "$status" -eq 0 ]
+  for text in 'Purpose:' 'Prerequisites:' 'Inputs:' 'Consequential effects:' 'Evidence:' \
+    'Normalized exit outcomes:' 'Documentation: docs/procedures/configure.md' \
+    '--user' '--refresh' '--output' 'runuser' 'configure-run.tsv' 'plan 02-16'; do
+    [[ "$output" == *"$text"* ]]
+  done
+  [[ "$output" != *'help only'* ]]
+  [[ "$output" != *'--target-root'* ]]
+  [ ! -s "$CFG_TEST_CALLS" ]
+  [ ! -e "$MIRROROS_CONFIGURE_ROOT/run/mirroros/configure.lock" ]
 }
 
-teardown() {
-  lifecycle_teardown
+@test "configure rejects unsupported arguments including combined help" {
+  for argument in --bogus --target-root --help; do
+    run "$CFG_TEST_ENTRY" "$argument" extra
+    [ "$status" -eq 2 ]
+    [[ "$output" == *'unsupported argument(s)'* ]]
+    [[ "$output" != *'is pending'* ]]
+  done
+  [ ! -s "$CFG_TEST_CALLS" ]
 }
 
-@test "configure help succeeds on stdout and describes its contract" {
-  lifecycle_invoke configure --help
-  lifecycle_assert_status 0
-  lifecycle_assert_stderr_empty
-  lifecycle_assert_stdout_contains 'Purpose:'
-  lifecycle_assert_stdout_contains 'Prerequisites:'
-  lifecycle_assert_stdout_contains 'Inputs:'
-  lifecycle_assert_stdout_contains 'Consequential effects:'
-  lifecycle_assert_stdout_contains 'Evidence:'
-  lifecycle_assert_stdout_contains 'Normalized exit outcomes:'
-  lifecycle_assert_stdout_contains 'Documentation: docs/procedures/configure.md'
-  lifecycle_assert_stdout_contains 'Help uses no privilege, requires no ShellCheck, Bats, or Gitleaks, and changes no state.'
-  for outcome in '0: success' '2: invalid input' '3: explicit user cancellation' \
-    '4: execution completed' '5: execution or upstream-operation failure' \
-    '6: internal contract or invariant failure'; do
-    lifecycle_assert_stdout_contains "$outcome"
+@test "configure requires values for user and output" {
+  for argument in --user --output; do
+    run "$CFG_TEST_ENTRY" "$argument"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *'requires a value'* ]]
   done
 }
 
-@test "configure without arguments refuses pending work without success wording" {
-  lifecycle_invoke configure
-  lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'MirrorOS configure is pending'
-  lifecycle_assert_stderr_contains 'docs/procedures/configure.md'
-  lifecycle_assert_no_success_output
+@test "configure without root returns 2 before convergence" {
+  export CFG_TEST_UID=1000
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'root using sudo'* ]]
+  cfg_test_no_install
+  [ ! -e "$MIRROROS_CONFIGURE_ROOT/run/mirroros/configure.lock" ]
 }
 
-@test "configure rejects unsupported arguments distinctly" {
-  lifecycle_invoke configure --bogus
-  lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'unsupported argument(s)'
-  lifecycle_assert_stderr_does_not_contain 'is pending'
-  lifecycle_assert_no_success_output
+@test "configure refuses missing nonexistent and root users" {
+  unset SUDO_USER
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'Target user is missing'* ]]
+  for user in nonexistent root; do
+    run "$CFG_TEST_ENTRY" --user "$user"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *'Target user'* ]]
+  done
+  cfg_test_no_install
 }
 
-@test "configure rejects help combined with extra arguments" {
-  lifecycle_invoke configure --help extra
-  lifecycle_assert_status 2
-  lifecycle_assert_stderr_contains 'unsupported argument(s)'
-  lifecycle_assert_stderr_does_not_contain 'is pending'
-  lifecycle_assert_no_success_output
+@test "configure explicit user overrides SUDO_USER and works outside the checkout" {
+  export SUDO_USER=root
+  cd "$CFG_TEST_DIR"
+  run "$CFG_TEST_ENTRY" --user alice
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'next boot'* ]]
 }
 
-@test "configure works when invoked by path outside the repository copy" {
-  lifecycle_invoke configure --help
-  lifecycle_assert_status 0
-  lifecycle_assert_invoked_outside_copy
+@test "configure missing or unloadable lifecycle helper gives damaged-checkout outcome" {
+  helper="$CFG_TEST_DIR/code/operations/lib/lifecycle-discovery.sh"
+  rm "$helper"
+  run "$CFG_TEST_ENTRY" --help
+  [ "$status" -eq 6 ]
+  [[ "$output" == *'incomplete or damaged checkout'* ]]
+  printf 'if then\n' > "$helper"
+  run "$CFG_TEST_ENTRY" --help
+  [ "$status" -eq 6 ]
+  [[ "$output" == *'Restore the helper from Git or re-clone'* ]]
 }
 
-@test "configure reports a missing helper as a damaged checkout" {
-  rm -f -- "$LIFECYCLE_COPY_ROOT/operations/lib/lifecycle-discovery.sh"
-  lifecycle_invoke configure --help
-  lifecycle_assert_status 6
-  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
-  lifecycle_assert_stderr_contains 'Restore the helper from Git or re-clone the repository.'
-}
-
-@test "configure reports an unloadable helper as a damaged checkout" {
-  printf '%s\n' 'if then' > "$LIFECYCLE_COPY_ROOT/operations/lib/lifecycle-discovery.sh"
-  lifecycle_invoke configure --help
-  lifecycle_assert_status 6
-  lifecycle_assert_stderr_contains 'incomplete or damaged checkout'
-  lifecycle_assert_stderr_contains 'Restore the helper from Git or re-clone the repository.'
+@test "configure missing capability helper or listed step gives outcome 6" {
+  cfg_test_step missing
+  rm "$CFG_TEST_DIR/code/capabilities/missing/apply"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 6 ]
+  [[ "$output" == *'incomplete or damaged checkout'* ]]
+  rm "$CFG_TEST_DIR/code/capabilities/lib/files.sh"
+  run "$CFG_TEST_ENTRY" --help
+  [ "$status" -eq 6 ]
 }

@@ -1,0 +1,4 @@
+# Explicit ttf-font provider for SDDM; the terminal Nerd Font provides ttf-font-nerd only.
+noto-fonts extra
+sddm extra
+uwsm extra

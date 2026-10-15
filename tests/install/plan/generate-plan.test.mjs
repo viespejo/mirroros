@@ -46,6 +46,15 @@ test('every storage option and root account mode matches its fixture', () => {
   }
 });
 
+test('the base installation supplies XKB data before configure validation', () => {
+  for (const storageOption of STORAGE_OPTION_NAMES) {
+    const { plan } = generate({ choices: { storage_option: storageOption } });
+    assert.ok(plan.choices.packages.value.includes('xkeyboard-config'));
+    const installation = plan.operations.find(operation => operation.kind === 'install_packages');
+    assert.equal(installation.parameters.packages.filter(name => name === 'xkeyboard-config').length, 1);
+  }
+});
+
 test('every value carries provenance, source, and editable, and the hostname comes from the override', () => {
   const { plan } = generate();
   for (const [key, entry] of Object.entries(plan.choices)) {

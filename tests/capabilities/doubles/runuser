@@ -1,0 +1,7 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+[[ "$1" == -u && "$2" == alice && "$3" == -- ]] || exit 97
+printf 'runuser -u %s\n' "$2" >> "$CFG_TEST_CALLS"
+shift 3
+export HOME="${CFG_TEST_HOME:?}"
+exec "$@"

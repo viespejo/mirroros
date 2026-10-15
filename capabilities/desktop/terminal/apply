@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# Prerequisites: validated package declarations and a non-root target user.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: packages installed; foot configuration exists, managed or user-owned.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_user_file "$STEP_DIR/foot.ini" .config/foot/foot.ini
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_file_present .config/foot/foot.ini

@@ -1059,6 +1059,9 @@ mirroros/
 │   └── external-sources.json
 │
 ├── capabilities/
+│   ├── README.md
+│   ├── configure-steps
+│   ├── lib/
 │   ├── base/
 │   │   ├── packages/
 │   │   ├── services/
@@ -1068,6 +1071,7 @@ mirroros/
 │   │   │   └── providers/
 │   │   │       └── hyprland/
 │   │   ├── terminal/
+│   │   ├── login/
 │   │   ├── portal/
 │   │   ├── clipboard/
 │   │   ├── screenshot/

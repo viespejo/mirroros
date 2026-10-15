@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages; the terminal font and compositor steps completed.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, STEP_DIR and shared helpers.
+# Postconditions: packages and login configuration exist; only SDDM is enabled; target graphical.
+# SDDM is never started or restarted by configure.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_system_file "$STEP_DIR/sddm/10-mirroros-login.conf" /etc/sddm.conf.d/10-mirroros-login.conf 0644
+cfg_unit_enable sddm.service
+cfg_default_target graphical.target
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_system_file_present /etc/sddm.conf.d/10-mirroros-login.conf
+cfg_require cfg_unit_enabled sddm.service
+cfg_require cfg_display_manager_is sddm.service
+cfg_require cfg_only_display_manager sddm.service
+cfg_require cfg_default_target_is graphical.target

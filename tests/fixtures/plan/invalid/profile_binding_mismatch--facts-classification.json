@@ -154,7 +154,8 @@
         "sudo",
         "neovim",
         "man-db",
-        "man-pages"
+        "man-pages",
+        "xkeyboard-config"
       ],
       "provenance": "personal_preference",
       "source": "policy",
@@ -377,6 +378,7 @@
           "neovim",
           "man-db",
           "man-pages",
+          "xkeyboard-config",
           "networkmanager"
         ],
         "rule_packages": [
@@ -626,10 +628,10 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "343fc65dcfb7ed9dfa6941b96a6556025b824f6e0b5c77205a6b73eea4c921d6"
+    "policy_sha256": "9ac6ed0b352b7232eb336fb9a970e6bf38b2be7b5e26cfe52fcc357754bda2f2"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "50fc2a92e5bb629720b0590eb22cb394f839439c5f8c5bcaaf1642210dbb9f9f"
+    "value": "eb87e5e9a9205de5daac0f62b11017c2fb5be6896f1e63e95bf70c3c982f9d59"
   }
 }

@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+# Prerequisites: validated package declarations and a non-root target user using bash.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: Starship installed; initialization exists and bashrc has its marked block.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_user_file "$STEP_DIR/starship.bash" .config/mirroros/bash/starship.bash
+cfg_bashrc_block .config/mirroros/bash/starship.bash
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_file_present .config/mirroros/bash/starship.bash
+cfg_require cfg_bashrc_block_present

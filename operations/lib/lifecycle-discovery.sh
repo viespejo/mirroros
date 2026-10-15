@@ -7,14 +7,23 @@ lifecycle_discovery_print_help() {
   local evidence="$6"
 
   printf 'MirrorOS %s — lifecycle discovery\n' "$command_name"
-  printf 'Availability: help only; domain behavior pending.\n'
+  if [[ "$command_name" == configure ]]; then
+    printf 'Availability: running installed system; installer context Pending (plan 02-16).\n'
+  else
+    printf 'Availability: help only; domain behavior pending.\n'
+  fi
   printf 'Purpose: %s\n' "$purpose"
   printf 'Prerequisites: %s\n' "$prerequisites"
   printf 'Inputs: %s\n' "$inputs"
   printf 'Consequential effects: %s\n' "$effects"
   printf 'Evidence: %s\n' "$evidence"
   printf '%s\n' 'Normalized exit outcomes:'
-  printf '%s\n' '  0: success (here, help was displayed; this is not domain-operation success)' \
+  if [[ "$command_name" == configure ]]; then
+    printf '%s\n' '  0: success (help, or all configure postconditions passed)'
+  else
+    printf '%s\n' '  0: success (here, help was displayed; this is not domain-operation success)'
+  fi
+  printf '%s\n' \
     '  2: invalid input or unmet precondition' \
     '  3: explicit user cancellation' \
     '  4: execution completed, but verification is not ready' \
