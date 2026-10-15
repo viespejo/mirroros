@@ -142,7 +142,7 @@ ui_success() {
   echo
 }
 
-# Word-wrap D19 and D20 only, splitting a word when it is wider than the available terminal space.
+# Word-wrap D19, D20, and the engine's no-valid-record failure, splitting words wider than the available space.
 ui_wrapped_style() {
   local foreground=$1 text width=$((TERM_WIDTH - PADDING_LEFT - 1))
   shift
@@ -195,6 +195,14 @@ NODE
   )
   echo
   ui_wrapped_style 8 'The disk was modified. The full result is in the run directory.' "Run directory: ${run_directory}"
+}
+
+# The engine ended without a valid record. Arguments: exit status and run directory.
+ui_engine_record_failure() {
+  local status=$1 run_directory=$2
+  ui_wrapped_style 1 'Phase: Installation engine' \
+    "Cause: The engine ended with status ${status} and left no valid record." \
+    "Next: Check install.log and engine/ in ${run_directory}."
 }
 
 # A failed phase is reported with its phase, cause, and next action. Arguments: phase, cause, next action.

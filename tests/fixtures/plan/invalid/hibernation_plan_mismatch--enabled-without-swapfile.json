@@ -316,7 +316,7 @@
       "parameters": {
         "disk": "virtio-SYNTH-VDA-0001"
       },
-      "description": "Remove existing filesystem and partition-table signatures from the target disk."
+      "description": "Remove existing signatures from the target disk."
     },
     {
       "id": "create_partition_table",
@@ -348,7 +348,7 @@
         "esp_filesystem": "vfat",
         "root_filesystem": "ext4"
       },
-      "description": "Format the ESP as FAT32 and the root partition with the selected filesystem.",
+      "description": "Format the ESP and the root partition.",
       "resolved_at_apply": [
         {
           "name": "partition_uuids",
@@ -386,7 +386,7 @@
           "amd-ucode"
         ]
       },
-      "description": "Install the base package set, zram-generator, the packages of the storage option, and the packages selected by the hardware rules."
+      "description": "Install packages."
     },
     {
       "id": "configure_zram",
@@ -399,7 +399,7 @@
         "compression_algorithm": "zstd",
         "swap_priority": 100
       },
-      "description": "Deliver the zram-generator drop-in: one zram device sized to memory, compressed with zstd, as preferred swap."
+      "description": "Configure zram as preferred swap."
     },
     {
       "id": "configure_memory_reclaim",
@@ -445,7 +445,7 @@
         "hardware_clock": "utc",
         "time_sync": "systemd-timesyncd"
       },
-      "description": "Configure locales, language, console keymap, time zone, hardware clock, and time sync."
+      "description": "Configure locale, time, and console keymap."
     },
     {
       "id": "configure_hostname_network",
@@ -455,7 +455,7 @@
         "hostname": "mirroros-ref",
         "network_manager": "NetworkManager"
       },
-      "description": "Set the hostname and configure NetworkManager without predefined connections."
+      "description": "Set the hostname and configure NetworkManager."
     },
     {
       "id": "create_user",
@@ -618,6 +618,6 @@
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "4aaf836a7077304520f9b3a667684bb3ed1bcdd0d159ef21e77ca1f37f617e50"
+    "value": "2022fd0c270a7f1f4b3513c19b18319c2b89b5c959dbe998ae89f2882809f993"
   }
 }

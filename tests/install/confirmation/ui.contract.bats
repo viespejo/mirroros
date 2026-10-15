@@ -1,4 +1,4 @@
-# Isolated D19/D20 presentation contracts; no terminal, target, or VM is required.
+# Isolated engine failure presentation contracts; no terminal, target, or VM is required.
 # shellcheck disable=SC1091,SC2034,SC2329 # Sourced presentation code invokes the doubles and reads the state.
 setup() {
   source "${BATS_TEST_DIRNAME}/../../../install/confirmation/lib/ui.sh"
@@ -22,6 +22,23 @@ setup() {
   TERM_WIDTH=40
   PADDING_LEFT=5
   PADDING='0 0 0 5'
+}
+
+@test "the engine no-valid-record failure wraps every line without truncation" {
+  local path='/a/very/long/run/directory/with/no/short/path/segments'
+  run ui_engine_record_failure 5 "$path"
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | awk 'length > 40 { found=1 } END { exit found }'
+  [[ "${output//[[:space:]]/}" == *'Phase:Installationengine'* ]]
+  [[ "${output//[[:space:]]/}" == *'Cause:Theengineendedwithstatus5andleftnovalidrecord.'* ]]
+  [[ "${output//[[:space:]]/}" == *"Next:Checkinstall.logandengine/in${path}."* ]]
+}
+
+@test "other phase failures retain their unwrapped presentation" {
+  local cause='A diagnostic line longer than the available terminal width remains unchanged.'
+  run ui_failure Discovery "$cause" 'Run discovery again.'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Cause: ${cause}"* ]]
 }
 
 @test "D19 wraps every diagnostic line and preserves long paths and log words" {

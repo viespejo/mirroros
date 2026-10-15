@@ -105,21 +105,18 @@ MirrorOS installation plan (format 4)
 3. Destructive operations
 =========================
   DESTRUCTIVE wipe_disk_signatures
-      Remove existing filesystem and partition-table signatures from the target
-      disk.
+      Remove existing signatures from the target disk.
   DESTRUCTIVE create_partition_table
       Write an empty GPT on the target disk.
   DESTRUCTIVE create_partitions
       Create the ESP and a root partition on the remaining space.
   DESTRUCTIVE format_filesystems
-      Format the ESP as FAT32 and the root partition with the selected
-      filesystem.
+      Format the ESP and the root partition.
 
 4. Operations in order
 ======================
   01. wipe_disk_signatures DESTRUCTIVE
-      Remove existing filesystem and partition-table signatures from the target
-      disk.
+      Remove existing signatures from the target disk.
       disk: virtio-SYNTH-VDA-0001
   02. create_partition_table DESTRUCTIVE
       Write an empty GPT on the target disk.
@@ -132,8 +129,7 @@ MirrorOS installation plan (format 4)
       esp_mount_point: /boot
       root: remaining_space
   04. format_filesystems DESTRUCTIVE
-      Format the ESP as FAT32 and the root partition with the selected
-      filesystem.
+      Format the ESP and the root partition.
       esp_filesystem: vfat
       root_filesystem: btrfs
       resolved at apply: partition_uuids (blkid)
@@ -146,15 +142,13 @@ MirrorOS installation plan (format 4)
       esp_mount_point: /boot
       subvolumes: @, @home, @log, @pkg, @snapshots
   07. install_packages
-      Install the base package set, zram-generator, the packages of the storage
-      option, and the packages selected by the hardware rules.
+      Install packages.
       packages: base, linux, linux-firmware, zram-generator, sudo, neovim,
         man-db, man-pages, xkeyboard-config, networkmanager, btrfs-progs,
         snapper, snap-pac, compsize
       rule_packages: amd-ucode
   08. configure_zram
-      Deliver the zram-generator drop-in: one zram device sized to memory,
-      compressed with zstd, as preferred swap.
+      Configure zram as preferred swap.
       destination: /usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf
       source_sha256:
         b6aa35ad3b4ee26a9296a50a45f215fd7e008fff05ad2fdbde67ba2a7f55f9cd
@@ -174,8 +168,7 @@ MirrorOS installation plan (format 4)
       Generate /etc/fstab by UUID.
       identifier: uuid
   11. configure_locale_time_console
-      Configure locales, language, console keymap, time zone, hardware clock,
-      and time sync.
+      Configure locale, time, and console keymap.
       locales: en_US.UTF-8
       lang: en_US.UTF-8
       locale_categories: LANG=en_US.UTF-8; LC_TIME=en_US.UTF-8;
@@ -186,8 +179,7 @@ MirrorOS installation plan (format 4)
       hardware_clock: utc
       time_sync: systemd-timesyncd
   12. configure_hostname_network
-      Set the hostname and configure NetworkManager without predefined
-      connections.
+      Set the hostname and configure NetworkManager.
       hostname: mirroros-ref
       network_manager: NetworkManager
   13. create_user
@@ -264,7 +256,7 @@ MirrorOS installation plan (format 4)
 
 8. Digest and bindings
 ======================
-  Digest (sha256)   b1eff26bc722db40256d4fdd8c6389ec442f5fb823239bc4121d38523d77a051
+  Digest (sha256)   2d29443616cb90c6b782a6b2a97d439ec80f5c1e731962356c8ea01d6c762fa8
   Facts sha256      b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11
   Facts run         20261007T120000Z-11111111-2222-4333-8444-555555555555
   Code commit       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (dirty false)

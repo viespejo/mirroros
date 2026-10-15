@@ -753,7 +753,7 @@ flow_engine() {
   if ! flow_cli engine-result "${engine_dir}/engine-run.json" "$status" > "$reasons" 2> /dev/null; then
     flow_log 'the engine record is missing or invalid'
     flow_assistant reason stage_failed "$status" > "$reasons"
-    ui_failure 'Installation engine' "The engine ended with status ${status} and left no valid record." "Check install.log and engine/ in ${FLOW_RUN_DIR}."
+    ui_engine_record_failure "$status" "$FLOW_RUN_DIR"
     flow_finish 5 failed engine "$reasons"
   fi
   outcome="$(flow_assistant get "${engine_dir}/engine-run.json" outcome)" || flow_unexpected engine 6 'Installation engine'

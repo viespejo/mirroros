@@ -2,7 +2,7 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PlanContractError } from '../../../install/plan/canonical-json.mjs';
 import { withDigest } from '../../../install/plan/digest-plan.mjs';
-import { generatePlan, loadFacts } from '../../../install/plan/generate-plan.mjs';
+import { generatePlan, loadFacts, OPERATION_DESCRIPTIONS } from '../../../install/plan/generate-plan.mjs';
 import { machineProjection, validatePlan } from '../../../install/plan/validate-plan.mjs';
 import { buildValidPlan, REFERENCE_MEMORY_BYTES, ROOT_ACCOUNT_MODES, STORAGE_OPTION_NAMES } from './build-fixtures.mjs';
 import {
@@ -25,6 +25,12 @@ const scratch = temporaryDirectory();
 const withDigestOf = plan => withDigest(plan);
 after(() => removeDirectory(scratch));
 const codes = result => result.reasons.map(item => item.code);
+
+test('every operation description fits 72 characters within the engine progress line', () => {
+  for (const [kind, description] of Object.entries(OPERATION_DESCRIPTIONS)) {
+    assert.ok(description.length <= 72, `${kind}: ${description.length} characters exceeds 72`);
+  }
+});
 
 test('defaults for the reference VM produce the independent fixture exactly', () => {
   const { plan, reasons } = generate();
