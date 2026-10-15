@@ -235,7 +235,7 @@ test('record writes both records from the run directory', () => {
   const approval = JSON.parse(readFileSync(join(directory, 'approval-record.json'), 'utf8'));
   assert.deepEqual(validateRunRecord(runRecord), []);
   assert.deepEqual(validateApprovalRecord(approval), []);
-  assert.equal(runRecord.format_version, 5);
+  assert.equal(runRecord.format_version, 6);
   assert.equal(runRecord.entry, 'guided');
   assert.deepEqual(runRecord.stages, ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation']);
   assert.deepEqual(runRecord.machine, plan.target.machine);
@@ -354,7 +354,7 @@ test('identity accepts a plan of the running artifact and blocks any other code 
 
 test('engine-result prints the reasons of a valid record and rejects a missing, invalid, or disagreeing one', () => {
   const record = {
-    format_version: 2, started_at: '2026-10-12T12:00:00Z', finished_at: '2026-10-12T12:05:00Z', outcome: 'failed', exit_status: 5,
+    format_version: 3, started_at: '2026-10-12T12:00:00Z', finished_at: '2026-10-12T12:05:00Z', outcome: 'failed', exit_status: 5,
     reasons: [{ code: 'stage_failed', stage: 'engine', operation: 'install_packages', message: 'm', next_step: 'n', child_exit_status: 1 }],
     completed: ['wipe_disk_signatures'], not_started: ['configure_zram'],
   };
@@ -366,8 +366,15 @@ test('engine-result prints the reasons of a valid record and rejects a missing, 
   assert.equal(run('engine-result', join(scratch, 'no-engine-run.json'), '5').status, 1);
   assert.equal(run('engine-result', write('engine-run-invalid.json', { ...record, outcome: 'approved' }), '5').status, 1);
   const passed = { format_version: 1, status: 'passed', checks: [{ id: 'kernel_installed', status: 'passed' }], failed_checks: [] };
-  const installed = write('engine-run-installed.json', { ...record, outcome: 'installed', exit_status: 0, reasons: [], not_started: [], postconditions: passed });
+  const installed = write('engine-run-installed.json', { ...record, outcome: 'installed', exit_status: 0, reasons: [], not_started: [], postconditions: passed, configure_outcome: 0 });
   assert.deepEqual(JSON.parse(run('engine-result', installed, '0').stdout), []);
+  const unconfigured = write('engine-run-not-configured.json', {
+    ...record, outcome: 'not_configured', exit_status: 4, not_started: [], postconditions: passed,
+    configure_outcome: 5, configure_failed_step: 'desktop/compositor/providers/hyprland',
+    configure_evidence: '/var/log/mirroros/configure/run',
+  });
+  assert.equal(run('engine-result', unconfigured, '4').status, 0);
+  assert.equal(run('engine-result', unconfigured, '0').status, 1);
   const failed = { format_version: 1, status: 'failed', checks: [{ id: 'kernel_installed', status: 'failed', detail: 'missing' }], failed_checks: ['kernel_installed'] };
   const unverified = write('engine-run-not-verified.json', {
     ...record,

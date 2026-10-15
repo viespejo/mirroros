@@ -85,9 +85,12 @@ run_startup() {
 
 @test "profile permissions list every executable entry point as 0:0:755 and add no setuid" {
   local path
-  for path in operations/install install/confirmation/confirm-plan install/confirmation/live-startup install/engine/apply install/postconditions/check; do
+  while IFS= read -r path; do
+    path="${path#"${REPOSITORY_ROOT}/"}"
     grep -Fq "[\"/usr/local/lib/mirroros/${path}\"]=\"0:0:755\"" "$PROFILEDEF"
-  done
+  done < <(find "${REPOSITORY_ROOT}/operations/install" "${REPOSITORY_ROOT}/operations/configure" \
+    "${REPOSITORY_ROOT}/install" "${REPOSITORY_ROOT}/hardware/discovery" "${REPOSITORY_ROOT}/hardware/rules" \
+    "${REPOSITORY_ROOT}/targets" "${REPOSITORY_ROOT}/capabilities" -type f -perm /111)
   ! grep -Eq '"[0-9]+:[0-9]+:[4-7][0-7]{3}"' "$PROFILEDEF"
   [ "$(readlink "${AIROOTFS}/usr/local/bin/mirroros-install")" = /usr/local/lib/mirroros/operations/install ]
 }

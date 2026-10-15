@@ -65,12 +65,13 @@ The fixed input is `image/archiso/`; there are no profile-selection options.
 
 ### Embedded MirrorOS code
 
-Besides the profile, the build embeds the MirrorOS code the live environment runs, so `mirroros-install` works without a repository checkout. The declared list is explicit (no globs): `operations/install`, `operations/lib/lifecycle-discovery.sh`, `install/`, `hardware/discovery/`, `hardware/rules/`, and `targets/`. `contracts/` and `tests/` are not embedded.
+Besides the profile, the build embeds the MirrorOS code the live environment runs, so `mirroros-install` and its final configure phase work without a repository checkout. The declared list is explicit (no globs): `operations/install`, `operations/configure`, `capabilities/`, `operations/lib/lifecycle-discovery.sh`, `install/`, `hardware/discovery/`, `hardware/rules/`, and `targets/`. `contracts/` and `tests/` are not embedded.
 
 - The code is captured into the private profile copy at `airootfs/usr/local/lib/mirroros/`, keeping the repository-relative layout and file modes, together with `identity.json` (`commit` and `dirty`). Nothing is committed under `image/archiso/airootfs/usr/local/lib/`.
 - A clean repository materializes the declared paths from the commit with `git archive`; a dirty one copies the tracked and untracked, non-ignored paths, as for the profile.
 - A declared subtree that is missing from the commit (clean) or the working tree (dirty) stops the build with status `2` and names the path.
-- The embedded code is part of the captured profile, so the Gitleaks scan above covers it.
+- The embedded code is part of the captured profile, so the Gitleaks scan above covers it, including configure helpers, steps, package declarations, and native capability files. Configure shares the capture's `identity.json`, commit, and dirty state with the installer.
+- After base postconditions pass, the engine copies `operations/configure`, the lifecycle discovery helper, `capabilities/`, and `identity.json` to the installed system's `/usr/local/lib/mirroros/` and creates `/usr/local/bin/mirroros-configure`. This is a root-owned rerun snapshot, not a clone or an automatically updated package. The live image embeds the code, not the complete installed graphical package set; target configure installs missing declared packages through `arch-chroot`.
 - `/usr/local/bin/mirroros-install` is a literal symlink in the profile to `/usr/local/lib/mirroros/operations/install`.
 - `nodejs` is added to the live package list because discovery normalization runs on Node.js in the live environment, and later plan processing will too.
 - `gum` is added unpinned for the interactive `mirroros-install` assistant. Under Story 2.4 DEC-009, ADR 0004's "pinned package version" is interpreted as **recorded and checked**, not a repository snapshot: the bundle's native package manifest records the installed version, and the assistant requires Gum major version `2`, returning `6` with `gum_not_qualified` when Gum is missing or its behavior is not qualified. The actual version is also recorded in the run evidence. This preserves rolling package resolution without changing the builder or ADR.

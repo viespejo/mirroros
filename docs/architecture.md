@@ -1216,7 +1216,7 @@ No root `package.json` is required while JavaScript uses only Node built-ins and
 - Installation entry point.
 - Tools required by accepted installation and validation paths.
 
-The live medium also embeds MirrorOS-owned installation code at `/usr/local/lib/mirroros/`, captured from the repository at build time, with `mirroros-install` on `PATH`; the image does not own that code.
+The live medium also embeds MirrorOS-owned installation code, `operations/configure`, and `capabilities/` at `/usr/local/lib/mirroros/`, captured from the repository at build time, with `mirroros-install` on `PATH`; the image does not own that code.
 
 It does not own the complete installed desktop or personal environment. Adding a package to the image requires a live-environment reason even if the same package is installed on the target.
 

@@ -170,6 +170,7 @@ teardown() { cfg_test_teardown; }
   [ "$status" -eq 0 ]
   [ "$(stat -c %a "$CFG_TEST_DIR/evidence")" = 700 ]
   grep -q $'run\tcontext\trunning' "$CFG_TEST_DIR/evidence/configure-run.tsv"
+  [[ "$output" == *'== 1/1 example =='* ]]
   grep -q $'run\toutcome\t0' "$CFG_TEST_DIR/evidence/configure-run.tsv"
   grep -q $'example\t1.0-1\textra' "$CFG_TEST_DIR/evidence/packages.tsv"
   [ "$(find "$CFG_TEST_DIR/evidence" -type f | wc -l)" -eq 3 ]
@@ -251,10 +252,10 @@ teardown() { cfg_test_teardown; }
   [ ! -s "$CFG_TEST_CALLS" ]
 }
 
-@test "target context fails closed with outcome 6" {
-  run cfg_test_helpers 'CONFIGURE_CONTEXT=target; cfg_packages_ensure /unused'
+@test "an unknown execution context fails closed with outcome 6" {
+  run cfg_test_helpers 'CONFIGURE_CONTEXT=unknown; cfg_packages_ensure /unused'
   [ "$status" -eq 6 ]
-  [[ "$output" == *'pending plan 02-16'* ]]
+  [[ "$output" == *'invalid execution context'* ]]
   [ ! -s "$CFG_TEST_CALLS" ]
 }
 

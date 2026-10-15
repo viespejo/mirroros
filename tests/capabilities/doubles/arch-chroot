@@ -1,0 +1,37 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+root=$1
+shift
+printf 'arch-chroot %s %s\n' "$root" "$*" >> "$CFG_TEST_CALLS"
+# Keep tool failures inside the fake target, independent of the host's installed tools.
+if [[ "$1" == bash && "${2:-}" == -c && "$3" == command\ -v* ]]; then
+  tool="${5:-pacman}"
+  [[ " ${CFG_TEST_MISSING_TOOLS:-} " != *" $tool "* ]] || exit 127
+  printf '/usr/bin/%s\n' "$tool"
+  exit 0
+fi
+if [[ "$1" == runuser ]]; then
+  home=$(awk -F: -v user="$3" '$1 == user { print $6 }' "$root/etc/passwd")
+  [[ "$home" == /* ]] || exit 97
+  export CFG_TEST_HOME="$root$home"
+fi
+if [[ "$1" == systemctl ]]; then
+  shift
+  case "$1" in
+    is-enabled) [[ -e "$root/etc/systemd/system/.sddm-enabled" ]] ;;
+    enable)
+      [[ "$2" == sddm.service ]] || exit 97
+      mkdir -p "$root/etc/systemd/system"
+      : > "$root/etc/systemd/system/.sddm-enabled"
+      ln -s /usr/lib/systemd/system/sddm.service "$root/etc/systemd/system/display-manager.service" ;;
+    get-default) if [[ -f "$root/etc/systemd/system/.default-target" ]]; then
+        cat "$root/etc/systemd/system/.default-target"
+      else printf 'multi-user.target\n'; fi ;;
+    set-default) printf '%s\n' "$2" > "$root/etc/systemd/system/.default-target" ;;
+    list-unit-files) if [[ -e "$root/etc/systemd/system/.sddm-enabled" ]]; then printf 'sddm.service enabled\n'; fi ;;
+    cat) printf '[Install]\nAlias=display-manager.service\n' ;;
+    *) printf 'Unexpected systemctl command: %s\n' "$*" >&2; exit 97 ;;
+  esac
+  exit $?
+fi
+exec "$@"

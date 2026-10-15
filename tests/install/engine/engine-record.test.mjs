@@ -34,11 +34,44 @@ test('the state lists every operation with its status and the position of the cu
   });
   assert.deepEqual(validateState(state), []);
   assert.equal(state.index, 3);
-  assert.equal(state.total, operations.length);
+  assert.equal(state.total, operations.length + 1);
   assert.deepEqual(state.operations.slice(0, 4).map(item => item.status), ['completed', 'completed', 'running', 'pending']);
   const final = buildState({ operations, status: 'installed', completed: operations.map(item => item.id), now: NOW });
-  assert.equal(final.index, operations.length);
+  assert.equal(final.index, operations.length + 1);
   assert.equal(final.current, undefined);
+});
+
+test('configure state uses the final position and validates optional marker fields', () => {
+  const operations = operationsOf(text);
+  const state = buildState({ operations, status: 'running', current: 'configure', completed: operations.map(item => item.id),
+    configureStep: 'system/session', configurePosition: '1/5', now: NOW });
+  assert.deepEqual(validateState(state), []);
+  assert.equal(state.index, operations.length + 1);
+  assert.equal(state.configure_step, 'system/session');
+  assert.equal(state.configure_position, '1/5');
+  assert.notDeepEqual(validateState({ ...state, configure_step: 1 }), []);
+  for (const position of [4, '0/5', '6/5', '1/x']) assert.notDeepEqual(validateState({ ...state, configure_position: position }), []);
+});
+
+test('not_configured requires a failed configure outcome, passed checks, and no pending operation', () => {
+  const options = parseOptions(['--started', NOW, '--outcome', 'not_configured', '--exit', '4',
+    '--completed', operationsOf(text).map(item => item.id).join(','), '--postconditions', JSON.stringify(PASSED),
+    '--configure-outcome', '4', '--configure-failed-step', 'system/session', '--configure-evidence', '/var/log/mirroros/configure/run']);
+  const run = buildRun({ planText: text, options, now: NOW });
+  assert.deepEqual(validateRun(run), []);
+  assert.equal(run.configure_outcome, 4);
+  assert.equal(run.configure_failed_step, 'system/session');
+  assert.equal(run.configure_evidence, '/var/log/mirroros/configure/run');
+  for (const outcome of [2, 3, 4, 5, 6]) assert.deepEqual(validateRun({ ...run, configure_outcome: outcome }), []);
+  for (const outcome of [undefined, 0, 1, 7, '4']) assert.notDeepEqual(validateRun({ ...run, configure_outcome: outcome }), []);
+  for (const change of [{ exit_status: 5 }, { postconditions: FAILED }, { not_started: ['create_user'] },
+    { configure_evidence: undefined }, { configure_failed_step: undefined }, { format_version: 2 }]) {
+    assert.notDeepEqual(validateRun({ ...run, ...change }), []);
+  }
+  const installed = { ...run, outcome: 'installed', exit_status: 0, configure_outcome: 0 };
+  assert.deepEqual(validateRun(installed), []);
+  assert.notDeepEqual(validateRun({ ...installed, configure_outcome: undefined }), []);
+  assert.notDeepEqual(validateRun({ ...installed, configure_outcome: 5 }), []);
 });
 
 test('the package count is recorded only when given', () => {
@@ -81,7 +114,7 @@ test('resolved values, mirrors, constants, and cleanup results are recorded', ()
 });
 
 test('a run is never valid as installed with a reason, a pending operation, or a non-zero status', () => {
-  const installed = { format_version: 2, started_at: NOW, finished_at: NOW, outcome: 'installed', exit_status: 0, reasons: [], completed: [], not_started: [], postconditions: PASSED };
+  const installed = { format_version: 3, started_at: NOW, finished_at: NOW, outcome: 'installed', exit_status: 0, reasons: [], completed: [], not_started: [], postconditions: PASSED, configure_outcome: 0 };
   assert.deepEqual(validateRun(installed), []);
   assert.notDeepEqual(validateRun({ ...installed, postconditions: undefined }), []);
   assert.notDeepEqual(validateRun({ ...installed, postconditions: FAILED }), []);
@@ -95,7 +128,7 @@ test('a run is never valid as installed with a reason, a pending operation, or a
 test('a document with a secret-looking field is never written', () => {
   const directory = mkdtempSync(join(tmpdir(), 'engine-record-'));
   try {
-    const run = { format_version: 2, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 5, reasons: [], completed: [], not_started: [], account_password: 'x' };
+    const run = { format_version: 3, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 5, reasons: [], completed: [], not_started: [], account_password: 'x' };
     assert.throws(() => writeAtomic(join(directory, 'engine-run.json'), run, validateRun), /secret/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -123,14 +156,14 @@ test('the command line writes both records atomically with private permissions',
   }
 });
 
-test('the state of the postconditions phase has current postconditions and an index equal to the total', () => {
+test('the postconditions phase leaves one final configure unit in the total', () => {
   const operations = operationsOf(text);
   const state = buildState({ operations, status: 'running', current: 'postconditions', completed: operations.map(item => item.id), now: NOW });
   assert.deepEqual(validateState(state), []);
   assert.equal(state.current, 'postconditions');
-  assert.equal(state.index, state.total);
+  assert.equal(state.index, state.total - 1);
   assert.ok(state.operations.every(item => item.status === 'completed'));
-  assert.equal(state.format_version, 2);
+  assert.equal(state.format_version, 3);
   assert.deepEqual(validateState(buildState({ operations, status: 'not_verified', completed: operations.map(item => item.id), now: NOW })), []);
 });
 
@@ -165,7 +198,7 @@ test('a not_verified run exits 4 with one postcondition_failed reason per failed
 });
 
 test('exit 4 belongs to not_verified alone and a stored result must itself be valid', () => {
-  const failed = { format_version: 2, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 4, reasons: [], completed: [], not_started: [] };
+  const failed = { format_version: 3, started_at: NOW, finished_at: NOW, outcome: 'failed', exit_status: 4, reasons: [], completed: [], not_started: [] };
   assert.notDeepEqual(validateRun(failed), []);
   const installed = { ...failed, outcome: 'installed', exit_status: 0, postconditions: { ...PASSED, checks: [{ id: 'unknown_check', status: 'passed' }] } };
   assert.notDeepEqual(validateRun(installed), []);

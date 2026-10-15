@@ -89,6 +89,7 @@ let quiet = null;
 const down = '\u001b[B';
 // Order matters: the first rule whose strings are all on screen fires. Later screens come first.
 const rules = [
+  { expect: ['Base system installed and verified;', 'View configure log', 'Return to shell'], keys: () => '\r' },
   { expect: ['Installed MirrorOS in', 'Return to shell'], keys: () => `${down}\r` },
   { expect: ['MirrorOS installation stopped', 'Return to shell'], keys: () => '\r' },
   { expect: ['MirrorOS installation could not be verified', 'Return to shell'], keys: () => '\r' },

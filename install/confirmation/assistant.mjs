@@ -196,8 +196,8 @@ function reasonList([code, child]) {
 }
 
 // The progress of the engine for the progress screen, as one tab-separated line: operations completed, total,
-// the one-based position of the current operation, its plan description, and the package count (empty when
-// none). It reads only state.json, which the engine rewrites atomically; an unreadable file exits 2.
+// the one-based position of the current operation, its description, and the package count or configure step
+// (empty when none). It reads only state.json, which the engine rewrites atomically; an unreadable file exits 2.
 function engineProgress([path]) {
   let state;
   try {
@@ -206,9 +206,14 @@ function engineProgress([path]) {
     return EXIT_INVALID_INPUT;
   }
   const completed = state.operations.filter(item => item.status === 'completed').length;
+  const configuring = state.current === 'configure';
   const current = state.operations.find(item => item.id === state.current) ?? state.operations[completed];
   const position = Math.min(completed + 1, state.total);
-  process.stdout.write(`${[completed, state.total, position, oneLine(current?.description ?? ''), state.packages_installed ?? ''].join('\t')}\n`);
+  const description = configuring ? 'Configure the graphical environment.' : current?.description ?? '';
+  const detail = configuring
+    ? `Configure step: ${state.configure_position ?? ''} ${state.configure_step ?? ''}`.trimEnd()
+    : state.packages_installed ?? '';
+  process.stdout.write(`${[completed, state.total, position, oneLine(description), oneLine(detail)].join('\t')}\n`);
   return EXIT_VALID;
 }
 

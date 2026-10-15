@@ -51,6 +51,33 @@ setup() {
   [[ "${output//[[:space:]]/}" == *'partiallymodifiedandinstallationdidnotcomplete.'* ]]
 }
 
+@test "D22 wraps the failed step and installed-system recovery without truncation" {
+  run ui_not_configured desktop/compositor/providers/hyprland '/a/very/long/run/directory/with/no/short/path/segments'
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" | awk 'length > 40 { found=1 } END { exit found }'
+  [[ "${output//[[:space:]]/}" == *'Basesysteminstalledandverified;environmentconfigurationfailedatstepdesktop/compositor/providers/hyprland.'* ]]
+  [[ "${output//[[:space:]]/}" == *'Boottheinstalledsystem,loginattheconsole,andrunsudomirroros-configure.'* ]]
+}
+
+@test "D17 configure progress shows the step instead of a package count and D18 confirms configuration" {
+  PADDING_LEFT_SPACES='     '
+  run ui_progress 3 4 4 'Configure the graphical environment.' 'Configure step: 4/5 desktop/compositor/providers/hyprland'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'[4/4] Configure the graphical environment.'* ]]
+  [[ "$output" == *'Configure step: 4/5 desktop/compositor/providers/hyprland'* ]]
+  [[ "$output" != *'Packages installed:'* ]]
+  run ui_success 75
+  [[ "$output" == *'Base system verified and graphical environment configured.'* ]]
+}
+
+@test "D17 initial configure progress never presents the step label as a package count" {
+  PADDING_LEFT_SPACES='     '
+  run ui_progress 3 4 4 'Configure the graphical environment.' 'Configure step:'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'Configure step:'* ]]
+  [[ "$output" != *'Packages installed:'* ]]
+}
+
 @test "D20 wraps the title, warning, check detail, and run directory without truncation" {
   printf '%s\n' '{"postconditions":{"checks":[{"id":"boot_resume_parameters","status":"failed","detail":"Expected offset 1234 but observed offset 5678 in the configured boot entry."}]}}' > "${BATS_TEST_TMPDIR}/engine-run.json"
   run ui_not_verified "${BATS_TEST_TMPDIR}/engine-run.json" '/a/very/long/run/directory/with/no/short/path/segments'

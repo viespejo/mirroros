@@ -10,6 +10,86 @@ teardown() {
   engine_teardown
 }
 
+@test "configure success copies the recovery code with normalized modes before execution" {
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(engine_json format_version)" = 3 ]
+  [ "$(engine_json configure_outcome)" = 0 ]
+  [ "$(engine_json format_version state.json)" = 3 ]
+  local target="$RUN_ROOT/target" code="$RUN_ROOT/target/usr/local/lib/mirroros"
+  cmp "$CODE_ROOT/identity.json" "$code/identity.json"
+  cmp "$CODE_ROOT/operations/lib/lifecycle-discovery.sh" "$code/operations/lib/lifecycle-discovery.sh"
+  cmp "$CODE_ROOT/capabilities/lib/common.sh" "$code/capabilities/lib/common.sh"
+  [ "$(readlink "$target/usr/local/bin/mirroros-configure")" = /usr/local/lib/mirroros/operations/configure ]
+  [ "$(stat -c %a "$code/operations/configure")" = 755 ]
+  [ "$(stat -c %a "$code/capabilities/lib/common.sh")" = 644 ]
+  [ "$(stat -c %a "$code/capabilities")" = 755 ]
+  grep -q '^chown -R 0:0 ' "$DOUBLE_STATE/calls.log"
+  grep -q '^configure --target-root .* --user ' "$DOUBLE_STATE/calls.log"
+  grep -q 'configure double outcome 0' "$OUTPUT/engine.log"
+  [ "$(engine_call_line configure)" -lt "$(engine_call_line umount)" ]
+}
+
+@test "configure failures preserve their outcome and only select new evidence from this invocation" {
+  local outcome
+  for outcome in 2 4 5 6; do
+    mkdir -p "$RUN_ROOT/target/var/log/mirroros/configure/old-run"
+    printf 'run\tfailed_step\told-step\n' > "$RUN_ROOT/target/var/log/mirroros/configure/old-run/configure-run.tsv"
+    printf '%s\n' "$outcome" > "$DOUBLE_STATE/configure-status"
+    engine_run
+    [ "$ENGINE_STATUS" -eq 4 ]
+    [ "$(engine_json outcome)" = not_configured ]
+    [ "$(engine_json configure_outcome)" = "$outcome" ]
+    [ "$(engine_json configure_failed_step)" = desktop/compositor/providers/hyprland ]
+    [ "$(engine_json configure_evidence)" = /var/log/mirroros/configure/new-run ]
+    [ "$(engine_json postconditions.status)" = passed ]
+    [ "$(engine_json not_started)" = '[]' ]
+    [ "$(engine_json status state.json)" = not_configured ]
+    [ ! -s "$DOUBLE_STATE/mounted.list" ]
+    if [[ "$outcome" != 6 ]]; then
+      engine_teardown
+      engine_setup
+    fi
+  done
+}
+
+@test "failed base postconditions never invoke configure or copy its launcher" {
+  : > "$DOUBLE_STATE/postconditions-missing-kernel"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 4 ]
+  [ "$(engine_json outcome)" = not_verified ]
+  ! engine_called configure
+  [ ! -e "$RUN_ROOT/target/usr/local/bin/mirroros-configure" ]
+}
+
+@test "SIGINT during configure waits for its outcome, records progress, and cleans up" {
+  : > "$DOUBLE_STATE/configure-hang"
+  (
+    PATH="$DOUBLE_BIN:$PATH" DOUBLE_STATE="$DOUBLE_STATE" MIRROROS_DISCOVERY_ROOT="$FIXTURE_ROOT" MIRROROS_ENGINE_RUN_ROOT="$RUN_ROOT" \
+      exec setsid env --default-signal=INT "$CODE_ROOT/install/engine/apply" --plan "$PLAN" --digest "$DIGEST" --output "$OUTPUT" \
+      3< <(printf '%s\n' "$ENGINE_PASSWORD") > /dev/null 2> "$TEST_ROOT/stderr.log"
+  ) &
+  ENGINE_BACKGROUND_PID=$!
+  for _ in $(seq 1 200); do
+    [ -f "$DOUBLE_STATE/configure-started" ] && [ "$(engine_json configure_position state.json)" = 4/5 ] && break
+    /usr/bin/sleep 0.1
+  done
+  [ -f "$DOUBLE_STATE/configure-started" ]
+  [ "$(engine_json current state.json)" = configure ]
+  [ "$(engine_json configure_step state.json)" = desktop/compositor/providers/hyprland ]
+  [ "$(engine_json configure_position state.json)" = 4/5 ]
+  [ "$(engine_json index state.json)" = "$(engine_json total state.json)" ]
+  kill -INT -- "-$ENGINE_BACKGROUND_PID"
+  ENGINE_STATUS=0
+  wait "$ENGINE_BACKGROUND_PID" || ENGINE_STATUS=$?
+  ENGINE_BACKGROUND_PID=''
+  [ "$ENGINE_STATUS" -eq 4 ]
+  [ "$(engine_json outcome)" = not_configured ]
+  [ "$(engine_json configure_outcome)" = 3 ]
+  engine_called umount
+  [ ! -s "$DOUBLE_STATE/mounted.list" ]
+}
+
 @test "an approved ext4 plan installs, records installed, and leaves nothing mounted" {
   engine_run
   [ "$ENGINE_STATUS" -eq 0 ]

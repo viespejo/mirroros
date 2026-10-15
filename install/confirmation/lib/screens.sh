@@ -362,6 +362,7 @@ review_form() {
   flow_load_review
   while true; do
     review_rows
+    gum style --foreground 8 --padding "$PADDING" 'After the base system is verified, the graphical environment is configured.'
     echo
     while IFS= read -r warning; do
       gum style --foreground 3 --padding "$PADDING" "$warning"

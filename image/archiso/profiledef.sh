@@ -20,6 +20,7 @@ file_permissions=(
   ["/root/.gnupg"]="0:0:700"
   ["/usr/local/bin/choose-mirror"]="0:0:755"
   ["/usr/local/lib/mirroros/operations/install"]="0:0:755"
+  ["/usr/local/lib/mirroros/operations/configure"]="0:0:755"
   ["/usr/local/lib/mirroros/install/discovery/discover"]="0:0:755"
   ["/usr/local/lib/mirroros/install/discovery/discover-firmware"]="0:0:755"
   ["/usr/local/lib/mirroros/install/discovery/discover-hardware"]="0:0:755"

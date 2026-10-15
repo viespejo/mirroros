@@ -165,19 +165,28 @@ test('has-warning exits 0 only when the preview or plan carries the warning code
 const operations = ['wipe_disk_signatures', 'create_partition_table', 'install_packages'].map((id, index) => ({
   id, description: `Description of ${id}`, status: ['completed', 'running', 'pending'][index],
 }));
-const state = extra => ({ format_version: 1, status: 'running', current: 'create_partition_table', index: 2, total: 3, operations, updated_at: '2026-10-12T12:00:00Z', ...extra });
+const state = extra => ({ format_version: 1, status: 'running', current: 'create_partition_table', index: 2, total: 4, operations, updated_at: '2026-10-12T12:00:00Z', ...extra });
 
 test('engine-progress prints completed, total, position, description, and the package count', () => {
   const result = run('engine-progress', write('state.json', state()));
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout, '1\t3\t2\tDescription of create_partition_table\t\n');
+  assert.equal(result.stdout, '1\t4\t2\tDescription of create_partition_table\t\n');
   const packages = run('engine-progress', write('state-packages.json', state({
     current: 'install_packages',
     operations: operations.map((item, index) => ({ ...item, status: index < 2 ? 'completed' : 'running' })),
     packages_installed: 41,
   })));
-  assert.equal(packages.stdout, '2\t3\t3\tDescription of install_packages\t41\n');
+  assert.equal(packages.stdout, '2\t4\t3\tDescription of install_packages\t41\n');
   assert.equal(run('engine-progress', join(scratch, 'missing-state.json')).status, 2);
+});
+
+test('engine-progress adds the final configure phase without a package count', () => {
+  const result = run('engine-progress', write('state-configure.json', state({
+    current: 'configure', operations: operations.map(item => ({ ...item, status: 'completed' })),
+    configure_position: '4/5', configure_step: 'desktop/compositor/providers/hyprland', packages_installed: 41,
+  })));
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '3\t4\t4\tConfigure the graphical environment.\tConfigure step: 4/5 desktop/compositor/providers/hyprland\n');
 });
 
 const engineRun = extra => ({

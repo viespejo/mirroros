@@ -1,11 +1,13 @@
 # Configure lifecycle procedure
 
-**Availability:** implemented for the running installed system. Installer context: **Pending, plan 02-16**.
-Story 4.2 is not complete until that follow-up delivers installer integration and the clean-installation proof.
+**Availability:** implemented for the running installed system and a mounted installer target root. The guided
+installer runs configure after the base postconditions pass, before the first normal reboot. Clean-installation
+qualification and graphical usability still require the plan's blocking VM checkpoint.
 
 ## Current behavior
 
 Invoke `operations/configure` by path from any working directory; it does not need to be installed on `PATH`.
+The installer also leaves `/usr/local/bin/mirroros-configure` on the installed system for reruns without a clone.
 It applies minimal graphical login and user tools through the ordered steps in
 [`capabilities/configure-steps`](../../capabilities/configure-steps), following
 [ADR 0010](../adr/0010-environment-configuration-mechanism-and-scope.md). This is not yet the complete MVP desktop.
@@ -16,6 +18,8 @@ not a substitute for that proof or for independent readiness verification by `ve
 sudo operations/configure
 sudo operations/configure --user alice
 sudo operations/configure --user alice --refresh --output /var/log/mirroros/configure/manual-run
+sudo mirroros-configure
+sudo operations/configure --target-root /run/mirroros/target --user alice
 operations/configure --help
 ```
 
@@ -26,15 +30,21 @@ capability helpers, or missing or invalid listed steps reports an incomplete or 
 
 ## Prerequisites and inputs
 
-- Run as root using `sudo`. The target user is `--user <name>`, otherwise `SUDO_USER`; missing, nonexistent,
-  invalid, and root target accounts are rejected. Bash must already be the intended interactive shell; configure
+- Run as root (using `sudo` on the installed system). The target user is `--user <name>`, otherwise `SUDO_USER`
+  in the running context only. With `--target-root`, `--user` is mandatory and must exist in the target's
+  `passwd`; missing, nonexistent, invalid, and root target accounts are rejected. Bash must already be the intended interactive shell; configure
   does not change the login shell.
 - Use a running MirrorOS-installed Arch system with Bash, pacman, flock, runuser, systemctl, install, and the
-  standard text and filesystem tools checked by validation. No Node.js, jq, or git runtime dependency is added.
+  standard text and filesystem tools checked by validation. In target context, the live medium needs
+  `arch-chroot`, `flock`, and `mountpoint`; base tools are checked inside the target. No Node.js, jq, or git
+  runtime dependency is added.
 - Existing pacman sync databases and access to declared official repositories are required. Network access is
   needed for missing packages; configure never initializes databases or modifies the keyring automatically.
-- `xkeyboard-config` must already supply `/usr/share/X11/xkb/rules/base.lst`. Installation policy includes this
-  prerequisite. Layout validation occurs before convergence, even if other packages are missing.
+- `xkeyboard-config` must already supply `/usr/share/xkeyboard-config-2/rules/base.lst`, or
+  `/usr/share/X11/xkb/rules/base.lst` in the legacy directory layout. Target validation reads the real directory
+  under the target root, not the absolute X11 compatibility alias that would resolve against the live medium.
+  Installation policy includes this prerequisite. Layout validation occurs before convergence, even if other
+  packages are missing.
 - The system keyboard layout is resolved from `XKBLAYOUT` in `/etc/vconsole.conf`, then `KEYMAP`, then `us`.
   It must be a known XKB layout. Set an explicit supported `XKBLAYOUT` when the console keymap name differs;
   configure does not translate names or support multiple layouts, variants, or options in this skeleton.
@@ -45,26 +55,52 @@ Supported options:
 
 | Option | Meaning |
 |---|---|
-| `--user <name>` | Override the target user inferred from `SUDO_USER` |
+| `--user <name>` | Override `SUDO_USER` in running context; mandatory in target context |
+| `--target-root <mounted-dir>` | Configure an absolute, existing mount point other than `/`, with explicit `--user` |
 | `--refresh` | Permit a full sync and upgrade in the first missing-package transaction |
 | `--output <dir>` | Write evidence to an absent or empty directory; directory symlinks are rejected |
 | `--help` | Show purpose, prerequisites, inputs, effects, evidence, and outcomes; use alone |
 
-Unsupported arguments, including combined help, end with `2`. There is no public target-root option. The
-`MIRROROS_CONFIGURE_ROOT` environment variable is test-only, requires command doubles, and must not be used as an
-installer interface. The guided-installer hook, ISO embedding, and target-context execution belong to plan 02-16.
+Unsupported arguments, including combined help, end with `2`. `MIRROROS_CONFIGURE_ROOT` remains test-only,
+requires command doubles, and cannot be combined with `--target-root`.
+
+### Installer target context and code delivery
+
+`--target-root` requires an absolute, existing mounted directory other than `/` and an explicit non-root
+`--user` from the target. Validation collects problems before any package, file, unit, or user convergence.
+Package, user, and unit queries and commands enter the target through the helpers' `cfg_exec` wrapper using
+`arch-chroot`; user writes use `runuser` inside that target with its own `HOME`. System files and links, keyboard
+and session-file checks, the lock, and evidence use paths prefixed with the mounted root from the live medium.
+Invalid target contexts create no lock or evidence.
+
+The guided engine invokes configure only after all base postconditions pass and before unmounting the target.
+Before invocation it copies `operations/configure`, `operations/lib/lifecycle-discovery.sh`, `capabilities/`,
+and `identity.json` into the target's `/usr/local/lib/mirroros/`, root-owned with directories and executables
+`0755` and other files `0644`. `/usr/local/bin/mirroros-configure` points to that copy's entry point. The entry
+point resolves symlinks, so `sudo mirroros-configure` works without a clone. This is a snapshot for reruns, not
+an automatically synchronized or updated installation of MirrorOS code; development still uses a checkout.
+
+The engine appends combined output to `engine.log` and publishes the positioned step markers
+`== <k>/<total> <step> ==`. Only configure outcome `0` permits `installed`/`0`. Any failure or interruption becomes
+`not_configured`/`4`, preserving configure's outcome, failed step, and target-relative evidence directory in
+the engine record. Normal cleanup still unmounts the target. Recovery is to boot the installed system, log in
+at a console, inspect the evidence, and run `sudo mirroros-configure`; the assistant offers no live-medium retry.
 
 ## Validation and package safety
 
 Before package, managed-file, unit, or user changes, validation collects detected problems: privilege and target
 user, required tools, lock availability, output path, XKB layout data and layout, existing sync databases, and
 resolution of every declared package to its declared repository. Concurrent runs are excluded by `flock` on
-`/run/mirroros/configure.lock`. Lock metadata and evidence are infrastructure writes, not convergence changes.
+`/run/mirroros/configure.lock` on the configured system (under the mounted root in target context). The target's
+on-disk `/run` is hidden by tmpfs at boot. Lock metadata and evidence are infrastructure writes, not convergence
+changes.
 
 Without `--refresh`, if any package is missing, non-ignored output from `pacman -Qu` blocks the run with outcome
 `2`; the diagnostic advises a full `sudo pacman -Syu` or an explicit rerun with `--refresh`. Otherwise missing
 packages are installed with `pacman -S --needed --noconfirm` against existing databases. With `--refresh`, the
 first missing-package transaction uses `pacman -Syu --needed --noconfirm`; later transactions use `-S`.
+Target-context transactions use `env SNAP_PAC_SKIP=y pacman ...` inside `arch-chroot` to avoid installation-time
+snap-pac snapshots; transactions on the running installed system retain normal snap-pac behavior.
 
 **Never run `pacman -Sy` alone:** refreshing databases without upgrading the system can produce an unsupported
 partial upgrade. Configure never uses that operation. `--refresh` can upgrade the entire system and should be
@@ -128,6 +164,9 @@ checkpoint, not just the mechanism tests.
 Root runs that pass argument parsing attempt to create a run directory under
 `/var/log/mirroros/configure/<run-id>/`, or at `--output`. Run IDs contain a UTC timestamp and UUID. The directory
 is root-owned and mode `0700` on the real system; output must be absent or empty and must not itself be a symlink.
+With `--target-root <dir>`, the default is `<dir>/var/log/mirroros/configure/<run-id>/` and the TSV records
+`context target`; on the installed system the same evidence is visible under `/var/log/mirroros/configure/`.
+An explicit `--output` is used as supplied to the coordinator, not automatically prefixed by the target root.
 
 | File | Contents |
 |---|---|
@@ -135,13 +174,15 @@ is root-owned and mode `0700` on the real system; output must be absent or empty
 | `configure-run.tsv` | Run identity, context, target user, code identity/dirty flag, start/end, outcome, failed step, reason, package mode, guard result, and every step's status/postcondition |
 | `packages.tsv` | Declared package names, resolved or installed versions, and repositories; not a full dependency inventory |
 
-TSV values have tabs and newlines replaced. Git identity uses `git rev-parse HEAD` and a dirty flag only when git
-and `.git` exist; otherwise it is `unavailable`. Git is optional. No JSON, shell trace, user-file dump, or secret
-input is recorded. Scan copied evidence on the development host with
+TSV values have tabs and newlines replaced. Git identity uses `git rev-parse HEAD` and a dirty flag when git
+and `.git` exist. Otherwise configure reads `commit` and `dirty` from the code root's `identity.json`, using
+Bash without Node.js or jq; missing identity data is `unavailable`. The TSV dirty flag is `yes` or `no` when
+known. Git is optional. No JSON output, shell trace, user-file dump, or secret input is recorded. Scan copied evidence on the development host with
 `gitleaks dir --no-banner --redact <evidence-dir>`; Gitleaks is not a target prerequisite.
 
 Help, parsing failures, damaged-checkout failures before execution, and unprivileged rejections produce no run
-evidence. A non-root process cannot create root-owned evidence and does not escalate. If the output directory
+evidence. Invalid target-root contexts also produce no run evidence. A non-root process cannot create
+root-owned evidence and does not escalate. If the output directory
 cannot be created, configure reports that failure; evidence is not guaranteed for an unwritable or invalid path.
 
 ## Normalized outcomes and recovery
@@ -155,7 +196,8 @@ cannot be created, configure reports that failure; evidence is not guaranteed fo
 | `5` | Step command failure, SIGTERM, or SIGHUP | Inspect upstream diagnostics, fix the cause, then rerun |
 | `6` | Damaged checkout, unsupported internal context, or contract failure | Restore the checkout or fix the internal contract before rerunning |
 
-For execution failures, output names the step, reason, and next action: rerun `sudo operations/configure`.
+For execution failures, output names the step, reason, and next action. From a checkout, rerun
+`sudo operations/configure`; after an installer run, boot the installed system and use `sudo mirroros-configure`.
 Outcomes `3`, `4`, and `5` never claim readiness. Package download, signature, or keyring failures remain failures;
 check network and mirror availability or repair the system keyring deliberately, rather than disabling signature
 checks. A missing mirror version may require a full system upgrade or `--refresh`. Preserve the failed run's

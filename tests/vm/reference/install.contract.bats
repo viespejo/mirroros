@@ -72,6 +72,10 @@ createServer(socket => {
     for (const command of chunk.toString().split('\n')) {
       const match = /^sendkey (\S+)$/.exec(command);
       if (match === null) continue;
+      if (match[1] === 'ctrl-alt-f2') {
+        appendFileSync(process.env.REFERENCE_CALL_LOG, 'login tty2\n');
+        continue;
+      }
       if (match[1] !== 'ret') {
         // QEMU has no uppercase key names; a capital letter arrives as shift-<letter>.
         const upper = /^shift-([a-z])$/.exec(match[1]);
@@ -122,7 +126,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
         default: [0, "installed"], "limine-nohib": [0, "installed"], ext4: [0, "installed"], "btrfs-rescue": [0, "installed"], failure: [5, "failed"], "cancel-password": [3, "cancelled"],
       }[name];
       const exit = bad === "wrong-exit" ? 1 : expected[0];
-      const common = { format_version: bad === "old-record" ? 4 : 5, run_id: "install-run", outcome: expected[1] };
+      const common = { format_version: bad === "old-record" ? 5 : 6, run_id: "install-run", outcome: expected[1] };
       const vendor = /^vendor_id\s*:\s*(\S+)/m.exec(require("node:fs").readFileSync("/proc/cpuinfo", "utf8"))?.[1];
       const microcode = vendor === "AuthenticAMD" ? ["amd-ucode", "AuthenticAMD.bin"] : ["intel-ucode", "GenuineIntel.bin"];
       const plan = { format_version: 4, choices: { storage_option: { value: name === "ext4" ? "ext4-systemd-boot" : "btrfs-limine" }, hibernation: { value: name === "default" || name === "ext4" } },
@@ -138,7 +142,8 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
         "plans/01/installation-plan.json": JSON.stringify(plan),
       };
       if (expected[1] !== "cancelled" && bad !== "missing-engine") {
-        const engine = { format_version: 2, postconditions: { status: bad === "postconditions" ? "failed" : "passed", failed_checks: [], checks: [{ id: "kernel_installed", status: "passed" }] }, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
+        const engine = { format_version: bad === "old-engine" ? 2 : 3, postconditions: { status: bad === "postconditions" ? "failed" : "passed", failed_checks: [], checks: [{ id: "kernel_installed", status: "passed" }] }, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
+        if (expected[1] === "installed" && bad !== "missing-configure") engine.configure_outcome = bad === "configure-failed" ? 5 : 0;
         const hibernating = name === "ext4" || name === "default";
         if (hibernating) engine.resolved = { resume_offset: bad === "no-resume" ? undefined : 1234 };
         if (name === "failure") { engine.failed_operation = { id: "install_packages", command: ["pacstrap"] }; engine.not_started = ["generate_fstab"]; }
@@ -259,6 +264,9 @@ install_result_field() {
     [ "$(install_result_field counted)" == 'true' ]
     [ "$(install_result_field install.resume_as_expected)" == 'true' ]
     [ "$(install_result_field install.microcode_as_expected)" == 'true' ]
+    [ "$(install_result_field install.records_format_6)" == 'true' ]
+    [ "$(install_result_field install.engine_record_as_expected)" == 'true' ]
+    grep -qx 'login tty2' "$REFERENCE_CALL_LOG"
     [ "$(install_result_field boot.first_boot.ok)" == 'true' ]
   done
 }
@@ -391,10 +399,10 @@ install_result_field() {
   [ "$(install_result_field install.resume_as_expected)" == 'false' ]
 }
 
-@test "old records, failed postconditions, or missing host microcode prevent qualification" {
+@test "old records, failed configuration, failed postconditions, or missing host microcode prevent qualification" {
   use_matching_bundle
   local bad
-  for bad in old-record postconditions microcode; do
+  for bad in old-record old-engine missing-configure configure-failed postconditions microcode; do
     rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence" "${REFERENCE_REPOSITORY_ROOT}/build"
     export REFERENCE_INSTALL_CASE=ext4 REFERENCE_INSTALL_BAD="$bad"
     reference_invoke_install --case ext4 "$REFERENCE_BUNDLE_DIR"
@@ -458,6 +466,28 @@ install_result_field() {
   [ "$(install_result_field counted)" == 'false' ]
 }
 
+@test "the guest driver returns to shell on a wrapped configure failure screen" {
+  run node --input-type=module - "${REFERENCE_TEST_SOURCE_ROOT}/vm/reference/guest/install-trigger.sh" <<'JS'
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import assert from 'node:assert/strict';
+const source = readFileSync(process.argv[2], 'utf8');
+const rules = runInNewContext(source.match(/const rules = (\[[\s\S]*?\n\]);/)[1], {
+  down: '\u001b[B', canary: 'test-only', name: 'default',
+});
+const screen = `Base system installed and verified; environment configuration failed at
+step unknown.
+View configure log
+Restart
+Return to shell
+Power off`;
+const rule = rules.find(candidate => candidate.expect.every(text => screen.includes(text)));
+assert.ok(rule);
+assert.equal(rule.keys(screen), '\r');
+JS
+  [ "$status" -eq 0 ]
+}
+
 @test "the guest trigger and the library never put the canary in a command line" {
   local trigger="${REFERENCE_TEST_SOURCE_ROOT}/vm/reference/guest/install-trigger.sh"
   local library="${REFERENCE_TEST_SOURCE_ROOT}/vm/reference/lib/install.sh"
@@ -469,7 +499,7 @@ install_result_field() {
 }
 
 @test "qualify-install never elevates privileges on the host" {
-  # The only sudo in the library is the text typed into the guest at tty1 to write the login marker.
+  # The only sudo in the library is the text typed into the guest at tty2 to write the login marker.
   run bash -c "grep -nE '(^|[;&|(])[[:space:]]*(sudo|pkexec|doas)[[:space:]]' \
     '${REFERENCE_TEST_SOURCE_ROOT}/vm/reference/qualify-install' '${REFERENCE_TEST_SOURCE_ROOT}/vm/reference/lib/install.sh' \
     | grep -v 'await type('"

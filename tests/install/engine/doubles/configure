@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# Installer configure double: no packages, mounts, units, or accounts are changed.
+set -Eeuo pipefail
+: "${DOUBLE_STATE:?}"
+printf 'configure %s\n' "$*" >> "$DOUBLE_STATE/calls.log"
+[[ "$1" == --target-root && "$3" == --user && -n "$4" ]]
+root="$2"
+[[ -x "$root/usr/local/lib/mirroros/operations/configure" ]]
+[[ -L "$root/usr/local/bin/mirroros-configure" ]]
+if read -r -t 0.1 _; then exit 6; fi
+if [[ -e /proc/$$/fd/3 || -e /proc/$$/fd/4 ]]; then exit 6; fi
+record="$root/var/log/mirroros/configure/new-run/configure-run.tsv"
+mkdir -p -- "${record%/*}"
+finish() {
+  printf 'run\toutcome\t%s\nrun\tfailed_step\t%s\n' "$1" "$([[ "$1" == 0 ]] || printf desktop/compositor/providers/hyprland)" > "$record"
+  printf 'configure double outcome %s\n' "$1"
+  exit "$1"
+}
+trap 'finish 3' INT
+trap 'finish 5' TERM HUP
+printf '== 1/5 system/session ==\n'
+printf '== 4/5 desktop/compositor/providers/hyprland ==\n'
+if [[ -f "$DOUBLE_STATE/configure-hang" ]]; then
+  printf '%s\n' "$$" > "$DOUBLE_STATE/configure-pid"
+  : > "$DOUBLE_STATE/configure-started"
+  while [[ ! -f "$DOUBLE_STATE/configure-release" ]]; do /usr/bin/sleep 0.05; done
+fi
+status=0
+[[ ! -f "$DOUBLE_STATE/configure-status" ]] || status="$(< "$DOUBLE_STATE/configure-status")"
+finish "$status"

@@ -11,6 +11,8 @@ SOURCE_CAPTURE_DIRTY_PATHS=()
 SOURCE_CAPTURE_EMBEDDED_ISO_PATH='/usr/local/lib/mirroros'
 SOURCE_CAPTURE_EMBEDDED_PATHS=(
   'operations/install'
+  'operations/configure'
+  'capabilities'
   'operations/lib/lifecycle-discovery.sh'
   'install'
   'hardware/discovery'

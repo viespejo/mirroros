@@ -3,22 +3,22 @@ load ../capabilities/support
 setup() { cfg_test_setup; }
 teardown() { cfg_test_teardown; }
 
-@test "configure help describes the running-system contract without mutation" {
+@test "configure help describes both execution contexts without mutation" {
   run "$CFG_TEST_ENTRY" --help
   [ "$status" -eq 0 ]
   for text in 'Purpose:' 'Prerequisites:' 'Inputs:' 'Consequential effects:' 'Evidence:' \
     'Normalized exit outcomes:' 'Documentation: docs/procedures/configure.md' \
-    '--user' '--refresh' '--output' 'runuser' 'configure-run.tsv' 'plan 02-16'; do
+    '--user' '--target-root <mounted-dir> (requires --user)' '--refresh' '--output' 'runuser' 'configure-run.tsv' 'installer target root'; do
     [[ "$output" == *"$text"* ]]
   done
   [[ "$output" != *'help only'* ]]
-  [[ "$output" != *'--target-root'* ]]
+  [[ "$output" != *'Pending, plan 02-16'* ]]
   [ ! -s "$CFG_TEST_CALLS" ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/run/mirroros/configure.lock" ]
 }
 
 @test "configure rejects unsupported arguments including combined help" {
-  for argument in --bogus --target-root --help; do
+  for argument in --bogus --help; do
     run "$CFG_TEST_ENTRY" "$argument" extra
     [ "$status" -eq 2 ]
     [[ "$output" == *'unsupported argument(s)'* ]]
@@ -27,8 +27,8 @@ teardown() { cfg_test_teardown; }
   [ ! -s "$CFG_TEST_CALLS" ]
 }
 
-@test "configure requires values for user and output" {
-  for argument in --user --output; do
+@test "configure requires values for user output and target root" {
+  for argument in --user --output --target-root; do
     run "$CFG_TEST_ENTRY" "$argument"
     [ "$status" -eq 2 ]
     [[ "$output" == *'requires a value'* ]]
@@ -61,6 +61,17 @@ teardown() { cfg_test_teardown; }
   export SUDO_USER=root
   cd "$CFG_TEST_DIR"
   run "$CFG_TEST_ENTRY" --user alice
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'next boot'* ]]
+}
+
+@test "configure resolves a launcher symlink outside the checkout" {
+  ln -s "$CFG_TEST_ENTRY" "$CFG_TEST_DIR/mirroros-configure"
+  cd "$CFG_TEST_DIR"
+  run "$CFG_TEST_DIR/mirroros-configure" --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'installer target root'* ]]
+  run "$CFG_TEST_DIR/mirroros-configure" --user alice
   [ "$status" -eq 0 ]
   [[ "$output" == *'next boot'* ]]
 }

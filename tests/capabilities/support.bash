@@ -54,4 +54,13 @@ cfg_test_helpers() {
   ' <<< "$script"
 }
 
+cfg_test_target_context() {
+  export CFG_TEST_TARGET_ROOT="$MIRROROS_CONFIGURE_ROOT"
+  unset MIRROROS_CONFIGURE_ROOT
+  export CFG_TEST_HOME="$CFG_TEST_TARGET_ROOT/home/alice"
+  mkdir -p "$CFG_TEST_HOME"
+  printf 'root:x:0:0:root:/root:/usr/bin/bash\nalice:x:1000:1000::/home/alice:/usr/bin/bash\n' > "$CFG_TEST_TARGET_ROOT/etc/passwd"
+  printf '{"commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","dirty":true}\n' > "$CFG_TEST_DIR/code/identity.json"
+}
+
 cfg_test_no_install() { ! grep -Eq '^pacman -S(yu)? ' "$CFG_TEST_CALLS"; }

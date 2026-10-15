@@ -108,8 +108,8 @@ ui_setup() {
 }
 
 # The engine progress screen (D17). Arguments: operations completed, total, one-based position of the current
-# operation, its plan description, and the package count (empty when none). The bar is the completed operations over
-# the total; the package count never moves it.
+# operation, its description, and the package count or configure step (empty when none). The bar is the completed
+# operations over the total; the detail never moves it.
 ui_progress() {
   local completed=$1 total=$2 position=$3 description=$4 packages=$5
   local width=34 filled=0 bar empty
@@ -122,7 +122,11 @@ ui_progress() {
   echo
   printf '%s%s%s\n' "$PADDING_LEFT_SPACES" "${bar// /█}" "${empty// /░}"
   gum style --foreground 8 --padding "$PADDING" "[${position}/${total}] ${description}"
-  if [[ -n $packages ]]; then gum style --foreground 8 --padding "$PADDING" "Packages installed: ${packages}"; fi
+  if [[ $packages == 'Configure step:' || $packages == 'Configure step: '* ]]; then
+    gum style --foreground 8 --padding "$PADDING" "$packages"
+  elif [[ -n $packages ]]; then
+    gum style --foreground 8 --padding "$PADDING" "Packages installed: ${packages}"
+  fi
 }
 
 # The success screen (D18). Argument: the elapsed seconds of the engine phase.
@@ -138,11 +142,11 @@ ui_success() {
   clear_logo
   echo
   gum style --padding "$PADDING" "Installed MirrorOS in ${duration}"
-  gum style --foreground 8 --padding "$PADDING" 'Base system installed. Configuration checks passed before the first restart.'
+  gum style --foreground 8 --padding "$PADDING" 'Base system verified and graphical environment configured.'
   echo
 }
 
-# Word-wrap D19, D20, and the engine's no-valid-record failure, splitting words wider than the available space.
+# Word-wrap D19, D20, D22, and the engine's no-valid-record failure, splitting words wider than the available space.
 ui_wrapped_style() {
   local foreground=$1 text width=$((TERM_WIDTH - PADDING_LEFT - 1))
   shift
@@ -195,6 +199,18 @@ NODE
   )
   echo
   ui_wrapped_style 8 'The disk was modified. The full result is in the run directory.' "Run directory: ${run_directory}"
+}
+
+# The unconfigured environment screen (D22). Arguments: failed configure step and run directory.
+ui_not_configured() {
+  local step=$1 run_directory=$2
+  clear_logo
+  echo
+  ui_wrapped_style 1 "Base system installed and verified; environment configuration failed at step ${step:-unknown}."
+  echo
+  ui_wrapped_style 7 'Boot the installed system, log in at the console, and run sudo mirroros-configure.'
+  echo
+  ui_wrapped_style 8 "Run directory: ${run_directory}"
 }
 
 # The engine ended without a valid record. Arguments: exit status and run directory.

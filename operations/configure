@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
 HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
 CODE_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 CAPABILITIES_DIR="$CODE_ROOT/capabilities"
@@ -43,9 +43,9 @@ done
 if [[ "$#" == 1 && "$1" == --help ]]; then
   lifecycle_discovery_main \
     'configure' \
-    'Configure minimal graphical login and user tools on the running installed system. Installer context: Pending, plan 02-16.' \
+    'Configure minimal graphical login and user tools on the running installed system or an installer target root.' \
     'Root via sudo, a non-root target user, base tools, sync databases, and xkeyboard-config layout data.' \
-    '--user <name> (default SUDO_USER), --refresh, --output <absent-or-empty-dir>, --help.' \
+    '--user <name> (default SUDO_USER on the running system), --target-root <mounted-dir> (requires --user), --refresh, --output <absent-or-empty-dir>, --help.' \
     'Install missing packages, preserve user-owned files, configure user files through runuser, enable SDDM without starting it, and select graphical.target. Safe full rerun.' \
     '/var/log/mirroros/configure/<run-id>/ or --output; private configure.log, configure-run.tsv, packages.tsv. No secrets.' \
     "$@"
@@ -57,7 +57,7 @@ validation_status=0
 cfg_validate || validation_status=$?
 # Evidence and lock metadata are infrastructure, not package/file/unit/user convergence mutations.
 # An unprivileged rejection cannot create root-owned evidence; report it without privilege escalation.
-if [[ "$(id -u)" == 0 ]]; then
+if [[ "$(id -u)" == 0 && ( "$CONFIGURE_CONTEXT" == running || "$CFG_TARGET_VALID" == 1 ) ]]; then
   if ! cfg_evidence_init; then
     printf '%s\n' 'MirrorOS configure: evidence could not be created; use an absent or empty writable --output directory.' >&2
     if (( validation_status == 0 )); then exit 2; fi

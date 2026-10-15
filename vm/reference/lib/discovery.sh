@@ -26,6 +26,8 @@ DISCOVERY_LAYOUT_RAW_NAME='layout.raw'
 DISCOVERY_EVIDENCE_BASE_NAME='discovery'
 DISCOVERY_OVERLAY_PATHS=(
   'operations/install'
+  'operations/configure'
+  'capabilities'
   'operations/lib/lifecycle-discovery.sh'
   'install'
   'hardware/discovery'

@@ -2,6 +2,7 @@
 export const OUTCOMES = {
   installed: [0],
   not_verified: [4],
+  not_configured: [4],
   cancelled: [3],
   invalidated: [2],
   blocked: [2],

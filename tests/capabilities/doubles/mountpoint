@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'mountpoint %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "$1" == -q && "$2" == -- && "$3" == "${CFG_TEST_TARGET_ROOT:-}" && "${CFG_TEST_MOUNTED:-1}" == 1 ]]

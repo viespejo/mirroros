@@ -6,7 +6,7 @@
 # stop-cleanup.sh, outcome.sh, evidence.sh, and discovery.sh to be sourced first.
 #
 # Every case boots twice when it installs: the ISO runs the real guided installer through a pty, then QEMU is
-# stopped and the disk boots alone, where the harness logs in at tty1 through the QEMU monitor and reads the
+# stopped and the disk boots alone, where the harness logs in at tty2 through the QEMU monitor and reads the
 # result from the serial console. Cases that do not install boot once.
 
 INSTALL_CASE=''
@@ -341,14 +341,14 @@ if (errors.length === 0) {
     preparation_succeeded: report.exit_status === 0,
     exits_as_expected: install.exit_status === expectedExit && run?.exit_status === expectedExit,
     outcomes_as_expected: run?.outcome === expectedOutcome && approval?.outcome === expectedOutcome,
-    records_format_5: run?.format_version === 5 && approval?.format_version === 5,
+    records_format_6: run?.format_version === 6 && approval?.format_version === 6,
     plan_format_4: plan?.format_version === 4,
     records_agree: run?.run_id === approval?.run_id && run?.final_digest === approval?.digest,
     evidence_complete: required.every(name => typeof files[name] === 'string'),
     engine_record_as_expected: engineExpected
-      ? engine?.format_version === 2 && engine?.outcome === expectedOutcome && engine?.exit_status === expectedExit
+      ? engine?.format_version === 3 && engine?.outcome === expectedOutcome && engine?.exit_status === expectedExit
         && (expectedOutcome === 'installed'
-          ? engine.not_started?.length === 0 && engine.failed_operation === undefined
+          ? engine.configure_outcome === 0 && engine.not_started?.length === 0 && engine.failed_operation === undefined
             && engine.postconditions?.status === 'passed' && engine.postconditions.failed_checks?.length === 0
             && engine.postconditions.checks?.length > 0 && engine.postconditions.checks.every(check => check.status === 'passed')
           : engine.failed_operation?.id === expectedFailedOperation && engine.not_started?.length > 0)
@@ -433,13 +433,13 @@ install_build_disk_boot_command() {
     filtered+=("$argument")
     index=$((index + 1))
   done
-  # A virtual display adapter lets the login driver keep a screendump of tty1 as private diagnostics; the guest sees
+  # A virtual display adapter lets the login driver keep a screendump of tty2 as private diagnostics; the guest sees
   # no extra input or storage device.
   filtered+=(-vga std)
   LAUNCH_QEMU_COMMAND=("${filtered[@]}")
 }
 
-# Types the user name and the canary at tty1 through the QEMU monitor, then proves the login by making the shell
+# Types the user name and the canary at tty2 through the QEMU monitor, then proves the login by making the shell
 # write a marker with its own user name to the serial port through sudo. The canary only travels host-side, in the environment of
 # this driver and through the monitor; it never reaches the serial console, which only receives the marker.
 # Prints one JSON document with one entry per user. Status 0 when every user logged in, 1 otherwise.
@@ -505,6 +505,8 @@ let firstBoot = null;
 const socket = await connectMonitor();
 if (socket !== null) {
   await sleep(Number(firstWaitText) * 1000);
+  socket.write('sendkey ctrl-alt-f2\n');
+  await sleep(1000);
   for (const user of users) {
     results[user] = false;
     while (Date.now() < deadline && alive() && !results[user]) {
@@ -546,7 +548,7 @@ if (socket !== null) {
         await enter(socket);
         await sleep(2000);
       } else {
-        // Private diagnostics: the last screen of tty1 after a failed attempt (a typed password is never echoed).
+        // Private diagnostics: the last screen of tty2 after a failed attempt (a typed password is never echoed).
         socket.write(`screendump ${screenPath}\n`);
         await sleep(Number(intervalText) * 1000);
       }

@@ -16,8 +16,8 @@ cfg_system_file() {
   fi
   if [[ -f "$dest" ]] && cmp -s -- "$src" "$dest" &&
     [[ "$(stat -c '%a:%u:%g' -- "$dest")" == "${mode#0}:$owner:$group" ]]; then return 0; fi
-  cfg_run install -d -m 0755 -- "$(dirname -- "$dest")"
-  cfg_run install -o "$owner" -g "$group" -m "$mode" -- "$src" "$dest"
+  cfg_run_host install -d -m 0755 -- "$(dirname -- "$dest")"
+  cfg_run_host install -o "$owner" -g "$group" -m "$mode" -- "$src" "$dest"
   cfg_changed
 }
 
@@ -56,8 +56,8 @@ cfg_system_link() {
     cfg_log "user-owned: $2; left untouched"
     return 0
   fi
-  cfg_run install -d -m 0755 -- "$(dirname -- "$link")"
-  cfg_run ln -s -- "$target" "$link"
+  cfg_run_host install -d -m 0755 -- "$(dirname -- "$link")"
+  cfg_run_host ln -s -- "$target" "$link"
   cfg_changed
 }
 
@@ -69,7 +69,7 @@ cfg_user_file() {
   cfg_managed "$src" || exit 6
   if [[ "$relative" == *.lua ]]; then legacy="${relative%.lua}.conf"; fi
   # The user owns path resolution, temporary files, directory creation and every HOME write.
-  result="$(runuser -u "$TARGET_USER" -- bash -c '
+  result="$(cfg_exec runuser -u "$TARGET_USER" -- bash -c '
     set -Eeuo pipefail
     umask 022
     relative=$1 legacy=$2
@@ -95,7 +95,7 @@ cfg_user_file() {
 # shellcheck disable=SC2016 # HOME is resolved by the user's Bash, never by root.
 cfg_user_file_present() {
   cfg_context
-  runuser -u "$TARGET_USER" -- bash -c '
+  cfg_exec runuser -u "$TARGET_USER" -- bash -c '
     [[ -e "$HOME/$1" ]] || { [[ "$1" == *.lua ]] && [[ -e "$HOME/${1%.lua}.conf" ]]; }
   ' bash "$1"
 }
@@ -105,7 +105,7 @@ cfg_bashrc_block() {
   local source_path="$1" result
   cfg_context
   [[ "$source_path" != /* && "$source_path" != *..* && "$source_path" =~ ^[a-zA-Z0-9_./-]+$ ]] || exit 6
-  result="$(runuser -u "$TARGET_USER" -- bash -c '
+  result="$(cfg_exec runuser -u "$TARGET_USER" -- bash -c '
     set -Eeuo pipefail
     umask 022
     rc="$HOME/.bashrc"
@@ -133,7 +133,7 @@ cfg_bashrc_block() {
 # shellcheck disable=SC2016 # HOME is resolved by the user's Bash.
 cfg_bashrc_block_present() {
   cfg_context
-  runuser -u "$TARGET_USER" -- bash -c '
+  cfg_exec runuser -u "$TARGET_USER" -- bash -c '
     if [[ -L "$HOME/.bashrc" ]]; then [[ -e "$HOME/.bashrc" ]]; exit; fi
     [[ $(grep -Fc "# BEGIN MirrorOS configure" "$HOME/.bashrc") == 1 &&
        $(grep -Fc "# END MirrorOS configure" "$HOME/.bashrc") == 1 ]]

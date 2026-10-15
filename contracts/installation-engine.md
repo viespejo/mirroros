@@ -1,8 +1,9 @@
 # Installation engine (`install/engine/apply`)
 
-`ENGINE_RUN_FORMAT_VERSION: 2` and `ENGINE_STATE_FORMAT_VERSION: 2`. Version `2` adds the postconditions phase, the
-`postconditions` field of the run record, and the outcome `not_verified`; records and state files of version `1`
-are historical evidence that is neither read nor transformed. `install/engine/apply` applies one approved
+`ENGINE_RUN_FORMAT_VERSION: 3` and `ENGINE_STATE_FORMAT_VERSION: 3`. Version `3` adds the final configure phase,
+its outcome and evidence fields, the outcome `not_configured`, and configure-step progress. Version `2` added the
+postconditions phase, the `postconditions` field of the run record, and the outcome `not_verified`; records and
+state files of versions `1` and `2` are historical evidence that is neither read nor transformed. `install/engine/apply` applies one approved
 [installation plan](installation-plan.md) (format 4) to the confirmed disk with the native Arch commands
 selected by [ADR 0002](../docs/adr/0002-installation-engine-selection.md). It is an internal boundary: it is
 invoked only by the guided assistant after the bound confirmation, the password entry, and the final
@@ -215,11 +216,12 @@ packages in a development check before this option was implemented.
 
 ## Evidence and state
 
-The engine writes only inside `--output` (the run's `engine/`), with `0700` directories and `0600` files:
+The engine writes its own evidence inside `--output` (the run's `engine/`), with `0700` directories and `0600`
+files. Configure writes separate evidence inside the target (see [Configure phase](#configure-phase)).
 
 | Path | Content |
 | --- | --- |
-| `engine.log` | Plain text, no ANSI sequences, no secret. Each operation starts with a `== <id> ==` header; the native stdout and stderr of every command follow, and each logged command line is its argv. Commands that receive the password on stdin are logged by name only. |
+| `engine.log` | Plain text, no ANSI sequences, no secret. Each operation or fixed phase starts with a `== <id> ==` header; configure output includes `== <k>/<total> <step> ==` markers; the native stdout and stderr of every command follow, and each logged command line is its argv. Commands that receive the password on stdin are logged by name only. |
 | `state.json` | Progress for the assistant; rewritten atomically after each change. |
 | `engine-run.json` | The run record, written atomically at the end and on every terminal path. |
 | `target-packages.txt` | The target's `pacman -Q` after `install_packages`. A description, not a pinning policy. |
@@ -230,31 +232,36 @@ Each JSON file is written to a temporary file in the same directory, re-read, va
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `2`. |
-| `status` | `running`, `installed`, `not_verified`, `failed`, `blocked`, or `invalidated`. |
-| `current` | The `id` of the running operation, or `postconditions` while the postconditions phase runs; omitted when none is running. |
-| `index` | One-based position of the current operation, or the number completed at the end. During the postconditions phase it equals `total`. |
-| `total` | Number of operations of the plan. |
+| `format_version` | Always `3`. |
+| `status` | `running`, `installed`, `not_verified`, `not_configured`, `failed`, `blocked`, or `invalidated`. |
+| `current` | The `id` of the running operation, `postconditions`, or `configure`; omitted when none is running. |
+| `index` | One-based current position, or the number completed at the end. For `N` plan operations: postconditions use `N`, configure and terminal `installed` use `N+1`. |
+| `total` | Number of operations of the plan plus one for configure; postconditions add no progress unit. |
 | `operations` | In plan order: `id`, `description` (from the plan), and `status` (`pending`, `running`, `completed`, or `failed`). |
 | `packages_installed` | Present only while `install_packages` runs: the count of installed packages. An informational count, never a fraction. |
+| `configure_step` | Optional string: the current capability path from a configure marker. |
+| `configure_position` | Optional string `k/total`, with positive integers and `k` no greater than `total`. |
 | `updated_at` | RFC 3339 time of the last update. |
 
 ### `engine-run.json`
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `2`. |
+| `format_version` | Always `3`. |
 | `started_at`, `finished_at` | RFC 3339 times. |
 | `plan_digest` | The digest of the plan that was applied. |
 | `code_identity` | `commit` and `dirty` of the running artifact. |
 | `storage_option`, `hibernation` | From the plan. |
-| `outcome` | `installed`, `not_verified`, `blocked`, `invalidated`, or `failed`. |
+| `outcome` | `installed`, `not_verified`, `not_configured`, `blocked`, `invalidated`, or `failed`. |
 | `exit_status` | The exit status of the engine. |
 | `reasons` | Structured reasons as in [Reasons](#reasons); may be empty. |
 | `completed`, `not_started` | Operation ids. |
 | `failed_operation` | Present on failure: `id`, `command` (argv, non-secret), and `child_exit_status` (the original status). |
 | `resolved` | Apply-time values: `partition_uuids` and, when hibernation is enabled, `resume_offset`. |
 | `postconditions` | The result document of [`installation-postconditions.md`](installation-postconditions.md#result), stored unchanged. Present when the postconditions phase ran, that is, when every operation completed; absent for `blocked`, `invalidated`, and for a `failed` run that stopped earlier. |
+| `configure_outcome` | Integer configure outcome: `0` for `installed`, `2`–`6` for `not_configured`; absent when the phase was not reached. |
+| `configure_failed_step` | String on `not_configured`: the failed capability path, or empty if no step was reached. |
+| `configure_evidence` | String on `not_configured`: target-relative evidence directory under `/var/log/mirroros/configure/`, or empty when evidence could not be created. |
 | `mirrors` | `servers` (the active `Server =` lines) and `mirrorlist_sha256`. |
 | `constants` | The engine constants used, per kind. |
 | `constants.install_limine_snapshot_tools.package.<name>` | `btrfs-limine` only: the `version` and `sha256` of each verified package. The AUR and upstream pins stay in the embedded `packages.json` and the artifact metadata. |
@@ -281,21 +288,23 @@ operation or pre-check step), `message`, `next_step`, and `child_exit_status` (o
 | `engine_asset_mismatch` | `failed`, `6` | A configuration asset or a prebuilt package fails its hash, or the Limine manifest is missing or invalid. Nothing is written or installed from it. |
 | `stage_failed` | `failed`, `5` | An operation failed or its immediate-effect check failed; `operation` names it and `child_exit_status` keeps the original status. |
 | `postcondition_failed` | `not_verified`, `4` | The postconditions suite finished with at least one failed check. `operation` is `postconditions`; `message` names the first failed check by its id and states what was expected and observed (the non-secret `detail`); `next_step` states that the installed system must not be relied on, that the run directory holds the full result, and that a new installation attempt is a new run. One reason per failed check, in suite order. |
-| `engine_interrupted` | `failed`, `128+n` | A signal arrived during the engine. |
+| `engine_interrupted` | `failed`, `128+n` | A signal arrived outside the configure phase. Configure interruptions use `not_configured` and the configure fields instead. |
 
 ## Exit statuses
 
 | Status | Meaning |
 | --- | --- |
-| `0` | `installed`: every operation of the plan completed with status `0`, its apply-time values were validated, and every check of the postconditions suite passed. |
+| `0` | `installed`: every operation of the plan completed with status `0`, its apply-time values were validated, every base postcondition passed, and configure returned `0`. |
 | `2` | `blocked` or `invalidated` before the first destructive operation, or an argument error. The disk is untouched. |
-| `4` | `not_verified`: every operation completed but at least one postcondition failed. The installation is not reported as successful; the target is unmounted by the normal cleanup and every record is retained. |
+| `4` | `not_verified`: every operation completed but at least one base postcondition failed. `not_configured`: base postconditions passed but configure returned `2`–`6`. Neither reports success; normal cleanup unmounts the target and retains records. |
 | `5` | An external tool failed unexpectedly, including a postconditions checker that did not return a valid result. |
 | `6` | Damaged code, embedded identity, configuration asset, or prebuilt package. |
-| `128+n` | Termination by signal `n` during the engine. |
+| `128+n` | Termination by signal `n` outside the configure phase. |
 
-Exit `4` is distinct from `5`: `5` means a step could not be executed; `4` means every step ran and the resulting
-configuration was found inconsistent or incomplete. `not_verified` is never converted into `installed` or into `5`.
+Exit `4` is allowed only for `not_verified` and `not_configured`: the base operations completed, but verification
+or environment configuration did not establish readiness. A configure command failure is recorded as
+`not_configured`/`4`, preserving its own outcome rather than reporting an engine operation failure.
+`not_verified` is never converted into `installed` or into `5`.
 
 ## Postconditions
 
@@ -312,19 +321,59 @@ document and stores it in `engine-run.json` `postconditions`.
 
 | Checker status | Engine result |
 | --- | --- |
-| `0` | Outcome `installed`, exit `0`. |
+| `0` | Continue to the configure phase; do not report `installed` yet. |
 | `4` | Outcome `not_verified`, exit `4`, with one `postcondition_failed` reason per failed check. |
 | Any other status, a missing or invalid result | Outcome `failed`, exit `5`, reason `stage_failed`, operation `postconditions`, with the checker's status in `child_exit_status`. |
 
-The engine runs its terminal cleanup after the phase in every case: `swapoff` of an active swapfile beneath the
+The engine runs its terminal cleanup after configure when the checker passes, or immediately when the checker
+fails or returns an invalid result: `swapoff` of an active swapfile beneath the
 mount point and `umount -R` of the mount point, recorded in `cleanup`. A `not_verified` run therefore leaves the
 target disk written and unmounted, with the engine records under `--output`. There is no retry of the phase, no
 repair of a failed check, no remounting by the assistant, and no resume.
 
-The user-facing message for `installed` states that the base system was installed and that the configuration checks
-passed before the first restart; it never claims that the installed system was booted or that every capability
-works. For `not_verified` the message states that installation finished but could not be verified, names the failed
-check, and states that the disk was modified.
+The user-facing message for `installed` states "Base system verified and graphical environment configured."
+It never claims that the installed system was booted or that every capability works. For `not_verified` the
+message states that installation finished but could not be verified, names the failed check, and states that the
+disk was modified.
+
+## Configure phase
+
+Only after the base postconditions pass, while the target remains mounted and the installer lock held, the
+engine sets `current` to `configure`. This is a fixed engine phase, not an installation-plan operation; it is
+bound to approval through the artifact's code identity and does not change the plan schema or format.
+
+Before invoking configure, the engine copies `operations/configure`, `operations/lib/lifecycle-discovery.sh`,
+`capabilities/`, and `identity.json` from its embedded code into the target's `/usr/local/lib/mirroros/`.
+The copy is root-owned: directories and executables are `0755`, other files `0644`. It creates the root-owned
+launcher `/usr/local/bin/mirroros-configure` pointing to `/usr/local/lib/mirroros/operations/configure`.
+The copy is available for recovery even if configure fails; it is never synchronized or updated automatically.
+
+The engine invokes its live embedded entry point, not the target copy:
+
+```text
+operations/configure --target-root /run/mirroros/target --user <create_user user_name>
+```
+
+Standard input is `/dev/null`, and neither fd 3 nor fd 4 is inherited. Helpers enter the target through
+`arch-chroot` for package, user, and unit commands; package transactions use `SNAP_PAC_SKIP=y` to avoid
+installation-time snap-pac snapshots. SDDM is enabled, never started. See the
+[configure procedure](../docs/procedures/configure.md) for validation and helper boundaries.
+
+Combined output is appended line by line to `engine.log`. Markers `== <k>/<total> <step> ==` update the optional
+`configure_step` and `configure_position` state fields. The engine locates evidence created by this invocation
+under the target's `/var/log/mirroros/configure/` and reads the failed step from `configure-run.tsv`.
+
+Outcome `0` continues to `installed`/`0`. Outcomes `2`–`6` end `not_configured`/`4`, recording
+`configure_outcome`, `configure_failed_step`, and `configure_evidence`. This outcome requires passed base
+postconditions and no pending plan operation. Code-copy failure is recorded with configure outcome `6`;
+step and evidence strings can be empty when failure precedes their creation. Normal cleanup runs on every
+terminal path. Configure never runs after a failed base postcondition, and no live-medium retry is offered:
+boot the installed system, log in at the console, and run `sudo mirroros-configure`.
+
+During configure, SIGINT, SIGTERM, and SIGHUP reach configure in the engine's process group. The engine does not
+invoke its normal `on_signal` path or forward a duplicate signal: it waits for configure to finish before
+cleanup and records `not_configured` with configure's outcome (`3` for SIGINT; `5` for SIGTERM or SIGHUP).
+An unhandled child signal status is normalized correspondingly; other unexpected child statuses become `6`.
 
 ## Failure, interruption, and cleanup
 
@@ -340,7 +389,7 @@ On a failure or a signal the engine runs best-effort, non-destructive cleanup: `
 beneath the mount point and `umount -R` of the mount point. It never wipes again, never undoes changes, and never
 touches a mount outside its own. A cleanup failure is recorded without masking the original error.
 
-SIGINT, SIGTERM, and SIGHUP received by the engine run that cleanup and end the run `failed` with
+Outside the configure phase, SIGINT, SIGTERM, and SIGHUP received by the engine run that cleanup and end the run `failed` with
 `engine_interrupted` and the status `128+n`. The assistant starts the engine in its own process group, forwards
 those signals to it during the engine phase, and waits for its cleanup.
 

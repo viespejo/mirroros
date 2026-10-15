@@ -17,7 +17,7 @@ usage_error() {
   exit 2
 }
 
-for library in common precheck storage btrfs system accounts boot limine; do
+for library in common precheck storage btrfs system accounts boot limine configure; do
   # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.
   source "${SCRIPT_DIR}/lib/${library}.sh" 2> /dev/null || {
     printf 'MirrorOS engine: the embedded engine code is damaged: lib/%s.sh could not be loaded.\n' "$library" >&2

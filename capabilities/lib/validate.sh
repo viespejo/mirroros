@@ -6,19 +6,24 @@ cfg_parse() {
   local invalid=0
   while (( $# )); do
     case "$1" in
-      --user|--output)
+      --user|--output|--target-root)
         if (( $# < 2 )) || [[ -z "$2" || "$2" == --* ]]; then
           printf 'MirrorOS configure: %s requires a value.\n' "$1" >&2
           invalid=1
           shift
           continue
         fi
-        case "$1" in --user) TARGET_USER="$2" ;; --output) CFG_OUTPUT="$2" ;; esac
+        case "$1" in
+          --user) TARGET_USER="$2"; CFG_USER_GIVEN=1 ;;
+          --output) CFG_OUTPUT="$2" ;;
+          --target-root) CONFIGURE_CONTEXT=target; CONFIGURE_ROOT="$2" ;;
+        esac
         shift 2 ;;
       --refresh) CFG_REFRESH=1; shift ;;
       *) printf 'MirrorOS configure: unsupported argument(s); use --help.\n' >&2; invalid=1; shift ;;
     esac
   done
+  if [[ "$CONFIGURE_CONTEXT" == target && "$CFG_USER_GIVEN" == 0 ]]; then TARGET_USER=''; fi
   (( invalid == 0 ))
 }
 
@@ -38,7 +43,10 @@ cfg_keyboard_validate() {
     done < "$(cfg_path /etc/vconsole.conf)"
   fi
   CFG_LAYOUT="${layout:-${keymap:-us}}"
-  listing="$(cfg_path /usr/share/X11/xkb/rules/base.lst)"
+  listing="$(cfg_path /usr/share/xkeyboard-config-2/rules/base.lst)"
+  if [[ ! -r "$listing" && ! -L "$(cfg_path /usr/share/X11/xkb)" ]]; then
+    listing="$(cfg_path /usr/share/X11/xkb/rules/base.lst)"
+  fi
   if [[ ! -r "$listing" ]]; then
     cfg_problem 'XKB layout data is missing; install the MirrorOS base package xkeyboard-config before rerunning.'
   elif ! awk -v layout="$CFG_LAYOUT" '
@@ -63,23 +71,69 @@ cfg_lock() {
 
 cfg_validate() {
   local tool uid='' user_uid='' step name repository extra resolved actual_name version actual_repository
-  local missing=0 upgrades='' query_status=0 tools_ok=1 resolved_match=0
+  local missing=0 upgrades='' query_status=0 tools_ok=1 resolved_match=0 context_ok=1
   if ! uid="$(id -u)" || [[ "$uid" != 0 ]]; then cfg_problem 'Run configure as root using sudo.'; fi
-  for tool in bash pacman flock runuser systemctl install id awk grep cmp dirname mkdir chmod chown \
-    ln readlink rm mv cat date find sort stat mktemp; do
-    if ! command -v "$tool" > /dev/null 2>&1; then
-      cfg_problem "Missing base tool: $tool; restore the base installation."
+  if [[ "$CONFIGURE_CONTEXT" == target ]]; then
+    if [[ ${MIRROROS_CONFIGURE_ROOT+x} ]]; then
+      cfg_problem '--target-root cannot be combined with MIRROROS_CONFIGURE_ROOT.'
+      context_ok=0
+    fi
+    if [[ "$CONFIGURE_ROOT" != /* ]]; then
+      cfg_problem '--target-root must be an absolute path.'
+      context_ok=0
+    fi
+    if [[ ! -d "$CONFIGURE_ROOT" ]]; then
+      cfg_problem '--target-root must be an existing directory.'
+      context_ok=0
+    elif [[ "$CONFIGURE_ROOT" -ef / ]]; then
+      cfg_problem '--target-root must not be /.'
+      context_ok=0
+    fi
+    for tool in arch-chroot flock mountpoint; do
+      if ! command -v "$tool" > /dev/null 2>&1; then
+        cfg_problem "Missing live-medium tool: $tool; restore the installation medium."
+        tools_ok=0
+        context_ok=0
+      fi
+    done
+    if command -v mountpoint > /dev/null 2>&1 && ! mountpoint -q -- "$CONFIGURE_ROOT"; then
+      cfg_problem '--target-root must be a mount point.'
+      context_ok=0
+    fi
+    if (( context_ok )); then
+      CONFIGURE_ROOT="${CONFIGURE_ROOT%/}"
+      CFG_TARGET_VALID=1
+    fi
+  fi
+  if (( context_ok )); then
+    for tool in bash pacman runuser systemctl install id awk grep cmp dirname mkdir chmod chown \
+      ln readlink rm mv cat date find sort stat mktemp; do
+      # shellcheck disable=SC2016 # The target Bash resolves its own tool path from the positional argument.
+      if ! cfg_exec bash -c 'command -v "$1"' bash "$tool" > /dev/null 2>&1; then
+        cfg_problem "Missing base tool: $tool; restore the base installation."
+        tools_ok=0
+      fi
+    done
+    if [[ "$CONFIGURE_CONTEXT" == running ]] && ! command -v flock > /dev/null 2>&1; then
+      cfg_problem 'Missing base tool: flock; restore the base installation.'
       tools_ok=0
     fi
-  done
-  if [[ -z "$TARGET_USER" ]]; then
-    cfg_problem 'Target user is missing; use sudo or --user <name>.'
-  elif [[ ! "$TARGET_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*\$?$ ]] || ! user_uid="$(id -u -- "$TARGET_USER" 2>/dev/null)"; then
-    cfg_problem 'Target user does not exist or has an invalid name; use --user <name>.'
-  elif [[ "$user_uid" == 0 || "$TARGET_USER" == root ]]; then
-    cfg_problem 'Target user must not be root; use --user <non-root-user>.'
   fi
-  if [[ "$uid" == 0 && "$tools_ok" == 1 ]]; then cfg_lock; fi
+  if [[ -z "$TARGET_USER" ]]; then
+    cfg_problem 'Target user is missing; use --user <name> (mandatory with --target-root).'
+  elif [[ "$TARGET_USER" == root ]]; then
+    cfg_problem 'Target user must not be root; use --user <non-root-user>.'
+  elif [[ ! "$TARGET_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*\$?$ ]]; then
+    cfg_problem 'Target user does not exist or has an invalid name; use --user <name>.'
+  elif (( context_ok )); then
+    if ! user_uid="$(cfg_exec id -u -- "$TARGET_USER" 2>/dev/null)" ||
+      { [[ "$CONFIGURE_CONTEXT" == target ]] && ! awk -F: -v user="$TARGET_USER" '$1 == user { found=1 } END { exit !found }' "$(cfg_path /etc/passwd)"; }; then
+      cfg_problem 'Target user does not exist or has an invalid name; use --user <name>.'
+    elif [[ "$user_uid" == 0 ]]; then
+      cfg_problem 'Target user must not be root; use --user <non-root-user>.'
+    fi
+  fi
+  if [[ "$uid" == 0 && "$tools_ok" == 1 && "$context_ok" == 1 ]]; then cfg_lock; fi
   if [[ -n "$CFG_OUTPUT" ]]; then
     if [[ -L "$CFG_OUTPUT" || ( -e "$CFG_OUTPUT" && ! -d "$CFG_OUTPUT" ) ]]; then
       cfg_problem '--output must be an absent or empty directory, not a symbolic link.'
@@ -87,11 +141,11 @@ cfg_validate() {
       cfg_problem '--output must be absent or empty; select a new directory.'
     fi
   fi
-  cfg_keyboard_validate
-  if ! compgen -G "$(cfg_path /var/lib/pacman/sync)/*.db" > /dev/null; then
+  if (( context_ok )); then cfg_keyboard_validate; fi
+  if (( context_ok )) && ! compgen -G "$(cfg_path /var/lib/pacman/sync)/*.db" > /dev/null; then
     cfg_problem 'Sync databases are absent; run sudo pacman -Syu before configuring.'
   fi
-  if command -v pacman > /dev/null 2>&1; then
+  if (( context_ok )) && cfg_exec bash -c 'command -v pacman' > /dev/null 2>&1; then
     for step in "${CFG_STEPS[@]}"; do
       while read -r name repository extra || [[ -n "$name" ]]; do
         [[ -n "$name" && "$name" != \#* ]] || continue
@@ -99,7 +153,7 @@ cfg_validate() {
           cfg_problem "Invalid package declaration in $step/packages; use <name> <official-repository>."
           continue
         fi
-        if ! resolved="$(pacman -Sp --print-format '%r %n %v' -- "$repository/$name" 2>/dev/null)"; then
+        if ! resolved="$(cfg_exec pacman -Sp --print-format '%r %n %v' -- "$repository/$name" 2>/dev/null)"; then
           cfg_problem "Package $name was not found in $repository; check sync databases and the declaration."
         else
           actual_repository='' actual_name='' version='' resolved_match=0
@@ -113,7 +167,7 @@ cfg_validate() {
             cfg_problem "Package $name does not resolve to declared repository $repository."
           fi
         fi
-        if pacman -Q -- "$name" > /dev/null 2>&1; then
+        if cfg_exec pacman -Q -- "$name" > /dev/null 2>&1; then
           CFG_INSTALLED["$name"]=1
         else
           CFG_INSTALLED["$name"]=0
@@ -122,7 +176,7 @@ cfg_validate() {
       done < "$CAPABILITIES_DIR/$step/packages"
     done
     if (( missing && ! CFG_REFRESH )); then
-      upgrades="$(pacman -Qu 2>&1)" || query_status=$?
+      upgrades="$(cfg_exec pacman -Qu 2>&1)" || query_status=$?
       # pacman uses status 1 for an empty query; unexpected failures are not an empty guard.
       if (( query_status > 1 )) || { (( query_status == 1 )) && [[ -n "$upgrades" ]]; }; then
         CFG_GUARD=failed

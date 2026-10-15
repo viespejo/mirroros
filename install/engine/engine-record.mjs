@@ -4,11 +4,11 @@ import { pathToFileURL } from 'node:url';
 
 import { validateResult } from '../postconditions/evaluate.mjs';
 
-export const ENGINE_RUN_FORMAT_VERSION = 2;
-export const ENGINE_STATE_FORMAT_VERSION = 2;
+export const ENGINE_RUN_FORMAT_VERSION = 3;
+export const ENGINE_STATE_FORMAT_VERSION = 3;
 export const POSTCONDITIONS_OPERATION = 'postconditions';
-export const STATE_STATUSES = ['running', 'installed', 'not_verified', 'failed', 'blocked', 'invalidated'];
-export const RUN_OUTCOMES = ['installed', 'not_verified', 'blocked', 'invalidated', 'failed'];
+export const STATE_STATUSES = ['running', 'installed', 'not_verified', 'not_configured', 'failed', 'blocked', 'invalidated'];
+export const RUN_OUTCOMES = ['installed', 'not_verified', 'not_configured', 'blocked', 'invalidated', 'failed'];
 export const OPERATION_STATUSES = ['pending', 'running', 'completed', 'failed'];
 
 const SECRET_KEY = /password|passphrase|secret|token/i;
@@ -26,11 +26,11 @@ function assertNoSecretKeys(value, path = 'document') {
 
 export function validateState(state) {
   const errors = [];
-  if (state.format_version !== ENGINE_STATE_FORMAT_VERSION) errors.push('format_version must be 2');
+  if (state.format_version !== ENGINE_STATE_FORMAT_VERSION) errors.push('format_version must be 3');
   if (!STATE_STATUSES.includes(state.status)) errors.push('status is not allowed');
   if (!Number.isInteger(state.index) || state.index < 0) errors.push('index must be a non-negative integer');
   if (!Number.isInteger(state.total) || state.total < 0) errors.push('total must be a non-negative integer');
-  if (!Array.isArray(state.operations) || state.operations.length !== state.total) errors.push('operations must list every operation');
+  if (!Array.isArray(state.operations) || state.operations.length + 1 !== state.total) errors.push('operations must list every operation');
   else {
     for (const operation of state.operations) {
       if (typeof operation.id !== 'string' || typeof operation.description !== 'string'
@@ -40,13 +40,19 @@ export function validateState(state) {
   if (state.packages_installed !== undefined && !(Number.isInteger(state.packages_installed) && state.packages_installed >= 0)) {
     errors.push('packages_installed must be a non-negative integer');
   }
+  if (state.configure_step !== undefined && typeof state.configure_step !== 'string') errors.push('configure_step must be a string');
+  if (state.configure_position !== undefined && (typeof state.configure_position !== 'string'
+    || !/^[1-9]\d*\/[1-9]\d*$/.test(state.configure_position)
+    || Number(state.configure_position.split('/')[0]) > Number(state.configure_position.split('/')[1]))) {
+    errors.push('configure_position must be k/total');
+  }
   if (typeof state.updated_at !== 'string') errors.push('updated_at is missing');
   return errors;
 }
 
 export function validateRun(run) {
   const errors = [];
-  if (run.format_version !== ENGINE_RUN_FORMAT_VERSION) errors.push('format_version must be 2');
+  if (run.format_version !== ENGINE_RUN_FORMAT_VERSION) errors.push('format_version must be 3');
   if (!RUN_OUTCOMES.includes(run.outcome)) errors.push('outcome is not allowed');
   if (!Number.isInteger(run.exit_status) || run.exit_status < 0 || run.exit_status > 255) errors.push('exit_status must be 0..255');
   for (const key of ['started_at', 'finished_at']) if (typeof run[key] !== 'string') errors.push(`${key} is missing`);
@@ -55,6 +61,15 @@ export function validateRun(run) {
     errors.push('an installed run has status 0, no reasons, and no pending operation');
   }
   if (run.outcome === 'installed' && run.postconditions?.status !== 'passed') errors.push('an installed run has passed postconditions');
+  if (run.outcome === 'installed' && run.configure_outcome !== 0) errors.push('an installed run has configure_outcome 0');
+  if (run.outcome === 'not_configured') {
+    if (run.exit_status !== 4) errors.push('a not_configured run exits 4');
+    if (run.postconditions?.status !== 'passed') errors.push('a not_configured run has passed postconditions');
+    if (!Array.isArray(run.not_started) || run.not_started.length > 0) errors.push('a not_configured run has no pending operation');
+    if (!Number.isInteger(run.configure_outcome) || run.configure_outcome < 2 || run.configure_outcome > 6) errors.push('configure_outcome must be 2..6');
+    if (typeof run.configure_evidence !== 'string') errors.push('configure_evidence must be a string');
+    if (typeof run.configure_failed_step !== 'string') errors.push('configure_failed_step must be a string');
+  }
   if (run.outcome === 'not_verified') {
     if (run.exit_status !== 4) errors.push('a not_verified run exits 4');
     if (run.postconditions?.status !== 'failed') errors.push('a not_verified run has failed postconditions');
@@ -63,7 +78,7 @@ export function validateRun(run) {
       errors.push('a not_verified run has one postcondition_failed reason per failed check');
     }
   }
-  if (run.exit_status === 4 && run.outcome !== 'not_verified') errors.push('only a not_verified run exits 4');
+  if (run.exit_status === 4 && !['not_verified', 'not_configured'].includes(run.outcome)) errors.push('only a not_verified or not_configured run exits 4');
   if (run.postconditions !== undefined) {
     for (const problem of validateResult(run.postconditions)) errors.push(`postconditions: ${problem}`);
   }
@@ -98,7 +113,7 @@ function list(value) {
   return value === undefined || value === '' ? [] : value.split(',');
 }
 
-export function buildState({ operations, status, current, completed, failed, packages, now }) {
+export function buildState({ operations, status, current, completed, failed, packages, configureStep, configurePosition, now }) {
   const done = new Set(completed);
   const states = operations.map(operation => {
     let operationStatus = 'pending';
@@ -112,10 +127,12 @@ export function buildState({ operations, status, current, completed, failed, pac
     format_version: ENGINE_STATE_FORMAT_VERSION,
     status,
     ...(current === undefined ? {} : { current }),
-    index: current === POSTCONDITIONS_OPERATION ? operations.length : position === -1 ? done.size : position + 1,
-    total: operations.length,
+    index: current === 'configure' || status === 'installed' ? operations.length + 1 : current === POSTCONDITIONS_OPERATION ? operations.length : position === -1 ? done.size : position + 1,
+    total: operations.length + 1,
     operations: states,
     ...(packages === undefined ? {} : { packages_installed: packages }),
+    ...(configureStep === undefined ? {} : { configure_step: configureStep }),
+    ...(configurePosition === undefined ? {} : { configure_position: configurePosition }),
     updated_at: now,
   };
   return state;
@@ -204,6 +221,9 @@ export function buildRun({ planText, options, now }) {
     };
   }
   if (postconditions !== undefined) run.postconditions = postconditions;
+  if (options['configure-outcome'] !== undefined) run.configure_outcome = Number(options['configure-outcome'][0]);
+  if (options['configure-failed-step'] !== undefined) run.configure_failed_step = options['configure-failed-step'][0];
+  if (options['configure-evidence'] !== undefined) run.configure_evidence = options['configure-evidence'][0];
   const resolved = pairs(options.resolved, 'resolved');
   if (Object.keys(resolved).length > 0) {
     if (resolved.resume_offset !== undefined) resolved.resume_offset = Number(resolved.resume_offset);
@@ -248,6 +268,8 @@ function main(args) {
       completed: list(options.completed?.[0]),
       failed: options.failed?.[0],
       packages: options.packages === undefined ? undefined : Number(options.packages[0]),
+      configureStep: options['configure-step']?.[0],
+      configurePosition: options['configure-position']?.[0],
       now,
     });
     writeAtomic(join(output, 'state.json'), state, validateState);

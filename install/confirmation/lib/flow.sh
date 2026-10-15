@@ -718,6 +718,27 @@ flow_failure_menu() {
   done
 }
 
+flow_configure_menu() {
+  local choice status step
+
+  flow_leave_interactive
+  step="$(flow_assistant get "${FLOW_RUN_DIR}/engine/engine-run.json" configure_failed_step)" || step=unknown
+  while true; do
+    ui_not_configured "$step" "$FLOW_RUN_DIR"
+    status=0
+    choice=$(gum choose --show-help --height 4 --selected 'Return to shell' 'View configure log' 'Restart' 'Return to shell' 'Power off') || status=$?
+    ((status == 0)) || return 0
+    case "$choice" in
+      'View configure log')
+        sed -n '/^== configure ==$/,$p' "${FLOW_RUN_DIR}/engine/engine.log" | gum pager || true
+        ;;
+      Restart) flow_power_action reboot; return 0 ;;
+      'Power off') flow_power_action poweroff; return 0 ;;
+      *) return 0 ;;
+    esac
+  done
+}
+
 # One invocation of the engine (install/engine/apply). The password reaches it only on fd 3, through process
 # substitution with the printf builtin, and this process drops its own copy once the engine has started. The
 # installer lock is inherited as fd 4. The engine runs with stdin /dev/null, in its own process group, and the
@@ -762,6 +783,10 @@ flow_engine() {
       FLOW_EXIT_MENU=flow_success_menu
       ui_success "$((SECONDS - started))"
       flow_finish 0 installed engine "$reasons"
+      ;;
+    not_configured)
+      FLOW_EXIT_MENU=flow_configure_menu
+      flow_finish 4 not_configured engine "$reasons"
       ;;
     not_verified)
       FLOW_ENGINE_UNVERIFIED=true

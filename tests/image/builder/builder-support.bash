@@ -22,6 +22,7 @@ builder_setup() {
   cp -a -- "${BUILDER_TEST_SOURCE_ROOT}/operations" "$BUILDER_REPOSITORY_ROOT/"
   cp -a -- \
     "${BUILDER_TEST_SOURCE_ROOT}/install" \
+    "${BUILDER_TEST_SOURCE_ROOT}/capabilities" \
     "${BUILDER_TEST_SOURCE_ROOT}/hardware" \
     "${BUILDER_TEST_SOURCE_ROOT}/targets" \
     "$BUILDER_REPOSITORY_ROOT/"
@@ -34,7 +35,7 @@ builder_setup() {
   git -C "$BUILDER_REPOSITORY_ROOT" init -q
   git -C "$BUILDER_REPOSITORY_ROOT" config user.name 'MirrorOS contract tests'
   git -C "$BUILDER_REPOSITORY_ROOT" config user.email 'mirroros-contract-tests@example.invalid'
-  git -C "$BUILDER_REPOSITORY_ROOT" -c commit.gpgsign=false add -- operations image install hardware targets
+  git -C "$BUILDER_REPOSITORY_ROOT" -c commit.gpgsign=false add -- operations image install hardware targets capabilities
   GIT_AUTHOR_NAME='MirrorOS contract tests' \
     GIT_AUTHOR_EMAIL='mirroros-contract-tests@example.invalid' \
     GIT_COMMITTER_NAME='MirrorOS contract tests' \

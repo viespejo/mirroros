@@ -5,6 +5,8 @@ CONFIGURE_CONTEXT=running
 CONFIGURE_ROOT="${MIRROROS_CONFIGURE_ROOT:-/}"
 CONFIGURE_ROOT="${CONFIGURE_ROOT%/}"
 TARGET_USER="${SUDO_USER:-}"
+CFG_USER_GIVEN=0
+CFG_TARGET_VALID=0
 CFG_REFRESH=0
 CFG_OUTPUT=''
 CFG_STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf unavailable)"
@@ -21,10 +23,18 @@ cfg_path() { printf '%s%s' "$CONFIGURE_ROOT" "$1"; }
 
 cfg_context() {
   case "$CONFIGURE_CONTEXT" in
-    running) ;;
-    target) printf '%s\n' 'MirrorOS configure: target context pending plan 02-16.' >&2; exit 6 ;;
+    running|target) ;;
     *) printf '%s\n' 'MirrorOS configure: invalid execution context.' >&2; exit 6 ;;
   esac
+}
+
+cfg_exec() {
+  cfg_context
+  if [[ "$CONFIGURE_CONTEXT" == target ]]; then
+    arch-chroot "$CONFIGURE_ROOT" "$@"
+  else
+    "$@"
+  fi
 }
 
 cfg_log() {
@@ -42,6 +52,13 @@ cfg_run() {
   cfg_context
   cfg_log "$*"
   # Only commands owned by these helpers are logged; never enable xtrace or dump user files.
+  (umask 022; cfg_exec "$@") < /dev/null >> "$CFG_OUTPUT/configure.log" 2>&1
+}
+
+# System files and links use live-medium paths, not paths inside arch-chroot.
+cfg_run_host() {
+  cfg_context
+  cfg_log "$*"
   (umask 022; "$@") < /dev/null >> "$CFG_OUTPUT/configure.log" 2>&1
 }
 
@@ -78,14 +95,15 @@ cfg_finish() {
 }
 
 cfg_execute() {
-  local step child_status
+  local step child_status position=0 total=${#CFG_STEPS[@]}
   trap 'cfg_finish 3 "interrupted by SIGINT"' INT
   trap 'cfg_finish 5 "terminated by SIGTERM"' TERM
   trap 'cfg_finish 5 "terminated by SIGHUP"' HUP
   trap 'cfg_finish 5 "command failed (child status $?)"' ERR
   for step in "${CFG_STEPS[@]}"; do
     CFG_CURRENT="$step"
-    cfg_log "== $step =="
+    position=$((position + 1))
+    cfg_log "== $position/$total $step =="
     rm -f -- "$CFG_OUTPUT/.changed"
     child_status=0
     # A foreground step receives terminal SIGINT normally. A conditional subshell would

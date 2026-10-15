@@ -2,6 +2,9 @@ load support
 
 setup() {
   confirm_setup
+  cp -a "${CONFIRM_SOURCE_ROOT}/capabilities" "$CODE_ROOT/"
+  install -m 0755 "${CONFIRM_ENGINE_SUPPORT}/doubles/configure" "${CODE_ROOT}/operations/configure"
+  ln -s "${CONFIRM_ENGINE_SUPPORT}/doubles/engine-double" "${DOUBLE_BIN}/chown"
   confirm_scenario reference-vm-empty
 }
 
@@ -116,7 +119,8 @@ approve_plan_script() {
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.reasons.length === 0"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "!('reason' in d)"
   confirm_assert_output_contains 'Installed MirrorOS in'
-  confirm_assert_output_contains 'Base system installed. Configuration checks passed before the first restart.'
+  confirm_assert_output_contains 'Base system verified and graphical environment configured.'
+  confirm_assert_gum_called 'After the base system is verified, the graphical environment is configured.'
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.outcome === 'installed' && d.exit_status === 0 && d.not_started.length === 0"
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.plan_digest === JSON.parse(require('node:fs').readFileSync('${RUN_DIR}/plans/01/installation-plan.json', 'utf8')).digest.value"
   confirm_json_assert "${RUN_DIR}/engine/state.json" "d.status === 'installed'"
@@ -126,7 +130,7 @@ approve_plan_script() {
   [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.txt" ]
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.storage_option === 'ext4-systemd-boot' && Object.keys(d).length === 2"
-  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 5 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 6 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password,discovery_final,engine'"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "/^[0-9a-f]{64}$/.test(d.digest) && d.outcome === 'installed'"
@@ -882,6 +886,28 @@ swap_scenario_hook() {
   confirm_assert_output_contains 'pacstrap: simulated failure'
   ! grep -qE '^systemctl (reboot|poweroff)' "${DOUBLE_STATE}/calls.log"
   confirm_assert_gum_not_called 'Installed MirrorOS'
+  confirm_assert_no_canary
+  confirm_assert_private
+}
+
+@test "configure failure shows D22 and its log menu without a live retry" {
+  printf '%s\n' 5 > "${DOUBLE_STATE}/configure-status"
+  queue_to_review
+  confirm_queue choose '0|Continue to confirmation' '0|View configure log' '0|Return to shell'
+  confirm_queue confirm 0
+  confirm_queue input '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 4 ]
+  confirm_assert_run 4 not_configured
+  confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.format_version === 3 && d.configure_outcome === 5 && d.configure_failed_step === 'desktop/compositor/providers/hyprland'"
+  confirm_assert_gum_called 'Base system installed and verified; environment configuration failed at step'
+  confirm_assert_gum_called 'sudo mirroros-configure'
+  confirm_assert_gum_called 'View configure log Restart Return to shell Power off'
+  confirm_assert_gum_called 'pager'
+  confirm_assert_gum_not_called 'Installed MirrorOS'
+  confirm_assert_gum_not_called 'Retry'
+  [ "$(grep -c '^configure ' "${DOUBLE_STATE}/calls.log")" -eq 1 ]
+  [ ! -s "${DOUBLE_STATE}/mounted.list" ]
   confirm_assert_no_canary
   confirm_assert_private
 }

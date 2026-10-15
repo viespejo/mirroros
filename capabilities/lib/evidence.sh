@@ -41,7 +41,7 @@ cfg_evidence_init() {
   for name in "${!CFG_RESOLVED[@]}"; do
     read -r name version repository <<< "${CFG_RESOLVED[$name]}"
     if [[ "${CFG_INSTALLED[$name]:-0}" == 1 ]]; then
-      record="$(pacman -Q -- "$name")" || return 1
+      record="$(cfg_exec pacman -Q -- "$name")" || return 1
       version="${record#* }"
     fi
     cfg_package_record "$name" "$version" "$repository"
@@ -63,12 +63,19 @@ cfg_package_record() {
 
 cfg_evidence_finish() {
   local outcome="$1" reason="$2" identity=unavailable dirty=unavailable step mode=default
-  local temporary="$CFG_OUTPUT/.configure-run.tsv"
+  local temporary="$CFG_OUTPUT/.configure-run.tsv" content
+
   if command -v git > /dev/null 2>&1 && [[ -e "$CODE_ROOT/.git" ]]; then
     identity="$(git -C "$CODE_ROOT" rev-parse HEAD 2>/dev/null)" || identity=unavailable
     dirty="$(git -C "$CODE_ROOT" status --porcelain 2>/dev/null)" || dirty=unavailable
     if [[ "$dirty" != unavailable ]]; then
       if [[ -n "$dirty" ]]; then dirty=yes; else dirty=no; fi
+    fi
+  elif [[ -r "$CODE_ROOT/identity.json" ]]; then
+    content="$(< "$CODE_ROOT/identity.json")"
+    if [[ "$content" =~ \"commit\"[[:space:]]*:[[:space:]]*\"([0-9a-f]{40})\" ]]; then identity="${BASH_REMATCH[1]}"; fi
+    if [[ "$content" =~ \"dirty\"[[:space:]]*:[[:space:]]*(true|false) ]]; then
+      if [[ "${BASH_REMATCH[1]}" == true ]]; then dirty=yes; else dirty=no; fi
     fi
   fi
   (( CFG_REFRESH == 0 )) || mode=refresh

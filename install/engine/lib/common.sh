@@ -44,6 +44,11 @@ ESP_UUID=''
 ROOT_UUID=''
 RESUME_OFFSET=''
 PACKAGE_COUNT=''
+CONFIGURE_OUTCOME=''
+CONFIGURE_STEP=''
+CONFIGURE_POSITION=''
+CONFIGURE_FAILED_STEP=''
+CONFIGURE_EVIDENCE=''
 
 # Paths below the test root; with the default root they are the real paths.
 sys_path() {
@@ -76,6 +81,8 @@ write_state() {
   [[ -z "$current" ]] || arguments+=(--current "$current")
   [[ -z "$failed" ]] || arguments+=(--failed "$failed")
   [[ -z "$PACKAGE_COUNT" || "$current" != install_packages ]] || arguments+=(--packages "$PACKAGE_COUNT")
+  [[ -z "$CONFIGURE_STEP" ]] || arguments+=(--configure-step "$CONFIGURE_STEP")
+  [[ -z "$CONFIGURE_POSITION" ]] || arguments+=(--configure-position "$CONFIGURE_POSITION")
   node_helper engine-record.mjs state "${arguments[@]}" || true
 }
 
@@ -214,6 +221,10 @@ finish() {
     for item in "${MIRROR_SERVERS[@]}"; do arguments+=(--server "$item"); done
     [[ -z "$MIRRORLIST_SHA256" ]] || arguments+=(--mirrorlist-sha256 "$MIRRORLIST_SHA256")
     [[ -z "$POSTCONDITIONS_JSON" ]] || arguments+=(--postconditions "$POSTCONDITIONS_JSON")
+    [[ -z "$CONFIGURE_OUTCOME" ]] || arguments+=(--configure-outcome "$CONFIGURE_OUTCOME")
+    if [[ "$outcome" == not_configured ]]; then
+      arguments+=(--configure-failed-step "$CONFIGURE_FAILED_STEP" --configure-evidence "$CONFIGURE_EVIDENCE")
+    fi
     for item in "${CONSTANTS[@]}"; do arguments+=(--constant "$item"); done
     for item in "${CLEANUP[@]}"; do arguments+=(--cleanup "$item"); done
     node_helper engine-record.mjs run "${arguments[@]}" || status=6
@@ -225,7 +236,7 @@ finish() {
 
 # The postconditions phase (contracts/installation-engine.md, "Postconditions"): after the last operation and before
 # the terminal cleanup, the read-only checker inspects the still-mounted target and its answer decides the outcome.
-# Every path ends in finish: installed (0), not_verified (4), or failed (5) when the checker gave no valid answer.
+# A passed check continues to configure; other paths end in not_verified (4) or failed (5) for an invalid answer.
 # A not_verified run is never retried, repaired, or converted into success or into status 5.
 run_postconditions() {
   local result status=0 verdict failed first
@@ -248,7 +259,10 @@ run_postconditions() {
   fi
   POSTCONDITIONS_JSON="$result"
   CURRENT_OP=''
-  if [[ "$status" == 0 ]]; then finish installed 0; fi
+  if [[ "$status" == 0 ]]; then
+    run_configure
+    finish installed 0
+  fi
   failed="${verdict#valid:}"
   first="${failed%%,*}"
   finish not_verified 4 '' postconditions \

@@ -6,7 +6,7 @@ ENGINE_PLAN_FIXTURES="${ENGINE_SOURCE_ROOT}/tests/fixtures/plan"
 ENGINE_CANARY='PLANTED-ENGINE-SECRET-0001'
 ENGINE_COMMIT='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
-  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep findmnt pacman lsinitcpio lsattr)
+  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep findmnt pacman lsinitcpio lsattr chown)
 
 ENGINE_STATUS=0
 ENGINE_PASSWORD="$ENGINE_CANARY"
@@ -23,6 +23,9 @@ engine_setup() {
   OUTPUT="${TEST_ROOT}/run directory/engine"
   mkdir -p "$CODE_ROOT" "$FIXTURE_ROOT" "$DOUBLE_STATE/out" "$DOUBLE_BIN" "$RUN_ROOT"
   cp -a "${ENGINE_SOURCE_ROOT}/install" "${CODE_ROOT}/install"
+  cp -a "${ENGINE_SOURCE_ROOT}/operations" "${ENGINE_SOURCE_ROOT}/capabilities" "$CODE_ROOT/"
+  cp -- "${ENGINE_SUPPORT_DIR}/doubles/configure" "${CODE_ROOT}/operations/configure"
+  chmod 0755 "${CODE_ROOT}/operations/configure"
   mkdir -p "${CODE_ROOT}/hardware"
   cp -a "${ENGINE_SOURCE_ROOT}/hardware/discovery" "${CODE_ROOT}/hardware/discovery"
   cp -a "${ENGINE_SOURCE_ROOT}/hardware/rules" "${CODE_ROOT}/hardware/rules"
