@@ -326,10 +326,12 @@ teardown() { cfg_test_teardown; }
   [ "$status" -eq 0 ]
   for file in "$CFG_TEST_HOME/.config/hypr/hyprland.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_options = "compose:ralt"' "$file"
-    grep -qF 'repeat_delay = 230' "$file"
-    grep -qF 'repeat_rate = 62' "$file"
     grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua")' "$file"
   done
+  grep -qF 'repeat_delay = 230' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
+  grep -qF 'repeat_rate = 62' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
+  [[ "$(< "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua")" != *repeat_delay* ]]
+  [[ "$(< "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua")" != *repeat_rate* ]]
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland/keyboard.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/keyboard.lua"
   ! grep -qE 'systemctl (start|restart)' "$CFG_TEST_CALLS"
 }

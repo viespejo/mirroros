@@ -3129,3 +3129,68 @@ push or active-host integration is authorized by those acceptances. Candidate pr
 and rerun/persistence evidence remain pending before claiming complete declared reconstruction. Final Task 5 graphical
 review and one privately authenticated real-provider conversation remain required; no credentials or conversation
 content belong in retained evidence.
+
+## Task 4 continuation: amendment application and greeter recovery
+
+This chronological addendum supersedes the previous pending amendment-commit and application statements.
+The separately authorized local commit `a3ab0039c15d640de81ca11c273cf8a9307fb62a`, parent `dbbea439`, contains
+Starship, session/greeter repeat defaults, their contracts and the reconstruction documentation (eight files).
+Bounded validation passed three affected Bats contracts, Bash syntax/ShellCheck, Lua syntax and isolated input
+checks, TOML parsing, whitespace checks and zero-finding source/evidence scans. An initial supplemental Lua
+fixture omitted an existing window-close API mock; it was corrected without changing product code.
+HOST evidence and the verified bundle: `evidence/development-workbench/amendment-validation/20261020T231149Z/`.
+
+The maintainer authorized transfer to a new clean guest checkout `~/code/mirroros-workbench-a3ab003` and two
+attended running configure executions. Bundle hashes matched; no installed snapshot replacement occurred.
+An initial bundle verification outside a Git repository stopped before cloning; verification in the new clone passed.
+Run from that checkout with distinct output directories:
+`sudo operations/configure --user viespejo --output <new-run-directory>`.
+
+- First run `20261020T231454Z-16292285-f0bc-4c3c-adc7-493704ff0933`: clean `a3ab003`, outcome 0,
+  compositor changed, the other seven steps unchanged, all postconditions passed.
+- Second run `20261020T231504Z-03151ecd-7d4b-456d-aa07-ad72b4c96f0a`: same clean source, outcome 0,
+  all eight steps unchanged with passed postconditions and no installation transactions.
+- Package/source TSVs are byte-identical between runs and their mappings match the preceding `dbbea439` running run.
+- Both logs report existing `.pi` preserved and SDDM not started. No private-directory byte audit was performed.
+- HOST evidence: `evidence/development-workbench/amendment-application/20261020T231542Z/{first,second}/`.
+  Its four-record-per-run export passed Gitleaks with zero findings before inspection (8137 bytes).
+- On-disk Starship, user-session and greeter files matched `a3ab003`; the installed code snapshot deliberately
+  remains clean `dbbea439`. Running configure from a new checkout does not replace that snapshot.
+
+### Failed reentry and bounded A/B recovery
+
+The maintainer logged out with Super+Shift+E and attempted graphical reentry. Authentication succeeded, but SDDM
+immediately closed the new user session with helper status 63; the replacement greeter also exited 63.
+The display showed a console login without working keyboard input. Kernel foreground-VT metadata did not match
+the photographed console, and seat0 had no active session. This is not evidence of a keyboard-layout defect.
+The user SDDM session diagnostic file was empty; bounded SDDM/logind/greeter journals did not establish a root cause.
+
+The separately authorized SDDM-only restart at 01:20:31 CEST failed to recover the greeter. No package/provider switch
+or repeated automatic restart was used. The maintainer then authorized one old-greeter A/B test with a protected backup:
+
+- Saved the amended `/usr/share/mirroros/sddm/hyprland.lua` exclusively to
+  `/usr/share/mirroros/sddm/hyprland.lua.before-ab-a3ab003`, root-owned mode 0600.
+- Restored only that active greeter file from the unchanged installed `dbbea439` snapshot, with type/hash guards
+  and atomic publication. Its SHA256 is `7facc9395965adad93096900969cfee087b2bdb696e2c6493b2fb2d4f68d8c74`.
+- Restarted SDDM once at 01:22:30 CEST. The greeter appeared; the maintainer subsequently logged in successfully.
+- The user-session configuration remained byte-identical to `a3ab003`. Fresh Wayland session 75 on VT7 was active;
+  `hyprctl -i 0 getoption input:repeat_delay` and `input:repeat_rate` reported 230 and 62, both explicitly set.
+
+The maintainer accepted this recovery. The A/B observation associates recovery with the old greeter configuration,
+but does not isolate either repeat field or prove a general upstream cause. No bad-configuration replay was performed.
+
+### Reviewed source correction, not yet committed
+
+The maintainer authorized removing both explicit repeat fields only from the greeter in the isolated source clone,
+retaining user-session 230/62, Compose, shared layout resolution and all bindings. The greeter now exactly matches
+the tested old-file SHA256 above. The contract requires repeat values in the session and their absence in the greeter.
+It failed against `a3ab003` as expected, then passed after the minimal correction. `luac -p` and isolated Lua checks
+confirm both input policies. HOST diagnostic evidence:
+`evidence/development-workbench/greeter-correction/20261020T232415Z/`.
+
+The correction and these documentation updates remain uncommitted. They have not been applied through configure in
+the VM; its greeter is still the deliberately restored A/B file. Do not rerun uncorrected `a3ab003` configure: it would
+reapply the failing greeter variant. Further commit, deployment or service/session restart needs separate authorization.
+The ISO still contains `dbbea439`; no rebuild, push or active-host integration occurred. Final reconstruction evidence
+must distinguish the original ISO, explicit checkout-based updates and this diagnostic intervention. Task 4 and the
+Task 5 final graphical/private-provider gate remain open.

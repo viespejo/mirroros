@@ -195,8 +195,10 @@ SDDM display-manager alias, the absence of another enabled display manager, and 
 does not automatically disable conflicting display managers. On outcome `0`, the final informational line says
 the graphical login is available at the next boot. Reboot only after reviewing the outcome and evidence.
 
-Session and greeter keyboard repeat defaults are a 230 ms initial delay and 62 repetitions per second,
-matching the maintainer-approved host behavior. These settings do not change pointer sensitivity.
+The user session's keyboard repeat defaults are a 230 ms initial delay and 62 repetitions per second,
+matching the maintainer-approved host behavior. The greeter retains its compositor repeat defaults: the
+reconstruction A/B check recovered login after removing the explicit repeat fields from that file.
+This does not identify an individual offending field. These settings do not change pointer sensitivity.
 
 ### Right Alt Compose and native overrides
 
