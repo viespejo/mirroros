@@ -25,6 +25,14 @@ install plugins or load NVM at startup. The user Node.js PATH comes from
 The user's login shell becomes `/usr/bin/zsh` only when it is currently Bash; any other
 choice is user-owned and preserved. Bash initialization for Starship stays in place.
 
+## Starship prompt
+
+`starship.toml` carries the maintainer-approved portable host prompt configuration,
+including Nerd Font symbols, vi-mode indicators, module ordering, directory formatting
+and `add_newline = false`. Configure installs it to `~/.config/starship.toml` using the
+same absent-or-marked ownership policy; unrelated files and symbolic links are preserved.
+It contains no credentials or personal paths and does not load host configuration at runtime.
+
 ## Zplug and plugin sources
 
 Zplug is the selected plugin manager. `install-plugins` runs as the target user during

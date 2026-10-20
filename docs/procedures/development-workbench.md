@@ -3031,3 +3031,101 @@ The clean-clone gate remains pending candidate-diff review and separate commit a
 actual host bundle/build outputs or every separate guest acceptance-evidence directory. Real target-root provisioning,
 separate-VM reconstruction, fresh graphical observations and final private-provider acceptance also remain pending.
 No product code changed during these validation/restoration slices and no VM/build/commit/push operation was performed.
+
+## Task 4 continuation: committed candidate and independent graphical reconstruction
+
+This chronological addendum supersedes the earlier pending commit/build/reconstruction statements only for the
+checks recorded here. Task 4 remains in progress; final private-provider acceptance is not implied.
+
+### Candidate, clean clone and build
+
+The separately authorized host-local candidate commit is `dbbea4392c386dc9b6854de06fef2c1b10016016`, based on
+`58523d5d9734249f08f9a3cf1e52de24be26552c`: 91 files, 8846 insertions and 60 deletions. Its message cites plan 02-17
+and the approved Cloud CLI/Atuin scope expansion. No active-host integration or MirrorOS push was performed.
+The preserved source bundle and clean-clone evidence are under HOST
+`evidence/development-workbench/clean-clone/20261020T134300Z/`.
+
+The clean-clone gate passed required files, modes, output/workflow-tooling absence, lifecycle syntax and ShellCheck,
+and the explicitly approved bounded `bats --jobs 2 tests/operations/configure.contract.bats` selection (9/9).
+This test-scope adjustment did not repeat the earlier successful full 64-test operations suite. Current source and
+retained evidence scans reported zero findings. The exact-two historical-canary exception above remains explicit.
+The maintainer also required preserving the original final blank line in
+`capabilities/workflow/pi/defaults/prompts/ubiquitous-language.md`; the precommit full diff check returned native 2
+solely for that reviewed whitespace exception, not a clean native 0. No scanner baseline or history rewrite was used.
+
+The first candidate ISO build was interrupted by reported power loss and retained without destructive cleanup.
+The separately authorized retry `20261020T152108Z-14d0df60-11c0-43bc-987c-b1691d583744` completed native 0 in 487 seconds,
+with publication and cleanup successful. Bundle:
+`build/workbench-candidate-dbbea439/dist/20261020T152108Z-14d0df60-11c0-43bc-987c-b1691d583744/`.
+The ISO `mirroros-2026.10.20-x86_64.iso` SHA256 is
+`5e40311157216d1fe62a21f3ea73ecd097385593a04a683adedd99c92a1b86d0`; all three bundle checksum entries passed.
+Build wrapper evidence is under HOST `evidence/development-workbench/iso-build/20261020T152108Z/`.
+Build success alone is not release or laptop qualification.
+
+A preceding default reference development-overlay qualification also passed installation, target configure,
+disk-only console login and first-boot checks in 663 seconds, with its owned disposable disk cleaned afterward.
+It used the older base ISO and approved candidate overlay, was explicitly `counted=false`, and did not retain detailed
+target configure records. It is not the persistent graphical reconstruction described next.
+
+### Independent target and running evidence
+
+The maintainer installed the new ISO in a separate VM, reported no installer errors, detached the ISO and confirmed
+disk boot and graphical login. No laboratory home state was copied as the reconstruction input.
+The installed identity independently reports clean `dbbea4392c386dc9b6854de06fef2c1b10016016`.
+
+- Target run: `20261020T154914Z-e94712f6-b8cf-4923-b2e1-94cd354c2264`, context `target`, user `viespejo`,
+  15:49:07 to 15:55:10 UTC, outcome 0, all eight steps changed with passed postconditions.
+- Running run: `20261020T221800Z-397eec81-8777-4336-998d-a8858b652052`, same user and clean candidate,
+  22:17:56 to 22:18:05 UTC, outcome 0, all eight steps unchanged with passed postconditions.
+- Running records: HOST `evidence/development-workbench/graphical-reconstruction/20261020T221832Z-running/`.
+- Complete target records: HOST `evidence/development-workbench/graphical-reconstruction/20261020T230856Z-target/`.
+
+Only `configure-run.tsv`, `packages.tsv`, `sources.tsv` and `configure.log` were exported through attended sudo,
+without changing the originals. The complete target export was scanned before diagnostic review:
+`gitleaks dir <target-export> --redact --report-format json --report-path <target-export>/gitleaks-records.json`
+returned native 0, zero findings, approximately 2.02 MB. The target TSV matches the previously reviewed copy exactly.
+
+Comparison by package name confirms all 28 declared package versions and repositories match; row ordering differs.
+All 20 common source rows match exactly. Target has 31 source rows: the additional Google Cloud CLI, six npm packages,
+skills CLI and three skill-source rows describe fresh provisioning; running intentionally omits these changed/fresh-only
+records when the SDK is satisfied and existing Pi configuration is preserved. This is not a claim that the complete
+source TSVs are byte-identical.
+
+Consumed identities include NVM v0.40.8 (`a885b885fef16fac4bc544188fb25e9e37ae83e8`), Node v24.22.0,
+Pi 1.3.0 from the exact pi-config dependency, Neovim `bdf02dd9b726c215c31d3a64c6cb38e56bbdac58`,
+pi-config `37ae549ae4de603ab0b9535e9a13187c9d257a26`, Sesh 2.33.0-1.1 and Google Cloud CLI 589.0.0.
+Fresh external skill sources were mattpocock/skills `5beb35b040e3de97e54fa9e386d7e42d15c295c2`,
+humanlayer/skills `653b6411c1f70c275a18e37673b042ff99f67ceb`, and
+tt-a1i/archify `25cf37080fc8b1dbe758a4efc3935b55f3327083`.
+
+The target log shows chroot-aware package hooks skipping system and user manager reloads and bus reloads;
+SDDM is enabled but explicitly not started. The running log reports existing `.pi` preserved, no initialization
+or installation transactions, and SDDM not started. No private-directory byte audit is implied.
+Retained upstream diagnostics include tmux-thumbs Rust dead-code/lifetime warnings and npm deprecations for
+`node-domexception@1.0.0` and `uuid@9.0.1`; successful outcomes do not constitute dependency vulnerability clearance.
+
+### Attended workflows and accepted amendments
+
+In the new VM the maintainer confirmed the requested Zsh/Tmux workflows, followed by Neovim startup without errors,
+file/text search, completion, save, cross-application clipboard and Tmux pane navigation. Pi extension loading and
+Shift+Enter inside Tmux work; the piw editor write/switch-buffer/return/save round-trip introduces no extra lines.
+These are attended reported outcomes, not a retained private conversation or Task 5 acceptance.
+
+The graphical checks exposed two approved additions absent from the built candidate:
+
+- The complete portable Starship TOML was added to the isolated HOST `build/workbench-starship-amendment` source,
+  with managed-file provisioning, postcondition, provenance and two extended contracts. The maintainer separately
+  authorized replacing the guest TOML; its SHA256 matches the source:
+  `a473360d7d8fb8f906c035f050d7ea49b44f2fe2dec06e880e9cda36cab51d4f`.
+  This is an explicit post-install intervention, not proof the existing ISO ships the full prompt configuration.
+- Session and greeter source defaults now declare keyboard `repeat_delay = 230` and `repeat_rate = 62`, with a contract
+  and configure-procedure documentation. The guest change was runtime-only through the reviewed Hyprland API;
+  no persistent installed compositor file was updated, so restart persistence is not yet demonstrated.
+
+The maintainer accepted both source amendments. The two Starship contracts and one keyboard contract passed targeted
+Bats selections; scoped source scans and changed-source static/whitespace checks passed as recorded in the execution
+log. These amendments and this addendum remain uncommitted in the isolated amendment clone. No new ISO build, commit,
+push or active-host integration is authorized by those acceptances. Candidate promotion, configure-based application
+and rerun/persistence evidence remain pending before claiming complete declared reconstruction. Final Task 5 graphical
+review and one privately authenticated real-provider conversation remain required; no credentials or conversation
+content belong in retained evidence.

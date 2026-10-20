@@ -326,6 +326,8 @@ teardown() { cfg_test_teardown; }
   [ "$status" -eq 0 ]
   for file in "$CFG_TEST_HOME/.config/hypr/hyprland.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_options = "compose:ralt"' "$file"
+    grep -qF 'repeat_delay = 230' "$file"
+    grep -qF 'repeat_rate = 62' "$file"
     grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua")' "$file"
   done
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland/keyboard.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/keyboard.lua"
@@ -573,6 +575,8 @@ shell_nothing_published() {
   for file in zshenv zshrc zprofile; do
     cmp "$CFG_SOURCE_ROOT/capabilities/workflow/shell/$file" "$CFG_TEST_HOME/.$file"
   done
+  cmp "$CFG_SOURCE_ROOT/capabilities/workflow/shell/starship.toml" "$CFG_TEST_HOME/.config/starship.toml"
+  grep -q '^add_newline = false$' "$CFG_TEST_HOME/.config/starship.toml"
   for commit in cc6906ea7ea18a5058e8b4862d4086148434ddde 91cafe4a09b6670cb8e761aa413e5f7b9e00816f \
     e6683f20e5c38d3e5447f45845d04ddda75d0f23 85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5 \
     989b23277ab33e8d5e82df6aed936e846db9d8b8 964ddf789b022b6958b27d02d7fa54f552de21e9; do
@@ -672,11 +676,14 @@ shell_nothing_published() {
 @test "user-owned Zsh startup files and links are preserved while provisioning continues" {
   shell_accounts
   shell_step
+  mkdir -p "$CFG_TEST_HOME/.config"
+  printf 'add_newline = true\n' > "$CFG_TEST_HOME/.config/starship.toml"
   printf '# my zshrc\n' > "$CFG_TEST_HOME/.zshrc"
   printf '# elsewhere\n' > "$CFG_TEST_DIR/target-zshenv"
   ln -s "$CFG_TEST_DIR/target-zshenv" "$CFG_TEST_HOME/.zshenv"
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
+  [ "$(< "$CFG_TEST_HOME/.config/starship.toml")" = 'add_newline = true' ]
   [ "$(< "$CFG_TEST_HOME/.zshrc")" = '# my zshrc' ]
   [ -L "$CFG_TEST_HOME/.zshenv" ]
   [ "$(< "$CFG_TEST_DIR/target-zshenv")" = '# elsewhere' ]
