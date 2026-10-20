@@ -1,0 +1,6 @@
+# managed by MirrorOS configure
+gui:
+  nerdFontsVersion: "3"
+  theme:
+    selectedLineBgColor:
+      - "#1f212e"

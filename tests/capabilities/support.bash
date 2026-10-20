@@ -44,7 +44,7 @@ cfg_test_helpers() {
   local script="$1"
   bash -Eeuo pipefail -c '
     CAPABILITIES_DIR="$CFG_TEST_DIR/code/capabilities"
-    for lib in common validate packages files units evidence; do
+    for lib in common validate packages files units evidence repositories; do
       source "$CAPABILITIES_DIR/lib/$lib.sh"
     done
     TARGET_USER=alice

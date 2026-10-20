@@ -33,3 +33,33 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **License (SPDX):** `MIT`
 - **Incorporated material:** Presentation function, palette, and layout adapted from the Omarchy ISO configurator, preserved as a reference at `prototypes/frontend/guided-installer/` (never sourced by production) and reimplemented at `install/confirmation/`
 - **Detailed provenance:** [Guided installer reference upstream record](../prototypes/frontend/guided-installer/UPSTREAM.md) and [Guided installer presentation upstream record](../install/confirmation/UPSTREAM.md)
+
+### Tokyo Night terminal palette
+
+- **License (SPDX):** `MIT` for the explicitly licensed terminal extra; other upstream repository material has its own terms
+- **Incorporated material:** Palette translated to Foot at `capabilities/desktop/terminal/foot.ini`, with reviewed bright-color overrides, and to the Tmux theme at `capabilities/workflow/tmux/tmux.theme.conf`; no upstream Lua code
+- **Detailed provenance:** [Terminal sources and notice scope](../capabilities/desktop/terminal/sources.md) and [MIT notice](../capabilities/desktop/terminal/LICENSE.tokyonight)
+
+### Prezto history options
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** History option choices adapted into the `setopt` block of `capabilities/workflow/shell/zshrc`; no other Prezto code
+- **Detailed provenance:** [Shell sources and notice scope](../capabilities/workflow/shell/sources.md) and [MIT notice](../capabilities/workflow/shell/LICENSE.prezto)
+
+### vim-tmux-navigator pane navigation
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Neovim-aware pane navigation bindings adapted into `capabilities/workflow/tmux/tmux.navigator.conf`; the plugin itself is not installed
+- **Detailed provenance:** [Tmux sources and notice scope](../capabilities/workflow/tmux/sources.md) and [MIT notices](../capabilities/workflow/tmux/LICENSE.notices)
+
+### catppuccin-tmux status layout
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Status and window layout of the omerxx fork reproduced in `capabilities/workflow/tmux/tmux.theme.conf`; the plugin itself is not loaded
+- **Detailed provenance:** [Tmux sources and notice scope](../capabilities/workflow/tmux/sources.md) and [MIT notices](../capabilities/workflow/tmux/LICENSE.notices)
+
+### Sesh and the sesh-bin recipe
+
+- **License (SPDX):** `MIT` for Sesh; the AUR recipe it derives from declares no separate license
+- **Incorporated material:** Recipe adapted from the AUR package `sesh-bin` into `capabilities/workflow/tmux/sesh/PKGBUILD`, keeping its maintainer line; the upstream release binary is downloaded and checksum-verified at build time, not stored
+- **Detailed provenance:** [Tmux sources and notice scope](../capabilities/workflow/tmux/sources.md)

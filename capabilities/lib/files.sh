@@ -63,16 +63,16 @@ cfg_system_link() {
 
 # shellcheck disable=SC2016 # Quoted programs expand HOME and variables only inside the user's Bash.
 cfg_user_file() {
-  local src="$1" relative="$2" legacy='' result
+  local src="$1" relative="$2" mode="${3:-0644}" legacy='' result
   cfg_context
-  [[ "$relative" != /* && "$relative" != *..* ]] || exit 6
+  [[ "$relative" != /* && "$relative" != *..* && ( "$mode" == 0644 || "$mode" == 0755 ) ]] || exit 6
   cfg_managed "$src" || exit 6
   if [[ "$relative" == *.lua ]]; then legacy="${relative%.lua}.conf"; fi
   # The user owns path resolution, temporary files, directory creation and every HOME write.
   result="$(cfg_exec runuser -u "$TARGET_USER" -- bash -c '
     set -Eeuo pipefail
     umask 022
-    relative=$1 legacy=$2
+    relative=$1 legacy=$2 mode=$3
     dest="$HOME/$relative"
     managed() { grep -Eq "^[[:space:]]*(#|;|--|//).*managed by MirrorOS configure" "$1"; }
     if [[ -L "$dest" ]] || { [[ -e "$dest" ]] && ! managed "$dest"; } ||
@@ -84,11 +84,11 @@ cfg_user_file() {
     tmp=$(mktemp "$(dirname -- "$dest")/.mirroros-configure.XXXXXX")
     trap '\''rm -f -- "$tmp"'\'' EXIT
     cat > "$tmp"
-    if [[ -f "$dest" ]] && cmp -s -- "$tmp" "$dest"; then exit 0; fi
-    chmod 0644 "$tmp"
+    if [[ -f "$dest" ]] && cmp -s -- "$tmp" "$dest" && [[ "$(stat -c %a -- "$dest")" == "${mode#0}" ]]; then exit 0; fi
+    chmod "$mode" "$tmp"
     mv -- "$tmp" "$dest"
     printf "changed\n"
-  ' bash "$relative" "$legacy" < "$src")"
+  ' bash "$relative" "$legacy" "$mode" < "$src")"
   if [[ "$result" == changed ]]; then cfg_changed; elif [[ -n "$result" ]]; then cfg_log "$result"; fi
 }
 
@@ -98,6 +98,33 @@ cfg_user_file_present() {
   cfg_exec runuser -u "$TARGET_USER" -- bash -c '
     [[ -e "$HOME/$1" ]] || { [[ "$1" == *.lua ]] && [[ -e "$HOME/${1%.lua}.conf" ]]; }
   ' bash "$1"
+}
+
+# The link is created only while its path is absent; any other existing path is user-owned and left untouched.
+# shellcheck disable=SC2016 # HOME is resolved by the user's Bash, never by root.
+cfg_user_link() {
+  local target="$1" relative="$2" result
+  cfg_context
+  [[ "$target" != /* && "$target" != *..* && "$relative" != /* && "$relative" != *..* ]] || exit 6
+  result="$(cfg_exec runuser -u "$TARGET_USER" -- bash -c '
+    set -Eeuo pipefail
+    dest="$HOME/$2" want="$HOME/$1"
+    if [[ -L "$dest" && "$(readlink -- "$dest")" == "$want" ]]; then exit 0; fi
+    if [[ -e "$dest" || -L "$dest" ]]; then
+      printf "user-owned: %s; left untouched\n" "$2"
+      exit 0
+    fi
+    mkdir -p -- "$(dirname -- "$dest")"
+    ln -sT -- "$want" "$dest"
+    printf "changed\n"
+  ' bash "$target" "$relative")"
+  if [[ "$result" == changed ]]; then cfg_changed; elif [[ -n "$result" ]]; then cfg_log "$result"; fi
+}
+
+# shellcheck disable=SC2016 # HOME is resolved by the user's Bash, never by root.
+cfg_user_link_present() {
+  cfg_context
+  cfg_exec runuser -u "$TARGET_USER" -- bash -c '[[ -e "$HOME/$1" ]]' bash "$1"
 }
 
 # shellcheck disable=SC2016 # The appended source line must retain a literal HOME expansion.
@@ -138,4 +165,54 @@ cfg_bashrc_block_present() {
     [[ $(grep -Fc "# BEGIN MirrorOS configure" "$HOME/.bashrc") == 1 &&
        $(grep -Fc "# END MirrorOS configure" "$HOME/.bashrc") == 1 ]]
   '
+}
+
+# The script text is the reviewed capability file, supplied on stdin to the selected user's Bash in a clean
+# startup environment. Its output starts with changed or unchanged; the caller may read the full output.
+# shellcheck disable=SC2034 # CFG_USER_SCRIPT_RESULT is consumed by the capability steps that call this helper.
+cfg_user_script() {
+  local script="$1" result
+  shift
+  cfg_context
+  CFG_USER_SCRIPT_RESULT=''
+  result="$(cfg_exec runuser -u "$TARGET_USER" -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- "$@" < "$script")" ||
+    return $?
+  CFG_USER_SCRIPT_RESULT="$result"
+  [[ "${result%%[[:space:]]*}" != changed ]] || cfg_changed
+}
+
+cfg_login_shell_current() {
+  awk -F: -v user="$TARGET_USER" '$1 == user { print $7; found=1 } END { exit !found }' "$(cfg_path /etc/passwd)"
+}
+
+# The login shell changes only from the installer's default Bash; any other choice is user-owned.
+cfg_login_shell() {
+  local shell="$1" current
+  cfg_context
+  [[ "$shell" =~ ^/usr/bin/[a-z]+$ ]] || exit 6
+  current="$(cfg_login_shell_current)" || { printf 'Target user is missing from passwd.\n' >&2; exit 4; }
+  [[ "$current" != "$shell" ]] || return 0
+  if [[ "$current" != /usr/bin/bash && "$current" != /bin/bash ]]; then
+    cfg_log "user-owned: login shell $current; left untouched"
+    return 0
+  fi
+  grep -qxF "$shell" "$(cfg_path /etc/shells)" || { printf '%s is not listed in /etc/shells; install its package before rerunning.\n' "$shell" >&2; exit 4; }
+  cfg_run usermod --shell "$shell" -- "$TARGET_USER"
+  cfg_changed
+}
+
+cfg_login_shell_present() {
+  local current
+  cfg_context
+  current="$(cfg_login_shell_current)" || return 1
+  [[ "$current" == "$1" || ( "$current" != /usr/bin/bash && "$current" != /bin/bash ) ]]
+}
+
+# The Node.js version is declared once, in the managed Zsh environment file, and parsed as data.
+cfg_node_version() {
+  local version
+  version="$(awk -F= '$1 == "MIRROROS_NODE_VERSION" { print $2; exit }' "$CAPABILITIES_DIR/workflow/node/environment.zsh")" ||
+    return 1
+  [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  printf '%s\n' "$version"
 }

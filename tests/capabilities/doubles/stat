@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+# Only the size of the downloaded Google Cloud CLI archive is simulated; every other invocation uses the real tool.
+if [[ "${1:-}" == -c && "${2:-}" == %s && "${3:-}" == -- && "${4:-}" == "${CFG_TEST_HOME:?}"/.local/opt/.google-cloud-sdk.mirroros.*/archive.tgz ]]; then
+  printf 'stat %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+  if [[ ${CFG_TEST_GCLOUD_TAMPER:-} == size ]]; then printf '1\n'; else printf '93451089\n'; fi
+  exit 0
+fi
+exec /usr/bin/stat "$@"

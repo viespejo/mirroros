@@ -1,0 +1,324 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root):
+#   bash -s -- apply <node-version> <base64 gzip tar of workflow/pi/defaults> <base64 gzip tar of workflow/pi/skills>
+#     <base64 of workflow/pi/external-skills> <base64 of workflow/pi/manual-skill.mjs> <name@version>...
+#   bash -s -- check
+# apply: initialize-only ~/.pi. Any existing ~/.pi, including a symlink, a dangling symlink or an empty directory,
+#   is preserved without a single write: no settings, bindings, instructions, links, packages or diagnostics.
+#   An absent ~/.pi is built in an owned sibling staging directory, validated, and published with a no-clobber
+#   rename, so an interrupted or failed initialization never leaves a partial ~/.pi behind and a destination
+#   created concurrently is never overwritten. The staged directory also receives the declared npm packages, installed
+#   with lifecycle scripts disabled and a private empty npm configuration, and links to the MirrorOS-owned skills,
+#   which are delivered without overwriting to ~/.local/share/mirroros/pi/skills. The external manual skills are
+#   fetched from their current upstream default branch, resolved once per source and installed with the skills CLI
+#   from the resolved checkouts, then limited to manual invocation; any failure aborts before publication.
+# check: read-only postcondition; ~/.pi must exist (initialized now, or preserved).
+# Output of apply: "<changed|unchanged> <initialized|preserved>"; after a fresh initialization further lines record
+#   "skills-cli <version>" and one "skill-source <url> <branch> <commit>" per external repository.
+#   Child output goes to stderr.
+set -Eeuo pipefail
+
+mode=${1:?}
+dest="$HOME/.pi"
+pi_config="$HOME/code/pi-config"
+staging=''
+skill_staging=''
+skills_cli_version=1.7.2
+
+# Inherited startup and module variables must not redirect the validation runtime.
+unset BASH_ENV ENV NODE_OPTIONS NODE_PATH NODE_VERSION
+
+fail() { printf 'pi: %s\n' "$*" >&2; exit 4; }
+
+present() { [[ -e "$dest" || -L "$dest" ]]; }
+
+cleanup() {
+  [[ -n "$skill_staging" && "$skill_staging" == */.staging.* ]] && rm -rf -- "$skill_staging"
+  [[ -n "$staging" && "$staging" == "$HOME"/.pi.mirroros.* ]] && rm -rf -- "$staging"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+case "$mode" in
+  check) present; exit ;;
+  apply) ;;
+  *) exit 6 ;;
+esac
+
+node_version=${2:?}
+payload=${3:?}
+skills_payload=${4:?}
+external_payload=${5:?}
+manual_script=${6:?}
+shift 6
+specs=("$@")
+(( ${#specs[@]} > 0 )) || exit 6
+[[ "$node_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 6
+for spec in "${specs[@]}"; do
+  [[ "$spec" =~ ^(@[a-z0-9._-]+/)?[a-z0-9._-]+@[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 6
+done
+
+external_text="$(printf '%s' "$external_payload" | base64 -d)" || exit 6
+mapfile -t external_lines <<< "$external_text"
+for line in "${external_lines[@]}"; do
+  [[ "$line" =~ ^(https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\.git)\ ([A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*)\ ([a-z0-9]+(-[a-z0-9]+)*(\ [a-z0-9]+(-[a-z0-9]+)*)*)$ ]] || exit 6
+  [[ "/${BASH_REMATCH[2]}/" != *"/./"* && "/${BASH_REMATCH[2]}/" != *"/../"* ]] || exit 6
+done
+
+# The initialize-only decision precedes every command that could create or write ~/.pi or its siblings.
+if present; then
+  printf 'unchanged preserved\n'
+  exit 0
+fi
+
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+[[ "$state_home" == /* ]] || exit 6
+lock_directory="$state_home/mirroros/pi"
+mkdir -p -- "$lock_directory"
+exec 9> "$lock_directory/init.lock"
+flock --nonblock 9 || fail "another Pi initialization is running; rerun after it finishes"
+if present; then
+  printf 'unchanged preserved\n'
+  exit 0
+fi
+
+skills_root="${XDG_DATA_HOME:-$HOME/.local/share}/mirroros/pi/skills"
+[[ "$skills_root" == /* ]] || exit 6
+
+# Only a directory that carries this step's own marker is stale staging from a killed run.
+for stale in "$HOME"/.pi.mirroros.* "$skills_root"/.staging.*; do
+  [[ -d "$stale" && ! -L "$stale" && -f "$stale/.mirroros-pi-staging" && ! -L "$stale/.mirroros-pi-staging" ]] ||
+    continue
+  rm -rf -- "$stale"
+done
+
+node_bin="$HOME/.nvm/versions/node/$node_version/bin"
+[[ -x "$node_bin/node" ]] || fail "the Node.js $node_version runtime is missing; rerun after workflow/node succeeds"
+export PATH="$node_bin:$PATH"
+
+umask 022
+staging="$(mktemp -d "$HOME/.pi.mirroros.XXXXXXXX")"
+: > "$staging/.mirroros-pi-staging"
+mkdir -- "$staging/agent" "$staging/agent/extensions" "$staging/agent/skills"
+
+printf '%s' "$payload" | base64 -d | gzip -dc | tar -x -C "$staging/agent" --no-same-owner --no-same-permissions ||
+  fail "the Pi defaults payload could not be unpacked"
+unexpected="$(find "$staging/agent" -mindepth 1 ! -type f ! -type d -print -quit)"
+[[ -z "$unexpected" ]] || fail "the Pi defaults payload contains a non-regular entry"
+for required in settings.json keybindings.json APPEND_SYSTEM.md; do
+  [[ -f "$staging/agent/$required" ]] || fail "the Pi defaults payload lacks $required"
+done
+compgen -G "$staging/agent/prompts/*.md" > /dev/null || fail "the Pi defaults payload lacks its prompt templates"
+
+# Voice and text-to-speech stay disabled in the initial defaults; both files must be valid JSON.
+validation='
+const fs = require("node:fs");
+const settings = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const voice = settings.voice;
+if (!voice || voice.enabled !== false || voice.ttsEnabled !== false) {
+  console.error("voice and text-to-speech must stay disabled in the Pi defaults");
+  process.exit(1);
+}
+'
+node --eval "$validation" "$staging/agent/settings.json" "$staging/agent/keybindings.json" < /dev/null >&2 ||
+  fail "the Pi defaults are invalid"
+
+# The declared npm packages are installed below the staged agent directory, as Pi would place them. A private work
+# directory inside the staging holds an empty user and global npm configuration, HOME and the cache, so neither the
+# user's npm settings nor lifecycle scripts can influence the result; it is removed before publication.
+work="$staging/.work"
+mkdir -- "$work" "$work/home" "$work/cache" "$work/tmp" "$staging/agent/npm"
+: > "$work/npmrc-user"
+: > "$work/npmrc-global"
+printf '{\n  "name": "pi-extensions",\n  "private": true\n}' > "$staging/agent/npm/package.json"
+env HOME="$work/home" TMPDIR="$work/tmp" XDG_CONFIG_HOME="$work/home/.config" XDG_CACHE_HOME="$work/cache" \
+  NPM_CONFIG_USERCONFIG="$work/npmrc-user" NPM_CONFIG_GLOBALCONFIG="$work/npmrc-global" \
+  NPM_CONFIG_CACHE="$work/cache" NPM_CONFIG_IGNORE_SCRIPTS=true NPM_CONFIG_UPDATE_NOTIFIER=false \
+  npm install --prefix "$staging/agent/npm" --ignore-scripts --legacy-peer-deps --no-audit --no-fund "${specs[@]}" \
+  < /dev/null >&2 || fail "the Pi packages could not be installed; nothing was published"
+
+# Every npm package the shipped settings select must exist in the staged package directory.
+packages_check='
+const fs = require("node:fs");
+const path = require("node:path");
+const settings = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+for (const entry of settings.packages ?? []) {
+  const source = typeof entry === "string" ? entry : entry.source;
+  if (!source.startsWith("npm:")) continue;
+  const name = source.slice(4).replace(/(?<=.)@[^/]*$/, "");
+  if (!fs.existsSync(path.join(process.argv[2], "node_modules", name, "package.json"))) {
+    console.error("the selected Pi package " + name + " is not installed");
+    process.exit(1);
+  }
+}
+'
+node --eval "$packages_check" "$staging/agent/settings.json" "$staging/agent/npm" < /dev/null >&2 ||
+  fail "the installed Pi packages do not match the shipped settings; nothing was published"
+
+# The MirrorOS-owned skills travel as a second payload and are validated before anything is written outside.
+mkdir -- "$work/skills"
+printf '%s' "$skills_payload" | base64 -d | gzip -dc | tar -x -C "$work/skills" --no-same-owner --no-same-permissions ||
+  fail "the Pi skills payload could not be unpacked"
+unexpected="$(find "$work/skills" -mindepth 1 ! -type f ! -type d -print -quit)"
+[[ -z "$unexpected" ]] || fail "the Pi skills payload contains a non-regular entry"
+skill_names=()
+for skill in "$work/skills"/*/; do
+  skill_name="$(basename -- "$skill")"
+  [[ "$skill_name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && -f "$skill/SKILL.md" ]] ||
+    fail "the Pi skills payload has an invalid skill directory"
+  skill_names+=("$skill_name")
+done
+(( ${#skill_names[@]} > 0 )) || fail "the Pi skills payload is empty"
+
+# pi-config owns its extensions; the links must resolve before the directory can be published.
+links=(
+  'answer.ts extensions/answer.ts'
+  'context.ts extensions/context.ts'
+  'files.ts extensions/files.ts'
+  'prefill-templates.ts extensions/prefill-templates.ts'
+  'todo.ts extensions/todo.ts'
+  'openai-codex-work extensions/openai-codex-work-provider/src'
+  'src extensions/gemini-cli-provider/src'
+  'permission-gate extensions/permission-gate'
+  'planning extensions/planning'
+  'usage extensions/usage'
+  'vertex-anthropic extensions/vertex-anthropic'
+  'vertex-maas extensions/vertex-maas'
+  'node_modules node_modules'
+)
+for entry in "${links[@]}"; do
+  read -r name target <<< "$entry"
+  [[ -e "$pi_config/$target" ]] ||
+    fail "pi-config lacks $target; resolve the selected repository manually (nothing was published)"
+  ln -sT -- "$pi_config/$target" "$staging/agent/extensions/$name"
+done
+
+# Package files keep their executable bits; everything else gets the managed modes.
+find "$staging" -type d -exec chmod 0755 -- {} +
+find "$staging" -type f ! -path "$staging/agent/npm/*" ! -path "$work/*" -exec chmod 0644 -- {} +
+chmod -R u+rwX,go+rX,go-w -- "$staging/agent/npm"
+
+# External manual skills come from the current upstream default branch of each declared repository, resolved once
+# per run, fetched by that exact commit into local checkouts and installed from there with the skills CLI, so a
+# second floating resolution cannot change the consumed source. The installer runs with the same isolation as the
+# packages and with lifecycle scripts disabled; the installed payload must equal its upstream directory. Only the
+# frontmatter flag is amended, and the upstream license is preserved with each skill.
+isolated=(
+  HOME="$work/home" TMPDIR="$work/tmp" XDG_CONFIG_HOME="$work/home/.config" XDG_CACHE_HOME="$work/cache"
+  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0=
+  NPM_CONFIG_USERCONFIG="$work/npmrc-user" NPM_CONFIG_GLOBALCONFIG="$work/npmrc-global" NPM_CONFIG_CACHE="$work/cache"
+  NPM_CONFIG_IGNORE_SCRIPTS=true NPM_CONFIG_UPDATE_NOTIFIER=false DISABLE_TELEMETRY=1 DO_NOT_TRACK=1
+)
+mkdir -- "$work/sources" "$work/project"
+printf '%s' "$manual_script" | base64 -d > "$work/manual-skill.mjs" || fail "the manual-skill script could not be unpacked"
+declare -A taken=() checkout=()
+for name in "${skill_names[@]}"; do taken[$name]=1; done
+source_notes=()
+expected_names=()
+for line in "${external_lines[@]}"; do
+  read -r url subdir names_text <<< "$line"
+  read -ra names <<< "$names_text"
+  for name in "${names[@]}"; do
+    [[ -z "${taken[$name]:-}" ]] || fail "the Pi skill name $name is declared twice; nothing was published"
+    taken[$name]=1
+    expected_names+=("$name")
+  done
+  if [[ -z "${checkout[$url]:-}" ]]; then
+    key="${url#https://github.com/}"
+    key="${key%.git}"
+    directory="$work/sources/${key//\//-}"
+    resolution="$(env "${isolated[@]}" git ls-remote --symref "$url" HEAD < /dev/null)" ||
+      fail "$url could not be resolved; nothing was published"
+    branch="$(awk '$1 == "ref:" { print $2 }' <<< "$resolution")"
+    commit="$(awk '$2 == "HEAD" && $1 != "ref:" { print $1 }' <<< "$resolution")"
+    [[ "$branch" == refs/heads/* && "$commit" =~ ^[0-9a-f]{40}$ ]] ||
+      fail "$url did not report a default branch and commit; nothing was published"
+    if ! { env "${isolated[@]}" git init --quiet "$directory" < /dev/null >&2 &&
+      env "${isolated[@]}" git -c core.hooksPath=/dev/null -C "$directory" fetch --quiet --depth=1 "$url" "$commit" < /dev/null >&2 &&
+      env "${isolated[@]}" git -c core.hooksPath=/dev/null -C "$directory" checkout --quiet --detach "$commit" < /dev/null >&2; }; then
+      fail "$url could not be fetched at $commit; nothing was published"
+    fi
+    [[ "$(env "${isolated[@]}" git -c core.hooksPath=/dev/null -C "$directory" rev-parse HEAD < /dev/null)" == "$commit" ]] ||
+      fail "$url did not check out $commit; nothing was published"
+    checkout[$url]=$directory
+    source_notes+=("skill-source $url $branch $commit")
+  fi
+  directory=${checkout[$url]}
+  source="$directory/$subdir"
+  [[ -d "$source" && ! -L "$source" ]] || fail "$url lacks $subdir; nothing was published"
+  (cd -- "$work/project" && env "${isolated[@]}" npx --yes --package="skills@$skills_cli_version" skills add "$source" \
+    --skill "${names[@]}" --agent pi --copy --yes < /dev/null >&2) ||
+    fail "the upstream skills could not be installed; nothing was published"
+  for name in "${names[@]}"; do
+    skill_source="$source"
+    if [[ ! -f "$source/SKILL.md" ]]; then skill_source="$source/$name"; fi
+    installed="$work/project/.agents/skills/$name"
+    [[ -f "$skill_source/SKILL.md" && -d "$installed" && ! -L "$installed" ]] ||
+      fail "the upstream skill $name was not found or installed; nothing was published"
+    [[ -z "$(find "$skill_source" "$installed" ! -type f ! -type d -print -quit)" ]] ||
+      fail "the upstream skill $name contains a non-regular entry; nothing was published"
+    diff -r -q -- "$skill_source" "$installed" > /dev/null ||
+      fail "the installed skill $name differs from its upstream source; nothing was published"
+    cp -r --no-dereference -- "$installed" "$staging/agent/skills/$name"
+    node "$work/manual-skill.mjs" "$staging/agent/skills/$name/SKILL.md" "$name" < /dev/null >&2 ||
+      fail "the upstream skill $name has an unsupported frontmatter; nothing was published"
+    if [[ -z "$(find "$installed" -maxdepth 1 -type f \( -iname 'licen[cs]e*' -o -iname 'copying*' \) -print -quit)" ]]; then
+      license="$(find "$directory" -maxdepth 1 -type f \( -iname 'licen[cs]e*' -o -iname 'copying*' \) -print -quit)"
+      [[ -n "$license" ]] || fail "the upstream repository of $name has no license file; nothing was published"
+      cp -- "$license" "$staging/agent/skills/$name/${license##*/}"
+    fi
+    chmod -R u+rwX,go+rX,go-w -- "$staging/agent/skills/$name"
+  done
+done
+[[ "$(find "$work/project/.agents/skills" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)" == \
+  "$(printf '%s\n' "${expected_names[@]}" | LC_ALL=C sort)" ]] ||
+  fail "the skills installer produced an unexpected set of skills; nothing was published"
+
+# Owned skills are delivered to a stable user-owned location, never replacing a different existing path, and
+# linked from the staged directory so they become active only together with a successful initialization.
+mkdir -p -- "$skills_root"
+for skill_name in "${skill_names[@]}"; do
+  target="$skills_root/$skill_name"
+  if [[ -e "$target" || -L "$target" ]]; then
+    if [[ -d "$target" && ! -L "$target" && -z "$(find "$target" ! -type f ! -type d -print -quit)" ]] &&
+      diff -r -q -- "$work/skills/$skill_name" "$target" > /dev/null; then
+      :
+    else
+      fail "$target exists with different content; move it aside manually (nothing was published)"
+    fi
+  else
+    skill_staging="$(mktemp -d "$skills_root/.staging.XXXXXXXX")"
+    : > "$skill_staging/.mirroros-pi-staging"
+    cp -r --no-dereference -- "$work/skills/$skill_name" "$skill_staging/$skill_name"
+    find "$skill_staging/$skill_name" -type d -exec chmod 0755 -- {} +
+    find "$skill_staging/$skill_name" -type f -exec chmod 0644 -- {} +
+    mv -T --no-clobber -- "$skill_staging/$skill_name" "$target" || :
+    [[ ! -e "$skill_staging/$skill_name" ]] || fail "$target appeared concurrently; nothing was published"
+    rm -rf -- "$skill_staging"
+    skill_staging=''
+  fi
+  ln -sT -- "$target" "$staging/agent/skills/$skill_name"
+done
+rm -rf -- "$work"
+
+# Publish only into an absent destination; anything created meanwhile is preserved unchanged.
+if present; then
+  printf 'pi: ~/.pi appeared during initialization; preserved unchanged\n' >&2
+  printf 'unchanged preserved\n'
+  exit 0
+fi
+rm -f -- "$staging/.mirroros-pi-staging"
+mv -T --no-clobber -- "$staging" "$dest" || :
+if [[ -e "$staging" ]]; then
+  present || fail "publishing ~/.pi failed; nothing was changed"
+  printf 'pi: ~/.pi appeared during publication; preserved unchanged\n' >&2
+  printf 'unchanged preserved\n'
+  exit 0
+fi
+staging=''
+printf 'changed initialized\nskills-cli %s\n' "$skills_cli_version"
+printf '%s\n' "${source_notes[@]}"

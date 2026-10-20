@@ -1,6 +1,6 @@
 -- managed by MirrorOS configure
 hl.config({
-    input = { kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua") },
+    input = { kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua"), kb_options = "compose:ralt" },
 })
 
 hl.bind("SUPER + Return", hl.dsp.exec_cmd("uwsm app -- foot"))

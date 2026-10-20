@@ -1,0 +1,104 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- <apply|check>.
+# apply: clones Zplug and the selected plugin sources at their identified commits when absent.
+# check: read-only postcondition for the provisioned sources.
+# Output of apply: "changed" or "unchanged", then one "<name> <source> <commit>" line per source.
+# Plugins are provisioned here, never by the interactive shell, so terminal startup performs no network work.
+set -Eeuo pipefail
+
+mode=${1:?}
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+[[ "$data_home" == /* ]] || exit 6
+zplug_home="$data_home/zplug"
+stagings=()
+
+# name source commit destination [alternative-origin]. Zplug expects the oh-my-zsh sources below
+# repos/robbyrussell/oh-my-zsh; the alternative origin is the name zplug itself clones from.
+sources=(
+  "zplug https://github.com/zplug/zplug cc6906ea7ea18a5058e8b4862d4086148434ddde $zplug_home"
+  "zsh-vi-mode https://github.com/jeffreytse/zsh-vi-mode 91cafe4a09b6670cb8e761aa413e5f7b9e00816f $zplug_home/repos/jeffreytse/zsh-vi-mode"
+  "zsh-syntax-highlighting https://github.com/zsh-users/zsh-syntax-highlighting e6683f20e5c38d3e5447f45845d04ddda75d0f23 $zplug_home/repos/zsh-users/zsh-syntax-highlighting"
+  "zsh-autosuggestions https://github.com/zsh-users/zsh-autosuggestions 85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5 $zplug_home/repos/zsh-users/zsh-autosuggestions"
+  "zsh-completions https://github.com/zsh-users/zsh-completions 989b23277ab33e8d5e82df6aed936e846db9d8b8 $zplug_home/repos/zsh-users/zsh-completions"
+  "oh-my-zsh https://github.com/ohmyzsh/ohmyzsh 964ddf789b022b6958b27d02d7fa54f552de21e9 $zplug_home/repos/robbyrussell/oh-my-zsh https://github.com/robbyrussell/oh-my-zsh"
+)
+
+fail() { printf 'shell: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  local staging
+  for staging in "${stagings[@]}"; do
+    [[ "$staging" == "$data_home"/.mirroros-* || "$staging" == "$zplug_home"/repos/*/.mirroros-* ]] && rm -rf -- "$staging"
+  done
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+# True for a standalone clone of the expected origin; its checked-out commit is the user's own choice.
+existing_source() {
+  local destination=$1 source=$2 alternative=${3:-} origin
+  [[ -d "$destination" && ! -L "$destination" && -d "$destination/.git" && ! -L "$destination/.git" ]] || return 1
+  origin="$(git --no-optional-locks -C "$destination" remote get-url origin)" || return 1
+  [[ "$origin" == "$source" || "$origin" == "$source.git" ]] && return 0
+  [[ -n "$alternative" && ( "$origin" == "$alternative" || "$origin" == "$alternative.git" ) ]]
+}
+
+safe_parents() {
+  local path=$1
+  while [[ "$path" != "$data_home" && "$path" != / ]]; do
+    path="$(dirname -- "$path")"
+    [[ ! -L "$path" ]] || fail "symbolic-link path component $path; preserved unchanged"
+  done
+}
+
+clone_source() {
+  local name=$1 source=$2 commit=$3 destination=$4 parent staging
+  parent="$(dirname -- "$destination")"
+  mkdir -p -- "$parent"
+  staging="$(mktemp -d "$parent/.mirroros-$name.XXXXXXXX")"
+  stagings+=("$staging")
+  git init --quiet "$staging/repository" >&2
+  git -C "$staging/repository" remote add origin "$source" >&2
+  git -C "$staging/repository" fetch --quiet --depth 1 --no-tags origin "$commit" < /dev/null >&2 ||
+    fail "cannot fetch $name commit $commit"
+  git -c core.hooksPath=/dev/null -C "$staging/repository" checkout --quiet --detach FETCH_HEAD >&2
+  [[ "$(git -C "$staging/repository" rev-parse HEAD)" == "$commit" ]] || fail "$name does not match identified commit $commit"
+  [[ ! -e "$destination" && ! -L "$destination" ]] || fail "$destination appeared during installation; preserved unchanged"
+  mv -T --no-clobber -- "$staging/repository" "$destination"
+  [[ ! -e "$staging/repository" ]] || fail "$destination appeared during publication; preserved unchanged"
+  rmdir -- "$staging"
+}
+
+case "$mode" in
+  check)
+    [[ -s "$zplug_home/init.zsh" ]] || exit 1
+    for entry in "${sources[@]}"; do
+      read -r name source commit destination alternative <<< "$entry"
+      existing_source "$destination" "$source" "$alternative" || exit 1
+    done
+    exit 0 ;;
+  apply) ;;
+  *) exit 6 ;;
+esac
+
+# Zplug owns the root; its plugin clones live below it, so the root is handled first.
+changed=0
+for entry in "${sources[@]}"; do
+  read -r name source commit destination alternative <<< "$entry"
+  safe_parents "$destination"
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    existing_source "$destination" "$source" "$alternative" ||
+      fail "existing $destination is not a clone of $source; preserved unchanged. Move it aside or install it manually, then rerun configure"
+  else
+    clone_source "$name" "$source" "$commit" "$destination"
+    changed=1
+  fi
+done
+
+if (( changed )); then printf 'changed\n'; else printf 'unchanged\n'; fi
+for entry in "${sources[@]}"; do
+  read -r name source commit destination alternative <<< "$entry"
+  printf '%s %s %s\n' "$name" "$source" "$(git --no-optional-locks -C "$destination" rev-parse HEAD)"
+done

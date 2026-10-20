@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'cargo %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+[[ "$1" == build && "$2" == --release && "$3" == --locked && "$4" == --target-dir=target ]] || exit 97
+# Only the cloned tmux-thumbs fixture may be built, and never through the network.
+[[ "$PWD" == "${CFG_TEST_HOME:?}/.config/tmux/plugins/tmux-thumbs" ]] || exit 97
+if [[ ${CFG_TEST_CARGO_FAIL:-0} == 1 ]]; then printf 'fixture build failure\n' >&2; exit 17; fi
+version="$(grep 'version =' Cargo.toml | grep -o '".*"' | sed 's/"//g')"
+mkdir -p target/release
+printf '#!/usr/bin/bash\nprintf "thumbs %s\\n"\n' "${CFG_TEST_THUMBS_VERSION:-$version}" > target/release/thumbs
+printf '#!/usr/bin/bash\nexit 0\n' > target/release/tmux-thumbs
+chmod 0755 target/release/thumbs target/release/tmux-thumbs

@@ -1,0 +1,137 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'git %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+dest=''
+while (( $# )); do
+  case "$1" in
+    --no-optional-locks) shift ;;
+    -C) dest=$2; shift 2 ;;
+    -c) [[ "$2" == core.hooksPath=/dev/null ]] || exit 97; shift 2 ;;
+    *) break ;;
+  esac
+done
+selected=${CFG_TEST_GIT_SELECTED:-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}
+# Upstream skill repositories: the default branch is main and the commit is fixed per repository.
+skill_commit() {
+  case "$1" in
+    mattpocock-skills) printf '49dd158d1076134a641b33efb035946536778336\n' ;;
+    humanlayer-skills) printf '653b6411c1f70c275a18e37673b042ff99f67ceb\n' ;;
+    tt-a1i-archify) printf 'ba701d20a55ed6f139484d9ead7ff45671fe40eb\n' ;;
+    *) return 1 ;;
+  esac
+}
+skill_file() {
+  printf -- '---\nname: %s\ndescription: Fixture skill %s\n%s---\n\nBody of %s\n' "$2" "$2" "${CFG_TEST_SKILL_EXTRA_HEADER:-}" "$2" > "$1/SKILL.md"
+}
+if [[ "$1" == ls-remote && "$2" == --symref ]]; then
+  [[ "$#" -eq 4 && "$4" == HEAD && "$3" == https://github.com/*.git ]] || exit 97
+  key=${3#https://github.com/}; key=${key%.git}; key=${key//\//-}
+  commit="$(skill_commit "$key")" || exit 97
+  if [[ ${CFG_TEST_SKILLS_RESOLVE_FAIL:-0} == 1 ]]; then printf 'fixture resolve failure\n' >&2; exit 17; fi
+  printf 'ref: refs/heads/main\tHEAD\n%s\tHEAD\n' "$commit"
+  exit 0
+fi
+if [[ "$1" == ls-remote ]]; then
+  [[ "$2" == --exit-code && "$3" == --heads && "$5" == refs/heads/master ]] || exit 97
+  if [[ ${CFG_TEST_GIT_REMOTE_FAIL:-0} == 1 ]]; then printf 'fixture remote failure\n' >&2; exit 17; fi
+  printf '%s\trefs/heads/master\n' "$selected"
+  exit 0
+fi
+if [[ "$1" == init ]]; then
+  [[ "$2" == --quiet ]] || exit 97
+  dest=$3
+fi
+[[ "$dest" == "${CFG_TEST_HOME:?}/code/"* || "$dest" == "$CFG_TEST_HOME"/.nvm* ||
+  "$dest" == "$CFG_TEST_HOME"/.local/share/zplug* || "$dest" == "$CFG_TEST_HOME"/.local/share/.mirroros-zplug* ||
+  "$dest" == "$CFG_TEST_HOME"/.config/tmux/plugins* || "$dest" == "$CFG_TEST_HOME"/.pi.mirroros.*/.work/sources/* ]] || exit 97
+case "$1" in
+  init) mkdir -p "$dest/.git" ;;
+  remote)
+    case "$2" in
+      add) [[ "$3" == origin ]]; printf '%s\n' "$4" > "$dest/.git/fixture-remote" ;;
+      get-url) [[ "$3" == origin ]]; cat "$dest/.git/fixture-remote" ;;
+      *) exit 97 ;;
+    esac ;;
+  rev-parse)
+    case "$2" in
+      --show-toplevel) printf '%s\n' "$dest" ;;
+      HEAD) cat "$dest/.git/fixture-head" ;;
+      *) exit 97 ;;
+    esac ;;
+  symbolic-ref) cat "$dest/.git/fixture-branch" ;;
+  status)
+    if [[ ${CFG_TEST_GIT_STATUS_FAIL:-0} == 1 ]]; then printf 'fixture status failure\n' >&2; exit 17; fi
+    if [[ -f "$dest/.git/fixture-status" ]]; then cat "$dest/.git/fixture-status"; fi ;;
+  fetch)
+    if [[ "$2" == --quiet && "$3" == --depth=1 && "$4" == https://github.com/*.git ]]; then
+      if [[ ${CFG_TEST_SKILLS_FETCH_FAIL:-0} == 1 ]]; then printf 'fixture skills fetch failure\n' >&2; exit 17; fi
+      printf '%s\n' "$5" > "$dest/.git/fixture-fetched"
+      exit 0
+    fi
+    if [[ "$2" == --quiet && "$3" == --depth && "$4" == 1 && "$5" == --no-tags && "$6" == origin ]]; then
+      if [[ ${CFG_TEST_GIT_FETCH_FAIL:-0} == 1 ]]; then printf 'fixture fetch failure\n' >&2; exit 17; fi
+      printf '%s\n' "$7" > "$dest/.git/fixture-fetched"
+      exit 0
+    fi
+    [[ "$2" == --no-tags && "$3" == origin && "$4" == "$selected" ]] || exit 97
+    if [[ ${CFG_TEST_GIT_FETCH_FAIL:-0} == 1 ]]; then printf 'fixture fetch failure\n' >&2; exit 17; fi
+    if [[ ${CFG_TEST_GIT_CHANGED_DURING_FETCH:-0} == 1 ]]; then printf ' M changed\n' > "$dest/.git/fixture-status"; fi ;;
+  merge-base) [[ ${CFG_TEST_GIT_DIVERGED:-0} != 1 ]] ;;
+  merge)
+    [[ "$2" == --ff-only && "$3" == --no-edit && "$4" == --no-stat && "$5" == "$selected" ]] || exit 97
+    if [[ ${CFG_TEST_GIT_POSTCONDITION_FAIL:-0} != 1 ]]; then printf '%s\n' "$selected" > "$dest/.git/fixture-head"; fi ;;
+  checkout)
+    if [[ "$2" == --quiet && "$3" == --detach && "$4" =~ ^[0-9a-f]{40}$ ]]; then
+      key=${dest##*/}
+      [[ "$4" == "$(skill_commit "$key")" && "$4" == "$(< "$dest/.git/fixture-fetched")" ]] || exit 97
+      printf '%s\n' "$4" > "$dest/.git/fixture-head"
+      printf 'upstream license\n' > "$dest/LICENSE"
+      if [[ ${CFG_TEST_SKILLS_NO_LICENSE:-0} == 1 ]]; then rm -f "$dest/LICENSE"; fi
+      case "$key" in
+        mattpocock-skills)
+          mkdir -p "$dest/skills/productivity"/{teach/agents,wait-what/agents,grill-me}
+          skill_file "$dest/skills/productivity/teach" teach
+          printf 'format\n' > "$dest/skills/productivity/teach/MISSION-FORMAT.md"
+          printf 'yaml\n' > "$dest/skills/productivity/teach/agents/openai.yaml"
+          skill_file "$dest/skills/productivity/wait-what" wait-what
+          skill_file "$dest/skills/productivity/grill-me" grill-me ;;
+        humanlayer-skills)
+          mkdir -p "$dest/plugins/show-me/skills/show-me/agents"
+          skill_file "$dest/plugins/show-me/skills/show-me" show-me ;;
+        tt-a1i-archify)
+          mkdir -p "$dest/archify/bin" "$dest/archify/references"
+          skill_file "$dest/archify" archify
+          printf 'archify license\n' > "$dest/archify/LICENSE"
+          printf '#!/usr/bin/bash\n' > "$dest/archify/bin/archify-tool"
+          chmod 0755 "$dest/archify/bin/archify-tool"
+          printf 'notices\n' > "$dest/archify/THIRD_PARTY_NOTICES.md" ;;
+      esac
+      exit 0
+    fi
+    if [[ "$2" == --quiet && "$3" == --detach && "$4" == FETCH_HEAD ]]; then
+      cp -- "$dest/.git/fixture-fetched" "$dest/.git/fixture-head"
+      if [[ -n ${CFG_TEST_GIT_DETACH_HEAD:-} ]]; then printf '%s\n' "$CFG_TEST_GIT_DETACH_HEAD" > "$dest/.git/fixture-head"; fi
+      printf '# fixture\n' > "$dest/init.zsh"
+      printf '[package]\nversion = "0.8.0"\n' > "$dest/Cargo.toml"
+      exit 0
+    fi
+    [[ "$2" == -b && "$3" == master && "$4" == "$selected" ]] || exit 97
+    printf '%s\n' "$3" > "$dest/.git/fixture-branch"
+    printf '%s\n' "$4" > "$dest/.git/fixture-head"
+    if [[ "$dest" == "$CFG_TEST_HOME"/code/.mirroros-pi-config.*/repository ]]; then
+      default_manifest='{"devDependencies":{"@earendil-works/pi-coding-agent":"1.3.0"}}'
+      printf '%s\n' "${CFG_TEST_PI_PACKAGE_JSON:-$default_manifest}" > "$dest/package.json"
+      printf '{"lockfileVersion":3}\n' > "$dest/package-lock.json"
+      mkdir -p "$dest/scripts"
+      printf '#!/usr/bin/bash\n' > "$dest/scripts/pi-editor"
+      chmod 0755 "$dest/scripts/pi-editor"
+      mkdir -p "$dest"/extensions/{openai-codex-work-provider/src,gemini-cli-provider/src,permission-gate,planning,usage,vertex-anthropic,vertex-maas}
+      for extension in answer context files prefill-templates todo; do printf '// fixture\n' > "$dest/extensions/$extension.ts"; done
+    fi
+    if [[ ${CFG_TEST_GIT_CONCURRENT:-0} == 1 ]]; then
+      mkdir -p "$CFG_TEST_HOME/code/nvim"
+      printf 'concurrent content\n' > "$CFG_TEST_HOME/code/nvim/untouched"
+    fi ;;
+  config) [[ "$2" == branch.master.remote || "$2" == branch.master.merge ]] || exit 97 ;;
+  *) printf 'Unexpected Git command\n' >&2; exit 97 ;;
+esac

@@ -1,0 +1,68 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'curl %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+output='' url=''
+while (( $# )); do
+  case "$1" in
+    --output) output=$2; shift 2 ;;
+    --connect-timeout|--max-time) shift 2 ;;
+    --proto) [[ "$2" == '=https' ]] || exit 97; shift 2 ;;
+    --tlsv1.2|--fail|--silent|--show-error|--location) shift ;;
+    -*) exit 97 ;;
+    *) url=$1; shift ;;
+  esac
+done
+if [[ "$url" == https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-589.0.0-linux-x86_64.tar.gz ]]; then
+  [[ "$output" == "${CFG_TEST_HOME:?}/.local/opt/.google-cloud-sdk.mirroros."*/archive.tgz ]] || exit 97
+  if [[ ${CFG_TEST_CURL_FAIL:-0} == 1 ]]; then printf 'fixture download failure\n' >&2; exit 22; fi
+  if [[ ${CFG_TEST_GCLOUD_CONCURRENT:-0} == 1 ]]; then
+    mkdir -p "$CFG_TEST_HOME/.local/opt/google-cloud-sdk-589.0.0"
+    printf 'concurrent content\n' > "$CFG_TEST_HOME/.local/opt/google-cloud-sdk-589.0.0/untouched"
+  fi
+  # Fixture archive: a disposable SDK tree that never touches the network, accounts or shell profiles.
+  fixture="$(mktemp -d)"
+  mkdir -p "$fixture/google-cloud-sdk/bin"
+  printf '%s\n' "${CFG_TEST_GCLOUD_VERSION:-589.0.0}" > "$fixture/google-cloud-sdk/VERSION"
+  cat > "$fixture/google-cloud-sdk/bin/gcloud" <<'GCLOUD'
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'gcloud %s CONFIG=%s\n' "$*" "${CLOUDSDK_CONFIG-}" >> "${CFG_TEST_CALLS:?}"
+[[ "${1:-}" == --version ]] || exit 97
+printf 'Google Cloud SDK %s\n' "$(< "$(dirname -- "$0")/../VERSION")"
+GCLOUD
+  chmod 0755 "$fixture/google-cloud-sdk/bin/gcloud"
+  entries=(google-cloud-sdk)
+  if [[ ${CFG_TEST_GCLOUD_LAYOUT:-} == extra ]]; then printf 'unexpected\n' > "$fixture/extra-file"; entries+=(extra-file); fi
+  tar -czf "$output" -C "$fixture" "${entries[@]}"
+  rm -rf -- "$fixture"
+  exit 0
+fi
+[[ "$url" == https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.8/install.sh && "$output" == "${CFG_TEST_HOME:?}/.nvm.mirroros."*/install.sh ]] || exit 97
+if [[ ${CFG_TEST_CURL_FAIL:-0} == 1 ]]; then printf 'fixture download failure\n' >&2; exit 22; fi
+# Fixture installer: builds a disposable NVM tree and never touches the network or shell profiles.
+cat > "$output" <<'INSTALLER'
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'nvm-installer PROFILE=%s VERSION=%s DIR=%s\n' "${PROFILE-}" "${NVM_INSTALL_VERSION-}" "${NVM_DIR-}" >> "${CFG_TEST_CALLS:?}"
+[[ "$PROFILE" == /dev/null && "$NVM_INSTALL_VERSION" == v0.40.8 && "$NVM_DIR" == "$CFG_TEST_HOME"/.nvm.mirroros.* ]] || exit 97
+# The official installer requires a custom NVM_DIR to exist before invocation.
+[[ -d "$NVM_DIR" ]] || { printf 'fixture NVM_DIR does not exist\n' >&2; exit 1; }
+if [[ ${CFG_TEST_NVM_INSTALLER_FAIL:-0} == 1 ]]; then printf 'fixture installer failure\n' >&2; exit 17; fi
+if [[ ${CFG_TEST_NVM_CONCURRENT:-0} == 1 ]]; then
+  mkdir -p "$CFG_TEST_HOME/.nvm"
+  printf 'concurrent content\n' > "$CFG_TEST_HOME/.nvm/untouched"
+fi
+mkdir -p "$NVM_DIR/.git"
+printf '%s\n' "${CFG_TEST_NVM_COMMIT:-a885b885fef16fac4bc544188fb25e9e37ae83e8}" > "$NVM_DIR/.git/fixture-head"
+cat > "$NVM_DIR/nvm.sh" <<'NVM'
+nvm() {
+  [[ "$1" == install && "$3" == --no-progress ]] || return 97
+  printf 'nvm install %s\n' "$2" >> "$CFG_TEST_CALLS"
+  [[ "${CFG_TEST_NODE_INSTALL_FAIL:-0}" != 1 ]] || return 17
+  mkdir -p "$NVM_DIR/versions/node/$2/bin"
+  printf '#!/usr/bin/bash\nprintf "%%s\\n" %s\n' "$2" > "$NVM_DIR/versions/node/$2/bin/node"
+  printf '#!/usr/bin/bash\nprintf "10.0.0\\n"\n' > "$NVM_DIR/versions/node/$2/bin/npm"
+  chmod 0755 "$NVM_DIR/versions/node/$2/bin/node" "$NVM_DIR/versions/node/$2/bin/npm"
+}
+NVM
+INSTALLER

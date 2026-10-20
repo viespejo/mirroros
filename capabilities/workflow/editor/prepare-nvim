@@ -1,0 +1,65 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- <apply|check> <node-version> <commit>.
+# apply: restores the locked Neovim plugins and runs the external configuration's explicit tool and parser
+#   preparation once per selected commit, with the selected Node.js runtime first on PATH.
+# check: read-only postcondition.
+# Output of apply: "changed" or "unchanged". Ordinary editor startup installs nothing. A ~/.config/nvim that does not
+# resolve to ~/code/nvim is user-owned: it is neither prepared nor required to be.
+set -Eeuo pipefail
+
+mode=${1:?} node_version=${2:?} commit=${3:?}
+[[ "$mode" == apply || "$mode" == check ]] || exit 6
+[[ "$node_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 6
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+[[ "$state_home" == /* && "$data_home" == /* ]] || exit 6
+stamp_directory="$state_home/mirroros/editor"
+stamp="$stamp_directory/nvim-prepared"
+temporary=''
+
+fail() { printf 'editor: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  [[ -z "$temporary" ]] || rm -f -- "$temporary"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+owned() {
+  [[ -L "$HOME/.config/nvim" && "$(readlink -f -- "$HOME/.config/nvim")" == "$(readlink -f -- "$HOME/code/nvim")" ]]
+}
+
+prepared() {
+  [[ -f "$stamp" && ! -L "$stamp" && "$(< "$stamp")" == "$commit" && -d "$data_home/nvim/lazy/lazy.nvim" ]]
+}
+
+if [[ "$mode" == check ]]; then
+  ! owned || prepared || fail "the selected Neovim configuration is not prepared for $commit"
+  exit 0
+fi
+
+if ! owned; then
+  printf 'editor: ~/.config/nvim is user-owned; Neovim preparation skipped.\n' >&2
+  printf 'unchanged\n'
+  exit 0
+fi
+if prepared; then
+  printf 'unchanged\n'
+  exit 0
+fi
+
+command -v nvim > /dev/null || fail "nvim is not installed"
+export PATH="$HOME/.nvm/versions/node/$node_version/bin:$PATH"
+nvim --headless '+Lazy! restore' +qa >&2 || fail "restoring the locked plugins failed; inspect the output above and rerun"
+nvim --headless -c "lua require('config.prepare_tools').run()" -c qa >&2 ||
+  fail "preparing the approved tools failed; inspect the output and :MasonLog, then rerun"
+nvim --headless -c "lua require('config.treesitter').run()" -c qa >&2 ||
+  fail "preparing the approved parsers failed; inspect the output above and rerun"
+mkdir -p -- "$stamp_directory"
+temporary=$(mktemp "$stamp_directory/.mirroros-configure.XXXXXX")
+printf '%s\n' "$commit" > "$temporary"
+mv -- "$temporary" "$stamp"
+temporary=''
+printf 'changed\n'

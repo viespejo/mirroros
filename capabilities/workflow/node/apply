@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+# Prerequisites: validated package declarations, a non-root target user and network access to GitHub and
+#   nodejs.org when the selected runtime is missing.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: git installed; managed environment.zsh installed; the identified NVM release and the Node.js
+#   version declared in environment.zsh resolve for the target user without loading NVM.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_user_file "$STEP_DIR/environment.zsh" .config/mirroros/node/environment.zsh
+
+node_version="$(cfg_node_version)" || exit 6
+cfg_user_script "$STEP_DIR/install-nvm" apply "$node_version"
+read -r _ nvm_ref nvm_commit <<< "$CFG_USER_SCRIPT_RESULT"
+[[ "$nvm_ref" != - ]] || nvm_ref=''
+[[ "$nvm_commit" != - ]] || nvm_commit=''
+cfg_source_record nvm https://github.com/nvm-sh/nvm "$nvm_ref" "$nvm_commit" "$nvm_ref"
+cfg_source_record node https://nodejs.org/dist "$node_version" '' "$node_version"
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_file_present .config/mirroros/node/environment.zsh
+cfg_require cfg_user_script "$STEP_DIR/install-nvm" check "$node_version"

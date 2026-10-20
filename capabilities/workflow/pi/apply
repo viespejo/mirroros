@@ -1,0 +1,77 @@
+#!/usr/bin/bash
+# Prerequisites: validated package declarations, a non-root target user, the declared Node.js runtime from
+#   workflow/node, git from workflow/node, and HTTPS access to GitHub and the npm registry when sources or
+#   packages are missing.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: ffmpeg installed; the selected branch of pi-config is a clean clone at ~/code/pi-config; the
+#   selected Pi version is installed in the user's NVM prefix and its pi-config runtime dependencies are installed
+#   for the applied lockfile; ~/.local/bin/pi-editor links to the pi-config launcher unless the user owns that path;
+#   the identified Google Cloud CLI archive is installed under ~/.local/opt and ~/.local/bin/gcloud links to it
+#   unless the user owns that path;
+#   ~/.pi exists: initialized with the MirrorOS defaults, the declared npm packages, the owned skills and the
+#   external manual skills only when it was absent, otherwise preserved unchanged.
+# The npm packages are declared once in npm-packages, one name@version per line, and parsed as data. The external
+#   skills are declared once in external-skills, one "<repository> <directory> <skill>..." per line, also as data.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+
+cfg_repository_sync pi-config https://github.com/viespejo/pi-config master code/pi-config
+cfg_user_link code/pi-config/scripts/pi-editor .local/bin/pi-editor
+
+node_version="$(cfg_node_version)" || exit 6
+cfg_user_script "$STEP_DIR/install-pi" apply "$node_version" "$(base64 -w0 < "$STEP_DIR/pi-version.mjs")"
+read -r _ pi_version pi_source <<< "$CFG_USER_SCRIPT_RESULT"
+[[ "$pi_version" =~ ^[0-9A-Za-z.+-]+$ && "$pi_source" =~ ^(exact_dependency|stable_registry)$ ]] || exit 6
+cfg_source_record pi https://registry.npmjs.org/@earendil-works/pi-coding-agent "$pi_source" '' "$pi_version"
+
+# The archive identity is verified only when it is downloaded, so it is recorded only when the installation changed.
+cfg_user_script "$STEP_DIR/install-gcloud" apply
+read -r gcloud_state gcloud_version gcloud_sha256 <<< "$CFG_USER_SCRIPT_RESULT"
+[[ "$gcloud_state" =~ ^(changed|unchanged)$ && "$gcloud_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 6
+if [[ "$gcloud_state" == changed ]]; then
+  [[ "$gcloud_sha256" =~ ^[0-9a-f]{64}$ ]] || exit 6
+  cfg_source_record gcloud "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-$gcloud_version-linux-x86_64.tar.gz" \
+    "sha256:$gcloud_sha256" '' "$gcloud_version"
+fi
+cfg_user_link ".local/opt/google-cloud-sdk-$gcloud_version/bin/gcloud" .local/bin/gcloud
+
+# ~/.pi is initialize-only: an existing path, including a symlink, is preserved without any write inside it.
+defaults="$(tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -C "$STEP_DIR/defaults" -cf - . | gzip -n | base64 -w0)"
+skills="$(tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -C "$STEP_DIR/skills" -cf - . | gzip -n | base64 -w0)"
+mapfile -t pi_packages < "$STEP_DIR/npm-packages"
+(( ${#pi_packages[@]} > 0 )) || exit 6
+[[ -s "$STEP_DIR/external-skills" ]] || exit 6
+external="$(base64 -w0 < "$STEP_DIR/external-skills")"
+manual_skill="$(base64 -w0 < "$STEP_DIR/manual-skill.mjs")"
+cfg_user_script "$STEP_DIR/init-pi" apply "$node_version" "$defaults" "$skills" "$external" "$manual_skill" "${pi_packages[@]}"
+read -r _ pi_state <<< "$CFG_USER_SCRIPT_RESULT"
+[[ "$pi_state" =~ ^(initialized|preserved)$ ]] || exit 6
+if [[ "$pi_state" == preserved ]]; then
+  cfg_log "user-owned: .pi; initialize-only defaults not applied; existing path preserved"
+else
+  for package in "${pi_packages[@]}"; do
+    [[ "$package" =~ ^((@[a-z0-9._-]+/)?[a-z0-9._-]+)@([0-9]+\.[0-9]+\.[0-9]+)$ ]] || exit 6
+    cfg_source_record "npm:${BASH_REMATCH[1]}" "https://registry.npmjs.org/${BASH_REMATCH[1]}" declared '' "${BASH_REMATCH[3]}"
+  done
+  while read -r kind url branch commit; do
+    case "$kind" in
+      skills-cli)
+        [[ "$url" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 6
+        cfg_source_record skills-cli https://registry.npmjs.org/skills declared '' "$url" ;;
+      skill-source)
+        [[ "$branch" == refs/heads/* && "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 6
+        [[ "$url" =~ ^https://github\.com/([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)\.git$ ]] || exit 6
+        cfg_source_record "skills:${BASH_REMATCH[1]}" "$url" "$branch" "$commit" '' ;;
+      '') ;;
+      *) exit 6 ;;
+    esac
+  done < <(tail -n +2 <<< "$CFG_USER_SCRIPT_RESULT")
+fi
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_link_present .local/bin/pi-editor
+cfg_require cfg_user_script "$STEP_DIR/install-pi" check "$node_version" "$pi_version"
+cfg_require cfg_user_script "$STEP_DIR/install-gcloud" check
+cfg_require cfg_user_link_present .local/bin/gcloud
+cfg_require cfg_user_script "$STEP_DIR/init-pi" check

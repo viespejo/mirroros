@@ -185,22 +185,54 @@ cfg_require cfg_only_display_manager sddm.service'
   cfg_test_no_install
 }
 
-@test "the unchanged five-step skeleton converges in the target and reruns without transactions" {
+# The declared runtime reports its version but runs the real Node.js, which executes the Pi version selector.
+target_pi_node_fixture() {
+  local bin="$CFG_TEST_HOME/.nvm/versions/node/v24.22.0/bin"
+  mkdir -p "$bin"
+  printf '# user nvm\n' > "$CFG_TEST_HOME/.nvm/nvm.sh"
+  CFG_TEST_REAL_NODE="$(command -v node)"
+  export CFG_TEST_REAL_NODE
+  cat > "$bin/node" <<'NODE'
+#!/usr/bin/bash
+[[ "${1:-}" != --version ]] || { printf 'v24.22.0\n'; exit 0; }
+exec "$CFG_TEST_REAL_NODE" "$@"
+NODE
+  chmod 0755 "$bin/node"
+  ln -s "$CFG_TEST_DIR/bin/npm" "$bin/npm"
+  ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
+}
+
+@test "the eight-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions"
   printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
+  printf '/bin/bash\n/usr/bin/zsh\n' > "$CFG_TEST_TARGET_ROOT/etc/shells"
+  target_pi_node_fixture
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 5/5 desktop/login =='* ]]
+  [[ "$output" == *'== 8/8 desktop/login =='* ]]
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT usermod --shell /usr/bin/zsh -- alice" "$CFG_TEST_CALLS"
+  [ "$(cut -d: -f7 <<< "$(grep '^alice:' "$CFG_TEST_TARGET_ROOT/etc/passwd")")" = /usr/bin/zsh ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/workflow/shell/zshrc" "$CFG_TEST_HOME/.zshrc"
+  [ "$(< "$CFG_TEST_HOME/.local/share/zplug/.git/fixture-head")" = cc6906ea7ea18a5058e8b4862d4086148434ddde ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.local" ]
+  [ -x "$CFG_TEST_HOME/.nvm/versions/node/v24.22.0/bin/node" ]
+  [ -f "$CFG_TEST_HOME/.config/mirroros/node/environment.zsh" ]
+  [ -x "$CFG_TEST_HOME/.nvm/versions/node/v24.22.0/bin/pi" ]
+  [ -L "$CFG_TEST_HOME/.local/bin/pi-editor" ]
   [ -f "$CFG_TEST_HOME/.config/foot/foot.ini" ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/foot.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  [ -e "$CFG_TEST_INSTALLED/noto-fonts-emoji" ]
   [ -f "$CFG_TEST_HOME/.config/hypr/hyprland.lua" ]
+  grep -qF 'kb_options = "compose:ralt"' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
+  grep -qF 'kb_options = "compose:ralt"' "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/sddm/hyprland.lua"
   [ -f "$CFG_TEST_HOME/.config/mirroros/bash/starship.bash" ]
   [ -f "$CFG_TEST_TARGET_ROOT/etc/sddm.conf.d/10-mirroros-login.conf" ]
   [ -f "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/sddm/hyprland.lua" ]
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 5 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 8 ]
   cfg_test_no_install
   ! grep -qE 'systemctl (start|restart)' "$CFG_TEST_CALLS"
 }
@@ -260,4 +292,128 @@ cfg_require cfg_only_display_manager sddm.service'
     line="Configure step: $position/$total $step"
     [ "${#line}" -le 80 ]
   done
+}
+
+@test "target editor-native defaults route through chroot and target HOME without services" {
+  run cfg_test_helpers '
+    CONFIGURE_CONTEXT=target
+    CONFIGURE_ROOT=$CFG_TEST_TARGET_ROOT
+    cfg_user_file "$CAPABILITIES_DIR/workflow/editor/lazygit.yml" .config/lazygit/config.yml
+  '
+  [ "$status" -eq 0 ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/workflow/editor/lazygit.yml" "$CFG_TEST_TARGET_ROOT/home/alice/.config/lazygit/config.yml"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice" "$CFG_TEST_CALLS"
+  ! grep -qE 'systemctl (start|restart)' "$CFG_TEST_CALLS"
+}
+
+@test "target node provisioning runs unprivileged in the chroot home and reruns without effects" {
+  printf 'CFG_STEPS=(workflow/node)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/node: changed'* ]]
+  [ "$("$CFG_TEST_HOME/.nvm/versions/node/v24.22.0/bin/node" --version)" = v24.22.0 ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.nvm" ]
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- apply v24.22.0" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- check v24.22.0" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/git" "$CFG_TEST_CALLS"
+  grep -q $'^node\thttps://nodejs.org/dist\tv24.22.0\t\tv24.22.0$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  ! grep -qE 'systemctl (start|restart|enable)' "$CFG_TEST_CALLS"
+  : > "$CFG_TEST_CALLS"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/node: unchanged'* ]]
+  ! grep -qE '^(curl|nvm-installer|nvm install) ' "$CFG_TEST_CALLS"
+  cfg_test_no_install
+}
+
+@test "target tmux provisioning builds as the user inside the chroot installs only the package with privileges and reruns without effects" {
+  printf 'CFG_STEPS=(workflow/tmux)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/tmux: changed'* ]]
+  cmp "$CFG_SOURCE_ROOT/capabilities/workflow/tmux/tmux.conf" "$CFG_TEST_HOME/.config/tmux/tmux.conf"
+  [ -x "$CFG_TEST_HOME/.config/tmux/plugins/tmux-thumbs/target/release/thumbs" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.config" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.cache" ]
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- apply" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- build " "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/tmux extra/wl-clipboard core/inetutils extra/rust core/base-devel" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -U --needed --noconfirm -- $CFG_TEST_HOME/.cache/mirroros/sesh/sesh-bin-2.33.0-1.1-x86_64.pkg.tar.zst" "$CFG_TEST_CALLS"
+  grep -q $'^sesh-bin\t2.33.0-1.1\tlocal$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/packages.tsv
+  grep -q $'^sesh\thttps://github.com/joshmedeski/sesh/releases/download/v2.33.0/sesh_Linux_x86_64.tar.gz\tv2.33.0\t863935c8caa3cc40cac6adcd344ac9742e51739f\t2.33.0-1.1$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  [ "$(grep -cE 'systemctl (start|restart|enable)' "$CFG_TEST_CALLS")" -eq 0 ]
+  : > "$CFG_TEST_CALLS"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/tmux: unchanged'* ]]
+  [ "$(grep -cE '^(cargo|makepkg|pacman -U) |^git .* (fetch|checkout|init) ' "$CFG_TEST_CALLS")" -eq 0 ]
+  cfg_test_no_install
+}
+
+@test "target editor provisioning prepares Neovim as the user inside the chroot and reruns without effects" {
+  printf 'CFG_STEPS=(workflow/editor)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/editor: changed'* ]]
+  [ "$(stat -c %a "$CFG_TEST_HOME/.local/bin/vim")" = 755 ]
+  [ "$(readlink "$CFG_TEST_HOME/.config/nvim")" = "$CFG_TEST_HOME/code/nvim" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.config" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.local" ]
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- apply v24.22.0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- check v24.22.0 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/lazygit extra/tree-sitter-cli extra/unzip extra/go" "$CFG_TEST_CALLS"
+  grep -q $'^nvim\thttps://github.com/viespejo/nvim-lua-new\tmaster\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\t$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  [ "$(grep -c '^nvim --headless' "$CFG_TEST_CALLS")" -eq 3 ]
+  [ "$(grep -cE 'systemctl (start|restart|enable)' "$CFG_TEST_CALLS")" -eq 0 ]
+  : > "$CFG_TEST_CALLS"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/editor: unchanged'* ]]
+  [ "$(grep -cE '^nvim |^git .* (fetch|checkout|init|merge) ' "$CFG_TEST_CALLS")" -eq 0 ]
+  cfg_test_no_install
+}
+
+@test "target Pi provisioning installs as the user inside the chroot and reruns without effects" {
+  printf 'CFG_STEPS=(workflow/pi)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  target_pi_node_fixture
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/pi: changed'* ]]
+  [ "$(readlink "$CFG_TEST_HOME/.local/bin/pi-editor")" = "$CFG_TEST_HOME/code/pi-config/scripts/pi-editor" ]
+  [ -x "$CFG_TEST_HOME/.nvm/versions/node/v24.22.0/bin/pi" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.local" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.npm" ]
+  [ -f "$CFG_TEST_HOME/.pi/agent/settings.json" ]
+  [ "$(readlink "$CFG_TEST_HOME/.pi/agent/extensions/planning")" = "$CFG_TEST_HOME/code/pi-config/extensions/planning" ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.pi" ]
+  grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- check" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- apply v24.22.0 " "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- check v24.22.0 1.3.0" "$CFG_TEST_CALLS"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/ffmpeg" "$CFG_TEST_CALLS"
+  grep -q $'^pi\thttps://registry.npmjs.org/@earendil-works/pi-coding-agent\texact_dependency\t\t1.3.0$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  [ "$(grep -c '^npm install --global ' "$CFG_TEST_CALLS")" -eq 1 ]
+  [ "$(grep -c '^npm ci ' "$CFG_TEST_CALLS")" -eq 1 ]
+  [ "$(grep -c '^npm install --prefix ' "$CFG_TEST_CALLS")" -eq 1 ]
+  [ "$(grep -c '^npm-isolation .* true$' "$CFG_TEST_CALLS")" -eq 1 ]
+  [ -f "$CFG_TEST_HOME/.pi/agent/npm/node_modules/pi-web-access/package.json" ]
+  [ "$(readlink "$CFG_TEST_HOME/.pi/agent/skills/aikido-mcp")" = "$CFG_TEST_HOME/.local/share/mirroros/pi/skills/aikido-mcp" ]
+  [ -f "$CFG_TEST_HOME/.local/share/mirroros/pi/skills/atlassian-mcp/SKILL.md" ]
+  [ "$(grep -c '^disable-model-invocation: true$' "$CFG_TEST_HOME/.pi/agent/skills/archify/SKILL.md")" -eq 1 ]
+  [ ! -L "$CFG_TEST_HOME/.pi/agent/skills/teach" ]
+  grep -q $'^skills:tt-a1i/archify\thttps://github.com/tt-a1i/archify.git\trefs/heads/main\tba701d20a55ed6f139484d9ead7ff45671fe40eb\t$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.local" ]
+  grep -q $'^npm:pi-mermaid\thttps://registry.npmjs.org/pi-mermaid\tdeclared\t\t0.3.0$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  [ -x "$CFG_TEST_HOME/.local/opt/google-cloud-sdk-589.0.0/bin/gcloud" ]
+  [ "$(readlink "$CFG_TEST_HOME/.local/bin/gcloud")" = "$CFG_TEST_HOME/.local/opt/google-cloud-sdk-589.0.0/bin/gcloud" ]
+  grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT runuser -u alice -- env -u BASH_ENV -u ENV bash --noprofile --norc -s -- apply" "$CFG_TEST_CALLS"
+  [ "$(grep -c '^curl .*google-cloud-cli-589.0.0-linux-x86_64.tar.gz$' "$CFG_TEST_CALLS")" -eq 1 ]
+  grep -q $'^gcloud\thttps://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-589.0.0-linux-x86_64.tar.gz\tsha256:f865da648f6fdae2015abb5b32eaa0eb10520e88f0ca735cfb33795868c8d26f\t\t589.0.0$' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/sources.tsv
+  [ "$(grep -cE 'systemctl (start|restart|enable)' "$CFG_TEST_CALLS")" -eq 0 ]
+  : > "$CFG_TEST_CALLS"
+  run target_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'workflow/pi: unchanged'* ]]
+  [ "$(grep -cE '^curl |^npm (install|ci|view) |^npx |^git .* (fetch|checkout|init|merge) |^git .*ls-remote --symref ' "$CFG_TEST_CALLS")" -eq 0 ]
+  [ ! -e "$CFG_TEST_TARGET_ROOT/root/.pi" ]
+  cfg_test_no_install
 }

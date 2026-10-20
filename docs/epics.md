@@ -582,6 +582,16 @@ The epic follows a walking skeleton, vertical slices, and a closure story. Story
 
 Providers are selected from the maintainer's exploration in a private VM laboratory and recorded as reviewed updates of `docs/mvp-scope.md`. The exploration itself stays outside the product; a story's plan registers a choice once the VM proves it.
 
+**Bounded workbench extension.** The reviewed workbench advances the Story 4.2 foundation and a bounded
+subset of development work from Stories 4.6/4.7. Native terminal appearance/key paths, Right Alt Compose and
+editor-owned Lazygit defaults do not imply a complete desktop shell, global visual coherence, Docker, all
+development tooling or safe AUR updating. Source declarations and contract tests do not replace separate-VM
+reconstruction and attended acceptance. The bounded development subset comprises the user-level Zsh, Tmux with
+Sesh, NVM-managed Node.js, Pi executable and initialize-only `~/.pi`, the external Neovim and pi-config
+synchronization, and the Google Cloud CLI. It does not complete Story 4.3, 4.6 or 4.7, and it leaves the
+`verify` runtime, Docker and the remaining development tooling to their owning stories. Story numbers and the
+remaining obligations stay unchanged.
+
 **Common contract.** Each slice applies the following to what it applies, and its criteria cite this contract instead of repeating it:
 
 - Bounded Bash `configure` scripts over native Arch and application formats, as decided by ADR 0010.

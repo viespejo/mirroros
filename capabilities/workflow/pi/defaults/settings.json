@@ -1,0 +1,91 @@
+{
+  "defaultProvider": "openai-codex-work",
+  "defaultModel": "gpt-6-luna",
+  "defaultThinkingLevel": "medium",
+  "enableSkillCommands": true,
+  "hideThinkingBlock": true,
+  "enabledModels": [
+    "google-gemini-cli/gemini-3-flash-preview",
+    "google-gemini-cli/gemini-3.1-pro-preview",
+    "google-vertex-anthropic/claude-opus-4-6",
+    "google-vertex-anthropic/claude-sonnet-4-6",
+    "google-vertex-anthropic/claude-opus-4-8",
+    "openai-codex/gpt-6-luna",
+    "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-6.1-sol",
+    "openai-codex/gpt-6-astra",
+    "openai-codex-work/gpt-6-luna",
+    "openai-codex-work/gpt-5.6-terra",
+    "openai-codex-work/gpt-6.1-sol",
+    "openai-codex-work/gpt-6-astra",
+    "pi-sub-anthropic/claude-opus-5-5",
+    "pi-sub-anthropic/claude-sonnet-5-5",
+    "pi-sub-anthropic/claude-fable-5-1",
+    "google-vertex/gemini-4-argon",
+    "google-vertex/gemini-3.8-flash"
+  ],
+  "permissionGate": {
+    "permissions": {
+      "allow": [
+        "Bash(rg *)",
+        "Bash(ls *)",
+        "Bash(find *)"
+      ],
+      "ask": [
+        "Bash(ls -R *)"
+      ],
+      "deny": []
+    }
+  },
+  "packages": [
+    {
+      "source": "npm:@codexstar/pi-listen",
+      "extensions": [
+        "+extensions/voice.ts"
+      ]
+    },
+    {
+      "source": "npm:pi-mermaid",
+      "extensions": [
+        "+index.ts"
+      ]
+    },
+    {
+      "source": "npm:pi-extension-manager",
+      "extensions": [
+        "-src/index.ts"
+      ]
+    },
+    "npm:pi-resource-center",
+    "npm:pi-sub-anthropic",
+    {
+      "source": "npm:pi-web-access",
+      "extensions": [
+        "+dist/index.js"
+      ]
+    }
+  ],
+  "quietStartup": true,
+  "theme": "dark",
+  "treeFilterMode": "no-tools",
+  "tuiMode": "regular",
+  "voice": {
+    "version": 2,
+    "enabled": false,
+    "language": "es",
+    "scope": "global",
+    "backend": "local",
+    "localModel": "parakeet-v3",
+    "toggleShortcut": "ctrl+shift+v",
+    "ttsEnabled": false,
+    "ttsBackend": "local",
+    "ttsLocalModel": "kitten-nano-en-v0_2",
+    "ttsLocalVoiceId": 0,
+    "ttsDeepgramVoiceId": "aura-asteria-en",
+    "ttsSpeed": 1,
+    "ttsAutoSpeak": true,
+    "autoSubmitOnSpeak": false,
+    "holdThresholdMs": 700,
+    "ttsDeepgramStreaming": false
+  }
+}

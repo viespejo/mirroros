@@ -1,0 +1,6 @@
+# managed by MirrorOS configure
+# Trusted user-local environment only: exports, no output or provisioning.
+for env_file in "$HOME"/.config/zsh/env.d/*.zsh(N); do
+  source "$env_file"
+done
+unset env_file

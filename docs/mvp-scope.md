@@ -64,15 +64,15 @@ project-owned QML.
 | Desktop portals | configure | open — selected by Story 4.5 | |
 | Clipboard and history | configure | open — selected by Story 4.5 | |
 | Screenshots | configure | open — selected by Story 4.5 | |
-| Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3; each slice binds its own actions |
+| Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3; each slice binds its own actions. Session and greeter default to Right Alt Compose without changing the resolved layout; AltGr overrides use native ownership rules in the configure procedure |
 
 ### Workflow
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Terminal | configure | foot | Selected by Story 4.2 |
-| Interactive shell | configure | bash with Starship | Selected by Story 4.2 |
-| Terminal multiplexer | configure | tmux | |
+| Terminal | configure | foot | Workbench-local Tokyo Night palette, JetBrainsMono Nerd Font Mono 14, centered 16x16 padding and CSI-u key paths; not a global visual provider selection |
+| Interactive shell | configure | Zsh with Starship | Default interactive login shell with Zplug, vi editing, autosuggestions, syntax highlighting, Fzf, Zoxide and local-only Atuin; plugins are provisioned by `configure`, never at shell startup. Bash remains the implementation language of bounded scripts |
+| Terminal multiplexer | configure | tmux | Native configuration with TPM plugins (Resurrect/Continuum, Neovim-aware navigation) and Sesh as the session selector from a reviewed local package recipe; Floax is excluded |
 | File manager | configure | open — selected by Story 4.5 | |
 | Browser | configure | open — selected by Story 4.5 | |
 
@@ -80,12 +80,13 @@ project-owned QML.
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Version control | configure | Git | |
-| Editor | configure | Neovim | Package delivered by installation; configuration applied by `configure` from an external configuration repository (Story 4.6) |
-| Coding agent | configure | Pi | Configuration applied from an external configuration repository (Story 4.6) |
+| Version control | configure | Git and Lazygit | Lazygit is an approved editor integration; portable native settings, no personal state or pager/browser expansion |
+| Editor | configure | Neovim | Package delivered by installation; configuration applied by `configure` from an external configuration repository (Story 4.6). The workbench synchronizes the current branch tip and prepares only the bounded external tools |
+| Coding agent | configure | Pi | Configuration applied from an external configuration repository (Story 4.6). The workbench installs the executable in the user's NVM runtime and initializes `~/.pi` only when it is absent; an existing directory is never reconciled |
 | Container runtime | configure | Docker | Story 4.6 |
 | Command-line search utilities | configure | open — selected by Story 4.6 | |
-| Node.js runtime for Pi and `verify` | configure | open — selected by Story 4.6 | |
+| Node.js runtime for Pi and `verify` | configure | NVM-managed Node.js for Pi; `verify` runtime open — selected by Story 4.6 | User-level installation; the live-ISO Node.js keeps its installer responsibilities |
+| Cloud CLI | configure | Google Cloud CLI | User-level SDK from a verified archive; authentication and Vertex AI setup stay attended |
 
 ### User
 
@@ -99,7 +100,7 @@ project-owned QML.
 
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
-| Typography | configure | open — selected by Story 4.8 | Story 4.2 uses provisional `ttf-jetbrains-mono-nerd`; Story 4.8 may replace it |
+| Typography | configure | open — selected by Story 4.8 | The workbench terminal uses `ttf-jetbrains-mono-nerd` and `noto-fonts-emoji`; global typography remains Story 4.8 work |
 | Coherent color palette across components | configure | open — selected by Story 4.8 | |
 | SDDM greeter theme | configure | Owned QML theme | Designed so that it can later match a boot splash |
 | Cursor and icons | configure | open — selected by Story 4.8 | |
@@ -211,7 +212,5 @@ These items are outside the frozen scope. None of them is decided here.
 
 - Keyboard remapping (kanata or kmonad).
 - tmuxinator.
-- atuin.
-- lazygit.
-- gh and gcloud.
+- gh.
 - Applications such as calibre, GIMP, and Insomnia.

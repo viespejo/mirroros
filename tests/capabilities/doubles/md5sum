@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+# Only the Google Cloud CLI archive verification is simulated; every other invocation uses the real tool.
+if [[ "${1:-}" == --check && "${2:-}" == --status ]]; then
+  line="$(cat)"
+  printf 'md5sum %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+  [[ "$line" == c3d491ff5bb2a19aa9fbf86f2e0e9eba\ \ "${CFG_TEST_HOME:?}"/.local/opt/.google-cloud-sdk.mirroros.*/archive.tgz ]] || exit 97
+  [[ ${CFG_TEST_GCLOUD_TAMPER:-} != md5 ]]
+  exit $?
+fi
+exec /usr/bin/md5sum "$@"

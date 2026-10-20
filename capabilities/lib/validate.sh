@@ -107,7 +107,7 @@ cfg_validate() {
   fi
   if (( context_ok )); then
     for tool in bash pacman runuser systemctl install id awk grep cmp dirname mkdir chmod chown \
-      ln readlink rm mv cat date find sort stat mktemp; do
+      ln readlink rm mv cat date find sort stat mktemp usermod; do
       # shellcheck disable=SC2016 # The target Bash resolves its own tool path from the positional argument.
       if ! cfg_exec bash -c 'command -v "$1"' bash "$tool" > /dev/null 2>&1; then
         cfg_problem "Missing base tool: $tool; restore the base installation."

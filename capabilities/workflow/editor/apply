@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+# Prerequisites: validated package declarations (neovim is installation-owned; git, base-devel and rust come from the
+#   earlier node and tmux steps), a non-root target user, the declared Node.js runtime, and HTTPS access to GitHub
+#   and the tool registries when sources or tools are missing.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: Lazygit and the editor prerequisites installed; managed Lazygit and vim wrapper files exist; the
+#   selected branch of the Neovim configuration is a clean clone at ~/code/nvim, linked from ~/.config/nvim unless
+#   the user owns that path; locked plugins, tools and parsers are prepared for the applied commit.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_user_file "$STEP_DIR/lazygit.yml" .config/lazygit/config.yml
+cfg_user_file "$STEP_DIR/vim" .local/bin/vim 0755
+
+cfg_repository_sync nvim https://github.com/viespejo/nvim-lua-new master code/nvim
+cfg_user_link code/nvim .config/nvim
+
+node_version="$(cfg_node_version)" || exit 6
+cfg_user_script "$STEP_DIR/prepare-nvim" apply "$node_version" "$CFG_REPOSITORY_COMMIT"
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_file_present .config/lazygit/config.yml
+cfg_require cfg_user_file_present .local/bin/vim
+cfg_require cfg_user_link_present .config/nvim
+cfg_require cfg_user_script "$STEP_DIR/prepare-nvim" check "$node_version" "$CFG_REPOSITORY_COMMIT"

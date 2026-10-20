@@ -1,1 +1,9 @@
 starship extra
+zsh extra
+fzf extra
+zoxide extra
+atuin extra
+fd extra
+bat extra
+tree extra
+ripgrep extra

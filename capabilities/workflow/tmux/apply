@@ -1,9 +1,33 @@
 #!/usr/bin/bash
-# Prerequisites: validated package declarations.
-# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, STEP_DIR and shared helpers.
-# Postconditions: tmux installed; no configuration file is introduced.
+# Prerequisites: validated package declarations (git comes from workflow/node, fzf and zoxide from workflow/shell,
+#   which run earlier), a non-root target user, and HTTPS access to GitHub when sources are missing.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: tmux and its prerequisites installed; managed native Tmux files exist; Sesh is installed from
+#   the reviewed recipe; TPM, the selected plugins and the compiled tmux-thumbs binaries exist at identified sources.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
+cfg_user_file "$STEP_DIR/tmux.conf" .config/tmux/tmux.conf
+cfg_user_file "$STEP_DIR/tmux.bindings.conf" .config/tmux/tmux.bindings.conf
+cfg_user_file "$STEP_DIR/tmux.navigator.conf" .config/tmux/tmux.navigator.conf
+cfg_user_file "$STEP_DIR/tmux.theme.conf" .config/tmux/tmux.theme.conf
+
+cfg_local_package_ensure sesh-bin "$STEP_DIR/sesh/PKGBUILD" "$STEP_DIR/build-sesh"
+cfg_source_record sesh 'https://github.com/joshmedeski/sesh/releases/download/v2.33.0/sesh_Linux_x86_64.tar.gz' \
+  v2.33.0 863935c8caa3cc40cac6adcd344ac9742e51739f "$(cfg_recipe_version "$STEP_DIR/sesh/PKGBUILD")"
+
+cfg_user_script "$STEP_DIR/install-plugins" apply
+{
+  read -r _
+  while read -r name source commit; do
+    cfg_source_record "$name" "$source" '' "$commit" ''
+  done
+} <<< "$CFG_USER_SCRIPT_RESULT"
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_file_present .config/tmux/tmux.conf
+cfg_require cfg_user_file_present .config/tmux/tmux.bindings.conf
+cfg_require cfg_user_file_present .config/tmux/tmux.navigator.conf
+cfg_require cfg_user_file_present .config/tmux/tmux.theme.conf
+cfg_require cfg_local_package_present sesh-bin "$STEP_DIR/sesh/PKGBUILD"
+cfg_require cfg_user_script "$STEP_DIR/install-plugins" check

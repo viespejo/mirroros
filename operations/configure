@@ -14,9 +14,9 @@ if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
   exit 6
 fi
 
-for library in common validate packages files units evidence; do
+for library in common validate packages files units evidence repositories; do
   library_path="$CAPABILITIES_DIR/lib/$library.sh"
-  # shellcheck disable=SC1090 # The six required libraries are checked before loading.
+  # shellcheck disable=SC1090 # The required libraries are checked before loading.
   if [[ ! -f "$library_path" ]] || ! bash -n "$library_path" || ! source "$library_path"; then
     printf '%s\n' 'MirrorOS: incomplete or damaged checkout; configure capability helpers could not be loaded.' \
       'Restore capabilities/ from Git or re-clone the repository.' >&2

@@ -1,0 +1,5 @@
+{
+  "app.model.select": ["alt+l"],
+  "app.model.cycleForward": ["alt+p"],
+  "app.model.cycleBackward": ["alt+n"]
+}

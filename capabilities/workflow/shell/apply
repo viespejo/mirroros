@@ -1,13 +1,34 @@
 #!/usr/bin/bash
-# Prerequisites: validated package declarations and a non-root target user using bash.
+# Prerequisites: validated package declarations (git comes from workflow/node, which runs earlier), a non-root
+#   target user using bash, and HTTPS access to GitHub when plugin sources are missing.
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
-# Postconditions: Starship installed; initialization exists and bashrc has its marked block.
+# Postconditions: shell tools and Zsh installed; Starship initialization exists and bashrc has its marked block;
+#   managed Zsh startup files and the identified Zplug/plugin sources exist; Zsh is the login shell unless the
+#   user chose a shell other than Bash.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_user_file "$STEP_DIR/starship.bash" .config/mirroros/bash/starship.bash
 cfg_bashrc_block .config/mirroros/bash/starship.bash
+cfg_user_file "$STEP_DIR/zshenv" .zshenv
+cfg_user_file "$STEP_DIR/zshrc" .zshrc
+cfg_user_file "$STEP_DIR/zprofile" .zprofile
+
+cfg_user_script "$STEP_DIR/install-plugins" apply
+{
+  read -r _
+  while read -r name source commit; do
+    cfg_source_record "$name" "$source" '' "$commit" ''
+  done
+} <<< "$CFG_USER_SCRIPT_RESULT"
+
+cfg_login_shell /usr/bin/zsh
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_user_file_present .config/mirroros/bash/starship.bash
 cfg_require cfg_bashrc_block_present
+cfg_require cfg_user_file_present .zshenv
+cfg_require cfg_user_file_present .zshrc
+cfg_require cfg_user_file_present .zprofile
+cfg_require cfg_user_script "$STEP_DIR/install-plugins" check
+cfg_require cfg_login_shell_present /usr/bin/zsh

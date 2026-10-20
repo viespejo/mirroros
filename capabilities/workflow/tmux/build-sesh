@@ -1,0 +1,38 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- build <base64 recipe>.
+# build: writes the reviewed PKGBUILD into an owned staging directory, builds it with makepkg without installing
+#   anything, and leaves the package in ~/.cache/mirroros/sesh for the privileged installation.
+# Output: "built <package path>".
+set -Eeuo pipefail
+
+mode=${1:?}
+recipe=${2:?}
+[[ "$mode" == build ]] || exit 6
+cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+[[ "$cache_home" == /* ]] || exit 6
+packages="$cache_home/mirroros/sesh"
+staging=''
+
+fail() { printf 'tmux: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  [[ -z "$staging" || "$staging" != "$packages"/.build.* ]] || rm -rf -- "$staging"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+command -v makepkg > /dev/null 2>&1 || fail 'makepkg is missing; install base-devel before rerunning'
+mkdir -p -- "$packages"
+[[ ! -L "$packages" ]] || fail "$packages is a symbolic link; preserved unchanged"
+staging="$(mktemp -d "$packages/.build.XXXXXXXX")"
+printf '%s' "$recipe" | base64 -d > "$staging/PKGBUILD" || fail 'the recipe is not valid base64'
+
+export PKGDEST="$packages" SRCDEST="$staging/sources" BUILDDIR="$staging/build"
+cd "$staging"
+package="$(makepkg --packagelist)" || fail 'the recipe cannot be built on this system'
+[[ "$package" == "$packages"/*.pkg.tar.* && "$package" != *$'\n'* ]] || fail 'unexpected package list from makepkg'
+makepkg --force --noconfirm --nocolor < /dev/null >&2 || fail 'makepkg failed; review its output above'
+[[ -f "$package" ]] || fail "makepkg did not produce $package"
+printf 'built %s\n' "$package"

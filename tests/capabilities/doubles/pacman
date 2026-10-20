@@ -13,7 +13,9 @@ case "$mode" in
   -Q)
     name="${!#}"
     [[ -e "$CFG_TEST_INSTALLED/$name" || "${CFG_TEST_ALL_INSTALLED:-0}" == 1 ]] || exit 1
-    printf '%s 1.0-1\n' "$name" ;;
+    # A locally installed package keeps the version of its file; official fixtures are always 1.0-1.
+    version="$(cat -- "$CFG_TEST_INSTALLED/$name" 2> /dev/null || true)"
+    printf '%s %s\n' "$name" "${version:-1.0-1}" ;;
   -Qu)
     printf '%s' "${CFG_TEST_UPGRADES:-}"
     exit "${CFG_TEST_QUERY_STATUS:-0}" ;;
@@ -23,5 +25,10 @@ case "$mode" in
       [[ "$package" != -* ]] || continue
       : > "$CFG_TEST_INSTALLED/${package#*/}"
     done ;;
+  -U)
+    [[ "${CFG_TEST_INSTALL_FAIL:-0}" != 1 ]] || exit 17
+    file="$(basename -- "${!#}")"
+    [[ "$file" =~ ^(.+)-([0-9][^-]*-[0-9.]+)-[^-]+\.pkg\.tar\.zst$ ]] || exit 97
+    printf '%s\n' "${BASH_REMATCH[2]}" > "$CFG_TEST_INSTALLED/${BASH_REMATCH[1]}" ;;
   *) printf 'Unexpected pacman mode: %s\n' "$mode" >&2; exit 97 ;;
 esac

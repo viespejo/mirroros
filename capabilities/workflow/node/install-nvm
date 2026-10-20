@@ -1,0 +1,99 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- <apply|check> <node-version>.
+# apply: installs the identified NVM release and the selected Node.js only when the runtime is missing.
+# check: read-only postcondition for the selected runtime and the on-demand NVM loader.
+# Output of apply: "<changed|unchanged> <nvm-ref|-> <nvm-commit|->". Child output goes to stderr.
+set -Eeuo pipefail
+
+nvm_release=v0.40.8
+nvm_commit=a885b885fef16fac4bc544188fb25e9e37ae83e8
+installer_sha256=48a0eee9a60e07422dce0eb5774754c83889570ca1ee2566c516acbe8af03a9e
+installer_url="https://raw.githubusercontent.com/nvm-sh/nvm/$nvm_release/install.sh"
+
+mode=${1:?}
+node_version=${2:?}
+[[ "$node_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 6
+nvm_dir="$HOME/.nvm"
+node_bin="$nvm_dir/versions/node/$node_version/bin"
+staging=''
+
+# Inherited manager, mirror, prefix and startup variables must not redirect the reviewed installation.
+unset BASH_ENV ENV NVM_SOURCE NVM_INSTALL_GITHUB_REPO NVM_METHOD NVM_PROFILE NVM_ENV NVM_NODEJS_ORG_MIRROR \
+  NVM_IOJS_ORG_MIRROR NODE_OPTIONS NODE_PATH NODE_VERSION NODE_MIRROR npm_config_prefix NPM_CONFIG_PREFIX PREFIX
+
+fail() { printf 'node: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  [[ -n "$staging" && "$staging" == "$HOME"/.nvm.mirroros.* ]] && rm -rf -- "$staging"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+runtime_present() {
+  [[ -s "$nvm_dir/nvm.sh" && -x "$node_bin/node" && -x "$node_bin/npm" ]] &&
+    [[ "$("$node_bin/node" --version)" == "$node_version" ]]
+}
+
+# True only for a standalone clone at the identified commit without tracked modifications.
+selected_nvm() {
+  local status
+  [[ -d "$1" && ! -L "$1" && -d "$1/.git" && ! -L "$1/.git" ]] || return 1
+  [[ "$(git --no-optional-locks -C "$1" rev-parse HEAD)" == "$nvm_commit" ]] || return 1
+  status="$(git --no-optional-locks -C "$1" status --porcelain=v1 --untracked-files=no)" || return 1
+  [[ -z "$status" ]]
+}
+
+report() {
+  local ref=- commit=-
+  if selected_nvm "$nvm_dir"; then ref=$nvm_release commit=$nvm_commit; fi
+  printf '%s %s %s\n' "$1" "$ref" "$commit"
+}
+
+install_nvm() {
+  staging="$(mktemp -d "$HOME/.nvm.mirroros.XXXXXXXX")"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --connect-timeout 20 --max-time 120 \
+    --output "$staging/install.sh" "$installer_url" < /dev/null >&2 || fail "cannot download the NVM $nvm_release installer"
+  printf '%s  %s\n' "$installer_sha256" "$staging/install.sh" | sha256sum --check --status ||
+    fail "NVM installer checksum mismatch; nothing was executed"
+  # The installer builds the staged tree without editing shell profiles; the tree is published only if verified.
+  mkdir -- "$staging/nvm"
+  NVM_DIR="$staging/nvm" PROFILE=/dev/null NVM_INSTALL_VERSION="$nvm_release" \
+    bash --noprofile --norc "$staging/install.sh" < /dev/null >&2 || fail "NVM $nvm_release installer failed"
+  selected_nvm "$staging/nvm" || fail "installed NVM does not match release $nvm_release ($nvm_commit)"
+  [[ ! -e "$nvm_dir" && ! -L "$nvm_dir" ]] || fail "$nvm_dir appeared during installation; preserved unchanged"
+  mv -T --no-clobber -- "$staging/nvm" "$nvm_dir"
+  [[ ! -e "$staging/nvm" ]] || fail "$nvm_dir appeared during publication; preserved unchanged"
+}
+
+case "$mode" in
+  check) runtime_present; exit ;;
+  apply) ;;
+  *) exit 6 ;;
+esac
+
+if runtime_present; then
+  report unchanged
+  exit 0
+fi
+
+if [[ -e "$nvm_dir" || -L "$nvm_dir" ]]; then
+  selected_nvm "$nvm_dir" || fail "existing $nvm_dir is not the unmodified NVM $nvm_release; preserved unchanged. \
+Install Node.js $node_version with it manually or move it aside, then rerun configure"
+else
+  install_nvm
+fi
+
+# nvm.sh is not safe under errexit/nounset; it is sourced only here, never from shell startup files.
+if ! (
+  set +eu
+  export NVM_DIR="$nvm_dir"
+  # shellcheck disable=SC1091 # The verified NVM release is sourced from the user's installation.
+  . "$nvm_dir/nvm.sh" --no-use || exit 1
+  nvm install "$node_version" --no-progress
+) < /dev/null >&2; then
+  fail "Node.js $node_version installation failed; review configure.log and rerun"
+fi
+runtime_present || fail "Node.js $node_version is not available after installation"
+report changed

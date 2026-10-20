@@ -1,0 +1,95 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- <apply|check>.
+# apply: installs the identified Google Cloud CLI archive only when the declared installation is missing.
+# check: read-only postcondition for the declared installation, run with an isolated throwaway CLI configuration.
+# Output of apply: "<changed|unchanged> <version> <sha256|->" (the SHA256 only when the archive was verified).
+# Child output goes to stderr.
+# The versioned archive identity below was reviewed during development: size and MD5 match the metadata of the
+# official Google Cloud Storage object; the SHA256 was computed locally from that object and is NOT a checksum
+# published by upstream. install.sh, gcloud init, components and authentication are never run.
+set -Eeuo pipefail
+
+version=589.0.0
+archive_url="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-$version-linux-x86_64.tar.gz"
+archive_size=93451089
+archive_md5=c3d491ff5bb2a19aa9fbf86f2e0e9eba
+archive_sha256=f865da648f6fdae2015abb5b32eaa0eb10520e88f0ca735cfb33795868c8d26f
+
+mode=${1:?}
+opt_dir="$HOME/.local/opt"
+install_dir="$opt_dir/google-cloud-sdk-$version"
+staging=''
+config_dir=''
+
+# Inherited interpreter, configuration and component settings must not redirect the reviewed installation.
+unset BASH_ENV ENV CLOUDSDK_PYTHON CLOUDSDK_PYTHON_SITEPACKAGES CLOUDSDK_ROOT_DIR PYTHONHOME PYTHONPATH
+export CLOUDSDK_CORE_DISABLE_USAGE_REPORTING=true CLOUDSDK_COMPONENT_MANAGER_DISABLE_UPDATE_CHECK=true
+
+fail() { printf 'gcloud: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  [[ -n "$staging" && "$staging" == "$opt_dir"/.google-cloud-sdk.mirroros.* ]] && rm -rf -- "$staging"
+  [[ -z "$config_dir" ]] || rm -rf -- "$config_dir"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+# True only for a real directory of the declared version; nothing is executed.
+installed() {
+  [[ -d "$1" && ! -L "$1" && -x "$1/bin/gcloud" && -f "$1/VERSION" && ! -L "$1/VERSION" ]] &&
+    [[ "$(< "$1/VERSION")" == "$version" ]]
+}
+
+install_archive() {
+  local archive extract
+  mkdir -p -- "$opt_dir"
+  staging="$(mktemp -d "$opt_dir/.google-cloud-sdk.mirroros.XXXXXXXX")"
+  archive="$staging/archive.tgz"
+  extract="$staging/extract"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --connect-timeout 20 --max-time 900 \
+    --output "$archive" "$archive_url" < /dev/null >&2 || fail "cannot download the Google Cloud CLI $version archive"
+  [[ "$(stat -c %s -- "$archive")" == "$archive_size" ]] ||
+    fail "Google Cloud CLI archive size mismatch; nothing was extracted"
+  printf '%s  %s\n' "$archive_md5" "$archive" | md5sum --check --status ||
+    fail "Google Cloud CLI archive MD5 mismatch; nothing was extracted"
+  printf '%s  %s\n' "$archive_sha256" "$archive" | sha256sum --check --status ||
+    fail "Google Cloud CLI archive SHA256 mismatch; nothing was extracted"
+  mkdir -- "$extract"
+  tar -xzf "$archive" --no-same-owner -C "$extract" < /dev/null >&2 || fail "cannot extract the Google Cloud CLI archive"
+  [[ "$(find "$extract" -mindepth 1 -maxdepth 1 -printf '%f\n')" == google-cloud-sdk ]] ||
+    fail "unexpected Google Cloud CLI archive layout; nothing was published"
+  installed "$extract/google-cloud-sdk" ||
+    fail "the archive does not contain Google Cloud CLI $version; nothing was published"
+  [[ ! -e "$install_dir" && ! -L "$install_dir" ]] || fail "$install_dir appeared during installation; preserved unchanged"
+  mv -T --no-clobber -- "$extract/google-cloud-sdk" "$install_dir"
+  [[ ! -e "$extract/google-cloud-sdk" ]] || fail "$install_dir appeared during publication; preserved unchanged"
+}
+
+# The version report uses a throwaway CLI configuration so no account or settings are ever created or read.
+reports_version() {
+  local report
+  config_dir="$(mktemp -d)"
+  report="$(CLOUDSDK_CONFIG="$config_dir" "$install_dir/bin/gcloud" --version < /dev/null 2> /dev/null)" || return 1
+  [[ "${report%%$'\n'*}" == "Google Cloud SDK $version" ]]
+}
+
+case "$mode" in
+  check) installed "$install_dir" && reports_version; exit ;;
+  apply) ;;
+  *) exit 6 ;;
+esac
+
+if installed "$install_dir"; then
+  printf 'unchanged %s -\n' "$version"
+  exit 0
+fi
+
+if [[ -e "$install_dir" || -L "$install_dir" ]]; then
+  fail "existing $install_dir is not the Google Cloud CLI $version installation; preserved unchanged. \
+Move it aside, then rerun configure"
+fi
+install_archive
+installed "$install_dir" || fail "Google Cloud CLI $version is not available after installation"
+printf 'changed %s %s\n' "$version" "$archive_sha256"

@@ -1,8 +1,11 @@
 # Ordered capability paths relative to capabilities/. No discovery or resume state.
 CFG_STEPS=(
   desktop/terminal
+  workflow/node
   workflow/shell
   workflow/tmux
+  workflow/editor
+  workflow/pi
   desktop/compositor/providers/hyprland
   desktop/login
 )

@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+# Only the NVM installer and Google Cloud CLI archive verifications are simulated; every other invocation uses the real tool.
+if [[ "${1:-}" == --check && "${2:-}" == --status ]]; then
+  line="$(cat)"
+  printf 'sha256sum %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+  if [[ "$line" == f865da648f6fdae2015abb5b32eaa0eb10520e88f0ca735cfb33795868c8d26f\ \ "${CFG_TEST_HOME:?}"/.local/opt/.google-cloud-sdk.mirroros.*/archive.tgz ]]; then
+    [[ ${CFG_TEST_GCLOUD_TAMPER:-} != sha256 ]]
+    exit $?
+  fi
+  [[ "$line" == 48a0eee9a60e07422dce0eb5774754c83889570ca1ee2566c516acbe8af03a9e\ \ "${CFG_TEST_HOME:?}"/.nvm.mirroros.*/install.sh ]] || exit 97
+  [[ ${CFG_TEST_INSTALLER_TAMPERED:-0} != 1 ]]
+  exit $?
+fi
+exec /usr/bin/sha256sum "$@"

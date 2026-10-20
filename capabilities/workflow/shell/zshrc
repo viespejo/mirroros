@@ -1,0 +1,106 @@
+# managed by MirrorOS configure
+# Interactive Zsh baseline. Plugins are installed during provisioning, never at startup.
+# History options adapted from prezto's history module (Robby Russell, Sorin Ionescu; MIT).
+source "$HOME/.config/mirroros/node/environment.zsh"
+
+export EDITOR=nvim
+export VISUAL=nvim
+export MANPAGER=less
+
+# piw wrapper for pi with editor-context
+piw() {
+  EDITOR=pi-editor \
+  VISUAL=pi-editor \
+  PI_EDITOR_OPEN_MODE=auto \
+  pi "$@"
+}
+
+# History
+setopt BANG_HIST EXTENDED_HISTORY SHARE_HISTORY HIST_EXPIRE_DUPS_FIRST HIST_IGNORE_DUPS
+setopt HIST_IGNORE_ALL_DUPS HIST_FIND_NO_DUPS HIST_IGNORE_SPACE HIST_SAVE_NO_DUPS HIST_VERIFY
+HISTFILE="$HOME/.zhistory"
+HISTSIZE=10000
+SAVEHIST=10000
+
+# Fzf: file and directory searches with previews
+export FZF_DEFAULT_COMMAND='fd --hidden --no-ignore --exclude .git --exclude node_modules'
+export FZF_DEFAULT_OPTS='--ansi -m --reverse --inline-info'
+export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND --type f . $HOME"
+export FZF_CTRL_T_OPTS="--height 100% --bind='?:toggle-preview' --preview 'bat --style=numbers --color=always --line-range :500 {}'"
+export FZF_ALT_C_COMMAND="$FZF_DEFAULT_COMMAND --type d . $HOME"
+export FZF_ALT_C_OPTS="--height 100% --bind='?:toggle-preview' --preview 'tree -C -I \"node_modules|.git\" {} | head -200'"
+
+_fzf_compgen_path() {
+  fd --hidden --follow --exclude node_modules --exclude ".git" . "$1"
+}
+
+_fzf_compgen_dir() {
+  fd --type d --hidden --follow --exclude node_modules --exclude ".git" . "$1"
+}
+
+# Run after zsh-vi-mode (re)initializes its keymaps, otherwise it overrides these bindings
+mirroros_init() {
+  source /usr/share/fzf/key-bindings.zsh
+  source /usr/share/fzf/completion.zsh
+  eval "$(atuin init zsh --disable-up-arrow)"
+  # Ctrl+R: fzf history in insert mode, Atuin search in normal mode
+  bindkey -M viins '^R' fzf-history-widget
+  bindkey -M vicmd '^R' atuin-search-vicmd
+  bindkey '^ ' autosuggest-accept
+  if [[ "${terminfo[kcbt]}" != "" ]]; then
+    bindkey "${terminfo[kcbt]}" reverse-menu-complete
+  fi
+}
+zvm_after_init_commands+=(mirroros_init)
+
+eval "$(starship init zsh)"
+eval "$(zoxide init zsh)"
+
+# Plugins
+export ZPLUG_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/zplug"
+source "$ZPLUG_HOME/init.zsh"
+
+zplug "jeffreytse/zsh-vi-mode"
+zplug "zsh-users/zsh-syntax-highlighting", defer:3
+zplug "zsh-users/zsh-autosuggestions", defer:3
+zplug "lib/completion", from:oh-my-zsh, defer:2
+zplug "zsh-users/zsh-completions", defer:3
+
+zplug load
+
+# Alias sets from the identified oh-my-zsh clone, sourced directly: zplug's from:oh-my-zsh plugin loading
+# rebuilds its cache for several seconds at the first start, while sourcing these files adds about 10 ms.
+for omz_plugin in git common-aliases; do
+  [[ -r "$ZPLUG_HOME/repos/robbyrussell/oh-my-zsh/plugins/$omz_plugin/$omz_plugin.plugin.zsh" ]] &&
+    source "$ZPLUG_HOME/repos/robbyrussell/oh-my-zsh/plugins/$omz_plugin/$omz_plugin.plugin.zsh"
+done
+unset omz_plugin
+
+# Completion list colors
+# dircolors emits nothing for a TERM missing from its database (foot), so generate for xterm-256color
+eval "$(TERM=xterm-256color dircolors -b)"
+zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
+
+alias ls='ls --color=auto'
+alias v='vim'
+alias nvim='vim'
+
+# Alias hints in pure Zsh (no extra process): name the longest alias whose expansion starts the typed command.
+mirroros_alias_hint() {
+  [[ "$1" == "$2" ]] || return 0
+  local name value best='' best_length=0
+  for name value in "${(@kv)aliases}"; do
+    [[ "$1" == "$value" || "$1" == "$value "* ]] || continue
+    (( ${#value} > best_length || (${#value} == best_length && ${#name} < ${#best}) )) || continue
+    best=$name best_length=${#value}
+  done
+  [[ -z "$best" ]] || print -P -- "%F{yellow}Alias tip:%f $best"
+}
+autoload -Uz add-zsh-hook
+add-zsh-hook preexec mirroros_alias_hint
+
+# Load trusted user-local configuration in alphabetical order.
+for config_file in "$HOME"/.config/zsh/conf.d/*.zsh(N); do
+  source "$config_file"
+done
+unset config_file

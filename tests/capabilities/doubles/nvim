@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'nvim %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+printf 'nvim-path %s\n' "${PATH%%:*}" >> "$CFG_TEST_CALLS"
+[[ "$1" == --headless ]] || exit 97
+# Only the three reviewed preparation invocations exist, and only below the fixture home.
+case "$*" in
+  '--headless +Lazy! restore +qa') step=restore; mkdir -p "${CFG_TEST_HOME:?}/.local/share/nvim/lazy/lazy.nvim" ;;
+  "--headless -c lua require('config.prepare_tools').run() -c qa") step=tools ;;
+  "--headless -c lua require('config.treesitter').run() -c qa") step=treesitter ;;
+  *) exit 97 ;;
+esac
+if [[ "${CFG_TEST_NVIM_FAIL:-}" == "$step" ]]; then printf 'fixture %s failure\n' "$step" >&2; exit 17; fi

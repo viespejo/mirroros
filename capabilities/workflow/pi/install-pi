@@ -1,0 +1,98 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root):
+#   bash -s -- apply <node-version> <base64 pi-version.mjs>
+#   bash -s -- check <node-version> <pi-version>
+# apply: selects the Pi version once from the synchronized pi-config, installs it into the user's NVM prefix with
+#   npm lifecycle scripts disabled only when the installed version differs, and installs the locked pi-config runtime
+#   dependencies only when they are missing or its manifest or lockfile changed.
+# check: read-only postcondition for the selected Pi version and the pi-config dependencies.
+# Output of apply: "<changed|unchanged> <pi-version> <source>". Child output goes to stderr.
+set -Eeuo pipefail
+
+mode=${1:?}
+node_version=${2:?}
+argument=${3:?}
+[[ "$mode" == apply || "$mode" == check ]] || exit 6
+[[ "$node_version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 6
+prefix="$HOME/.nvm/versions/node/$node_version"
+node_bin="$prefix/bin"
+pi_config="$HOME/code/pi-config"
+package_name=@earendil-works/pi-coding-agent
+state_home="${XDG_STATE_HOME:-$HOME/.local/state}"
+[[ "$state_home" == /* ]] || exit 6
+stamp_directory="$state_home/mirroros/pi"
+stamp="$stamp_directory/pi-config-dependencies"
+workspace=''
+temporary=''
+
+# Inherited prefix, registry, startup and module variables must not redirect the selected installation.
+unset BASH_ENV ENV NODE_OPTIONS NODE_PATH NODE_VERSION npm_config_prefix NPM_CONFIG_PREFIX npm_config_registry \
+  NPM_CONFIG_REGISTRY npm_config_userconfig NPM_CONFIG_USERCONFIG npm_config_globalconfig NPM_CONFIG_GLOBALCONFIG PREFIX
+export PATH="$node_bin:$PATH"
+
+fail() { printf 'pi: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  [[ -z "$workspace" || "$workspace" != "${TMPDIR:-/tmp}"/mirroros-pi.* ]] || rm -rf -- "$workspace"
+  [[ -z "$temporary" ]] || rm -f -- "$temporary"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+installed_version() {
+  local manifest="$prefix/lib/node_modules/$package_name/package.json"
+  [[ -f "$manifest" && ! -L "$manifest" && -x "$node_bin/pi" ]] || return 1
+  node --print 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).version' "$manifest"
+}
+
+dependency_identity() {
+  [[ -f "$pi_config/package.json" && ! -L "$pi_config/package.json" &&
+    -f "$pi_config/package-lock.json" && ! -L "$pi_config/package-lock.json" ]] ||
+    fail "pi-config lacks a regular package.json and package-lock.json; resolve the selected repository manually"
+  cat -- "$pi_config/package.json" "$pi_config/package-lock.json" | sha256sum | cut -d' ' -f1
+}
+
+dependencies_present() {
+  [[ -d "$pi_config/node_modules" && ! -L "$pi_config/node_modules" && -f "$stamp" && ! -L "$stamp" &&
+    "$(< "$stamp")" == "$(dependency_identity)" ]]
+}
+
+if [[ "$mode" == check ]]; then
+  [[ "$(installed_version)" == "$argument" ]] || fail "Pi $argument is not installed under $prefix"
+  dependencies_present || fail "the pi-config runtime dependencies are not installed for its current lockfile"
+  exit 0
+fi
+
+[[ -x "$node_bin/node" && -x "$node_bin/npm" ]] || fail "the Node.js $node_version runtime is missing; rerun after workflow/node succeeds"
+
+workspace="$(mktemp -d "${TMPDIR:-/tmp}/mirroros-pi.XXXXXXXX")"
+printf '%s' "$argument" | base64 -d > "$workspace/pi-version.mjs" || fail 'the version selector is not valid base64'
+selection="$(node "$workspace/pi-version.mjs" "$pi_config/package.json" < /dev/null)" ||
+  fail "Pi version selection failed; resolve the reported pi-config declaration manually (no fallback was attempted)"
+IFS=$'\t' read -r version source extra <<< "$selection"
+[[ "$version" =~ ^[0-9A-Za-z.+-]+$ && "$source" =~ ^(exact_dependency|stable_registry)$ && -z "$extra" ]] ||
+  fail "unexpected Pi version selection output"
+
+outcome=unchanged
+if [[ "$(installed_version || true)" != "$version" ]]; then
+  npm install --global --prefix "$prefix" --ignore-scripts --no-audit --no-fund "$package_name@$version" < /dev/null >&2 ||
+    fail "installing Pi $version failed; review the output above and rerun"
+  [[ "$(installed_version || true)" == "$version" ]] || fail "Pi $version is not available after installation"
+  outcome=changed
+fi
+
+identity="$(dependency_identity)"
+if ! dependencies_present; then
+  (cd -- "$pi_config" && npm ci --ignore-scripts --omit=dev --omit=peer --no-audit --no-fund < /dev/null >&2) ||
+    fail "installing the pi-config runtime dependencies failed; review the output above and rerun"
+  mkdir -p -- "$stamp_directory"
+  temporary="$(mktemp "$stamp_directory/.mirroros-configure.XXXXXX")"
+  printf '%s\n' "$identity" > "$temporary"
+  mv -- "$temporary" "$stamp"
+  temporary=''
+  outcome=changed
+fi
+
+printf '%s %s %s\n' "$outcome" "$version" "$source"

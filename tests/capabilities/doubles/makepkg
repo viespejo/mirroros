@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'makepkg %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+# The recipe must be the one staged by the build script, inside the user's own cache, and nothing may leave it.
+[[ "$PWD" == "${CFG_TEST_HOME:?}/.cache/mirroros/sesh/.build."* && -f PKGBUILD ]] || exit 97
+[[ "$PKGDEST" == "$CFG_TEST_HOME/.cache/mirroros/sesh" && "$SRCDEST" == "$PWD/sources" && "$BUILDDIR" == "$PWD/build" ]] || exit 97
+version="$(awk -F= '$1 == "pkgver" { v = $2 } $1 == "pkgrel" { r = $2 } END { print v "-" r }' PKGBUILD)"
+package="$PKGDEST/sesh-bin-$version-x86_64.pkg.tar.zst"
+case "$1" in
+  --packagelist)
+    [[ ${CFG_TEST_MAKEPKG_UNSUPPORTED:-0} != 1 ]] || { printf 'fixture unsupported architecture\n' >&2; exit 1; }
+    printf '%s\n' "$package" ;;
+  --force)
+    [[ "$2" == --noconfirm && "$3" == --nocolor ]] || exit 97
+    if [[ ${CFG_TEST_MAKEPKG_FAIL:-0} == 1 ]]; then printf 'fixture build failure\n' >&2; exit 17; fi
+    printf 'fixture package\n' > "$package" ;;
+  *) exit 97 ;;
+esac

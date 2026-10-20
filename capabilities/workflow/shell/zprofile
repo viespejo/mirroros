@@ -1,0 +1,4 @@
+# managed by MirrorOS configure
+# Login shells receive the user Node.js runtime on PATH. The session model stays with uwsm; this file
+# neither forces TERM nor starts a display server.
+source "$HOME/.config/mirroros/node/environment.zsh"

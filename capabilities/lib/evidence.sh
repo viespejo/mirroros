@@ -61,6 +61,19 @@ cfg_package_record() {
   mv -- "$temporary" "$CFG_OUTPUT/packages.tsv"
 }
 
+cfg_source_record() {
+  local name="$1" source="$2" ref="$3" commit="$4" version="$5" line
+  local file="$CFG_OUTPUT/sources.tsv" temporary="$CFG_OUTPUT/.sources.tsv"
+  if [[ ! -e "$file" ]]; then cfg_record name source ref commit version > "$file"; fi
+  : > "$temporary"
+  while IFS= read -r line; do
+    [[ "${line%%$'\t'*}" != "$name" ]] || continue
+    printf '%s\n' "$line" >> "$temporary"
+  done < "$file"
+  cfg_record "$name" "$source" "$ref" "$commit" "$version" >> "$temporary"
+  mv -- "$temporary" "$file"
+}
+
 cfg_evidence_finish() {
   local outcome="$1" reason="$2" identity=unavailable dirty=unavailable step mode=default
   local temporary="$CFG_OUTPUT/.configure-run.tsv" content

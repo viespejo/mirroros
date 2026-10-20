@@ -15,6 +15,7 @@ if [[ "$1" == runuser ]]; then
   [[ "$home" == /* ]] || exit 97
   export CFG_TEST_HOME="$root$home"
 fi
+if [[ "$1" == usermod ]]; then export CFG_TEST_PASSWD_ROOT="$root"; fi
 if [[ "$1" == systemctl ]]; then
   shift
   case "$1" in

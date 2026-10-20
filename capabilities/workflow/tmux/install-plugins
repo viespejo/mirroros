@@ -1,0 +1,120 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- <apply|check>.
+# apply: clones TPM and the selected plugins at their identified commits when absent, then compiles tmux-thumbs
+#   when its binaries are missing or do not match the cloned version.
+# check: read-only postcondition for the provisioned sources and the compiled binaries.
+# Output of apply: "changed" or "unchanged", then one "<name> <source> <commit>" line per source.
+# Plugins are provisioned here, never by Tmux, so opening a session performs no network work or compilation.
+set -Eeuo pipefail
+
+mode=${1:?}
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+[[ "$config_home" == /* ]] || exit 6
+plugins="$config_home/tmux/plugins"
+thumbs="$plugins/tmux-thumbs"
+stagings=()
+
+# name source commit destination
+sources=(
+  "tpm https://github.com/tmux-plugins/tpm e261deb1b47614eed3400089ce7197dc68acc4eb $plugins/tpm"
+  "tmux-sensible https://github.com/tmux-plugins/tmux-sensible 25cb91f42d020f675bb0a2ce3fbd3a5d96119efa $plugins/tmux-sensible"
+  "tmux-yank https://github.com/tmux-plugins/tmux-yank acfd36e4fcba99f8310a7dfb432111c242fe7392 $plugins/tmux-yank"
+  "tmux-resurrect https://github.com/tmux-plugins/tmux-resurrect cff343cf9e81983d3da0c8562b01616f12e8d548 $plugins/tmux-resurrect"
+  "tmux-continuum https://github.com/tmux-plugins/tmux-continuum 0698e8f4b17d6454c71bf5212895ec055c578da0 $plugins/tmux-continuum"
+  "tmux-thumbs https://github.com/fcsonline/tmux-thumbs ae91d5f7c0d989933e86409833c46a1eca521b6a $thumbs"
+  "tmux-fzf https://github.com/sainnhe/tmux-fzf 2839d6bd0e13b7c5e385e131e4c217917fa73555 $plugins/tmux-fzf"
+  "tmux-fzf-url https://github.com/wfxr/tmux-fzf-url 7c4838e95fde660b7f2aaf514323ac8498e0d4f4 $plugins/tmux-fzf-url"
+)
+
+fail() { printf 'tmux: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  local staging
+  for staging in "${stagings[@]}"; do
+    [[ "$staging" == "$plugins"/.mirroros-* ]] && rm -rf -- "$staging"
+  done
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+# True for a standalone clone of the expected origin; its checked-out commit is the user's own choice.
+existing_source() {
+  local destination=$1 source=$2 origin
+  [[ -d "$destination" && ! -L "$destination" && -d "$destination/.git" && ! -L "$destination/.git" ]] || return 1
+  origin="$(git --no-optional-locks -C "$destination" remote get-url origin)" || return 1
+  [[ "$origin" == "$source" || "$origin" == "$source.git" ]]
+}
+
+# Mirrors the check in tmux-thumbs.sh: a missing or different binary makes the plugin open an interactive installer.
+thumbs_built() {
+  local version
+  version="$(grep 'version =' "$thumbs/Cargo.toml" | grep -o '".*"' | sed 's/"//g')" || return 1
+  [[ -x "$thumbs/target/release/tmux-thumbs" && -x "$thumbs/target/release/thumbs" ]] || return 1
+  [[ "$("$thumbs/target/release/thumbs" --version)" == "thumbs $version" ]]
+}
+
+safe_parents() {
+  local path=$1
+  while [[ "$path" != "$config_home" && "$path" != / ]]; do
+    path="$(dirname -- "$path")"
+    [[ ! -L "$path" ]] || fail "symbolic-link path component $path; preserved unchanged"
+  done
+}
+
+clone_source() {
+  local name=$1 source=$2 commit=$3 destination=$4 staging
+  mkdir -p -- "$plugins"
+  staging="$(mktemp -d "$plugins/.mirroros-$name.XXXXXXXX")"
+  stagings+=("$staging")
+  git init --quiet "$staging/repository" >&2
+  git -C "$staging/repository" remote add origin "$source" >&2
+  git -C "$staging/repository" fetch --quiet --depth 1 --no-tags origin "$commit" < /dev/null >&2 ||
+    fail "cannot fetch $name commit $commit"
+  git -c core.hooksPath=/dev/null -C "$staging/repository" checkout --quiet --detach FETCH_HEAD >&2
+  [[ "$(git -C "$staging/repository" rev-parse HEAD)" == "$commit" ]] || fail "$name does not match identified commit $commit"
+  [[ ! -e "$destination" && ! -L "$destination" ]] || fail "$destination appeared during installation; preserved unchanged"
+  mv -T --no-clobber -- "$staging/repository" "$destination"
+  [[ ! -e "$staging/repository" ]] || fail "$destination appeared during publication; preserved unchanged"
+  rmdir -- "$staging"
+}
+
+case "$mode" in
+  check)
+    for entry in "${sources[@]}"; do
+      read -r name source commit destination <<< "$entry"
+      existing_source "$destination" "$source" || exit 1
+    done
+    thumbs_built || exit 1
+    exit 0 ;;
+  apply) ;;
+  *) exit 6 ;;
+esac
+
+changed=0
+for entry in "${sources[@]}"; do
+  read -r name source commit destination <<< "$entry"
+  safe_parents "$destination"
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    existing_source "$destination" "$source" ||
+      fail "existing $destination is not a clone of $source; preserved unchanged. Move it aside or install it manually, then rerun configure"
+  else
+    clone_source "$name" "$source" "$commit" "$destination"
+    changed=1
+  fi
+done
+
+# The build happens in the published clone and is repeated whenever it is missing, so an interrupted build resumes.
+if ! thumbs_built; then
+  command -v cargo > /dev/null 2>&1 || fail 'cargo is missing; install rust before rerunning'
+  (cd "$thumbs" && cargo build --release --locked --target-dir=target < /dev/null >&2) || fail 'cannot compile tmux-thumbs; review the output above'
+  thumbs_built || fail 'tmux-thumbs binaries do not match the cloned version after the build'
+  changed=1
+fi
+
+if (( changed )); then printf 'changed\n'; else printf 'unchanged\n'; fi
+for entry in "${sources[@]}"; do
+  read -r name source commit destination <<< "$entry"
+  printf '%s %s %s\n' "$name" "$source" "$(git --no-optional-locks -C "$destination" rev-parse HEAD)"
+done

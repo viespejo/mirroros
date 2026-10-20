@@ -33,13 +33,15 @@ capability helpers, or missing or invalid listed steps reports an incomplete or 
 - Run as root (using `sudo` on the installed system). The target user is `--user <name>`, otherwise `SUDO_USER`
   in the running context only. With `--target-root`, `--user` is mandatory and must exist in the target's
   `passwd`; missing, nonexistent, invalid, and root target accounts are rejected. Bash must already be the intended interactive shell; configure
-  does not change the login shell.
-- Use a running MirrorOS-installed Arch system with Bash, pacman, flock, runuser, systemctl, install, and the
+  changes the login shell to Zsh only when it is currently Bash; another chosen shell is preserved.
+- Use a running MirrorOS-installed Arch system with Bash, pacman, flock, runuser, systemctl, install, usermod, and the
   standard text and filesystem tools checked by validation. In target context, the live medium needs
   `arch-chroot`, `flock`, and `mountpoint`; base tools are checked inside the target. No Node.js, jq, or git
   runtime dependency is added.
 - Existing pacman sync databases and access to declared official repositories are required. Network access is
   needed for missing packages; configure never initializes databases or modifies the keyring automatically.
+  The Node.js step also needs HTTPS access to GitHub and nodejs.org when the declared runtime is missing, and the
+  editor step needs it for the Neovim configuration and its plugin and tool registries.
 - `xkeyboard-config` must already supply `/usr/share/xkeyboard-config-2/rules/base.lst`, or
   `/usr/share/X11/xkb/rules/base.lst` in the legacy directory layout. Target validation reads the real directory
   under the target root, not the absolute X11 compatibility alias that would resolve against the live medium.
@@ -47,7 +49,8 @@ capability helpers, or missing or invalid listed steps reports an incomplete or 
   packages are missing.
 - The system keyboard layout is resolved from `XKBLAYOUT` in `/etc/vconsole.conf`, then `KEYMAP`, then `us`.
   It must be a known XKB layout. Set an explicit supported `XKBLAYOUT` when the console keymap name differs;
-  configure does not translate names or support multiple layouts, variants, or options in this skeleton.
+  configure does not translate names or support multiple layouts, variants, or arbitrary option selection.
+  Session and greeter default to Right Alt Compose; see the native override below for layouts requiring AltGr.
 - Native package and configuration files in `capabilities/` are the inputs. There are no secret inputs, personal
   configuration files, or external application repository checkouts in this slice.
 
@@ -109,13 +112,16 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The five steps run in this order:
+The eight steps run in this order:
 
 | Step | Applied state |
 |---|---|
-| `desktop/terminal` | foot, provisional `ttf-jetbrains-mono-nerd`, and user foot font configuration |
-| `workflow/shell` | Starship, managed interactive bash initialization, and a marked bashrc source block |
-| `workflow/tmux` | tmux with defaults; no `/etc/tmux.conf` |
+| `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji` and approved native terminal-local defaults |
+| `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
+| `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
+| `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |
+| `workflow/editor` | Lazygit, tree-sitter-cli, unzip and Go, managed Lazygit and `vim` wrapper files, the external Neovim configuration at `~/code/nvim` linked from `~/.config/nvim`, and its locked plugins, tools and parsers prepared by the user |
+| `workflow/pi` | ffmpeg, the external pi-config at `~/code/pi-config`, the Pi executable in the user's NVM prefix selected from pi-config's exact declaration, the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, the `pi-editor` and `gcloud` links, and the initialize-only `~/.pi` defaults with their npm packages and owned skills |
 | `desktop/compositor/providers/hyprland` | Minimal session, shared keyboard module, Wayland greeter, and one uwsm session entry |
 | `desktop/login` | SDDM and uwsm, explicit `noto-fonts`, stock theme without autologin, enable-only login, and graphical default target |
 
@@ -125,14 +131,60 @@ greeter uses Wayland. No `qt6-wayland` dependency or VM-specific workaround is a
 
 Managed destinations are:
 
-- `~/.config/foot/foot.ini`: only `font=JetBrainsMono Nerd Font:size=11` beyond its management header. foot reads
-  this before its system default. The package-owned `/etc/xdg/foot/foot.ini` is deliberately left intact.
+- `~/.config/foot/foot.ini`: Tokyo Night palette, `JetBrainsMono Nerd Font Mono:size=14`, centered 16x16 padding,
+  `term=foot`, and CSI-u Shift+Return / Alt+Shift+Return sequences. Foot reads this before its system default.
+  The package-owned `/etc/xdg/foot/foot.ini` is deliberately left intact. See
+  [terminal provenance and notices](../../capabilities/desktop/terminal/sources.md).
+- `~/.config/mirroros/node/environment.zsh`: the declared Node.js version and PATH entry for the selected runtime,
+  plus an on-demand `nvm_load`; NVM is installed by the user without profile edits. See
+  [node sources](../../capabilities/workflow/node/sources.md).
+- `~/.zshenv`, `~/.zshrc`, `~/.zprofile`: the approved interactive Zsh baseline. Plugins live under
+  `~/.local/share/zplug`, provisioned by configure and never at shell startup. User-owned files and links are
+  preserved. See [shell sources](../../capabilities/workflow/shell/sources.md).
+- `~/.config/tmux/tmux.conf`, `tmux.bindings.conf`, `tmux.navigator.conf`, `tmux.theme.conf`: the approved Tmux
+  baseline with Ctrl+A, Neovim-aware navigation, Tokyo Night styling and Prefix+o for Sesh; plugins live under
+  `~/.config/tmux/plugins`, provisioned by configure (the tmux-thumbs helper is compiled there as the user) and
+  never by Tmux. `sesh-bin` is the only package that is not from an official repository: it is built by the user
+  from the reviewed recipe in the product and installed with `pacman -U`, and its package file stays in
+  `~/.cache/mirroros/sesh`. User-owned files and links are preserved. See
+  [tmux sources](../../capabilities/workflow/tmux/sources.md).
+- `~/.config/lazygit/config.yml`, `~/.local/bin/vim`: the portable Lazygit input and the Neovim wrapper that opens Oil.
+  `~/.config/nvim` links to the selected `master` of the external Neovim configuration cloned at `~/code/nvim`, only
+  while that path is absent; a clone with local work, another origin or divergent history fails with an actionable
+  message and is never reset. Preparation runs as the user once per applied commit; configuration revisions are
+  intentionally not pinned. See [editor sources](../../capabilities/workflow/editor/sources.md).
+- `~/code/pi-config`, `~/.local/bin/pi-editor`, and the Pi executable: pi-config is the selected `master` of the external
+  repository, synchronized like the Neovim configuration (local work, another origin or divergent history fails and
+  is never reset). The Pi version is selected once per run from its exact `devDependencies` entry; an absent entry
+  selects the latest stable release, and a range or malformed value fails without fallback. Pi is installed by the
+  user with npm lifecycle scripts disabled, and the pi-config runtime dependencies only when its manifest or
+  lockfile changed. Transitive dependencies are not pinned and compatibility is never repaired automatically.
+  `pi-editor` links to the pi-config launcher only while that path is absent. See
+  [Pi sources](../../capabilities/workflow/pi/sources.md).
+- `~/.local/opt/google-cloud-sdk-589.0.0` and `~/.local/bin/gcloud`: the versioned Google Cloud CLI archive, installed
+  by the user after its size, MD5 and locally computed SHA256 are verified (the SHA256 is not published by upstream;
+  this needs HTTPS access to `dl.google.com` only when the installation is missing). No installer script,
+  component update, `gcloud init` or authentication runs, and no profile is edited. A directory of another version,
+  a symlink or a concurrently created destination is preserved and reported; `gcloud` links to the installation only while
+  that path is absent. Account setup, project selection and Application Default Credentials stay a private,
+  attended step. See [Pi sources](../../capabilities/workflow/pi/sources.md).
+- `~/.pi`: initialized only when the path is absent, with MirrorOS-owned settings, keybindings, instructions and prompt
+  templates (voice and text-to-speech disabled; no credentials, sessions or models), the npm packages listed in
+  `capabilities/workflow/pi/npm-packages` (installed with lifecycle scripts disabled and a private empty npm
+  configuration; this needs access to the npm registry), the MirrorOS-owned skills (delivered without overwriting to
+  `~/.local/share/mirroros/pi/skills`), the external manual skills listed in `capabilities/workflow/pi/external-skills`
+  (current upstream, fetched by the commit resolved once per run into the staging, with `disable-model-invocation: true`
+  as the only amendment; this needs access to GitHub and the npm registry) and links to the extensions of pi-config. Any existing `~/.pi`, including a symlink or an empty directory, is preserved entirely and reported;
+  nothing is merged, reset or reconciled inside it. To adopt newer defaults, move the directory aside
+  (for example `mv ~/.pi ~/.pi.backup`) and rerun configure. Initialization is staged outside `~/.pi` and published
+  only after validation, so a failed run leaves no partial directory.
 - `~/.config/mirroros/bash/starship.bash`: default Starship initialization for interactive bash; sourced through
   one marked block appended to `~/.bashrc`. No `starship.toml` is supplied.
-- `~/.config/hypr/hyprland.lua`: the shared keyboard module and exactly three bindings: `SUPER+Return` launches
+- `~/.config/hypr/hyprland.lua`: the shared keyboard module, Right Alt Compose and exactly three bindings: `SUPER+Return` launches
   `uwsm app -- foot`, `SUPER+SHIFT+Q` closes the active window, and `SUPER+SHIFT+E` runs `uwsm stop`.
 - `/usr/share/mirroros/hypr/keyboard.lua`: runtime layout resolution, shared by the greeter and managed session.
-- `/usr/share/mirroros/sddm/hyprland.lua`: minimal greeter configuration without logo, splash, or animations.
+- `/usr/share/mirroros/sddm/hyprland.lua`: minimal greeter configuration without logo, splash, or animations,
+  using the same layout resolver and Right Alt Compose default.
 - `/usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop`: a link to the upstream session entry. Its directory
   must contain exactly that entry and its `Exec` must contain `uwsm start` and `hyprland.desktop`.
 - `/etc/sddm.conf.d/20-mirroros-hyprland.conf`: Wayland greeter command and restricted Wayland session directory.
@@ -142,6 +194,23 @@ SDDM is enabled, **never started or restarted**; `graphical.target` becomes the 
 SDDM display-manager alias, the absence of another enabled display manager, and the default target. Configure
 does not automatically disable conflicting display managers. On outcome `0`, the final informational line says
 the graphical login is available at the next boot. Reboot only after reviewing the outcome and evidence.
+
+### Right Alt Compose and native overrides
+
+`kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The layout
+still comes from the shared keyboard module; adding Compose never forces `us` or changes `/etc/vconsole.conf`.
+This replaces Right Alt's normal AltGr role. Do not assume layouts that depend on AltGr are unaffected.
+
+To retain AltGr, deliberately take ownership of each applicable native file: remove its
+`managed by MirrorOS configure` comment and set `kb_options = ""` or the options required by the chosen layout.
+The session file is `~/.config/hypr/hyprland.lua`; the greeter file is
+`/usr/share/mirroros/sddm/hyprland.lua` and requires a separately reviewed root edit. Configure preserves those
+unmarked files. Review the resulting native configuration before the next session/greeter start; configure
+never reloads the compositor or restarts SDDM. No additional override schema is introduced.
+
+The prototype confirmed the reported accented-character sequence in the graphical session. Contract checks
+prove native declaration delivery and unchanged layout resolution, not all keyboard layouts or graphical
+greeter behavior; fresh-session and greeter interaction remain attended verification.
 
 ### File ownership and safe rerun
 
@@ -173,6 +242,7 @@ An explicit `--output` is used as supplied to the coordinator, not automatically
 | `configure.log` | Allowed step commands and their output, validation failures, and step diagnostics |
 | `configure-run.tsv` | Run identity, context, target user, code identity/dirty flag, start/end, outcome, failed step, reason, package mode, guard result, and every step's status/postcondition |
 | `packages.tsv` | Declared package names, resolved or installed versions, and repositories; not a full dependency inventory |
+| `sources.tsv` (when consumed) | Public external source names/URLs, selected refs/commits and declared versions; no configuration or private-state dumps |
 
 TSV values have tabs and newlines replaced. Git identity uses `git rev-parse HEAD` and a dirty flag when git
 and `.git` exist. Otherwise configure reads `commit` and `dirty` from the code root's `identity.json`, using

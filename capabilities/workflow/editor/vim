@@ -1,0 +1,4 @@
+#!/bin/bash
+# managed by MirrorOS configure
+# Neovim wrapper: opens Oil when started without arguments or with a single directory.
+nvim "$@" -c "if exists(':Oil') && (argc() == 0 || (argc() == 1 && isdirectory(argv(0)))) | execute 'Oil' .. (argv(0) == '' ? '' : ' ' . argv(0)) | endif"

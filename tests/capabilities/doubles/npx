@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'npx %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+printf 'npx-cwd %s\n' "$PWD" >> "$CFG_TEST_CALLS"
+home=${CFG_TEST_HOME:?}
+# Only the reviewed skills installation exists: project scope below the staged work directory, fully isolated.
+[[ "$1" == --yes && "$2" == --package=skills@1.7.2 && "$3" == skills && "$4" == add && "$6" == --skill ]] || exit 97
+source=$5
+shift 6
+names=()
+while (( $# )) && [[ "$1" != --agent ]]; do names+=("$1"); shift; done
+[[ "$*" == '--agent pi --copy --yes' && ${#names[@]} -gt 0 ]] || exit 97
+work=${PWD%/project}
+[[ "$PWD" == "$home"/.pi.mirroros.*/.work/project && "$source" == "${work}"/sources/* ]] || exit 97
+[[ "$HOME" == "$work/home" && "$NPM_CONFIG_USERCONFIG" == "$work/npmrc-user" && "$NPM_CONFIG_GLOBALCONFIG" == "$work/npmrc-global" &&
+  "$NPM_CONFIG_CACHE" == "$work/cache" && "$NPM_CONFIG_IGNORE_SCRIPTS" == true && "$DISABLE_TELEMETRY" == 1 &&
+  "$GIT_TERMINAL_PROMPT" == 0 ]] || exit 97
+printf 'npx-isolation %s\n' "$NPM_CONFIG_IGNORE_SCRIPTS" >> "$CFG_TEST_CALLS"
+if [[ ${CFG_TEST_SKILLS_INSTALL_FAIL:-0} == 1 ]]; then printf 'fixture skills installer failure\n' >&2; exit 17; fi
+mkdir -p .agents/skills
+for name in "${names[@]}"; do
+  if [[ -f "$source/SKILL.md" ]]; then from=$source; else from="$source/$name"; fi
+  cp -r --no-dereference -- "$from" ".agents/skills/$name"
+done
+if [[ ${CFG_TEST_SKILLS_ALTER:-0} == 1 ]]; then printf 'altered\n' >> ".agents/skills/${names[0]}/SKILL.md"; fi

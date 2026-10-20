@@ -1,0 +1,28 @@
+# Maintainer: Lucas Schwiderski <lucas@lschwiderski.de>
+# Derived by MirrorOS from the AUR package sesh-bin 2.33.0-1, recipe revision
+# e2965e02ffbbb63fc2af817456c4fde99a843f8c (https://aur.archlinux.org/packages/sesh-bin).
+# Changes: x86_64 only; the checksum is the one reviewed for the x86_64 release asset instead of one repeated
+# for every architecture; the upstream MIT notice is installed from the release tag; the prebuilt binary is not
+# stripped. Built by the selected user and installed by configure; see ../sources.md.
+_pkgname=sesh
+pkgname=${_pkgname}-bin
+pkgver=2.33.0
+pkgrel=1.1
+pkgdesc="Smart session manager for the terminal"
+arch=('x86_64')
+url="https://github.com/joshmedeski/sesh"
+license=('MIT')
+depends=('zoxide' 'tmux')
+provides=('sesh')
+conflicts=('sesh')
+options=('!strip')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/releases/download/v${pkgver}/${_pkgname}_Linux_x86_64.tar.gz"
+        "${pkgname}-${pkgver}-LICENSE::https://raw.githubusercontent.com/joshmedeski/sesh/863935c8caa3cc40cac6adcd344ac9742e51739f/LICENSE")
+sha256sums=('e04fe35778eaf768a1fbbaa6e01d008ae22038c52b8d7834d38c9e7ad4822daa'
+            '7a2c197fc6bf5df1035db087764b94f78dede904b6a9e04d73d6a7bf849bbc60')
+
+package() {
+    install -Dm755 $_pkgname "$pkgdir/usr/bin/$_pkgname"
+    install -Dm644 share/man/man1/sesh.1 "$pkgdir/usr/share/man/man1/${_pkgname}.1"
+    install -Dm644 "${srcdir}/${pkgname}-${pkgver}-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

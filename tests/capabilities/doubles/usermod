@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'usermod %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+[[ "$1" == --shell && "$3" == -- ]] || exit 97
+root="${CFG_TEST_PASSWD_ROOT:-${MIRROROS_CONFIGURE_ROOT:?}}"
+if [[ ${CFG_TEST_USERMOD_FAIL:-0} == 1 ]]; then printf 'fixture usermod failure\n' >&2; exit 17; fi
+# Only the disposable fixture passwd is rewritten, never the real account database.
+awk -F: -v OFS=: -v user="$4" -v shell="$2" '$1 == user { $7 = shell } { print }' "$root/etc/passwd" > "$root/etc/passwd.new"
+mv -- "$root/etc/passwd.new" "$root/etc/passwd"
