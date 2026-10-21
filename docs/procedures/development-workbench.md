@@ -3194,3 +3194,34 @@ reapply the failing greeter variant. Further commit, deployment or service/sessi
 The ISO still contains `dbbea439`; no rebuild, push or active-host integration occurred. Final reconstruction evidence
 must distinguish the original ISO, explicit checkout-based updates and this diagnostic intervention. Task 4 and the
 Task 5 final graphical/private-provider gate remain open.
+
+## Task 4 continuation: committed greeter correction and converged application
+
+This addendum supersedes only the preceding uncommitted/undeployed correction status. The maintainer separately
+approved local commit `51ab92c3fa911be685eaa0cc972c0343794adf47`, parent `a3ab003`, containing the four reviewed
+correction/test/documentation files. The isolated HOST checkout is `build/workbench-starship-amendment`.
+The verified bundle and commit evidence remain under
+`evidence/development-workbench/greeter-correction/20261020T232415Z/`. No push or active-host integration occurred.
+
+The maintainer separately authorized transfer to the new guest checkout `~/code/mirroros-workbench-51ab92c`
+and two privately attended running configure executions, without replacing the installed snapshot or restarting
+services/sessions. The transferred bundle matched its HOST SHA256; the checkout was clean at the exact commit.
+
+- First run: `20261020T232801Z-8058fe77-6c9b-498e-86ba-453d1fbd3928`.
+- Second run: `20261020T232811Z-548dffc4-fd61-4053-9b98-c83445565b04`.
+- Both record clean `51ab92c`, running context, outcome 0, all eight steps unchanged and all postconditions passed.
+- Both complete logs report existing `.pi` preserved, no installation transactions and SDDM not started.
+- Package/source TSVs are byte-identical between runs; mappings also match the preceding `a3ab003` application.
+- Persistent Starship, user-session Hyprland and greeter files match corrected source. The restored A/B greeter
+  is now the declared product result, not an outstanding configuration divergence.
+- The active compositor reports repeat delay 230 and rate 62. Configure did not restart SDDM; this is not a new
+  logout/reentry test after corrected application. No private `.pi` content audit was performed.
+- HOST evidence: `evidence/development-workbench/corrected-application/20261020T232841Z/{first,second}/`.
+  The allowlisted records passed redacted Gitleaks with zero findings before review (7908 bytes).
+
+The maintainer accepted this application/rerun evidence without manual amendments. The installed snapshot and
+original target installation remain `dbbea439`; corrected running configuration comes from the explicit checkout
+update path. Do not describe this as target provisioning directly from `51ab92c` or an amended ISO reconstruction.
+Final clean-clone validation, resolution of that target/corrected-source evidence gap, whole-Task-4 review and the
+Task 5 attended graphical/private-provider gate remain pending. This documentation update authorizes no additional
+commit, build, VM/target operation, service restart, push or active-host integration.
