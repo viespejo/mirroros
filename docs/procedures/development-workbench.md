@@ -3225,3 +3225,108 @@ update path. Do not describe this as target provisioning directly from `51ab92c`
 Final clean-clone validation, resolution of that target/corrected-source evidence gap, whole-Task-4 review and the
 Task 5 attended graphical/private-provider gate remain pending. This documentation update authorizes no additional
 commit, build, VM/target operation, service restart, push or active-host integration.
+
+## Task 4 continuation: final-source target and running reconstruction
+
+This chronological addendum resolves the preceding target/corrected-source identity gap. The separately approved
+local documentation commit `dfd5bf21c694b30f2e049dbf59ddcc616549d118`, parent `51ab92c`, was validated through a
+fresh bounded clean-clone gate. Required files/modes/output absence, lifecycle static checks and nine configure
+contracts passed. Current source and retained evidence scans reported zero findings. The exact-two historical
+canary exception, bounded Bats scope and preserved original prompt EOF exception remain explicit; this is not a
+claim that all original raw checks returned zero. The verified complete source bundle and gate evidence are at
+`evidence/development-workbench/final-clean-clone/20261021T132804Z/` on the HOST.
+
+### Disposable live preparation failure and corrected input
+
+The maintainer authorized a separate disposable installation using the existing validated `dbbea439` ISO and final
+committed runtime, not a new ISO build. The first standalone runtime archive mistakenly reused the reference
+harness's overlay subtree list without the generated `packages/` payload. That list is suitable for overlaying an
+existing embedded runtime, not for assembling a standalone one. The first installation stopped before configure
+at `install_limine_snapshot_tools`, status 6, after partially modifying only the new disposable disk. The maintainer
+reported the runtime's missing packages directory. Do not characterize this as a configure failure or product repair.
+The failure was observed through attended screenshots; its full live records were not exported before shutdown.
+
+The corrected input includes the final committed embedded subtrees, a generated source identity and both Limine
+packages extracted directly from the checksum-validated original ISO. The native manifest loader rejects the old
+incomplete input and validates both package SHA256 values in the complete input. All 159 committed source files
+were byte-compared with `dfd5bf21`; source/input secret scans passed. Inputs and diagnostics remain under HOST
+`build/20261021T135624Z-complete-target-input/` and
+`evidence/development-workbench/20261021T135624Z-complete-target-input/` respectively. These are ignored outputs,
+not product source or a new laboratory provisioning framework.
+
+The maintainer approved reusing the same disposable disk for a normal installer retry rather than creating another
+VM. The trial disk and UEFI store remain under `build/20261021T133637Z-final-target/`; no existing laboratory disk
+was replaced, restored or deleted. At the maintainer's request, launch presentation was matched to the existing
+laboratory's SPICE/VirGL/local viewer, retaining NAT/VirtIO and localhost-only SSH port 2223. No SPICE redesign,
+clipboard guest setup or host network change was performed. The maintainer reported working Internet afterward;
+no causal network fix is established. No guest authentication or terminal input was captured in serial logs.
+
+For the attended live retry, cancel the old ISO's automatic installer, mount the `MOS_WORKBENCH` input medium
+read-only, check its `SHA256SUMS`, and extract `candidate-runtime.tar.gz` into a new `/root/mirroros-final` directory.
+Run `/root/mirroros-final/operations/install --output /root/workbench-install-retry`, select only the new 32 GiB
+VirtIO `/dev/vda`, review the plan and complete normal confirmation with private disposable runtime credentials.
+Do not use the ISO's older launcher. This is explicit development code delivery, not an unchanged final-source ISO.
+
+### Same final candidate in both contexts
+
+After reported installation success and a separately coordinated shutdown, the same disk booted with neither
+optical medium attached. The selected installed user is `viespejo`. Dedicated-key SSH used verified host identity,
+strict checking, no agent forwarding and no root SSH. Password/sudo entry stayed in visible attended terminals;
+only the dedicated public key was authorized. The installed identity independently reports clean `dfd5bf21`.
+
+The maintainer authorized exporting only `configure-run.tsv`, `packages.tsv`, `sources.tsv` and `configure.log`,
+then separately authorized two installed `mirroros-configure` runs and their allowlisted exports. Each export was
+checked for exact filenames, regular-file types and private ownership/modes, and scanned before diagnostic review.
+HOST evidence root:
+`evidence/development-workbench/20261021T135624Z-complete-target-input/installed-boot/`.
+
+- `target/`: run `20261021T142057Z-6e44f2c8-8c51-4487-8513-04d3539498ef`, context target, clean `dfd5bf21`,
+  outcome 0, all eight steps changed with passed postconditions; 14:20:51 through 14:27:07 UTC.
+- `running/first/`: run `20261021T144521Z-c5b1c242-d06d-452f-b467-8ca089a1d9fd`, context running,
+  clean `dfd5bf21`, outcome 0, all eight steps unchanged with passed postconditions.
+- `running/second/`: run `20261021T144530Z-79fc1d44-77f4-4857-9251-36457d7c2f6b`, same identity/context,
+  outcome 0, all eight steps unchanged with passed postconditions.
+- Both running logs are complete 616-byte records: existing `.pi` preserved, no installation transactions and
+  SDDM not started. This is not a private-directory content audit.
+- Package/source TSVs are byte-identical between running runs. All 28 package mappings and 20 common source rows
+  equal target. Eleven target-only rows represent changed-only gcloud and fresh-only npm/skills provenance, not drift.
+- Applied identities include NVM v0.40.8, Node v24.22.0, exact Pi 1.3.0, Neovim `bdf02dd9` and pi-config `37ae549a`.
+  The target log retains npm node-domexception/uuid deprecation diagnostics; no automatic compatibility repair or
+  vulnerability-clearance claim is made. Target/running scoped evidence scans reported zero findings.
+
+The maintainer accepted the target evidence and both running runs/comparison without manual amendments. The final
+runtime is now demonstrated in both contexts on this separate reconstruction. Whole-Task-4 review and Task 5's
+attended graphical/private-provider verdict remain separate gates; no final conversation, fresh graphical feature
+acceptance or plan completion is inferred. No MirrorOS push or active-HOST product integration occurred.
+
+## Task 5: attended final acceptance and Sidekick correction
+
+The maintainer confirmed the complete final-VM checklist: Foot/Zsh appearance and behavior, Tmux/Sesh/navigation
+and disposable restoration, Neovim editing/search/clipboard, Node/Pi availability before nvm_load, piw round-trip,
+Pi resources and Shift+Enter. The maintainer also confirmed a real conversation with a privately authenticated
+provider in this final reconstructed VM. These are attended outcomes, not assistant instrumentation; no provider
+credentials or conversation content were requested, inspected or retained. Audio and every-provider authentication
+remain outside the required laboratory acceptance.
+
+During this gate, Sidekick's Pi launch failed with tmux new-session rejecting the unset flag. Read-only diagnosis
+found that the locked Sidekick maps false tool-environment values to unsupported `-u` arguments. Four optional
+Vertex/Google variables in the external Neovim configuration used false when absent. With separate authorization,
+a temporary HOST clone changed only those fallbacks to empty strings, yielding supported `-e NAME=` arguments
+and clearing stale inherited values. The existing routing test now covers absent, partial and defined environments:
+it failed before the correction, then passed all seven cases. StyLua, diff whitespace and source secret scans passed.
+No plugin or lockfile update was made.
+
+The separately authorized external commit `b0208048e17dd2450666e4ddf16b9c53ccdc4267`, parent `bdf02dd9`, was
+published without force to nvim-lua-new master and independently verified. The final VM's clean master checkout
+was fast-forwarded to that exact commit without dependency preparation or resets. After a fresh Neovim launch,
+the maintainer reported correct Sidekick/Pi behavior and explicitly accepted the correction without manual changes.
+The subsequent complete checklist and private-provider confirmation apply to this updated external configuration;
+the earlier target/running source records correctly retain the older Neovim revision. No claim is made that those
+records were regenerated after this final external update.
+
+MirrorOS runtime identity remains clean `dfd5bf21`; pi-config remains the previously recorded `37ae549a`. These final
+procedure consolidations are documentation-only delivery, separate from the validated runtime. The active HOST
+MirrorOS/Neovim checkouts were not silently updated. Historical explicitly authorized host/publication/credential exceptions remain in the execution
+record and must not be replaced by a blanket claim that no such changes ever occurred. Final whole-task review
+is separate from these functional confirmations. Disk cleanup was explicitly deferred until after task completion;
+no disks, checkpoints or evidence were deleted during the inventory discussion.
