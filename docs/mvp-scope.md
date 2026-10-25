@@ -66,6 +66,14 @@ project-owned QML.
 | Screenshots | configure | open — selected by Story 4.5 | |
 | Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3, which delivers the approved Omarchy-first key table; each later slice binds its own reserved actions. The session provides `us` and `es` (`us` first); the greeter keeps the resolved layout; both default to Right Alt Compose; AltGr overrides use native ownership rules in the configure procedure |
 
+Story 4.3 source is delivered through configure at reviewed candidate `8c3c3cc` (plan 02-19). Clean-reference
+target/running application, an unchanged second running run, native binding reload, session stop/start, one
+shell-failure recovery and bounded attended lock/counter checks have evidence. Final acceptance remains open:
+mouse drag remains failed under the reference-VM-only DEC-029 exception, and absent-provider quiet diagnostics
+retain their failures under temporary DEC-030 review until Stories 4.4/4.5 deliver their owners. Unperformed
+keyboard, output and hardware checks are not passes. See the [desktop shell procedure](procedures/desktop-shell.md#final-source-verification-checkpoint).
+This checkpoint selects no additional providers and does not qualify the complete MVP or target laptop.
+
 ### Workflow
 
 | Capability | Origin | Provider | Notes |

@@ -1,9 +1,10 @@
 # Desktop shell procedure
 
-**Availability:** production source integrated from the reviewed Story 4.3 prototype (plan 02-19 Task 1);
-configure delivery, the systemd user lifecycle, lock/idle configuration and keyboard bindings added by plan 02-19
-Task 2 and proven so far only by host contracts. Clean reconstruction and attended acceptance belong to Task 3.
-Until those pass, nothing here claims a ready graphical session or complete Story 4.3 acceptance.
+**Availability:** production source and configure delivery are integrated (plan 02-19 Tasks 1/2). Task 3 has
+clean-reference target/running evidence and bounded attended session results at candidate
+`8c3c3cccc46421598b1fce47a330452c78230a80`; the maintainer accepted this bounded Task 3 result with its listed
+limits. Mouse drag and quiet-runtime failures remain recorded under scoped exceptions. Nothing here claims a
+ready complete Story 4.3 environment or laptop qualification.
 
 The historical laboratory recipe and results remain in
 [desktop-shell-prototype.md](desktop-shell-prototype.md); this procedure does not replace that record.
@@ -47,10 +48,11 @@ The historical laboratory recipe and results remain in
   [Hyprland bindings record](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md): bar toggle,
   idle-lock toggle, TUI system monitor, layout cycling, monitor scaling and later-story keys.
 
-Open risks verified only in Task 3: Quickshell reloads its configuration when its files change, so publishing a
-new runtime under a running shell may reload that shell (untested; configure itself never restarts it). If
-hypridle fails while locked, its stop also ends hyprlock (packaged kill mode) and Hyprland shows its lockdead
-screen. The packaged `hypridle.service` contents and Terminal=true launches are checked on an installed system.
+Open risks: Quickshell reloads its configuration when its files change, so publishing a new runtime under a
+running shell may reload that shell (untested; configure itself never restarts it). Failure of hypridle while
+locked remains untested: its packaged control-group kill mode could end its hyprlock child; no safe outcome is
+claimed. Task 3 inspected the real packaged unit and verified `Terminal=true` through uwsm, Foot and a real TTY
+without foot-server; a maintainer-attended synthetic window confirmed the launch.
 
 ## Defaults, preferences and private state
 
@@ -108,6 +110,62 @@ Its files are private (directory `0700`, files `0600`); never copy them into evi
 - **Known upstream issue:** during the repeated hour of a daylight-saving change, Quickshell's
   `SystemClock` (bar clock) logs `QTimer::start: negative intervals` continuously; it ends with that hour.
   The quiet-log checks fail in that window and must be rerun afterwards.
+
+## Final-source verification checkpoint
+
+Plan 02-19 Task 3 received A (Accept) for its bounded evidence and explicit limits, not complete story readiness.
+The reference used a verified base ISO at source `d9edb3d` plus separately
+verified candidate inputs at `8c3c3cc`, not an unchanged final-source release ISO. Selected run evidence is under
+`evidence/desktop-shell-production/candidate-20261025T032813Z-amended/` (ignored, hash-checked and secret-scanned).
+
+| Check | Observed outcome |
+|---|---|
+| Clean candidate contracts | Mechanism Bats 85/85 with `--jobs 1`; other five affected contracts 52/52 with `--jobs 8`; Node 27/27; menu model 12/12; provenance 93 files; i18n checks passed. These are selected suites, not the whole repository. |
+| Target/running configure | Target all 10 steps changed; first running 9 unchanged/Hyprland changed; identical second running all 10 unchanged. No running package transaction or process restart observed. First-running session-file difference has no established cause. |
+| Installed QML | 57 files, 829 reviewed warnings, no new/stale baseline entries; checker 0. This is not zero diagnostics. |
+| Selector and dmenu | Selector replacement 17 PASS, exit 0; dmenu 26 PASS, exit 0. Keyboard injection was not run; pointer cancellation remains unverified. |
+| Original graphical suites | Menu exit 1 (64 PASS/4 quiet failures); bar exit 1 (5/1); notifications exit 1 (7/1); OSD exit 1 (7/1); while-away exit 1 (17/1). Counts include lint where invoked; early-stopped checks were not passes. |
+| Functional continuation | Authorized diagnostic-only copies of bar/notification tests reached their ends: sparse save/no-op, restart, live config, default updates/reset, invalid-file preservation, restored notifications/quiet state/preferences, literal argv after restart, private permissions and retention all passed. Each suite still exited 1 with three quiet failures; no runtime or baseline suppression. |
+| Native reload | One `hyprctl reload`, exit 0; same compositor/shell/idle PIDs, no errors, 116 effective bindings, 110 registry entries with unique matches. Post-reload help and terminal passed attended checks. |
+| One shell failure | One authorized SIGKILL of the shell main process; automatic on-failure recovery, IPC ready, exactly one restart, compositor/hypridle unchanged. Bar/menu recovery confirmed attended. Start-limit exhaustion was not exercised. |
+| Session lifecycle | Attended System logout reached SDDM; selected-user compositor/shell/idle absent and graphical target inactive. New SDDM login started one of each, zero restarts/errors; registry regenerated for the new instance. |
+| Lock and counter | Explicit lock from es returned to us, wrong password rejected and private unlock passed. Shell restart while locked left lock and hypridle intact. Named synthetic notifications around a locked shell restart produced count 2, then 0 after history expansion/panel close. |
+
+Specific evidence directories: `terminal-attended-20261025T150349Z/`,
+`functional-completion-20261025T143716Z/`, `native-reload-20261025T144305Z-display-exception/`,
+`shell-failure-20261025T150613Z/`, `session-lifecycle-20261025T151340Z/`,
+`counter-20261025T135921Z/` and `qmllint-20261025T140716Z/`.
+
+The native reload/lifecycle checks preserve a maintainer-owned local `Virtual-1` display exception
+(`1920x1080@60.00`, scale `1.2`); it is not a common default and does not explain the earlier configure rewrite.
+A temporary unprivileged `systemd-inhibit --what=idle` was authorized for attended testing, bounded to one hour;
+its absence was subsequently confirmed. No production timeout was changed and no inhibitor remains claimed active.
+
+### Open failures and limits
+
+- Both SUPER+left drag (move) and SUPER+right drag (resize) fail in the reference. Keyboard resizing works.
+  Registered mouse bindings and source inspection do not establish a cause or fix. The maintainer accepted a
+  reference-VM-only exception and no repeated identical test (DEC-029); retain both results as failed, not passed.
+  QEMU involvement is plausible, not demonstrated. Comparative hardware qualification remains pending; no hardware
+  success or blanket Story 4.3 acceptance follows from this exception.
+- Quiet checks still fail on missing PipeWire/UPower and intermittent portal diagnostics. DEC-030 accepts a
+  temporary exception only for these observed absent-provider categories, owned by Stories 4.4/4.5; revisit it
+  when those providers are delivered. Original suite exit 1 and unavailable states remain visible. No provider
+  was installed or warning suppressed to manufacture a pass; new or unrelated diagnostics are not waived.
+  Private-bus inability to activate the real user manager remains a fixture limitation, not production evidence.
+  Production journal checks confirmed the provider-warning categories. The reviewed QML baseline is separate.
+- Idle locking was observed repeatedly, but exact 300-second timing and idle-from-es reset remain unverified.
+  Tray visibility, multi-output and remaining standard-keyboard family checks are not qualified by other passes.
+- No new suspend retest, hardware qualification, actual restart-limit exhaustion or changed-runtime live-reload
+  qualification was performed. Original prototype defects and failed attempts remain historical evidence.
+- Initial fixtures with overlong IPC paths, invalid counter stimuli, a partial manual command, expired SSH and a
+  snapshot requested while still at SDDM remain recorded as such, not product passes. Later corrected evidence
+  does not erase their original outcomes.
+
+Final Task 3 review accepted this bounded result and its listed limits. Story 4.3 closure remains unclaimed:
+reference-only drag exception DEC-029 and temporary absent-provider diagnostic exception DEC-030 do not waive
+other requirements. Unverified checks above remain unverified. Publication and laptop migration are separate
+operations.
 
 ## Verification
 

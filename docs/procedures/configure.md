@@ -311,6 +311,31 @@ check network and mirror availability or repair the system keyring deliberately,
 checks. A missing mirror version may require a full system upgrade or `--refresh`. Preserve the failed run's
 evidence and choose a new absent or empty `--output` directory for each rerun.
 
+## Story 4.3 reconstruction checkpoint
+
+Plan 02-19 Task 3 has reference evidence at clean candidate
+`8c3c3cccc46421598b1fce47a330452c78230a80`; final story acceptance is still open. The installation used a
+verified older base ISO plus explicit candidate input, not an unchanged candidate release ISO.
+
+| Context | Native run ID | Outcome |
+|---|---|---|
+| Installer target | `20261025T035115Z-de1ed53d-f217-4779-b44d-5b1694a3661a` | 0; all 10 steps changed and passed |
+| First running | `20261025T043055Z-f62449d8-855f-4317-8644-cc74fb9860d9` | 0; 9 unchanged, Hyprland changed |
+| Identical second running | `20261025T043109Z-c3882350-3144-4618-941c-7c42f2f2fce7` | 0; all 10 unchanged and passed |
+
+All runs record the same clean candidate. Running package/source records are byte-identical; 34 declared package
+mappings match target/running. Neither running run performed a package transaction or restarted compositor,
+shell or hypridle. The first running run rewrote the managed session file; no pre-run bytes/mode snapshot exists
+and the cause is not established. The maintainer reported opening it without modification. Do not relabel that
+run unchanged or attribute the difference to a user edit. A later, explicitly reviewed local QEMU resolution
+exception is separate from this observation.
+
+Evidence: `evidence/desktop-shell-production/candidate-20261025T032813Z-amended/configure-contexts/` and
+`configure-context-comparison.txt`, with selected records hash-checked and secret-scanned. Actual native reload,
+logout/startup, one-failure recovery and attended results are recorded in the [shell procedure](desktop-shell.md).
+Mouse drag and quiet-runtime failures still block a blanket ready claim; successful configure is not complete
+Story 4.3 or full-MVP readiness. No private preferences, notification history or credentials were exported.
+
 ## Add a package and rerun
 
 1. Add `<name> <official-repository>` to the owning capability's `packages` file and review its inclusion.
