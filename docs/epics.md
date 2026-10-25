@@ -752,7 +752,7 @@ So that frequent desktop actions are efficient without unnecessary persistent UI
 **Given** the shell components are running
 **When** no intervention is required
 **Then** each component remains quiet
-**And** color is not the sole means of communicating state.
+**And** state cues follow the Omarchy reference, including states it conveys by color alone, as decided by [DEC-015](technical-interviews/story-4-3-guest-host_log.md#dec-015) and [DEC-026](technical-interviews/story-4-3-guest-host_log.md#dec-026).
 
 **Given** visual settings are removed
 **When** functional configuration is reapplied

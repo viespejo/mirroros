@@ -1,0 +1,9 @@
+# Quickshell runtime; its package pulls Qt, Wayland and PipeWire libraries.
+quickshell extra
+# Keyboard-layout indicator: device watch (inotifywait) and layout names (xkbcli).
+inotify-tools extra
+libxkbcommon extra
+# Notification cards and panel font.
+ttf-liberation extra
+# Clearing a copied notification code (wl-paste, wl-copy).
+wl-clipboard extra

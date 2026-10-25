@@ -23,6 +23,56 @@ cfg_system_file() {
 
 cfg_system_file_present() { cfg_context; [[ -e "$(cfg_path "$1")" ]]; }
 
+# A system file whose previous delivery is identified by its recorded SHA256, so a local edit that keeps the managed
+# header is still detected. An absent destination is created and an identical one is accepted. Any other destination
+# (edited, unknown, a link or not a regular file) is a conflict: it is never overwritten and the step fails.
+cfg_tracked_record() { cfg_path "/var/lib/mirroros/configure/delivered$1.sha256"; }
+
+cfg_tracked_file() {
+  local src="$1" path="$2" mode="$3" dest record owner group want current='' recorded=''
+  cfg_context
+  [[ "$path" == /* && "$path" != *..* ]] || exit 6
+  cfg_managed "$src" || { printf 'Missing managed header: %s\n' "$src" >&2; exit 6; }
+  owner="$(stat -c %u -- "$(cfg_path /)")"
+  group="$(stat -c %g -- "$(cfg_path /)")"
+  dest="$(cfg_path "$path")"
+  record="$(cfg_tracked_record "$path")"
+  want="$(sha256sum < "$src")"
+  want="${want%% *}"
+  if [[ -f "$record" ]]; then recorded="$(< "$record")"; fi
+  if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) ]]; then
+    printf 'Conflict: %s is not a regular file delivered by MirrorOS; move it aside, then rerun configure.\n' "$path" >&2
+    exit 4
+  fi
+  if [[ -f "$dest" ]]; then
+    current="$(sha256sum < "$dest")"
+    current="${current%% *}"
+    if [[ "$current" == "$want" && "$recorded" == "$want" &&
+      "$(stat -c '%a:%u:%g' -- "$dest")" == "${mode#0}:$owner:$group" ]]; then return 0; fi
+    if [[ "$current" != "$want" && ( -z "$recorded" || "$current" != "$recorded" ) ]]; then
+      printf 'Conflict: %s differs from its last MirrorOS delivery (local edit or unknown file); move it aside or restore it, then rerun configure.\n' "$path" >&2
+      exit 4
+    fi
+  fi
+  cfg_run_host install -d -m 0755 -- "$(dirname -- "$dest")"
+  cfg_run_host install -o "$owner" -g "$group" -m "$mode" -- "$src" "$dest"
+  printf '%s\n' "$want" > "$CFG_OUTPUT/.tracked-record"
+  cfg_run_host install -d -m 0755 -- "$(dirname -- "$record")"
+  cfg_run_host install -o "$owner" -g "$group" -m 0644 -- "$CFG_OUTPUT/.tracked-record" "$record"
+  rm -f -- "$CFG_OUTPUT/.tracked-record"
+  cfg_changed
+}
+
+cfg_tracked_file_present() {
+  local dest record current
+  cfg_context
+  dest="$(cfg_path "$1")"
+  record="$(cfg_tracked_record "$1")"
+  [[ -f "$dest" && ! -L "$dest" && -f "$record" ]] || return 1
+  current="$(sha256sum < "$dest")"
+  [[ "${current%% *}" == "$(< "$record")" ]]
+}
+
 cfg_session_is_only() {
   local directory session="$2" entries file target command marker
   cfg_context

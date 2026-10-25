@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and a non-root target user; the compositor and shell steps completed.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: packages installed with their packaged user unit; the drop-in matches its last delivery; native
+# hypridle/hyprlock configuration exists, managed or user-owned; hypridle is enabled for the selected user or
+# user-owned. Nothing is started, restarted or reloaded: a running session picks it up at its next login.
+set -Eeuo pipefail
+
+dropin=/etc/systemd/user/hypridle.service.d/10-mirroros.conf
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_tracked_file "$STEP_DIR/systemd/10-mirroros.conf" "$dropin" 0644
+cfg_user_file "$STEP_DIR/hypridle.conf" .config/hypr/hypridle.conf
+cfg_user_file "$STEP_DIR/hyprlock.conf" .config/hypr/hyprlock.conf
+cfg_user_unit_enable hypridle.service /usr/lib/systemd/user/hypridle.service graphical-session.target
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_system_file_present /usr/lib/systemd/user/hypridle.service
+cfg_require cfg_tracked_file_present "$dropin"
+cfg_require cfg_user_file_present .config/hypr/hypridle.conf
+cfg_require cfg_user_file_present .config/hypr/hyprlock.conf
+cfg_require cfg_user_unit_enabled hypridle.service graphical-session.target

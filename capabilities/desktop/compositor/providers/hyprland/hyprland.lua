@@ -1,8 +1,9 @@
 -- managed by MirrorOS configure
 hl.config({
-    input = { kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua"), kb_options = "compose:ralt", repeat_delay = 230, repeat_rate = 62 },
+    input = { kb_layout = "us,es", kb_options = "compose:ralt", repeat_delay = 230, repeat_rate = 62 },
+    dwindle = { preserve_split = true },
 })
 
-hl.bind("SUPER + Return", hl.dsp.exec_cmd("uwsm app -- foot"))
-hl.bind("SUPER + SHIFT + Q", hl.dsp.window.close())
-hl.bind("SUPER + SHIFT + E", hl.dsp.exec_cmd("uwsm stop"))
+-- Approved Story 4.3 bindings. dofile runs them again at every configuration load; nothing is unbound at runtime.
+dofile("/usr/share/mirroros/hypr/shell-bindings.lua")
+dofile("/usr/share/mirroros/hypr/window-bindings.lua")

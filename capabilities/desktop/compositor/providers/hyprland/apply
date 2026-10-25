@@ -1,12 +1,15 @@
 #!/usr/bin/bash
 # Prerequisites: validated packages and XKB layout; upstream Lua API and uwsm session entry.
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
-# Postconditions: packages and configuration exist; exactly one uwsm session is listed.
+# Postconditions: packages and configuration exist; the approved bindings match their last delivery;
+# exactly one uwsm session is listed.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_system_file "$STEP_DIR/keyboard.lua" /usr/share/mirroros/hypr/keyboard.lua 0644
 cfg_system_file "$STEP_DIR/greeter/hyprland.lua" /usr/share/mirroros/sddm/hyprland.lua 0644
+cfg_tracked_file "$STEP_DIR/shell-bindings.lua" /usr/share/mirroros/hypr/shell-bindings.lua 0644
+cfg_tracked_file "$STEP_DIR/window-bindings.lua" /usr/share/mirroros/hypr/window-bindings.lua 0644
 cfg_user_file "$STEP_DIR/hyprland.lua" .config/hypr/hyprland.lua
 cfg_system_link /usr/share/wayland-sessions/hyprland-uwsm.desktop /usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop
 cfg_system_file "$STEP_DIR/sddm/20-mirroros-hyprland.conf" /etc/sddm.conf.d/20-mirroros-hyprland.conf 0644
@@ -14,6 +17,8 @@ cfg_system_file "$STEP_DIR/sddm/20-mirroros-hyprland.conf" /etc/sddm.conf.d/20-m
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_system_file_present /usr/share/mirroros/hypr/keyboard.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/sddm/hyprland.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/shell-bindings.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/window-bindings.lua
 cfg_require cfg_user_file_present .config/hypr/hyprland.lua
 cfg_require cfg_system_file_present /etc/sddm.conf.d/20-mirroros-hyprland.conf
 cfg_require cfg_session_is_only /usr/share/mirroros/wayland-sessions hyprland-uwsm.desktop 'uwsm start' hyprland.desktop

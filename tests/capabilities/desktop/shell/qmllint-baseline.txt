@@ -1,0 +1,832 @@
+# qmllint from qt6-declarative 6.12.0-2
+# Reviewed prototype diagnostics; copy keys are file:line:column.
+# Adapted/new keys are [file, message, trimmed source]. Duplicate keys count.
+adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
+adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
+adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
+adapt ["Commons/Style.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var sh = shortHex[1]"]
+adapt ["bar/Bar.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: Commons.Color.tooltip.background"]
+adapt ["bar/Bar.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
+adapt ["bar/Bar.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"tooltip\", \"border\", Commons.Color.tooltip.border, 1)"]
+adapt ["bar/Bar.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.tooltip.text"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","Binding { target: slot.activeItem; property: \"bar\"; value: root; when: !!slot.activeItem && \"bar\" in slot.activeItem }"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","Component.onCompleted: root.registerModuleSlot(slot)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","Component.onDestruction: if (hovered) root.setBarHovered(false)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","Component.onDestruction: root.unregisterModuleSlot(slot)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","color: root.background"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","cursorShape: moduleHover.hovered && root.moduleClickTargetAt(slot, mouseX, mouseY) ? Qt.PointingHandCursor : Qt.ArrowCursor"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","entries: root.layoutConfig.center"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","entries: root.layoutConfig.centerBegin"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","entries: root.layoutConfig.centerEnd"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","entries: root.layoutConfig.left"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","entries: root.layoutConfig.right"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","fixedEdge: BarModel.slotEdge(moduleListRoot.entries.length, index,"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","font.family: root.fontFamily"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","if (!root.pressModuleClickTarget(slot, mouse.button, mouse.x, mouse.y)) mouse.accepted = false"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","if (!root.targetBelongsToWindow(target, barWindow)) return"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","if (root.position === \"bottom\") {"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","implicitHeight: root.barSize"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","moduleListRoot.fixedEdge, moduleListRoot.firstEdge, moduleListRoot.lastEdge)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","moduleListRoot.fixedEdge, moduleListRoot.firstEdge, moduleListRoot.lastEdge)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","moduleListRoot.fixedEdge, moduleListRoot.firstEdge, moduleListRoot.lastEdge)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","onHoveredChanged: root.setBarHovered(hovered)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","readonly property bool panelOpen: root.activePopout === activeItem && activeItem !== null"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","region: moduleListRoot.region"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","sourceComponent: root.widgetComponents[slot.moduleName] || emptyModuleComponent"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","sourceComponent: root.widgetComponents[slot.moduleName] || emptyModuleComponent"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","text: root.tooltipText"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","tooltipAnchor.rect.x = Math.round(point.x)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","tooltipAnchor.rect.y = Math.round(point.y)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","var target = root.tooltipTarget"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","visible: root.tooltipShown && root.tooltipTarget !== null && root.tooltipText !== \"\" && root.targetBelongsToWindow(root.tooltipTarget, barWindow)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","visible: root.tooltipShown && root.tooltipTarget !== null && root.tooltipText !== \"\" && root.targetBelongsToWindow(root.tooltipTarget, barWindow)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","visible: root.tooltipShown && root.tooltipTarget !== null && root.tooltipText !== \"\" && root.targetBelongsToWindow(root.tooltipTarget, barWindow)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","visible: root.tooltipShown && root.tooltipTarget !== null && root.tooltipText !== \"\" && root.targetBelongsToWindow(root.tooltipTarget, barWindow)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","visible: root.tooltipShown && root.tooltipTarget !== null && root.tooltipText !== \"\" && root.targetBelongsToWindow(root.tooltipTarget, barWindow)"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","} else if (root.position === \"left\") {"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","} else if (root.position === \"right\") {"]
+adapt ["bar/BluetoothState.qml","Member \"values\" not found on type \"UntypedObjectModel\" [missing-property]","readonly property var devices: Bluetooth.devices ? Bluetooth.devices.values : []"]
+adapt ["bar/BluetoothState.qml","Type \"BluetoothAdapter\" of property \"defaultAdapter\" not found. This is likely due to a missing dependency entry or a type not being exposed declaratively. [unresolved-type]","readonly property var adapter: Bluetooth.defaultAdapter"]
+adapt ["bar/indicators/Dnd.qml","Member \"iconFont\" not found on type \"QObject\" [missing-property]","font.pixelSize: Math.round(Style.bar.iconFont * 0.6)"]
+adapt ["bar/indicators/Dnd.qml","Member \"openSettings\" not found on type \"QObject\" [missing-property]","if (action === \"settings\") panel.openSettings()"]
+adapt ["bar/indicators/Dnd.qml","Member \"open\" not found on type \"QObject\" [missing-property]","else panel.open()"]
+adapt ["bar/indicators/Dnd.qml","Member \"screen\" not found on type \"QObject\" [missing-property]","return window && window.screen ? String(window.screen.name || \"\") : \"\""]
+adapt ["bar/indicators/Dnd.qml","Member \"screen\" not found on type \"QObject\" [missing-property]","return window && window.screen ? String(window.screen.name || \"\") : \"\""]
+adapt ["bar/widgets/Audio.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","bar.shell.summon(\"omarchy.osd\", JSON.stringify({"]
+adapt ["bar/widgets/Audio.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (!bar || !bar.shell) return"]
+adapt ["bar/widgets/Clock.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","fixedHeight: root.vertical ? root.verticalLines.length * Style.bar.iconSlot : -1"]
+adapt ["bar/widgets/Clock.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","height: Style.bar.iconSlot"]
+adapt ["bar/widgets/Clock.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","readonly property real openPanelIndicatorHeight: Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55))"]
+adapt ["bar/widgets/Clock.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === \"function\")"]
+adapt ["bar/widgets/Clock.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === \"function\")"]
+adapt ["bar/widgets/Clock.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","root.bar.shell.updateEntryInline(root.moduleName, entry)"]
+adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]",": button.fontSize"]
+adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]","? button.fontSize * 0.9"]
+adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]","color: button.foreground"]
+adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]","fontFamily: button.fontFamily"]
+adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]","width: button.width"]
+adapt ["bar/widgets/Indicators.qml","Member \"activeOverride\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"activeOverride\" in target) target.activeOverride = indicatorBlock === \"active\" ? true : null"]
+adapt ["bar/widgets/Indicators.qml","Member \"active\" not found on type \"QObject\" [missing-property]","var active = !!indicatorSource.item && indicatorSource.item.active === true"]
+adapt ["bar/widgets/Indicators.qml","Member \"bar\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"bar\" in target) target.bar = root.bar"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitHeight\" not found on type \"QObject\" [missing-property]","implicitHeight: blockLoader.item ? blockLoader.item.implicitHeight : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitHeight\" not found on type \"QObject\" [missing-property]","implicitHeight: blockLoader.item ? blockLoader.item.implicitHeight : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitHeight\" not found on type \"QObject\" [missing-property]","implicitHeight: indicatorSource.item && indicatorSource.item.visible ? indicatorSource.item.implicitHeight : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitHeight\" not found on type \"QObject\" [missing-property]","implicitHeight: orientationLoader.item ? orientationLoader.item.implicitHeight : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitWidth\" not found on type \"QObject\" [missing-property]","implicitWidth: blockLoader.item ? blockLoader.item.implicitWidth : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitWidth\" not found on type \"QObject\" [missing-property]","implicitWidth: blockLoader.item ? blockLoader.item.implicitWidth : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitWidth\" not found on type \"QObject\" [missing-property]","implicitWidth: indicatorSource.item && indicatorSource.item.visible ? indicatorSource.item.implicitWidth : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"implicitWidth\" not found on type \"QObject\" [missing-property]","implicitWidth: orientationLoader.item ? orientationLoader.item.implicitWidth : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"indicatorBlock\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"indicatorBlock\" in target) target.indicatorBlock = indicatorBlock"]
+adapt ["bar/widgets/Indicators.qml","Member \"indicatorHost\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"indicatorHost\" in target) target.indicatorHost = root"]
+adapt ["bar/widgets/Indicators.qml","Member \"moduleName\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"moduleName\" in target) target.moduleName = indicatorId"]
+adapt ["bar/widgets/Indicators.qml","Member \"settings\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"settings\" in target) target.settings = indicatorSettings"]
+adapt ["bar/widgets/Indicators.qml","Member \"visible\" not found on type \"QObject\" [missing-property]","implicitHeight: indicatorSource.item && indicatorSource.item.visible ? indicatorSource.item.implicitHeight : 0"]
+adapt ["bar/widgets/Indicators.qml","Member \"visible\" not found on type \"QObject\" [missing-property]","implicitWidth: indicatorSource.item && indicatorSource.item.visible ? indicatorSource.item.implicitWidth : 0"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","Component.onCompleted: if (indicatorSlot.indicatorId && !root.indicatorComponents[indicatorSlot.indicatorId]) console.warn(\"Indicator loader error\", indicatorSlot.indicatorId)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","entry: activeIndicatorBlockRoot.indicatorsModule.entryForId(activeId)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","entry: activeIndicatorBlockRoot.indicatorsModule.entryForId(activeId)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","if (\"bar\" in target) target.bar = root.bar"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","if (\"indicatorHost\" in target) target.indicatorHost = root"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","implicitHeight: Math.max(inactiveHorizontalBlock.implicitHeight, root.barSize)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","implicitHeight: root.revealInactiveIndicators ? inactiveVerticalBlock.implicitHeight : 0"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","implicitWidth: Math.max(inactiveVerticalBlock.implicitWidth, root.barSize)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","implicitWidth: root.revealInactiveIndicators ? inactiveHorizontalBlock.implicitWidth : 0"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorBlock: indicatorBlockRoot.indicatorBlock"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorBlock: indicatorBlockRoot.indicatorBlock"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorModel: activeIndicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorModel: activeIndicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorModel: inactiveIndicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorModel: inactiveIndicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: activeIndicatorBlockRoot.indicatorsModule"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: activeIndicatorBlockRoot.indicatorsModule"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: indicatorBlockRoot.indicatorsModule"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: indicatorBlockRoot.indicatorsModule"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: root"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: root"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: root"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","indicatorsModule: root"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","model: activeIndicatorBlockRoot.indicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","model: activeIndicatorBlockRoot.indicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","model: indicatorBlockRoot.indicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","model: indicatorBlockRoot.indicatorModel"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","onHoveredChanged: root.setIndicatorAreaHovered(hovered)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","onHoveredChanged: root.setIndicatorAreaHovered(hovered)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","onHoveredChanged: root.setIndicatorAreaHovered(hovered)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","onHoveredChanged: root.setIndicatorAreaHovered(hovered)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","readonly property string indicatorId: root.entryId(entry)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","readonly property var barRef: root.bar"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","readonly property var indicatorSettings: root.entrySettings(entry)"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: !root.vertical"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: !root.vertical"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: activeIndicatorBlockRoot.reportActiveState"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: activeIndicatorBlockRoot.reportActiveState"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: indicatorBlockRoot.reportActiveState"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: indicatorBlockRoot.reportActiveState"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: root.vertical"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","reportActiveState: root.vertical"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","sourceComponent: root.indicatorComponents[indicatorSlot.indicatorId] || null"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","x: root.fixedAtStart ? 0 : inactiveHorizontalArea.width"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","x: root.fixedAtStart ? activeHorizontalBlock.width : 0"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","y: root.fixedAtStart ? 0 : inactiveVerticalArea.height"]
+adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","y: root.fixedAtStart ? activeVerticalBlock.height : 0"]
+adapt ["bar/widgets/KeyboardLayout.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","fontSize: Style.font.caption"]
+adapt ["bar/widgets/KeyboardLayout.qml","Member \"run\" not found on type \"QObject\" [missing-property]","root.bar.run(root.syncNames.map(name =>"]
+adapt ["bar/widgets/MenuButton.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar.shell) root.bar.shell.toggle(\"menu\")"]
+adapt ["bar/widgets/MenuButton.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar.shell) root.bar.shell.toggle(\"menu\")"]
+adapt ["bar/widgets/Power.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","slotSize: Style.bar.iconSlot * (root.showPercentage && !vertical ? 2 : 1)"]
+adapt ["bar/widgets/Power.qml","Member \"providers\" not found on type \"QObject\" [missing-property]","readonly property var providers: bar ? bar.providers : null"]
+adapt ["bar/widgets/Power.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)"]
+adapt ["bar/widgets/Power.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","Layout.leftMargin: firstGuest && !root.vertical ? Style.space(6) : 0"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","Layout.topMargin: firstGuest && root.vertical ? Style.space(6) : 0"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","bar: root.bar"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","else root.focusWorkspace(modelData)"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","fixedHeight: root.barSize"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","fixedWidth: root.vertical ? root.barSize : Style.space(20)"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","fixedWidth: root.vertical ? root.barSize : Style.space(20)"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","if (shown) root.cycleLayout()"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","onWheelMoved: function(delta) { root.scrollWorkspaces(delta) }"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool firstGuest: root.blockOf(modelData) !== root.block && index > 0 && root.blockOf(root.workspaceIds()[index - 1]) === root.block"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool firstGuest: root.blockOf(modelData) !== root.block && index > 0 && root.blockOf(root.workspaceIds()[index - 1]) === root.block"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool firstGuest: root.blockOf(modelData) !== root.block && index > 0 && root.blockOf(root.workspaceIds()[index - 1]) === root.block"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool firstGuest: root.blockOf(modelData) !== root.block && index > 0 && root.blockOf(root.workspaceIds()[index - 1]) === root.block"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool firstGuest: root.blockOf(modelData) !== root.block && index > 0 && root.blockOf(root.workspaceIds()[index - 1]) === root.block"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool shown: root.monitor !== null && root.monitor.activeWorkspace !== null && root.monitor.activeWorkspace.id === modelData"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool shown: root.monitor !== null && root.monitor.activeWorkspace !== null && root.monitor.activeWorkspace.id === modelData"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property bool shown: root.monitor !== null && root.monitor.activeWorkspace !== null && root.monitor.activeWorkspace.id === modelData"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property int slot: root.slotOf(modelData)"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly property var workspace: root.workspaceById(modelData)"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? \"0\" : String(slot))"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? \"0\" : String(slot))"]
+adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? \"0\" : String(slot))"]
+adapt ["menu/Menu.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.bodySmall"]
+adapt ["menu/Menu.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.bodySmall"]
+adapt ["menu/Menu.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
+adapt ["menu/Menu.qml","Member \"displayLarge\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.displayLarge"]
+adapt ["menu/Menu.qml","Member \"hairline\" not found on type \"QObject\" [missing-property]","height: Style.spacing.hairline"]
+adapt ["menu/Menu.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["menu/Menu.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["menu/Menu.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["menu/Menu.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["menu/Menu.qml","Member \"iconLarge\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.iconLarge"]
+adapt ["menu/Menu.qml","Member \"iconLarge\" not found on type \"QObject\" [missing-property]","height: Style.font.iconLarge"]
+adapt ["menu/Menu.qml","Member \"iconLarge\" not found on type \"QObject\" [missing-property]","width: Style.font.iconLarge"]
+adapt ["menu/Menu.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& (service.stacking !== \"source\" || service.openDeck === Layout.deckKeyFor(model, service.stacking))"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& (service.stacking !== \"source\" || service.openDeck === Layout.deckKeyFor(model, service.stacking))"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& (service.stacking !== \"source\" || service.openDeck === Layout.deckKeyFor(model, service.stacking))"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","Component.onCompleted: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","Component.onCompleted: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","actions: service.actionsOf(model.key, service.refsRevision)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","actions: service.actionsOf(model.key, service.refsRevision)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","actionsAlign: service.actionsAlign"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","cardWidth: deck.width"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","drawnHeight: service.at(model.key, \"height\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","expanded: service.expanded"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","fontScale: service.fontScale"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","hoverX: service.hoverX"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","hoverY: service.hoverY"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","hovered: service.hoverKey === model.key"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","iconOverrides: service.iconOverrides"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","if (service.stacking !== \"source\") return"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","model: toasts"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","now: service.nowTick"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActionInvoked: function(identifier) { service.invokeAction(model.key, identifier) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActivated: service.activate(model.key)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onDismissed: service.closeToast(model.key, \"dismissed\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onExpired: service.closeToast(model.key, \"expired\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onOfferTaken: function(kind, value) { service.takeOffer(kind, value, model.key) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onSilenceRequested: service.setDoNotDisturb(true)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onTargetHeightChanged: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onTargetHeightChanged: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","paused: service.expanded"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","place: service.placements[model.key]"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","scene: service"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.pointerEntered(decks[i].key)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.snoozeSource(String(model.groupKey || \"\"),"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","showCountdown: service.showCountdown"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","snoozeOptions: service.snoozeOptions"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","sole: toasts.count === 1"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","target: sceneRun"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var bottom = top + (service.heights[first.key] || Style.space(58))"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var decks = service.layout.decks"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var place = service.layout.placements[first.key]"]
+adapt ["osd/Osd.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"popups\", \"border\", Commons.Color.popups.border, Math.max(1, Style.space(2)))"]
+adapt ["osd/Osd.qml","Member \"displayLarge\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.displayLarge"]
+adapt ["osd/Osd.qml","Member \"displayLarge\" not found on type \"QObject\" [missing-property]","height: card.borderTop + root.pad + Style.font.displayLarge + root.pad + card.borderBottom"]
+adapt ["osd/Osd.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Style.font.family"]
+adapt ["osd/Osd.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Style.font.family"]
+adapt ["osd/Osd.qml","Member \"sm\" not found on type \"QObject\" [missing-property]","height: Math.max(Style.space(6), Style.spacing.sm)"]
+adapt ["osd/Osd.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.popups.text"]
+adapt ["osd/Osd.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.popups.text"]
+adapt ["osd/Osd.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Util.alpha(Commons.Color.popups.text, 0.45)"]
+adapt ["osd/Osd.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["osd/Osd.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var p = JSON.parse(payloadJson || \"{}\")"]
+adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","if (root.writer.busy) return"]
+adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","onLoaded: if (!root.writer.busy) root.applyUserText(text(), true)"]
+copy Commons/InputDevices.qml:0:0
+copy Ui/BarIconButton.qml:10:40
+copy Ui/BarIconButton.qml:11:46
+copy Ui/BarIconButton.qml:12:52
+copy Ui/BarIconButton.qml:32:23
+copy Ui/BarIconButton.qml:9:37
+copy Ui/BarIconContent.qml:11:17
+copy Ui/BarIconContent.qml:23:18
+copy Ui/BarIconContent.qml:23:30
+copy Ui/BarIconContent.qml:24:18
+copy Ui/BarIconContent.qml:24:31
+copy Ui/BarIconContent.qml:35:17
+copy Ui/BarIconContent.qml:8:39
+copy Ui/BarIndicator.qml:51:41
+copy Ui/BarIndicator.qml:52:37
+copy Ui/BarWidget.qml:35:35
+copy Ui/BarWidget.qml:36:13
+copy Ui/BorderSurface.qml:36:15
+copy Ui/BorderSurface.qml:37:19
+copy Ui/Button.qml:154:34
+copy Ui/Button.qml:155:73
+copy Ui/Button.qml:156:75
+copy Ui/Button.qml:157:71
+copy Ui/Button.qml:158:77
+copy Ui/Button.qml:168:28
+copy Ui/Button.qml:41:42
+copy Ui/Button.qml:42:38
+copy Ui/Button.qml:43:38
+copy Ui/Button.qml:46:50
+copy Ui/Button.qml:47:48
+copy Ui/Button.qml:58:59
+copy Ui/Button.qml:59:59
+copy Ui/Button.qml:60:55
+copy Ui/Button.qml:83:134
+copy Ui/IconContentBounds.qml:101:37
+copy Ui/IconContentBounds.qml:112:43
+copy Ui/IconContentBounds.qml:113:43
+copy Ui/IconContentBounds.qml:133:56
+copy Ui/IconContentBounds.qml:136:9
+copy Ui/IconContentBounds.qml:137:60
+copy Ui/IconContentBounds.qml:137:9
+copy Ui/IconContentBounds.qml:52:42
+copy Ui/IconContentBounds.qml:52:61
+copy Ui/IconContentBounds.qml:52:81
+copy Ui/IconContentBounds.qml:53:24
+copy Ui/IconContentBounds.qml:54:16
+copy Ui/IconContentBounds.qml:55:21
+copy Ui/IconContentBounds.qml:58:20
+copy Ui/IconContentBounds.qml:59:20
+copy Ui/IconContentBounds.qml:60:20
+copy Ui/IconContentBounds.qml:61:17
+copy Ui/IconContentBounds.qml:62:20
+copy Ui/IconContentBounds.qml:63:17
+copy Ui/IconContentBounds.qml:64:16
+copy Ui/IconContentBounds.qml:66:23
+copy Ui/IconContentBounds.qml:81:53
+copy Ui/KeyboardPanel.qml:327:90
+copy Ui/KeyboardPanel.qml:329:30
+copy Ui/KeyboardPanel.qml:333:22
+copy Ui/KeyboardPanel.qml:333:57
+copy Ui/KeyboardPanel.qml:376:18
+copy Ui/KeyboardPanel.qml:376:33
+copy Ui/KeyboardPanel.qml:376:67
+copy Ui/KeyboardPanel.qml:394:22
+copy Ui/KeyboardPanel.qml:408:33
+copy Ui/OpticalGlyph.qml:10:38
+copy Ui/OpticalGlyph.qml:9:42
+copy Ui/PanelActionButton.qml:35:42
+copy Ui/PanelActionButton.qml:36:38
+copy Ui/PanelActionButton.qml:39:85
+copy Ui/PanelHero.qml:13:42
+copy Ui/PanelHero.qml:14:38
+copy Ui/PanelHero.qml:24:84
+copy Ui/PanelHero.qml:58:36
+copy Ui/PanelHero.qml:85:38
+copy Ui/PanelHero.qml:99:34
+copy Ui/PanelKeyCatcher.qml:65:11
+copy Ui/PanelKeyCatcher.qml:66:11
+copy Ui/PanelSectionHeader.qml:12:42
+copy Ui/PanelSectionHeader.qml:13:38
+copy Ui/PanelToolTip.qml:22:57
+copy Ui/PanelToolTip.qml:23:57
+copy Ui/PanelToolTip.qml:24:53
+copy Ui/PanelToolTip.qml:25:42
+copy Ui/PanelToolTip.qml:26:38
+copy Ui/PanelToolTip.qml:28:124
+copy Ui/PanelToolTip.qml:45:68
+copy Ui/PanelToolTip.qml:46:70
+copy Ui/PanelToolTip.qml:47:66
+copy Ui/PanelToolTip.qml:48:72
+copy Ui/PopupCard.qml:107:20
+copy Ui/PopupCard.qml:109:27
+copy Ui/PopupCard.qml:112:27
+copy Ui/PopupCard.qml:121:13
+copy Ui/PopupCard.qml:122:13
+copy Ui/PopupCard.qml:123:22
+copy Ui/PopupCard.qml:123:53
+copy Ui/PopupCard.qml:124:23
+copy Ui/PopupCard.qml:125:25
+copy Ui/PopupCard.qml:125:85
+copy Ui/PopupCard.qml:126:58
+copy Ui/PopupCard.qml:128:25
+copy Ui/PopupCard.qml:128:54
+copy Ui/PopupCard.qml:129:23
+copy Ui/PopupCard.qml:130:58
+copy Ui/PopupCard.qml:133:9
+copy Ui/PopupCard.qml:134:9
+copy Ui/PopupCard.qml:138:26
+copy Ui/PopupCard.qml:140:20
+copy Ui/PopupCard.qml:140:51
+copy Ui/PopupCard.qml:141:66
+copy Ui/PopupCard.qml:143:66
+copy Ui/PopupCard.qml:146:7
+copy Ui/PopupCard.qml:147:7
+copy Ui/PopupCard.qml:14:39
+copy Ui/PopupCard.qml:154:33
+copy Ui/PopupCard.qml:17:52
+copy Ui/PopupCard.qml:18:108
+copy Ui/PopupCard.qml:34:45
+copy Ui/PopupCard.qml:34:72
+copy Ui/PopupCard.qml:37:45
+copy Ui/PopupCard.qml:37:71
+copy Ui/PopupCard.qml:66:26
+copy Ui/PopupCard.qml:75:19
+copy Ui/PopupCard.qml:76:18
+copy Ui/PopupCard.qml:76:55
+copy Ui/PopupCard.qml:90:9
+copy Ui/PopupCard.qml:91:5
+copy Ui/PopupCard.qml:92:5
+copy Ui/PopupCard.qml:93:5
+copy Ui/PopupCard.qml:94:5
+copy Ui/PopupCard.qml:95:5
+copy Ui/PopupCard.qml:95:5
+copy Ui/PopupCard.qml:98:5
+copy Ui/ToggleSwitch.qml:62:67
+copy Ui/WidgetButton.qml:10:65
+copy Ui/WidgetButton.qml:11:38
+copy Ui/WidgetButton.qml:132:22
+copy Ui/WidgetButton.qml:133:23
+copy Ui/WidgetButton.qml:138:15
+copy Ui/WidgetButton.qml:139:21
+copy Ui/WidgetButton.qml:140:19
+copy Ui/WidgetButton.qml:141:32
+copy Ui/WidgetButton.qml:142:16
+copy Ui/WidgetButton.qml:142:31
+copy Ui/WidgetButton.qml:142:53
+copy Ui/WidgetButton.qml:142:72
+copy Ui/WidgetButton.qml:143:19
+copy Ui/WidgetButton.qml:61:64
+copy Ui/WidgetButton.qml:69:91
+copy Ui/WidgetButton.qml:70:92
+copy Ui/WidgetButton.qml:72:38
+copy Ui/WidgetButton.qml:74:38
+copy Ui/WidgetButton.qml:90:52
+copy Ui/WidgetButton.qml:92:42
+copy bar/widgets/Tray.qml:195:35
+copy bar/widgets/Tray.qml:211:32
+copy bar/widgets/Tray.qml:211:57
+copy bar/widgets/Tray.qml:213:14
+copy bar/widgets/Tray.qml:272:43
+copy bar/widgets/Tray.qml:273:43
+copy bar/widgets/Tray.qml:275:63
+copy bar/widgets/Tray.qml:276:23
+copy bar/widgets/Tray.qml:280:12
+copy bar/widgets/Tray.qml:281:50
+copy bar/widgets/Tray.qml:282:17
+copy bar/widgets/Tray.qml:283:18
+copy bar/widgets/Tray.qml:286:29
+copy bar/widgets/Tray.qml:291:16
+copy bar/widgets/Tray.qml:294:14
+copy bar/widgets/Tray.qml:294:34
+copy bar/widgets/Tray.qml:295:17
+copy bar/widgets/Tray.qml:297:44
+copy bar/widgets/Tray.qml:297:68
+copy bar/widgets/Tray.qml:305:14
+copy bar/widgets/Tray.qml:307:18
+copy bar/widgets/Tray.qml:308:19
+copy bar/widgets/Tray.qml:313:16
+copy bar/widgets/Tray.qml:313:36
+copy bar/widgets/Tray.qml:313:56
+copy bar/widgets/Tray.qml:314:20
+copy bar/widgets/Tray.qml:315:21
+copy bar/widgets/Tray.qml:319:18
+copy bar/widgets/Tray.qml:319:38
+copy bar/widgets/Tray.qml:321:24
+copy bar/widgets/Tray.qml:325:24
+copy bar/widgets/Tray.qml:334:18
+copy bar/widgets/Tray.qml:343:12
+copy bar/widgets/Tray.qml:345:18
+copy bar/widgets/Tray.qml:346:102
+copy bar/widgets/Tray.qml:346:23
+copy bar/widgets/Tray.qml:346:44
+copy bar/widgets/Tray.qml:346:75
+copy bar/widgets/Tray.qml:347:102
+copy bar/widgets/Tray.qml:347:23
+copy bar/widgets/Tray.qml:347:44
+copy bar/widgets/Tray.qml:347:75
+copy bar/widgets/Tray.qml:349:18
+copy bar/widgets/Tray.qml:362:44
+copy bar/widgets/Tray.qml:363:43
+copy bar/widgets/Tray.qml:365:22
+copy bar/widgets/Tray.qml:366:66
+copy bar/widgets/Tray.qml:370:12
+copy bar/widgets/Tray.qml:371:16
+copy bar/widgets/Tray.qml:372:50
+copy bar/widgets/Tray.qml:373:18
+copy bar/widgets/Tray.qml:376:29
+copy bar/widgets/Tray.qml:381:16
+copy bar/widgets/Tray.qml:384:14
+copy bar/widgets/Tray.qml:384:34
+copy bar/widgets/Tray.qml:385:17
+copy bar/widgets/Tray.qml:388:44
+copy bar/widgets/Tray.qml:388:68
+copy bar/widgets/Tray.qml:396:14
+copy bar/widgets/Tray.qml:398:18
+copy bar/widgets/Tray.qml:399:19
+copy bar/widgets/Tray.qml:404:16
+copy bar/widgets/Tray.qml:404:36
+copy bar/widgets/Tray.qml:404:56
+copy bar/widgets/Tray.qml:405:20
+copy bar/widgets/Tray.qml:406:21
+copy bar/widgets/Tray.qml:410:18
+copy bar/widgets/Tray.qml:410:38
+copy bar/widgets/Tray.qml:412:24
+copy bar/widgets/Tray.qml:416:24
+copy bar/widgets/Tray.qml:425:18
+copy bar/widgets/Tray.qml:434:12
+copy bar/widgets/Tray.qml:436:18
+copy bar/widgets/Tray.qml:437:101
+copy bar/widgets/Tray.qml:437:22
+copy bar/widgets/Tray.qml:437:43
+copy bar/widgets/Tray.qml:437:74
+copy bar/widgets/Tray.qml:438:103
+copy bar/widgets/Tray.qml:438:24
+copy bar/widgets/Tray.qml:438:45
+copy bar/widgets/Tray.qml:438:76
+copy bar/widgets/Tray.qml:440:18
+copy bar/widgets/Tray.qml:466:36
+copy bar/widgets/Tray.qml:475:36
+copy bar/widgets/Tray.qml:486:36
+copy bar/widgets/Tray.qml:496:18
+copy bar/widgets/Tray.qml:509:44
+copy bar/widgets/Tray.qml:510:44
+copy bar/widgets/Tray.qml:529:20
+copy bar/widgets/Tray.qml:530:26
+copy bar/widgets/Tray.qml:531:40
+copy bar/widgets/Tray.qml:541:25
+copy bar/widgets/Tray.qml:544:34
+copy bar/widgets/Tray.qml:545:34
+copy bar/widgets/Tray.qml:546:24
+copy bar/widgets/Tray.qml:556:25
+copy bar/widgets/Tray.qml:559:34
+copy bar/widgets/Tray.qml:560:34
+copy bar/widgets/Tray.qml:561:24
+copy bar/widgets/Tray.qml:631:40
+copy bar/widgets/Tray.qml:644:40
+copy bar/widgets/Tray.qml:674:41
+copy bar/widgets/Tray.qml:707:111
+copy bar/widgets/Tray.qml:707:53
+copy bar/widgets/Tray.qml:707:82
+copy bar/widgets/Tray.qml:710:46
+copy bar/widgets/Tray.qml:716:22
+copy bar/widgets/Tray.qml:728:45
+copy bar/widgets/Tray.qml:736:114
+copy bar/widgets/Tray.qml:736:97
+copy bar/widgets/Tray.qml:747:24
+copy bar/widgets/Tray.qml:748:30
+copy bar/widgets/Tray.qml:749:44
+copy bar/widgets/Tray.qml:777:24
+copy bar/widgets/Tray.qml:778:30
+copy bar/widgets/Tray.qml:779:44
+copy bar/widgets/Tray.qml:791:24
+copy bar/widgets/Tray.qml:792:30
+copy bar/widgets/Tray.qml:793:44
+copy bar/widgets/Tray.qml:803:23
+copy bar/widgets/Tray.qml:807:21
+copy bar/widgets/Tray.qml:808:21
+copy bar/widgets/Tray.qml:811:21
+copy bar/widgets/Tray.qml:828:38
+copy bar/widgets/Tray.qml:838:15
+copy bar/widgets/Tray.qml:849:26
+copy bar/widgets/Tray.qml:860:28
+copy bar/widgets/Tray.qml:864:34
+copy bar/widgets/Tray.qml:864:42
+copy bar/widgets/Tray.qml:864:76
+copy bar/widgets/Tray.qml:873:30
+copy bar/widgets/Tray.qml:874:31
+copy bar/widgets/Tray.qml:877:7
+copy bar/widgets/Tray.qml:883:24
+copy bar/widgets/Tray.qml:884:25
+copy bar/widgets/Tray.qml:894:22
+copy bar/widgets/Tray.qml:894:32
+copy bar/widgets/Tray.qml:894:67
+copy bar/widgets/Tray.qml:894:84
+copy bar/widgets/Tray.qml:895:21
+copy bar/widgets/Tray.qml:895:31
+copy notifications/DeedButton.qml:23:26
+copy notifications/DeedButton.qml:30:43
+copy notifications/DeedButton.qml:31:26
+copy notifications/DeedButton.qml:32:24
+copy notifications/NotificationPanel.qml:235:25
+copy notifications/NotificationPanel.qml:237:13
+copy notifications/NotificationPanel.qml:237:46
+copy notifications/NotificationPanel.qml:238:46
+copy notifications/NotificationPanel.qml:238:71
+copy notifications/NotificationPanel.qml:238:9
+copy notifications/NotificationPanel.qml:239:9
+copy notifications/NotificationPanel.qml:244:13
+copy notifications/NotificationPanel.qml:244:35
+copy notifications/NotificationPanel.qml:244:54
+copy notifications/NotificationPanel.qml:244:71
+copy notifications/NotificationPanel.qml:245:19
+copy notifications/NotificationPanel.qml:245:32
+copy notifications/NotificationPanel.qml:246:28
+copy notifications/NotificationPanel.qml:246:9
+copy notifications/NotificationPanel.qml:249:14
+copy notifications/NotificationPanel.qml:249:35
+copy notifications/NotificationPanel.qml:249:54
+copy notifications/NotificationPanel.qml:249:70
+copy notifications/NotificationPanel.qml:249:93
+copy notifications/NotificationPanel.qml:250:11
+copy notifications/NotificationPanel.qml:250:33
+copy notifications/NotificationPanel.qml:250:46
+copy notifications/NotificationPanel.qml:270:22
+copy notifications/NotificationPanel.qml:272:36
+copy notifications/NotificationPanel.qml:278:27
+copy notifications/NotificationPanel.qml:279:27
+copy notifications/NotificationPanel.qml:284:30
+copy notifications/NotificationPanel.qml:291:38
+copy notifications/NotificationPanel.qml:296:24
+copy notifications/NotificationPanel.qml:297:26
+copy notifications/NotificationPanel.qml:298:29
+copy notifications/NotificationPanel.qml:299:29
+copy notifications/NotificationPanel.qml:300:45
+copy notifications/NotificationPanel.qml:303:28
+copy notifications/NotificationPanel.qml:306:42
+copy notifications/NotificationPanel.qml:310:38
+copy notifications/NotificationPanel.qml:315:24
+copy notifications/NotificationPanel.qml:316:26
+copy notifications/NotificationPanel.qml:317:29
+copy notifications/NotificationPanel.qml:318:29
+copy notifications/NotificationPanel.qml:319:49
+copy notifications/NotificationPanel.qml:319:63
+copy notifications/NotificationPanel.qml:322:28
+copy notifications/NotificationPanel.qml:325:42
+copy notifications/NotificationPanel.qml:330:24
+copy notifications/NotificationPanel.qml:331:30
+copy notifications/NotificationPanel.qml:331:44
+copy notifications/NotificationPanel.qml:331:80
+copy notifications/NotificationPanel.qml:337:24
+copy notifications/NotificationPanel.qml:338:30
+copy notifications/NotificationPanel.qml:338:44
+copy notifications/NotificationPanel.qml:338:86
+copy notifications/NotificationPanel.qml:343:21
+copy notifications/NotificationPanel.qml:343:38
+copy notifications/NotificationPanel.qml:346:24
+copy notifications/NotificationPanel.qml:347:30
+copy notifications/NotificationPanel.qml:347:44
+copy notifications/NotificationPanel.qml:347:94
+copy notifications/NotificationPanel.qml:353:23
+copy notifications/NotificationPanel.qml:361:21
+copy notifications/NotificationPanel.qml:362:27
+copy notifications/NotificationPanel.qml:363:27
+copy notifications/NotificationPanel.qml:364:28
+copy notifications/NotificationPanel.qml:368:34
+copy notifications/NotificationPanel.qml:369:35
+copy notifications/NotificationPanel.qml:374:27
+copy notifications/NotificationPanel.qml:374:43
+copy notifications/NotificationPanel.qml:375:28
+copy notifications/NotificationPanel.qml:375:50
+copy notifications/NotificationPanel.qml:375:77
+copy notifications/NotificationPanel.qml:376:27
+copy notifications/NotificationPanel.qml:377:28
+copy notifications/NotificationPanel.qml:377:44
+copy notifications/NotificationPanel.qml:378:29
+copy notifications/NotificationPanel.qml:378:51
+copy notifications/NotificationPanel.qml:378:78
+copy notifications/NotificationPanel.qml:379:28
+copy notifications/NotificationPanel.qml:380:34
+copy notifications/NotificationPanel.qml:381:37
+copy notifications/NotificationPanel.qml:392:30
+copy notifications/NotificationPanel.qml:392:47
+copy notifications/NotificationPanel.qml:394:31
+copy notifications/NotificationPanel.qml:394:54
+copy notifications/NotificationPanel.qml:394:70
+copy notifications/NotificationPanel.qml:395:34
+copy notifications/NotificationPanel.qml:398:33
+copy notifications/NotificationPanel.qml:398:56
+copy notifications/NotificationPanel.qml:398:71
+copy notifications/NotificationPanel.qml:399:36
+copy notifications/NotificationPanel.qml:399:50
+copy notifications/NotificationPanel.qml:399:84
+copy notifications/NotificationPanel.qml:404:31
+copy notifications/NotificationPanel.qml:404:52
+copy notifications/NotificationPanel.qml:404:64
+copy notifications/NotificationPanel.qml:405:34
+copy notifications/NotificationPanel.qml:406:33
+copy notifications/NotificationPanel.qml:406:54
+copy notifications/NotificationPanel.qml:406:75
+copy notifications/NotificationPanel.qml:408:27
+copy notifications/NotificationPanel.qml:408:47
+copy notifications/NotificationPanel.qml:408:69
+copy notifications/NotificationPanel.qml:409:28
+copy notifications/NotificationPanel.qml:409:51
+copy notifications/NotificationPanel.qml:417:32
+copy notifications/NotificationPanel.qml:423:31
+copy notifications/NotificationPanel.qml:424:33
+copy notifications/NotificationPanel.qml:425:32
+copy notifications/NotificationPanel.qml:433:24
+copy notifications/NotificationPanel.qml:437:56
+copy notifications/NotificationPanel.qml:450:26
+copy notifications/NotificationPanel.qml:451:32
+copy notifications/NotificationPanel.qml:452:46
+copy notifications/NotificationPanel.qml:466:28
+copy notifications/NotificationPanel.qml:466:44
+copy notifications/NotificationPanel.qml:470:29
+copy notifications/NotificationPanel.qml:471:34
+copy notifications/NotificationPanel.qml:477:36
+copy notifications/NotificationPanel.qml:477:50
+copy notifications/NotificationPanel.qml:487:24
+copy notifications/NotificationPanel.qml:487:48
+copy notifications/NotificationPanel.qml:490:26
+copy notifications/NotificationPanel.qml:499:26
+copy notifications/NotificationPanel.qml:499:49
+copy notifications/NotificationPanel.qml:499:64
+copy notifications/NotificationPanel.qml:504:32
+copy notifications/NotificationPanel.qml:511:40
+copy notifications/NotificationPanel.qml:511:64
+copy notifications/NotificationPanel.qml:514:25
+copy notifications/NotificationPanel.qml:515:80
+copy notifications/NotificationPanel.qml:516:25
+copy notifications/NotificationPanel.qml:519:26
+copy notifications/NotificationPanel.qml:519:49
+copy notifications/NotificationPanel.qml:523:25
+copy notifications/NotificationPanel.qml:523:39
+copy notifications/NotificationPanel.qml:523:62
+copy notifications/NotificationPanel.qml:528:25
+copy notifications/NotificationPanel.qml:528:39
+copy notifications/NotificationPanel.qml:530:38
+copy notifications/NotificationPanel.qml:533:25
+copy notifications/NotificationPanel.qml:533:47
+copy notifications/NotificationPanel.qml:533:61
+copy notifications/NotificationPanel.qml:533:83
+copy notifications/NotificationPanel.qml:543:42
+copy notifications/NotificationPanel.qml:546:21
+copy notifications/NotificationPanel.qml:547:27
+copy notifications/NotificationPanel.qml:548:27
+copy notifications/NotificationPanel.qml:552:24
+copy notifications/NotificationPanel.qml:553:21
+copy notifications/NotificationPanel.qml:558:38
+copy notifications/NotificationPanel.qml:561:24
+copy notifications/NotificationPanel.qml:567:52
+copy notifications/NotificationPanel.qml:575:99
+copy notifications/NotificationPanel.qml:576:32
+copy notifications/NotificationPanel.qml:576:51
+copy notifications/NotificationPanel.qml:577:33
+copy notifications/NotificationPanel.qml:583:76
+copy notifications/NotificationPanel.qml:589:32
+copy notifications/NotificationPanel.qml:590:38
+copy notifications/NotificationPanel.qml:591:52
+copy notifications/NotificationPanel.qml:598:48
+copy notifications/NotificationPanel.qml:604:33
+copy notifications/NotificationPanel.qml:605:34
+copy notifications/NotificationPanel.qml:606:40
+copy notifications/NotificationPanel.qml:607:65
+copy notifications/NotificationPanel.qml:612:33
+copy notifications/NotificationPanel.qml:613:34
+copy notifications/NotificationPanel.qml:637:25
+copy notifications/NotificationPanel.qml:640:25
+copy notifications/NotificationPanel.qml:642:34
+copy notifications/NotificationPanel.qml:649:46
+copy notifications/NotificationPanel.qml:652:48
+copy notifications/NotificationPanel.qml:656:51
+copy notifications/NotificationPanel.qml:656:66
+copy notifications/NotificationPanel.qml:663:31
+copy notifications/NotificationPanel.qml:663:57
+copy notifications/NotificationPanel.qml:663:77
+copy notifications/NotificationPanel.qml:665:31
+copy notifications/NotificationPanel.qml:673:51
+copy notifications/NotificationPanel.qml:673:68
+copy notifications/NotificationPanel.qml:675:36
+copy notifications/NotificationPanel.qml:687:35
+copy notifications/NotificationPanel.qml:689:36
+copy notifications/NotificationPanel.qml:697:85
+copy notifications/NotificationPanel.qml:704:59
+copy notifications/NotificationPanel.qml:705:70
+copy notifications/NotificationPanel.qml:706:40
+copy notifications/NotificationPanel.qml:707:46
+copy notifications/NotificationPanel.qml:716:40
+copy notifications/NotificationPanel.qml:733:42
+copy notifications/NotificationPanel.qml:736:81
+copy notifications/NotificationPanel.qml:737:25
+copy notifications/NotificationPanel.qml:740:26
+copy notifications/NotificationPanel.qml:740:50
+copy notifications/NotificationPanel.qml:744:24
+copy notifications/NotificationPanel.qml:744:48
+copy notifications/NotificationPanel.qml:749:24
+copy notifications/NotificationPanel.qml:751:38
+copy notifications/NotificationPanel.qml:755:25
+copy notifications/NotificationPanel.qml:755:46
+copy notifications/NotificationPanel.qml:755:69
+copy notifications/NotificationPanel.qml:766:25
+copy notifications/NotificationPanel.qml:766:39
+copy notifications/NotificationPanel.qml:770:27
+copy notifications/NotificationPanel.qml:771:27
+copy notifications/NotificationPanel.qml:772:36
+copy notifications/NotificationPanel.qml:774:22
+copy notifications/NotificationPanel.qml:775:17
+copy notifications/NotificationPanel.qml:776:17
+copy notifications/NotificationPanel.qml:789:12
+copy notifications/NotificationPanel.qml:790:18
+copy notifications/NotificationPanel.qml:791:32
+copy notifications/NotificationPanel.qml:797:12
+copy notifications/NotificationPanel.qml:798:18
+copy notifications/NotificationPanel.qml:799:32
+copy notifications/NotificationPanel.qml:803:17
+copy notifications/NotificationPanel.qml:804:17
+copy notifications/NotificationPanel.qml:809:17
+copy notifications/NotificationPanel.qml:810:17
+copy notifications/NotificationPanel.qml:811:26
+copy notifications/NotificationPanel.qml:812:36
+copy notifications/NotificationPanel.qml:822:28
+copy notifications/NotificationPanel.qml:826:30
+copy notifications/NotificationPanel.qml:833:16
+copy notifications/NotificationPanel.qml:834:22
+copy notifications/NotificationPanel.qml:835:36
+copy notifications/NotificationPanel.qml:843:21
+copy notifications/NotificationPanel.qml:867:19
+copy notifications/NotificationPanel.qml:868:19
+copy notifications/NotificationPanel.qml:883:36
+copy notifications/NotificationPanel.qml:883:53
+copy notifications/NotificationPanel.qml:897:32
+copy notifications/NotificationPanel.qml:898:33
+copy notifications/NotificationPanel.qml:899:31
+copy notifications/NotificationPanel.qml:900:34
+copy notifications/NotificationPanel.qml:903:32
+copy notifications/NotificationPanel.qml:904:46
+copy notifications/NotificationPanel.qml:921:30
+copy notifications/NotificationPanel.qml:926:17
+copy notifications/NotificationPanel.qml:934:16
+copy notifications/NotificationPanel.qml:936:36
+copy notifications/NotificationPanel.qml:946:26
+copy notifications/NotificationPanel.qml:948:36
+copy notifications/Picker.qml:100:28
+copy notifications/Picker.qml:103:35
+copy notifications/Picker.qml:109:30
+copy notifications/Picker.qml:117:42
+copy notifications/Picker.qml:117:83
+copy notifications/Picker.qml:118:18
+copy notifications/Picker.qml:119:33
+copy notifications/Picker.qml:121:61
+copy notifications/Picker.qml:127:47
+copy notifications/Picker.qml:128:48
+copy notifications/Picker.qml:130:19
+copy notifications/Picker.qml:132:109
+copy notifications/Picker.qml:132:66
+copy notifications/Picker.qml:133:26
+copy notifications/Picker.qml:134:40
+copy notifications/Picker.qml:144:15
+copy notifications/Picker.qml:145:15
+copy notifications/Picker.qml:145:29
+copy notifications/Picker.qml:31:32
+copy notifications/Picker.qml:32:60
+copy notifications/Picker.qml:37:28
+copy notifications/Picker.qml:45:34
+copy notifications/Picker.qml:64:64
+copy notifications/Picker.qml:65:44
+copy notifications/Picker.qml:71:36
+copy notifications/Picker.qml:78:66
+copy notifications/Picker.qml:83:36
+copy notifications/Picker.qml:98:61
+copy notifications/Toast.qml:367:66
+copy notifications/Toast.qml:374:37
+copy notifications/Toast.qml:375:40
+copy notifications/Toast.qml:386:46
+copy notifications/Toast.qml:387:35
+copy notifications/Toast.qml:388:55
+copy notifications/Toast.qml:388:73
+copy notifications/Toast.qml:412:26
+copy notifications/Toast.qml:413:25
+copy notifications/Toast.qml:414:25
+copy notifications/Toast.qml:415:27
+copy notifications/Toast.qml:416:60
+copy notifications/Toast.qml:455:87
+copy notifications/Toast.qml:457:40
+copy notifications/Toast.qml:481:52
+copy notifications/Toast.qml:483:41
+copy notifications/Toast.qml:484:44
+copy notifications/Toast.qml:484:51
+copy notifications/Toast.qml:496:60
+copy notifications/Toast.qml:497:62
+copy notifications/Toast.qml:499:68
+copy notifications/Toast.qml:508:39
+copy notifications/Toast.qml:509:42
+copy notifications/Toast.qml:534:41
+copy notifications/Toast.qml:535:44
+copy notifications/Toast.qml:555:65
+copy notifications/Toast.qml:556:57
+copy notifications/Toast.qml:577:38
+copy notifications/Toast.qml:610:73
+copy notifications/Toast.qml:613:40
+copy notifications/Toast.qml:629:40
+copy notifications/Toast.qml:674:24
+copy notifications/Toast.qml:707:29
+copy notifications/Toast.qml:745:55
+copy notifications/Toast.qml:752:16

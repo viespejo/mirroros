@@ -7,5 +7,7 @@ CFG_STEPS=(
   workflow/editor
   workflow/pi
   desktop/compositor/providers/hyprland
+  desktop/shell
+  desktop/lock
   desktop/login
 )

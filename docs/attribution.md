@@ -34,6 +34,13 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **Incorporated material:** Presentation function, palette, and layout adapted from the Omarchy ISO configurator, preserved as a reference at `prototypes/frontend/guided-installer/` (never sourced by production) and reimplemented at `install/confirmation/`
 - **Detailed provenance:** [Guided installer reference upstream record](../prototypes/frontend/guided-installer/UPSTREAM.md) and [Guided installer presentation upstream record](../install/confirmation/UPSTREAM.md)
 
+### Omarchy desktop shell fragments
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Selective menu (including the Apps launcher and selector), bar, notification and OSD fragments copied or adapted into the owned shell at `capabilities/desktop/shell/`; key choices, binding descriptions and dispatcher shapes adapted into `capabilities/desktop/compositor/providers/hyprland/shell-bindings.lua` and `window-bindings.lua` (no upstream file copied); copyright holders David Heinemeier Hansson and Neil Jagdish Patel (Omapager notification-engine origin)
+- **License texts:** Omarchy's MIT text and Omapager's complete MIT text (Copyright (c) 2026 Neil Jagdish Patel) are retained unchanged as `LICENSE.omarchy` and `LICENSE.omapager` in `capabilities/desktop/shell/`; the Omapager text was verified externally as license evidence only (not a code-source pin or full license audit)
+- **Detailed provenance:** [Desktop shell upstream record](../capabilities/desktop/shell/UPSTREAM.md) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md)
+
 ### Tokyo Night terminal palette
 
 - **License (SPDX):** `MIT` for the explicitly licensed terminal extra; other upstream repository material has its own terms

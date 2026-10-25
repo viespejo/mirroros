@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and a non-root target user; the compositor step completed (hyprctl, uwsm).
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: packages installed; the runtime tree and the user unit match their last delivery; the unit is
+# enabled for the selected user or user-owned. Nothing is started, restarted or reloaded: a running session picks
+# the shell up at its next login. Personal preferences and private state are never read or written.
+set -Eeuo pipefail
+
+runtime=/usr/share/mirroros/shell
+unit=/etc/systemd/user/mirroros-shell.service
+
+cfg_packages_ensure "$STEP_DIR/packages"
+status=0
+bash "$STEP_DIR/install-runtime" check "$STEP_DIR" "$(cfg_path "$runtime")" || status=$?
+case "$status" in
+  0) ;;
+  1)
+    cfg_run_host bash "$STEP_DIR/install-runtime" publish "$STEP_DIR" "$(cfg_path "$runtime")" \
+      "$(stat -c %u -- "$(cfg_path /)")" "$(stat -c %g -- "$(cfg_path /)")"
+    cfg_changed ;;
+  *) exit 4 ;;
+esac
+cfg_source_record mirroros-shell-runtime capabilities/desktop/shell '' '' \
+  "manifest-sha256:$(bash "$STEP_DIR/install-runtime" digest "$STEP_DIR")"
+cfg_tracked_file "$STEP_DIR/systemd/mirroros-shell.service" "$unit" 0644
+cfg_user_unit_enable mirroros-shell.service "$unit" graphical-session.target
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require bash "$STEP_DIR/install-runtime" check "$STEP_DIR" "$(cfg_path "$runtime")"
+cfg_require cfg_tracked_file_present "$unit"
+cfg_require cfg_user_unit_enabled mirroros-shell.service graphical-session.target

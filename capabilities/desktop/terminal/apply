@@ -1,11 +1,15 @@
 #!/usr/bin/bash
 # Prerequisites: validated package declarations and a non-root target user.
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
-# Postconditions: packages installed; foot configuration exists, managed or user-owned.
+# Postconditions: packages installed; foot configuration and the terminal preference list exist, managed or
+# user-owned; the effective list names an installed terminal for Terminal=true entries.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_user_file "$STEP_DIR/foot.ini" .config/foot/foot.ini
+cfg_user_file "$STEP_DIR/xdg-terminals.list" .config/xdg-terminals.list
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_user_file_present .config/foot/foot.ini
+cfg_require cfg_user_file_present .config/xdg-terminals.list
+cfg_require cfg_user_script "$STEP_DIR/check-terminal-list"

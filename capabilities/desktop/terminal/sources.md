@@ -38,3 +38,15 @@ Unmarked files and symlinks remain user-owned. The package-owned system Foot
 configuration is not overwritten. A successful file/package postcondition does
 not establish graphical, clipboard or Tmux/Pi key-path acceptance on a new guest;
 those checks remain attended runtime verification.
+
+## Terminal preference for desktop entries
+
+Configure manages `~/.config/xdg-terminals.list` with the single entry
+`foot.desktop`, the native preference list `uwsm app` follows for desktop
+entries with `Terminal=true`. `foot.desktop` runs a standalone Foot, so no
+`foot-server` or `footclient` is required. An unmarked list, or a
+desktop-specific `~/.config/hyprland-xdg-terminals.list`, stays user-owned;
+`check-terminal-list` runs as the user and fails the step with an actionable
+message when the effective list names no installed desktop entry, instead of
+reporting a passing postcondition. Launching a `Terminal=true` entry remains an
+attended session check.

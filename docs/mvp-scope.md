@@ -58,13 +58,13 @@ project-owned QML.
 |---|---|---|---|
 | Wayland compositor and graphical session | configure | Hyprland (provisional) | [ADR 0011](adr/0011-hyprland-compositor-provider.md); Hyprland is the provider, not the architectural capability |
 | Graphical login | configure | SDDM with its greeter on Hyprland and a small owned QML theme | Sessions always start through `uwsm start hyprland.desktop`; password login, no autologin |
-| Desktop shell: bar, launcher, notifications, OSD, and session menu | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); bounded to these surfaces |
-| Screen lock and idle | configure | open — selected by Story 4.3 | Never project-owned QML |
+| Desktop shell: bar, launcher, notifications, OSD, and session menu | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); bounded to these surfaces; started by its own systemd user unit with the uwsm graphical session |
+| Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; no DPMS or automatic suspend policy |
 | Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
 | Desktop portals | configure | open — selected by Story 4.5 | |
 | Clipboard and history | configure | open — selected by Story 4.5 | |
 | Screenshots | configure | open — selected by Story 4.5 | |
-| Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3; each slice binds its own actions. Session and greeter default to Right Alt Compose without changing the resolved layout; AltGr overrides use native ownership rules in the configure procedure |
+| Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3, which delivers the approved Omarchy-first key table; each later slice binds its own reserved actions. The session provides `us` and `es` (`us` first); the greeter keeps the resolved layout; both default to Right Alt Compose; AltGr overrides use native ownership rules in the configure procedure |
 
 ### Workflow
 

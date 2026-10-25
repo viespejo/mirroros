@@ -289,11 +289,19 @@ teardown() { cfg_test_teardown; }
   done < <(find "$CFG_SOURCE_ROOT/capabilities" -type f -name apply -print0)
 }
 
+terminal_desktop_entry() {
+  mkdir -p "$CFG_TEST_HOME/.local/share/applications"
+  printf '[Desktop Entry]\nName=Foot\nExec=foot\n' > "$CFG_TEST_HOME/.local/share/applications/${1:-foot.desktop}"
+}
+
 @test "terminal delivers approved native defaults and emoji dependency with unchanged rerun" {
   printf 'CFG_STEPS=(desktop/terminal)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  terminal_desktop_entry
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/foot.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/xdg-terminals.list" "$CFG_TEST_HOME/.config/xdg-terminals.list"
+  [ "$(grep -v '^#' "$CFG_TEST_HOME/.config/xdg-terminals.list")" = foot.desktop ]
   grep -q '^font=JetBrainsMono Nerd Font Mono:size=14$' "$CFG_TEST_HOME/.config/foot/foot.ini"
   grep -q '^pad=16x16 center$' "$CFG_TEST_HOME/.config/foot/foot.ini"
   grep -qF '\x1b[13;2u=Shift+Return' "$CFG_TEST_HOME/.config/foot/foot.ini"
@@ -307,6 +315,7 @@ teardown() { cfg_test_teardown; }
 
 @test "terminal preserves user-owned native defaults and package system configuration" {
   printf 'CFG_STEPS=(desktop/terminal)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  terminal_desktop_entry
   mkdir -p "$CFG_TEST_HOME/.config/foot" "$MIRROROS_CONFIGURE_ROOT/etc/xdg/foot"
   printf '# user terminal\nfont=local\n' > "$CFG_TEST_HOME/.config/foot/foot.ini"
   printf '# package terminal\n' > "$MIRROROS_CONFIGURE_ROOT/etc/xdg/foot/foot.ini"
@@ -317,17 +326,58 @@ teardown() { cfg_test_teardown; }
   [ "$(< "$MIRROROS_CONFIGURE_ROOT/etc/xdg/foot/foot.ini")" = '# package terminal' ]
 }
 
-@test "session and greeter receive Compose without replacing the shared layout resolver" {
+@test "a user-owned terminal list naming no installed terminal is an actionable conflict and is preserved" {
+  printf 'CFG_STEPS=(desktop/terminal)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  terminal_desktop_entry
+  printf '# my terminals\nmissing-terminal.desktop\n' > "$CFG_TEST_DIR/list"
+  mkdir -p "$CFG_TEST_HOME/.config"
+  cp "$CFG_TEST_DIR/list" "$CFG_TEST_HOME/.config/xdg-terminals.list"
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/out"
+  [ "$status" -eq 4 ]
+  grep -qF 'No installed terminal is listed in .config/xdg-terminals.list' "$CFG_TEST_DIR/out/configure.log"
+  cmp "$CFG_TEST_DIR/list" "$CFG_TEST_HOME/.config/xdg-terminals.list"
+  printf 'missing-terminal.desktop\n+foot.desktop:new-window\n' > "$CFG_TEST_HOME/.config/xdg-terminals.list"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  printf 'missing-terminal.desktop\n' > "$CFG_TEST_HOME/.config/hyprland-xdg-terminals.list"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+}
+
+@test "an unknown session keyboard layout is rejected before package mutation" {
+  cfg_test_step
+  printf 'CFG_STEPS=(example desktop/compositor/providers/hyprland)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  printf '! layout\n  us English (US)\n! variant\n' > "$MIRROROS_CONFIGURE_ROOT/usr/share/X11/xkb/rules/base.lst"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'Session keyboard layout es is not a known XKB layout'* ]]
+  cfg_test_no_install
+}
+
+@test "session receives us,es and the approved bindings while the greeter keeps the shared layout resolver" {
   printf 'CFG_STEPS=(desktop/compositor/providers/hyprland)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
   printf 'KEYMAP=es\n' > "$MIRROROS_CONFIGURE_ROOT/etc/vconsole.conf"
   mkdir -p "$MIRROROS_CONFIGURE_ROOT/usr/share/wayland-sessions"
   printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$MIRROROS_CONFIGURE_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
-  for file in "$CFG_TEST_HOME/.config/hypr/hyprland.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
+  local session="$CFG_TEST_HOME/.config/hypr/hyprland.lua" provider="$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland"
+  for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_options = "compose:ralt"' "$file"
-    grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua")' "$file"
   done
+  grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua")' "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"
+  grep -qF 'kb_layout = "us,es"' "$session"
+  grep -qF 'preserve_split = true' "$session"
+  grep -qF 'dofile("/usr/share/mirroros/hypr/shell-bindings.lua")' "$session"
+  grep -qF 'dofile("/usr/share/mirroros/hypr/window-bindings.lua")' "$session"
+  refute grep -qE 'SHIFT \+ [QE]"' "$session"
+  for file in shell-bindings.lua window-bindings.lua; do
+    cmp "$provider/$file" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/$file"
+  done
+  : > "$CFG_TEST_CALLS"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'desktop/compositor/providers/hyprland: unchanged'* ]]
   grep -qF 'repeat_delay = 230' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
   grep -qF 'repeat_rate = 62' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
   [[ "$(< "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua")" != *repeat_delay* ]]
@@ -1770,4 +1820,73 @@ gcloud_nothing_published() {
   refute grep -qE 'cfg_run|cfg_exec|runuser' "$directory/apply"
   refute grep -qE '^[^#]*(profile|bashrc|zshrc)' <<< "$code"
   bash -n "$directory/install-gcloud"
+}
+
+# shellcheck disable=SC2016 # cfg_test_helpers expands these command strings in its own Bash process.
+@test "tracked system files detect local edits that keep the managed header and never overwrite them" {
+  local dest="$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/example.service"
+  local record="$MIRROROS_CONFIGURE_ROOT/var/lib/mirroros/configure/delivered/etc/systemd/user/example.service.sha256"
+  printf '# managed by MirrorOS configure\nfirst\n' > "$CFG_TEST_DIR/source"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644; cfg_tracked_file_present /etc/systemd/user/example.service'
+  [ "$status" -eq 0 ]
+  cmp "$CFG_TEST_DIR/source" "$dest"
+  [ "$(< "$record")" = "$(sha256sum < "$CFG_TEST_DIR/source" | cut -d' ' -f1)" ]
+  rm "$CFG_TEST_DIR/helper-output/.changed"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644'
+  [ "$status" -eq 0 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  printf '# managed by MirrorOS configure\nsecond\n' > "$CFG_TEST_DIR/source"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644'
+  [ "$status" -eq 0 ]
+  cmp "$CFG_TEST_DIR/source" "$dest"
+  printf '# managed by MirrorOS configure\nlocal edit\n' > "$dest"
+  printf '# managed by MirrorOS configure\nthird\n' > "$CFG_TEST_DIR/source"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644'
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'differs from its last MirrorOS delivery'* ]]
+  [ "$(< "$dest")" = $'# managed by MirrorOS configure\nlocal edit' ]
+  run cfg_test_helpers 'cfg_tracked_file_present /etc/systemd/user/example.service'
+  [ "$status" -ne 0 ]
+  cp "$CFG_TEST_DIR/source" "$dest"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644; cfg_tracked_file_present /etc/systemd/user/example.service'
+  [ "$status" -eq 0 ]
+  rm -r "$MIRROROS_CONFIGURE_ROOT/var/lib/mirroros"
+  printf 'unknown\n' > "$dest"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644'
+  [ "$status" -eq 4 ]
+  [ "$(< "$dest")" = unknown ]
+  rm "$dest"
+  ln -s "$CFG_TEST_DIR/source" "$dest"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/systemd/user/example.service 0644'
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'not a regular file delivered by MirrorOS'* ]]
+  [ -L "$dest" ]
+}
+
+@test "user units are enabled offline as the user by their wants link and user overrides are preserved" {
+  local wants="$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants"
+  run cfg_test_helpers 'cfg_user_unit_enable example.service /etc/systemd/user/example.service graphical-session.target
+cfg_user_unit_enabled example.service graphical-session.target'
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$wants/example.service")" = /etc/systemd/user/example.service ]
+  grep -q '^runuser -u alice' "$CFG_TEST_CALLS"
+  refute grep -qE '^(systemctl|sudo) ' "$CFG_TEST_CALLS"
+  rm "$CFG_TEST_DIR/helper-output/.changed"
+  run cfg_test_helpers 'cfg_user_unit_enable example.service /etc/systemd/user/example.service graphical-session.target'
+  [ "$status" -eq 0 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  rm "$wants/example.service"
+  ln -s /dev/null "$CFG_TEST_HOME/.config/systemd/user/example.service"
+  run cfg_test_helpers 'cfg_user_unit_enable example.service /etc/systemd/user/example.service graphical-session.target
+cfg_user_unit_enabled example.service graphical-session.target'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'user-owned: .config/systemd/user/example.service'* ]]
+  [ ! -e "$wants/example.service" ] && [ ! -L "$wants/example.service" ]
+  rm "$CFG_TEST_HOME/.config/systemd/user/example.service"
+  ln -s /usr/lib/systemd/user/other.service "$wants/example.service"
+  run cfg_test_helpers 'cfg_user_unit_enable example.service /etc/systemd/user/example.service graphical-session.target'
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$wants/example.service")" = /usr/lib/systemd/user/other.service ]
+  run cfg_test_helpers 'cfg_user_unit_enable ../x.service /etc/systemd/user/example.service graphical-session.target'
+  [ "$status" -eq 6 ]
 }

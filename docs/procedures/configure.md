@@ -112,17 +112,19 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The eight steps run in this order:
+The ten steps run in this order:
 
 | Step | Applied state |
 |---|---|
-| `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji` and approved native terminal-local defaults |
+| `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
 | `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |
 | `workflow/editor` | Lazygit, tree-sitter-cli, unzip and Go, managed Lazygit and `vim` wrapper files, the external Neovim configuration at `~/code/nvim` linked from `~/.config/nvim`, and its locked plugins, tools and parsers prepared by the user |
 | `workflow/pi` | ffmpeg, the external pi-config at `~/code/pi-config`, the Pi executable in the user's NVM prefix selected from pi-config's exact declaration, the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, the `pi-editor` and `gcloud` links, and the initialize-only `~/.pi` defaults with their npm packages and owned skills |
-| `desktop/compositor/providers/hyprland` | Minimal session, shared keyboard module, Wayland greeter, and one uwsm session entry |
+| `desktop/compositor/providers/hyprland` | Session with `us,es` layouts and the approved Story 4.3 bindings, shared keyboard module for the greeter, Wayland greeter, and one uwsm session entry |
+| `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell`, and its user unit enabled for the selected user |
+| `desktop/lock` | hyprlock and hypridle, native lock and idle configuration, a hypridle drop-in, and hypridle enabled for the selected user |
 | `desktop/login` | SDDM and uwsm, explicit `noto-fonts`, stock theme without autologin, enable-only login, and graphical default target |
 
 The Nerd Font supplies Starship glyphs but does not provide SDDM's required `ttf-font`; `noto-fonts` supplies that
@@ -180,15 +182,33 @@ Managed destinations are:
   only after validation, so a failed run leaves no partial directory.
 - `~/.config/mirroros/bash/starship.bash`: default Starship initialization for interactive bash; sourced through
   one marked block appended to `~/.bashrc`. No `starship.toml` is supplied.
-- `~/.config/hypr/hyprland.lua`: the shared keyboard module, Right Alt Compose and exactly three bindings: `SUPER+Return` launches
-  `uwsm app -- foot`, `SUPER+SHIFT+Q` closes the active window, and `SUPER+SHIFT+E` runs `uwsm stop`.
-- `/usr/share/mirroros/hypr/keyboard.lua`: runtime layout resolution, shared by the greeter and managed session.
+- `~/.config/xdg-terminals.list`: `foot.desktop`, the terminal `uwsm app` uses for `Terminal=true` desktop entries.
+  A user-owned list (or `~/.config/hyprland-xdg-terminals.list`) is preserved; when the effective list names no
+  installed desktop entry, the step fails with an actionable message instead of passing.
+- `~/.config/hypr/hyprland.lua`: the session layouts `us,es` (`us` first), Right Alt Compose, the repeat defaults,
+  `dwindle.preserve_split`, and the approved bindings loaded with `dofile` from the two files below at every
+  configuration load. The earlier `SUPER+SHIFT+Q` and `SUPER+SHIFT+E` bindings are removed (close: `SUPER+W` or
+  `SUPER+Q`; logout: System menu); `SUPER+Return` still launches `uwsm app -- foot`.
+- `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`: the approved key table and the registry the
+  shell's keyboard help reads (`$XDG_RUNTIME_DIR/mirroros-keybindings.tsv`). Nothing is unbound at runtime. See
+  [Hyprland bindings provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md).
+- `/usr/share/mirroros/hypr/keyboard.lua`: runtime layout resolution for the greeter.
 - `/usr/share/mirroros/sddm/hyprland.lua`: minimal greeter configuration without logo, splash, or animations,
   using the same layout resolver and Right Alt Compose default.
 - `/usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop`: a link to the upstream session entry. Its directory
   must contain exactly that entry and its `Exec` must contain `uwsm start` and `hyprland.desktop`.
 - `/etc/sddm.conf.d/20-mirroros-hyprland.conf`: Wayland greeter command and restricted Wayland session directory.
 - `/etc/sddm.conf.d/10-mirroros-login.conf`: stock theme with an empty `Current` and disabled autologin.
+- `/usr/share/mirroros/shell`: the shell runtime, published as one manifest-checked tree; `/etc/systemd/user/
+  mirroros-shell.service`: its user unit; `~/.config/systemd/user/graphical-session.target.wants/mirroros-shell.service`:
+  its enablement for the selected user. Personal preferences (`~/.config/mirroros/shell.json`) and private state
+  (`~/.local/state/mirroros/shell`) are never read or written. See
+  [shell sources](../../capabilities/desktop/shell/sources.md) and the [desktop shell procedure](desktop-shell.md).
+- `~/.config/hypr/hypridle.conf`, `~/.config/hypr/hyprlock.conf`: lock after 300 seconds idle and before sleep, the
+  `us` layout before every lock, the while-away lock marker hooks, and a solid lock surface with system PAM
+  authentication; `/etc/systemd/user/hypridle.service.d/10-mirroros.conf`: stale-marker cleanup before hypridle
+  starts; `~/.config/systemd/user/graphical-session.target.wants/hypridle.service`: enablement of the packaged unit
+  for the selected user. See [lock sources](../../capabilities/desktop/lock/sources.md).
 
 SDDM is enabled, **never started or restarted**; `graphical.target` becomes the default. Postconditions check the
 SDDM display-manager alias, the absence of another enabled display manager, and the default target. Configure
@@ -202,8 +222,10 @@ This does not identify an individual offending field. These settings do not chan
 
 ### Right Alt Compose and native overrides
 
-`kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The layout
-still comes from the shared keyboard module; adding Compose never forces `us` or changes `/etc/vconsole.conf`.
+`kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The greeter's
+layout still comes from the shared keyboard module and the console keeps `/etc/vconsole.conf`; neither is changed.
+The managed session declares the product layouts `us,es` (DEC-017) with `us` at index 0, switched with `SUPER+I`
+and `SUPER+SHIFT+I`; validation rejects a session layout missing from the XKB data before any package change.
 This replaces Right Alt's normal AltGr role. Do not assume layouts that depend on AltGr are unaffected.
 
 To retain AltGr, deliberately take ownership of each applicable native file: remove its
@@ -223,6 +245,17 @@ All home-directory writes run as the target user through `runuser`. Files are cr
 only when they carry the `managed by MirrorOS configure` header and differ. Non-managed files and symbolic links
 are preserved and reported as user-owned; their postconditions only check existence, not the managed contents.
 A user-owned legacy `~/.config/hypr/hyprland.conf` prevents creating a shadowing Lua configuration.
+
+The shell runtime, the shell unit, the hypridle drop-in and the binding files are tracked deliveries: configure
+records what it delivered (`/var/lib/mirroros/configure/delivered/`, or the runtime's `.mirroros-manifest`), so a
+local edit is detected even when it keeps the managed header. An absent destination is created and the intact
+previous delivery is updated; an edited, unknown or linked destination is a conflict that fails the step with
+outcome `4` and is never overwritten. Move it aside (or restore it) and rerun.
+
+User units are enabled offline by creating the selected user's own `graphical-session.target.wants` link, as
+that user; no user manager or bus is needed and no other account is affected. A user's own unit file or mask in
+`~/.config/systemd/user/` is preserved. Configure never starts, restarts or reloads the shell, hypridle or the
+desktop in either context: a running session picks up the new units at its next login.
 
 `~/.bashrc` is never rewritten: one block between `# BEGIN MirrorOS configure` and `# END MirrorOS configure`
 sources the managed Starship file. A linked bashrc is preserved; malformed or duplicate markers require manual

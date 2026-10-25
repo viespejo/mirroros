@@ -1,0 +1,22 @@
+# managed by MirrorOS configure
+# The MirrorOS desktop shell, started by the user manager with the uwsm graphical session (DEC-023). This unit is the
+# only owner of shell startup and restarts: Hyprland does not start the shell and no script supervises it. It has no
+# dependency on hypridle or hyprlock, so restarting or stopping the shell never touches the lock or idle lifetime.
+[Unit]
+Description=MirrorOS desktop shell
+Documentation=file:///usr/share/mirroros/shell/sources.md
+PartOf=graphical-session.target
+After=graphical-session.target
+Requisite=graphical-session.target
+# Bounded restarts: after five starts within a minute the unit stays failed; see its journal.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/qs -p /usr/share/mirroros/shell
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

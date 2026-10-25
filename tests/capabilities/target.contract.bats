@@ -202,15 +202,33 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the eight-step configuration converges in the target and reruns without transactions" {
+@test "the ten-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
-  mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions"
+  mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
+    "$CFG_TEST_HOME/.local/share/applications"
+  printf '[Unit]\nDescription=packaged hypridle\n' > "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user/hypridle.service"
+  printf '[Desktop Entry]\nExec=foot\n' > "$CFG_TEST_HOME/.local/share/applications/foot.desktop"
   printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
   printf '/bin/bash\n/usr/bin/zsh\n' > "$CFG_TEST_TARGET_ROOT/etc/shells"
   target_pi_node_fixture
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 8/8 desktop/login =='* ]]
+  [[ "$output" == *'== 10/10 desktop/login =='* ]]
+  bash "$CFG_SOURCE_ROOT/capabilities/desktop/shell/install-runtime" check "$CFG_SOURCE_ROOT/capabilities/desktop/shell" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/shell"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/shell/systemd/mirroros-shell.service" \
+    "$CFG_TEST_TARGET_ROOT/etc/systemd/user/mirroros-shell.service"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/lock/systemd/10-mirroros.conf" \
+    "$CFG_TEST_TARGET_ROOT/etc/systemd/user/hypridle.service.d/10-mirroros.conf"
+  [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-shell.service")" = \
+    /etc/systemd/user/mirroros-shell.service ]
+  [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/hypridle.service")" = \
+    /usr/lib/systemd/user/hypridle.service ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/lock/hypridle.conf" "$CFG_TEST_HOME/.config/hypr/hypridle.conf"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/lock/hyprlock.conf" "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/quickshell" "$CFG_TEST_CALLS"
+  run grep -qE 'systemctl (start|restart|reload|daemon-reload|--user)' "$CFG_TEST_CALLS"
+  [ "$status" -eq 1 ]
   grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT usermod --shell /usr/bin/zsh -- alice" "$CFG_TEST_CALLS"
   [ "$(cut -d: -f7 <<< "$(grep '^alice:' "$CFG_TEST_TARGET_ROOT/etc/passwd")")" = /usr/bin/zsh ]
   cmp "$CFG_SOURCE_ROOT/capabilities/workflow/shell/zshrc" "$CFG_TEST_HOME/.zshrc"
@@ -232,7 +250,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 8 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 10 ]
   cfg_test_no_install
   ! grep -qE 'systemctl (start|restart)' "$CFG_TEST_CALLS"
 }
