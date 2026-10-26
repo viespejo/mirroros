@@ -254,6 +254,9 @@ NODE
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/foot.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
   [ -e "$CFG_TEST_INSTALLED/noto-fonts-emoji" ]
   [ -f "$CFG_TEST_HOME/.config/hypr/hyprland.lua" ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland/monitors.lua" "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/hypr/monitors.lua"
+  grep -qxF 'dofile("/usr/share/mirroros/hypr/monitors.lua")' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
+  grep -qxF 'dofile("/usr/share/mirroros/hypr/monitors.lua")' "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/sddm/hyprland.lua"
   grep -qF 'kb_options = "compose:ralt"' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
   grep -qF 'kb_options = "compose:ralt"' "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/sddm/hyprland.lua"
   [ -f "$CFG_TEST_HOME/.config/mirroros/bash/starship.bash" ]

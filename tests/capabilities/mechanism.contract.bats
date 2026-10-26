@@ -368,6 +368,11 @@ terminal_desktop_entry() {
   for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/layouts.lua")' "$file"
   done
+  for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
+    grep -qxF 'dofile("/usr/share/mirroros/hypr/monitors.lua")' "$file"
+  done
+  cmp "$provider/monitors.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/monitors.lua"
+  [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/monitors.lua")" = 644 ]
   cmp "$provider/layouts.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/layouts.lua"
   [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/layouts.lua")" = 644 ]
   cmp "$provider/greeter/layout-indicator" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/layout-indicator"

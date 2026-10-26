@@ -232,6 +232,18 @@ matching the maintainer-approved host behavior. The greeter retains its composit
 reconstruction A/B check recovered login after removing the explicit repeat fields from that file.
 This does not identify an individual offending field. These settings do not change pointer sensitivity.
 
+### Virtual display defaults
+
+The managed Hyprland session and SDDM greeter both load `/usr/share/mirroros/hypr/monitors.lua` with `dofile` at
+each configuration load. Its only `hl.monitor` rule matches `Virtual-1`, with `mode = "1920x1080@60"`,
+`position = "auto"` and `scale = 1.2` (1600x900 logical pixels). All other monitor fields and connectors keep
+Hyprland's defaults; there is no catch-all monitor rule. Any output named `Virtual-1` matches, not only the local
+QEMU lab. Future connector-specific rules remain possible in the native configuration.
+
+This rule does not configure the live console, kernel framebuffer, firmware or boot menu. Kernel `video=` changes
+are a separate boot-policy decision, not an implicit part of desktop scaling. Configure publishes the files but
+never reloads the compositor or restarts SDDM; review them at the next session and greeter start.
+
 ### Right Alt Compose and native overrides
 
 `kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The console keeps

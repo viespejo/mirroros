@@ -1,4 +1,5 @@
 -- managed by MirrorOS configure
+dofile("/usr/share/mirroros/hypr/monitors.lua")
 hl.config({
     input = { kb_layout = require("/usr/share/mirroros/hypr/layouts.lua"), kb_options = "compose:ralt" },
     misc = {

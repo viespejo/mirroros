@@ -23,6 +23,15 @@
 `hyprland.lua` is original MirrorOS configuration. Its `dwindle.preserve_split = true` follows the observed need of
 SUPER+J (togglesplit) and matches Omarchy `default/hypr/looknfeel.lua` 93-95; no other look-and-feel value is taken.
 
+## Monitor defaults
+
+`monitors.lua` is original MirrorOS configuration, using `HL.MonitorSpec` and `hl.monitor` from the installed
+Hyprland 0.56.2 Lua API (`/usr/share/hypr/stubs/hl.meta.lua`). No upstream configuration is copied. Session and
+greeter load the same file with `dofile` on every configuration load. The only rule selects `Virtual-1` at
+1920x1080@60, automatic position and scale 1.2; all other fields and connectors retain provider defaults. The
+local QEMU lab advertises that mode, but any other connector with the same name also matches. No kernel, firmware
+or live-console mode is changed by this rule.
+
 ## Registration and reload
 
 The prototype loaded these files into a running session with `hyprctl eval` and removed them with

@@ -168,8 +168,40 @@ test('the registry lists launchable entries for the current instance and leaves 
 test('Lua sources parse', { skip: !lua && 'no Lua interpreter' }, () => {
   const luac = ['luac5.4', 'luac'].find(name => spawnSync(name, ['-v']).status === 0);
   if (!luac) return;
-  execFileSync(luac, ['-p', ...['hyprland.lua', 'keyboard.lua', 'layouts.lua', 'shell-bindings.lua', 'window-bindings.lua',
+  execFileSync(luac, ['-p', ...['hyprland.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua',
     'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
+});
+
+test('session and greeter reload only the shared Virtual-1 monitor rule', { skip: !lua && 'no Lua interpreter' }, () => {
+  const result = execFileSync(lua, ['-e', `
+    local original_dofile = dofile
+    package.preload['/usr/share/mirroros/hypr/layouts.lua'] = function() return 'us,es' end
+    dofile = function(file)
+      if file == '/usr/share/mirroros/hypr/monitors.lua' then
+        return original_dofile(arg[1] .. '/monitors.lua')
+      end
+      assert(file == '/usr/share/mirroros/hypr/shell-bindings.lua'
+        or file == '/usr/share/mirroros/hypr/window-bindings.lua', file)
+    end
+    hl = {
+      config = function() end, bind = function() end, on = function() end,
+      dsp = { exec_cmd = function() end },
+      monitor = function(spec)
+        local count = 0
+        for _ in pairs(spec) do count = count + 1 end
+        assert(count == 4)
+        assert(spec.output == 'Virtual-1')
+        assert(spec.mode == '1920x1080@60')
+        assert(spec.position == 'auto')
+        assert(spec.scale == 1.2)
+        print(spec.output)
+      end,
+    }
+    for _, file in ipairs({'hyprland.lua', 'greeter/hyprland.lua'}) do
+      for reload = 1, 2 do original_dofile(arg[1] .. '/' .. file) end
+    end
+  `, '-', provider], { input: '', encoding: 'utf8' });
+  assert.deepEqual(result.trim().split('\n'), Array(4).fill('Virtual-1'));
 });
 
 test('the session and greeter layout list starts with the resolved layout without duplicates', { skip: !lua && 'no Lua interpreter' }, () => {
