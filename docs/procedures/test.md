@@ -66,11 +66,13 @@ Run the profile and complementary builder/reference contracts without constructi
 ```sh
 bats tests/image/live-profile.contract.bats tests/image/guided-installer.contract.bats \
   tests/image/builder/ tests/vm/reference/
-node --test tests/image/builder/*.test.mjs tests/vm/reference/*.test.mjs
+node --test tests/image/live-display.test.mjs tests/image/builder/*.test.mjs tests/vm/reference/*.test.mjs
+grub-script-check image/archiso/grub/grub.cfg
+grub-script-check image/archiso/grub/loopback.cfg
 git diff --check
 ```
 
-These check approved declarations, MirrorOS metadata/date behavior, live Arch lineage, removed resources, unchanged SSH policy, startup and native-tool failure handling. Reference/builder contracts use doubles, not actual runtime qualification. Supply `MIRROROS_BASELINE_BUNDLE` and `MIRROROS_REDUCED_BUNDLE` as documented in [Build](build.md#reduced-live-profile-and-identity) to check actual dependency-resolved manifests; otherwise that check is explicitly skipped.
+These check approved declarations, MirrorOS metadata/date behavior, live Arch lineage, removed resources, unchanged SSH policy, startup and native-tool failure handling. The live-display contracts check the 720p preference and native-display recovery pair without changing the font or installed-system code. [ADR 0017](../adr/0017-live-console-display-preference.md) still requires new-artifact UEFI/OVMF and physical observations, effective-mode checks, and an ignored/unavailable-mode recovery test. Reference/builder contracts use doubles, not actual runtime qualification. Supply `MIRROROS_BASELINE_BUNDLE` and `MIRROROS_REDUCED_BUNDLE` as documented in [Build](build.md#reduced-live-profile-and-identity) to check actual dependency-resolved manifests; otherwise that check is explicitly skipped.
 
 The [live-package audit and attended QEMU/UEFI acceptance procedure](iso-size-and-live-branding.md#manual-acceptance-and-optimization-measurements) is the manual acceptance path for this reduction. It provides [graphical launch and separate installed/rescue boots](iso-size-and-live-branding.md#graphical-launch-installed-boot-and-rescue-boot), a three-option [installation matrix](iso-size-and-live-branding.md#installation-matrix), [ext4/Btrfs mounting and arch-chroot](iso-size-and-live-branding.md#rescue-mounting-and-arch-chroot), a separate Wi-Fi-device checklist, and private verdict/size/timing worksheets. Until required attended verdicts and a comparable size/timing comparison are recorded and approved, runtime acceptance remains pending; unavailable Wi-Fi evidence is pending, never inferred from virtual Ethernet. Each build, each VM launch (including disk-only and rescue boots), and each destructive case requires explicit authorization. These graphical unseeded observations complement, but do not change or replace, the reference VM configuration, qualification IDs, counted-run rules or Story 2.6 gate.
 

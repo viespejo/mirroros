@@ -32,7 +32,7 @@ The supported boot scope is **UEFI/OVMF only**, using systemd-boot. The reviewed
 ## Local delta
 
 - **Baseline:** vendor import commit `bc4cd22b0e4294914f38f4ba800b88474ab3a50a`.
-- **Functional summary:** Embed the MirrorOS installer entry point and tty1 startup integration, Node.js/Gum runtime declarations and executable permissions; preserve NoCloud orchestration. Apply the [approved package audit](../../docs/procedures/iso-size-and-live-branding.md): 62 retained x86_64 declarations, 69 removed declarations, associated service/agent/speech and BIOS resource cleanup. Set MirrorOS ISO metadata, live hostname, welcome and boot titles; add a live-only regular `/etc/os-release` override with Arch lineage. Preserve upstream technical paths, firmware, network configuration, SSH policy and package signature policy. Installed-system policy is separate.
+- **Functional summary:** Embed the MirrorOS installer entry point and tty1 startup integration, Node.js/Gum runtime declarations and executable permissions; preserve NoCloud orchestration. Apply the [approved package audit](../../docs/procedures/iso-size-and-live-branding.md): 62 retained x86_64 declarations, 69 removed declarations, associated service/agent/speech and BIOS resource cleanup. Set MirrorOS ISO metadata, live hostname, welcome and boot titles; add a live-only regular `/etc/os-release` override with Arch lineage. Preserve upstream technical paths, firmware, network configuration, SSH policy and package signature policy. Installed-system policy is separate. Under [ADR 0017](../../docs/adr/0017-live-console-display-preference.md), the default live entry requests `video=1280x720` as a best-effort preference; a second native-display entry omits it. Both retained GRUB configurations carry the same alternatives without expanding boot qualification. No font, package, installed boot parameter, or graphical scaling policy changes.
 - **Statistics:** Use the baseline comparison below for the reviewed integration commit; include new profile paths before recording final statistics. `UPSTREAM.md` is excluded. No generated image or embedded code payload is committed.
 
 Run from `main` after the merge commit; `HEAD` then identifies the reviewed integration commit:
@@ -46,6 +46,10 @@ git diff --stat "$VENDOR_BASELINE_COMMIT" HEAD \
 ```
 
 ## Qualification states
+
+The ADR 0017 display-entry delta has not been built or boot-qualified. The attended ThinkPad experiment
+used a connector-specific one-boot argument on the previous development artifact, not the new global
+request. Both entries, ignored/unavailable-mode recovery, and the reference VM remain pending for this delta.
 
 - **Aggregate signature validation:** passed (Cosign image signature and Pacman package signature).
 - **Import integrity:** passed (`pacman -Qkk archiso`; exported profile comparison).

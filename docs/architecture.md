@@ -466,6 +466,7 @@ MirrorOS introduces no custom TUI. [Gum](https://github.com/charmbracelet/gum) i
 - Color never carries meaning alone.
 - Commands respect non-interactive terminals and `NO_COLOR`.
 - The guided live installer supports only the colored interactive live console and rejects `NO_COLOR`, `TERM=dumb`, and non-interactive terminals ([ADR 0006](adr/0006-guided-live-installation-boundaries.md)).
+- The live medium requests 1280x720 as a best-effort readability preference and offers a separate native-display boot entry without that request ([ADR 0017](adr/0017-live-console-display-preference.md)). The kernel-default font remains unchanged; temporary large-text commands are documented, not applied automatically. This policy never changes installed boot parameters or graphical-session scaling, and promises no automatic fallback or universal mode support.
 - A styled header or welcome is allowed only in interactive TTY sessions of `install` and `configure`; it is suppressed in non-interactive mode, without a TTY, and in logs. The live ISO opens the guided installer's welcome on tty1 automatically; this grants no authorization. MirrorOS adds no persistent healthy-state notifications.
 
 **Desktop boundary:**

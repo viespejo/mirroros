@@ -410,6 +410,12 @@ first. The wording shown is the proposed production text; every item awaits appr
 | D22 | None. | For `not_configured`/`4`: the logo, the red line "Base system installed and verified; environment configuration failed at step <step>." (unknown when no step is available), the next action "Boot the installed system, log in at the console, and run sudo mirroros-configure.", and "Run directory: <path>". The menu is "View configure log" / "Restart" / "Return to shell" / "Power off", with "Return to shell" selected. The pager shows the configure portion of `engine.log`. Lines wrap at word boundaries like D20. No retry from the live medium and no automatic action; leaving for the shell returns `4`. | Story 4.2 DEC-027, DEC-028, DEC-032. |
 | D23 | No configure announcement under the review rows. | Adds the fixed dimmed line "After the base system is verified, the graphical environment is configured." under the review rows in both review presentations, before confirmation. It fits 80 columns and does not add an editable choice or a plan operation. | Story 4.2 DEC-031. |
 
+The live medium additionally requests a different display geometry under
+[ADR 0017](../docs/adr/0017-live-console-display-preference.md): its default boot entry requests
+`video=1280x720`, with a separate native-display entry omitting that request. This approved live-only
+difference changes neither these screens nor the kernel-default font. Temporary large text remains a
+manual session adjustment, not an assistant feature or an installation-plan choice.
+
 Unchanged and not differences: the logo and its two-tone drawing, the palette and the VT-only palette setting, the
 centering, the Gum widget styles, the welcome text and the live-keyboard screen (including "This layout is for the
 live installation, not the installed system."), the Wi-Fi instruction text and its pager, the timezone,

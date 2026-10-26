@@ -28,7 +28,7 @@
 
 ## Differences from the reference
 
-The only intended differences are listed in
+The live medium additionally changes display-mode preference under [ADR 0017](../../docs/adr/0017-live-console-display-preference.md), without changing the console font or the presentation scripts. The intended differences are listed in
 [`contracts/installation-confirmation.md`](../../contracts/installation-confirmation.md#differences-from-the-reference)
 (D1 to D14). The production assistant additionally shows three short gray status lines while a read-only
 phase runs, in the style of the reference's "Checking internet connection...": "Checking system clock...",

@@ -127,6 +127,40 @@ mirroros-install --help
 
 On the live ISO the same assistant opens automatically on tty1 as root (ADR 0006); cancelling or finishing returns to the shell, `mirroros-install` restarts it, and other consoles stay plain shells. A seeded qualification boot suppresses only the automatic start. The assistant performs preparation, read-only discovery, choice collection, review, confirmation, protected password entry, final revalidation, and then runs the installation engine as a non-interactive child while it presents progress. The live-root decision (re-evaluated for the reachable engine in ADR 0008) does not change the installed system: installed-user configuration keeps its privilege separation. The full format, safety projection, reason codes, and records are specified in [`contracts/installation-confirmation.md`](../../contracts/installation-confirmation.md).
 
+### Live display and text size
+
+Under [ADR 0017](../adr/0017-live-console-display-preference.md), the default USB/UEFI entry is
+**MirrorOS Live/Rescue - prefer 1280x720**. It requests `video=1280x720` for this live boot only. The kernel
+and driver decide the effective mode; this is not a forced connector or a check that the panel advertises
+720p. The font remains the kernel default. The boot menu itself need not change size.
+
+If the screen is blank, distorted, or unsuitable, reboot to the USB menu and select
+**MirrorOS Live/Rescue - native display**. That entry omits the mode request and preserves the
+firmware/kernel choice; automatic fallback is not guaranteed. Do not interrupt an installation that is
+writing the disk just to adjust presentation. Neither entry changes installed boot parameters, desktop
+scaling, or the greeter's monitor policy. GRUB configuration retains the same alternatives for compatibility;
+Ventoy is not a qualified boot path.
+
+Optional larger text is a temporary live-console adjustment, not the default. Before installation starts,
+cancel the assistant to its root shell on the console you want to adjust, then run:
+
+```bash
+setfont -d default8x16
+mirroros-install
+```
+
+This doubles the 8x16 font to 16x32. It can displace the logo or overflow long screens; check the review
+and warnings before proceeding. Restarting the assistant redraws the screen with the new glyphs instead
+of judging text left over from the previous rendering. Do not start a second assistant while one is active
+on another console. To restore the boot font and its mapping, cancel back to that console's shell and run
+`setfont -R`, then restart the assistant. Rebooting also discards the adjustment. No font setting is copied
+to the installed system.
+
+For a display check, read `cat /proc/cmdline`, `showconsolefont -i`, `stty size`, and, if present,
+`cat /sys/class/graphics/fb0/virtual_size`; virtual framebuffer size alone is not proof of the active
+connector mode. Record the effective connector mode too when qualifying the artifact. At effective
+1280x720 with an 8x16 font expect roughly 160 columns and 45 rows, not a universal fit guarantee.
+
 ### Inputs and flow
 
 - Stdin and stdout must both be terminals of the supported scope: a colored interactive console of the live ISO (`TERM` set and not `dumb`, `NO_COLOR` unset). Missing TTY, `NO_COLOR`, `TERM=dumb`, public `apply`, `--yes`, `--non-interactive`, `--target`, and unknown options return `2` before any prompt or discovery; there is no colorless variant and no bypass.

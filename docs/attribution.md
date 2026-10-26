@@ -27,7 +27,7 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 ### Archiso
 
 - **License (SPDX):** `GPL-3.0-or-later`
-- **Incorporated material:** Official `releng` profile at `image/archiso/`, locally modified for MirrorOS installer integration, reviewed live-package reduction, UEFI-only media and live branding; upstream license and technical references remain intact
+- **Incorporated material:** Official `releng` profile at `image/archiso/`, locally modified for MirrorOS installer integration, reviewed live-package reduction, UEFI-only media, live branding and live display-preference/recovery entries; upstream license and technical references remain intact
 - **Detailed provenance:** [Archiso upstream record](../image/archiso/UPSTREAM.md)
 
 ### Omarchy ISO configurator presentation

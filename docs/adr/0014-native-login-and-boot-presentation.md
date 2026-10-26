@@ -147,3 +147,7 @@ After adoption, through plan 02-20:
 [ADR 0016](0016-greeter-power-actions.md) supersedes only the exclusion of power menus: confirmed restart and
 shutdown through SDDM's native proxy are permitted. The other decisions remain in force, with the keyboard-layout
 extension already recorded in ADR 0015.
+
+[ADR 0017](0017-live-console-display-preference.md) supersedes only the consequence that live boot visuals remain
+unchanged, for a best-effort display-mode preference and native-display recovery entry. Installed presentation
+and the live package list remain unchanged.
