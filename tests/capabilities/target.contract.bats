@@ -202,7 +202,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the ten-step configuration converges in the target and reruns without transactions" {
+@test "the twelve-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -211,9 +211,21 @@ NODE
   printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
   printf '/bin/bash\n/usr/bin/zsh\n' > "$CFG_TEST_TARGET_ROOT/etc/shells"
   target_pi_node_fixture
+  cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 10/10 desktop/login =='* ]]
+  [[ "$output" == *'== 10/12 visual/branding =='* ]]
+  [[ "$output" == *'== 11/12 system/boot-splash =='* ]]
+  [[ "$output" == *'== 12/12 desktop/login =='* ]]
+  grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT limine-update" "$CFG_TEST_CALLS"
+  grep -qxF "KERNEL_CMDLINE[default]=\"$CFG_TEST_CMDLINE quiet splash\"" "$CFG_TEST_TARGET_ROOT/etc/default/limine"
+  bash "$CFG_SOURCE_ROOT/capabilities/desktop/login/install-theme" check "$CFG_SOURCE_ROOT/capabilities/desktop/login/sddm/mirroros" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/sddm/themes/mirroros" "English (US)"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/branding/mirroros-wordmark.svg" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/branding/mirroros-wordmark.svg"
+  [ -f "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/branding/mirroros-wordmark.png" ]
+  grep -qxF 'Current=mirroros' "$CFG_TEST_TARGET_ROOT/etc/sddm.conf.d/10-mirroros-login.conf"
+  grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT rsvg-convert --width 1580 --height 320" "$CFG_TEST_CALLS"
   bash "$CFG_SOURCE_ROOT/capabilities/desktop/shell/install-runtime" check "$CFG_SOURCE_ROOT/capabilities/desktop/shell" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/shell"
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/shell/systemd/mirroros-shell.service" \
@@ -250,8 +262,12 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 10 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 12 ]
   cfg_test_no_install
+  run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
+  [ "$status" -eq 1 ]
+  run grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT limine-update" "$CFG_TEST_CALLS"
+  [ "$status" -eq 1 ]
   ! grep -qE 'systemctl (start|restart)' "$CFG_TEST_CALLS"
 }
 

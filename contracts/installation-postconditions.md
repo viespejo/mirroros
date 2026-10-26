@@ -86,6 +86,11 @@ the result rather than reported as passed, except where the table states that it
 The Limine check also covers the Limine snapshot entries as written by the engine; the baseline-snapshot and
 Snapper checks stay with the engine's immediate-effect checks and are not repeated here.
 
+The checker runs before configure, so these checks compare the base boot configuration exactly with the plan. The
+boot-splash overlay that configure adds afterwards (`quiet` and `splash`, the `plymouth` hook drop-in and the
+regenerated images) is verified by configure's own postconditions, not here, and no check above accepts additional
+command-line tokens ([engine, configure phase](installation-engine.md#configure-phase)).
+
 ### Cross-component consistency
 
 Several checks compare two components rather than one file with the plan, because each can be internally valid
@@ -152,6 +157,7 @@ reason `stage_failed`, operation `postconditions`, and the checker's status in `
 ## Out of scope
 
 Runtime readiness, first-boot observation, network connectivity, hibernation and resume behavior, graphics
-behavior, Snapper or snapshot content beyond the Limine entries, package-set pinning, and any repair or retry.
+behavior, Snapper or snapshot content beyond the Limine entries, package-set pinning, any repair or retry, and the
+configure-owned boot-splash overlay.
 Reuse of this component by the runtime verification stage of Epic 5 is intended, but its runtime checks are not
 defined here.

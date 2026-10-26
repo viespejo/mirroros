@@ -1,0 +1,116 @@
+#!/usr/bin/bash
+# Publishes the MirrorOS SDDM theme as one tree. Run by the desktop/login step on the host side (paths below the
+# configure root); never by the greeter.
+#
+#   install-theme digest  <source> <layout>                       SHA256 of the delivery manifest (evidence identity)
+#   install-theme check   <source> <dest> <layout>                0 current, 1 publish needed, 4 conflict
+#   install-theme publish <source> <dest> <layout> <uid> <gid>
+#
+# The tree is every regular file of <source> (mode 0644) plus a generated theme.conf.user holding the label of the
+# keyboard layout resolved by configure (its XKB description, as hyprlock shows it), because SDDM's Wayland keyboard
+# model publishes no layout. <dest>/.mirroros-manifest records
+# the delivered tree, so a local edit is detected. A tree is published only when <dest> is absent or is the intact
+# previous delivery; a link, an unknown directory or a modified delivery is never overwritten. The new tree is staged
+# beside <dest>, verified, then exchanged atomically, so an interruption leaves either the previous or the new
+# complete tree. Leftover staging from an interrupted run is removed on the next publication.
+set -Eeuo pipefail
+export LC_ALL=C
+
+readonly manifest_name=.mirroros-manifest staging_prefix=.mirroros-theme.mirroros-staging. user_conf=theme.conf.user
+
+usage() { printf 'Usage: install-theme digest|check|publish <source> [<dest>] <layout> [<uid> <gid>]\n' >&2; exit 6; }
+
+user_conf_content() {
+  printf '; managed by MirrorOS configure\n'
+  printf '; Keyboard layout resolved by configure; the SDDM Wayland keyboard model publishes none.\n'
+  printf '[General]\nkeyboardLayout="%s"\n' "$1"
+}
+
+# "f 644 <sha256> <path>" for every delivered file, sorted by path.
+source_manifest() {
+  local source="$1" layout="$2" path
+  {
+    ( cd -- "$source" && find . -mindepth 1 -printf '%p\n' ) | while read -r path; do
+      printf 'f 644 %s %s\n' "$(sha256sum < "$source/$path" | cut -d' ' -f1)" "$path"
+    done
+    printf 'f 644 %s ./%s\n' "$(user_conf_content "$layout" | sha256sum | cut -d' ' -f1)" "$user_conf"
+  } | sort -k4
+}
+
+# The same lines for an installed tree, with its actual kinds and modes; any other entry is reported.
+tree_manifest() {
+  local dest="$1" kind mode path
+  ( cd -- "$dest" && find . -mindepth 1 ! -path "./$manifest_name" -printf '%y %m %p\n' ) | while read -r kind mode path; do
+    case "$kind" in
+      f) printf 'f %s %s %s\n' "$mode" "$(sha256sum < "$dest/$path" | cut -d' ' -f1)" "$path" ;;
+      *) printf '%s %s - %s\n' "$kind" "$mode" "$path" ;;
+    esac
+  done | sort -k4
+}
+
+check() {
+  local source="$1" dest="$2" layout="$3" actual
+  [[ -e "$dest" || -L "$dest" ]] || return 1
+  if [[ -L "$dest" || ! -d "$dest" || ! -f "$dest/$manifest_name" || -L "$dest/$manifest_name" ]]; then
+    printf 'Conflict: %s is not an SDDM theme delivered by MirrorOS; move it aside, then rerun configure.\n' "$dest" >&2
+    return 4
+  fi
+  actual="$(tree_manifest "$dest")"
+  if [[ "$actual" != "$(sort -k4 < "$dest/$manifest_name")" ]]; then
+    printf 'Conflict: %s differs from its last MirrorOS delivery (local edit); move it aside or restore it, then rerun configure.\n' "$dest" >&2
+    return 4
+  fi
+  [[ "$actual" == "$(source_manifest "$source" "$layout")" ]] || return 1
+}
+
+publish() {
+  local source="$1" dest="$2" layout="$3" uid="$4" gid="$5" parent staging status=0 path
+  check "$source" "$dest" "$layout" || status=$?
+  case "$status" in 0) return 0 ;; 1) ;; *) return "$status" ;; esac
+  parent="$(dirname -- "$dest")"
+  install -d -m 0755 -o "$uid" -g "$gid" -- "$parent"
+  find "$parent" -mindepth 1 -maxdepth 1 -name "$staging_prefix*" -exec rm -rf -- {} +
+  staging="$(mktemp -d "$parent/${staging_prefix}XXXXXX")"
+  chmod 0755 "$staging"
+  chown "$uid:$gid" "$staging"
+  source_manifest "$source" "$layout" > "$staging/$manifest_name"
+  while read -r _ _ _ path; do
+    if [[ "$path" == "./$user_conf" ]]; then
+      user_conf_content "$layout" > "$staging/$path"
+      chmod 0644 "$staging/$path"
+      chown "$uid:$gid" "$staging/$path"
+    else
+      install -m 0644 -o "$uid" -g "$gid" -- "$source/$path" "$staging/$path"
+    fi
+  done < "$staging/$manifest_name"
+  chmod 0644 "$staging/$manifest_name"
+  chown "$uid:$gid" "$staging/$manifest_name"
+  if [[ "$(tree_manifest "$staging")" != "$(< "$staging/$manifest_name")" ]]; then
+    printf 'The staged SDDM theme does not match its manifest.\n' >&2
+    return 5
+  fi
+  if [[ -e "$dest" ]]; then
+    mv --exchange -T -- "$staging" "$dest"
+    rm -rf -- "$staging"
+  else
+    mv -T -- "$staging" "$dest"
+  fi
+  check "$source" "$dest" "$layout"
+}
+
+(( $# >= 3 )) || usage
+[[ -d "$2" && ! -L "$2" ]] || { printf 'Missing SDDM theme source: %s\n' "$2" >&2; exit 6; }
+unsupported="$(cd -- "$2" && find . -mindepth 1 \( ! -type f -o -name "$user_conf" \) -print -quit)"
+[[ -z "$unsupported" ]] || { printf 'Unsupported SDDM theme source entry: %s\n' "$unsupported" >&2; exit 6; }
+case "$1" in
+  digest) (( $# == 3 )) || usage; layout="$3" ;;
+  check) (( $# == 4 )) || usage; layout="$4" ;;
+  publish) (( $# == 6 )) || usage; layout="$4"; [[ "$5" =~ ^[0-9]+$ && "$6" =~ ^[0-9]+$ ]] || usage ;;
+  *) usage ;;
+esac
+[[ "$layout" =~ ^[A-Za-z0-9\ ()\'._-]+$ ]] || { printf 'Invalid keyboard layout for the SDDM theme: %s\n' "$layout" >&2; exit 6; }
+case "$1" in
+  digest) source_manifest "$2" "$layout" | sha256sum | cut -d' ' -f1 ;;
+  check) check "$2" "$3" "$layout" ;;
+  publish) publish "$2" "$3" "$layout" "$5" "$6" ;;
+esac

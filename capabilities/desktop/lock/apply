@@ -10,6 +10,7 @@ dropin=/etc/systemd/user/hypridle.service.d/10-mirroros.conf
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_tracked_file "$STEP_DIR/systemd/10-mirroros.conf" "$dropin" 0644
+cfg_system_file "$STEP_DIR/lock-screen" /usr/share/mirroros/lock/lock-screen 0755
 cfg_user_file "$STEP_DIR/hypridle.conf" .config/hypr/hypridle.conf
 cfg_user_file "$STEP_DIR/hyprlock.conf" .config/hypr/hyprlock.conf
 cfg_user_unit_enable hypridle.service /usr/lib/systemd/user/hypridle.service graphical-session.target
@@ -17,6 +18,7 @@ cfg_user_unit_enable hypridle.service /usr/lib/systemd/user/hypridle.service gra
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_system_file_present /usr/lib/systemd/user/hypridle.service
 cfg_require cfg_tracked_file_present "$dropin"
+cfg_require cfg_system_file_present /usr/share/mirroros/lock/lock-screen
 cfg_require cfg_user_file_present .config/hypr/hypridle.conf
 cfg_require cfg_user_file_present .config/hypr/hyprlock.conf
 cfg_require cfg_user_unit_enabled hypridle.service graphical-session.target

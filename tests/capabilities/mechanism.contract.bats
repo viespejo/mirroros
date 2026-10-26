@@ -354,7 +354,7 @@ terminal_desktop_entry() {
   cfg_test_no_install
 }
 
-@test "session receives us,es and the approved bindings while the greeter keeps the shared layout resolver" {
+@test "session and greeter share the resolved-first layout list and the greeter receives the layout indicator" {
   printf 'CFG_STEPS=(desktop/compositor/providers/hyprland)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
   printf 'KEYMAP=es\n' > "$MIRROROS_CONFIGURE_ROOT/etc/vconsole.conf"
   mkdir -p "$MIRROROS_CONFIGURE_ROOT/usr/share/wayland-sessions"
@@ -365,8 +365,13 @@ terminal_desktop_entry() {
   for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_options = "compose:ralt"' "$file"
   done
-  grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/keyboard.lua")' "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"
-  grep -qF 'kb_layout = "us,es"' "$session"
+  for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
+    grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/layouts.lua")' "$file"
+  done
+  cmp "$provider/layouts.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/layouts.lua"
+  [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/layouts.lua")" = 644 ]
+  cmp "$provider/greeter/layout-indicator" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/layout-indicator"
+  [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/layout-indicator")" = 755 ]
   grep -qF 'preserve_split = true' "$session"
   grep -qF 'dofile("/usr/share/mirroros/hypr/shell-bindings.lua")' "$session"
   grep -qF 'dofile("/usr/share/mirroros/hypr/window-bindings.lua")' "$session"
@@ -1861,6 +1866,27 @@ gcloud_nothing_published() {
   [ "$status" -eq 4 ]
   [[ "$output" == *'not a regular file delivered by MirrorOS'* ]]
   [ -L "$dest" ]
+}
+
+@test "tracked system files migrate only an exact listed earlier delivery that has no record" {
+  local dest="$MIRROROS_CONFIGURE_ROOT/etc/example.conf" legacy
+  local record="$MIRROROS_CONFIGURE_ROOT/var/lib/mirroros/configure/delivered/etc/example.conf.sha256"
+  mkdir -p "${dest%/*}"
+  printf '# managed by MirrorOS configure\nold\n' > "$dest"
+  legacy="$(sha256sum < "$dest" | cut -d' ' -f1)"
+  printf '# managed by MirrorOS configure\nnew\n' > "$CFG_TEST_DIR/source"
+  run cfg_test_helpers 'cfg_tracked_file "$CFG_TEST_DIR/source" /etc/example.conf 0644'
+  [ "$status" -eq 4 ]
+  [ "$(< "$dest")" = $'# managed by MirrorOS configure\nold' ]
+  run cfg_test_helpers "cfg_tracked_file \"\$CFG_TEST_DIR/source\" /etc/example.conf 0644 0000 $legacy; cfg_tracked_file_present /etc/example.conf"
+  [ "$status" -eq 0 ]
+  cmp "$CFG_TEST_DIR/source" "$dest"
+  [ "$(< "$record")" = "$(sha256sum < "$CFG_TEST_DIR/source" | cut -d' ' -f1)" ]
+  # Once a record exists, the legacy content is no longer an accepted previous delivery.
+  printf '# managed by MirrorOS configure\nold\n' > "$dest"
+  run cfg_test_helpers "cfg_tracked_file \"\$CFG_TEST_DIR/source\" /etc/example.conf 0644 $legacy"
+  [ "$status" -eq 4 ]
+  [ "$(< "$dest")" = $'# managed by MirrorOS configure\nold' ]
 }
 
 @test "user units are enabled offline as the user by their wants link and user overrides are preserved" {

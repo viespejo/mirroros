@@ -1,17 +1,47 @@
 #!/usr/bin/bash
-# Prerequisites: validated packages; the terminal font and compositor steps completed.
-# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, STEP_DIR and shared helpers.
-# Postconditions: packages and login configuration exist; only SDDM is enabled; target graphical.
+# Prerequisites: validated packages and keyboard layout; the terminal font, compositor and visual/branding steps completed.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, CFG_LAYOUT, STEP_DIR and shared helpers.
+# Postconditions: packages exist; the MirrorOS theme and the login configuration selecting it match their last
+# delivery; only SDDM is enabled; target graphical.
 # SDDM is never started or restarted by configure.
 set -Eeuo pipefail
 
+theme=/usr/share/sddm/themes/mirroros
+login=/etc/sddm.conf.d/10-mirroros-login.conf
+# The login configuration shipped before the theme (empty Current=); migrated only while unchanged.
+legacy_login=e8a1257fbfde6463e2cfaf1ee54b8211599f0a5f43ac30faa4d8376d920a930e
+
 cfg_packages_ensure "$STEP_DIR/packages"
-cfg_system_file "$STEP_DIR/sddm/10-mirroros-login.conf" /etc/sddm.conf.d/10-mirroros-login.conf 0644
+# The greeter labels the layout with its XKB description, as hyprlock does; the code is used when none is listed.
+listing="$(cfg_path /usr/share/xkeyboard-config-2/rules/base.lst)"
+[[ -r "$listing" ]] || listing="$(cfg_path /usr/share/X11/xkb/rules/base.lst)"
+label="$(awk -v layout="$CFG_LAYOUT" '
+  /^! layout/ { section=1; next }
+  /^!/ { section=0 }
+  section && $1 == layout { $1=""; sub(/^[[:space:]]+/, ""); print; exit }
+' "$listing" 2> /dev/null || true)"
+[[ "$label" =~ ^[A-Za-z0-9\ ()\'._-]+$ ]] || label="$CFG_LAYOUT"
+# The complete theme is published before the configuration selects it.
+status=0
+bash "$STEP_DIR/install-theme" check "$STEP_DIR/sddm/mirroros" "$(cfg_path "$theme")" "$label" || status=$?
+case "$status" in
+  0) ;;
+  1)
+    cfg_run_host bash "$STEP_DIR/install-theme" publish "$STEP_DIR/sddm/mirroros" "$(cfg_path "$theme")" "$label" \
+      "$(stat -c %u -- "$(cfg_path /)")" "$(stat -c %g -- "$(cfg_path /)")"
+    cfg_changed ;;
+  *) exit 4 ;;
+esac
+cfg_source_record mirroros-sddm-theme capabilities/desktop/login '' '' \
+  "manifest-sha256:$(bash "$STEP_DIR/install-theme" digest "$STEP_DIR/sddm/mirroros" "$label")"
+cfg_tracked_file "$STEP_DIR/sddm/10-mirroros-login.conf" "$login" 0644 "$legacy_login"
 cfg_unit_enable sddm.service
 cfg_default_target graphical.target
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
-cfg_require cfg_system_file_present /etc/sddm.conf.d/10-mirroros-login.conf
+cfg_require bash "$STEP_DIR/install-theme" check "$STEP_DIR/sddm/mirroros" "$(cfg_path "$theme")" "$label"
+cfg_require cfg_system_file_present /usr/share/mirroros/branding/mirroros-wordmark.png
+cfg_require cfg_tracked_file_present "$login"
 cfg_require cfg_unit_enabled sddm.service
 cfg_require cfg_display_manager_is sddm.service
 cfg_require cfg_only_display_manager sddm.service

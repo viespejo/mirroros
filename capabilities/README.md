@@ -17,7 +17,12 @@ dependency graph, or resume state. The current order is:
 5. `workflow/editor`: Lazygit and the editor prerequisites, the `vim` wrapper, the external Neovim configuration cloned at `~/code/nvim` and linked from `~/.config/nvim`, with its locked plugins, tools and parsers prepared.
 6. `workflow/pi`: ffmpeg, the external pi-config cloned at `~/code/pi-config`, the Pi executable in the user's NVM prefix and the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, with the `pi-editor` and `gcloud` launcher links and the initialize-only `~/.pi` defaults, npm packages and owned skills.
 7. `desktop/compositor/providers/hyprland`: session, keyboard module, greeter, and session selection.
-8. `desktop/login`: SDDM, uwsm, an explicit generic font provider, and enable-only graphical login.
+8. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
+9. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
+10. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
+11. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
+    overlay of the recognized boot configuration, and the regenerated boot images ([ADR 0014](../docs/adr/0014-native-login-and-boot-presentation.md)).
+12. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
 
 Each step supplies:
 
@@ -30,6 +35,10 @@ The coordinator supplies `STEP_DIR`, `CONFIGURE_CONTEXT`, `CONFIGURE_ROOT`, `TAR
 including `CFG_OUTPUT`. A step uses helpers for packages, system files and links, user work, units, and read-only
 queries. No `apply` calls `pacman`, `systemctl`, `install`, or `runuser` directly; the mechanism contract test checks
 that boundary. Steps must not bypass helpers through `cfg_run` or introduce context-specific command execution.
+Two bounded exceptions run a capability's own native tool without branching on context: `visual/branding` renders
+with `rsvg-convert` through `cfg_exec`, and the capability-local `system/boot-splash/boot-splash.sh`, sourced by its
+`apply`, routes `mkinitcpio`, `limine-update` and `lsinitcpio` through `cfg_run` or `cfg_exec` and writes boot
+configuration on the live side through `cfg_run_host` and `cfg_path`. Neither adds a shared helper or a chroot branch.
 
 Helpers in `lib/` own the effect boundary:
 
@@ -255,8 +264,11 @@ layouts requiring AltGr need the native ownership override described in the
 
 Every Hyprland-specific package and native file lives below `desktop/compositor/providers/hyprland/`, including
 the SDDM Wayland drop-in and greeter configuration. Login remains provider-neutral. The greeter and managed
-session load one shared keyboard module at runtime through absolute-path `require`, so changes to the system
-layout apply on their next start. Lua uses the Hyprland 0.55-or-later API; graphical usability is proven by the
+session load one shared layout list at runtime through absolute-path `require` (`layouts.lua`): the resolved
+layout first, then the declared `us,es` without duplicates, so both start in the configured layout and changes to
+the system layout apply on their next start. In the greeter, `SUPER+I` and `SUPER+SHIFT+I` switch layouts through
+the one-shot `layout-indicator` helper, which records the active layout for the SDDM theme
+([ADR 0015](../docs/adr/0015-greeter-keyboard-layout-switching.md)). Lua uses the Hyprland 0.55-or-later API; graphical usability is proven by the
 human checkpoint, not by file-existence postconditions.
 
 The provider creates a link to the upstream `hyprland-uwsm.desktop` in a dedicated session directory.

@@ -112,7 +112,7 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The ten steps run in this order:
+The twelve steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -122,10 +122,12 @@ The ten steps run in this order:
 | `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |
 | `workflow/editor` | Lazygit, tree-sitter-cli, unzip and Go, managed Lazygit and `vim` wrapper files, the external Neovim configuration at `~/code/nvim` linked from `~/.config/nvim`, and its locked plugins, tools and parsers prepared by the user |
 | `workflow/pi` | ffmpeg, the external pi-config at `~/code/pi-config`, the Pi executable in the user's NVM prefix selected from pi-config's exact declaration, the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, the `pi-editor` and `gcloud` links, and the initialize-only `~/.pi` defaults with their npm packages and owned skills |
-| `desktop/compositor/providers/hyprland` | Session with `us,es` layouts and the approved Story 4.3 bindings, shared keyboard module for the greeter, Wayland greeter, and one uwsm session entry |
+| `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 bindings, the greeter layout indicator, Wayland greeter, and one uwsm session entry |
 | `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell`, and its user unit enabled for the selected user |
 | `desktop/lock` | hyprlock and hypridle, native lock and idle configuration, a hypridle drop-in, and hypridle enabled for the selected user |
-| `desktop/login` | SDDM and uwsm, explicit `noto-fonts`, stock theme without autologin, enable-only login, and graphical default target |
+| `visual/branding` | librsvg, the shared MirrorOS wordmark SVG and the PNG rendered from it by the installed `rsvg-convert` |
+| `system/boot-splash` | Plymouth, the static MirrorOS theme and its selection, the `plymouth` hook drop-in, `quiet splash` on the normal boot entry, and boot images regenerated only when these inputs change |
+| `desktop/login` | SDDM and uwsm, explicit `noto-fonts`, the MirrorOS theme without autologin, enable-only login, and graphical default target |
 
 The Nerd Font supplies Starship glyphs but does not provide SDDM's required `ttf-font`; `noto-fonts` supplies that
 virtual dependency explicitly. SDDM's mandatory dependencies still include Xorg even though its configured
@@ -185,7 +187,8 @@ Managed destinations are:
 - `~/.config/xdg-terminals.list`: `foot.desktop`, the terminal `uwsm app` uses for `Terminal=true` desktop entries.
   A user-owned list (or `~/.config/hyprland-xdg-terminals.list`) is preserved; when the effective list names no
   installed desktop entry, the step fails with an actionable message instead of passing.
-- `~/.config/hypr/hyprland.lua`: the session layouts `us,es` (`us` first), Right Alt Compose, the repeat defaults,
+- `~/.config/hypr/hyprland.lua`: the session layouts from `/usr/share/mirroros/hypr/layouts.lua` (the resolved
+  layout first, then `us,es` without duplicates), Right Alt Compose, the repeat defaults,
   `dwindle.preserve_split`, and the approved bindings loaded with `dofile` from the two files below at every
   configuration load. The earlier `SUPER+SHIFT+Q` and `SUPER+SHIFT+E` bindings are removed (close: `SUPER+W` or
   `SUPER+Q`; logout: System menu); `SUPER+Return` still launches `uwsm app -- foot`.
@@ -198,7 +201,16 @@ Managed destinations are:
 - `/usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop`: a link to the upstream session entry. Its directory
   must contain exactly that entry and its `Exec` must contain `uwsm start` and `hyprland.desktop`.
 - `/etc/sddm.conf.d/20-mirroros-hyprland.conf`: Wayland greeter command and restricted Wayland session directory.
-- `/etc/sddm.conf.d/10-mirroros-login.conf`: stock theme with an empty `Current` and disabled autologin.
+- `/etc/sddm.conf.d/10-mirroros-login.conf`: `Current=mirroros` and disabled autologin; the exact earlier
+  stock-theme file is migrated, any other content is a conflict.
+- `/usr/share/mirroros/branding`: the wordmark SVG and its rendered PNG, published as one manifest-checked tree; see
+  [branding sources](../../capabilities/visual/branding/sources.md).
+- `/usr/share/sddm/themes/mirroros`: the MirrorOS SDDM theme, published as one manifest-checked tree; see
+  [login sources](../../capabilities/desktop/login/sources.md).
+- `/usr/share/plymouth/themes/mirroros/`, `/etc/plymouth/plymouthd.conf` and
+  `/etc/mkinitcpio.conf.d/90-mirroros-plymouth.conf`: the static Plymouth theme, its selection and the hook
+  drop-in; the boot entry or `/etc/default/limine` gains `quiet splash`. See
+  [Boot splash overlay](#boot-splash-overlay).
 - `/usr/share/mirroros/shell`: the shell runtime, published as one manifest-checked tree; `/etc/systemd/user/
   mirroros-shell.service`: its user unit; `~/.config/systemd/user/graphical-session.target.wants/mirroros-shell.service`:
   its enablement for the selected user. Personal preferences (`~/.config/mirroros/shell.json`) and private state
@@ -222,10 +234,13 @@ This does not identify an individual offending field. These settings do not chan
 
 ### Right Alt Compose and native overrides
 
-`kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The greeter's
-layout still comes from the shared keyboard module and the console keeps `/etc/vconsole.conf`; neither is changed.
-The managed session declares the product layouts `us,es` (DEC-017) with `us` at index 0, switched with `SUPER+I`
-and `SUPER+SHIFT+I`; validation rejects a session layout missing from the XKB data before any package change.
+`kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The console keeps
+`/etc/vconsole.conf`, which is not changed. The session and the greeter load one list from `layouts.lua`: the
+resolved layout first, then the declared product layouts `us,es` (DEC-017) without duplicates, switched with
+`SUPER+I` and `SUPER+SHIFT+I` in both ([ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md)); the lock
+screen starts in the resolved layout, accepts the same keys and restores the previous layout after unlocking.
+Validation rejects a declared layout missing from the XKB data
+before any package change.
 This replaces Right Alt's normal AltGr role. Do not assume layouts that depend on AltGr are unaffected.
 
 To retain AltGr, deliberately take ownership of each applicable native file: remove its
@@ -265,6 +280,22 @@ A full rerun starts from the beginning. Satisfied steps report `unchanged`, chan
 execution stops at the first failure. Later steps are recorded as `not_run`; there is no resume state. An already
 configured rerun performs no package transaction. The complete graphical and rerun proof belongs to the VM
 checkpoint, not just the mechanism tests.
+
+### Boot splash overlay
+
+`system/boot-splash` changes only a recognized MirrorOS boot configuration: the shipped systemd-boot entries and
+preset (`ext4-systemd-boot`, `btrfs-rescue`) or the shipped `/etc/default/limine` and hook drop-in
+(`btrfs-limine`). Inspected files are parsed as data before anything is written; an ambiguous boot loader, an
+unknown hook override, a link, an edited entry or a local Plymouth theme selection is preserved and fails the step
+with outcome `4`. The ESP must be mounted at `/boot`.
+
+Only `quiet` and `splash` are appended; root, subvolume, zswap and resume parameters keep their values. The
+systemd-boot fallback entry keeps the base command line and is the menu path without the splash. Boot images are
+regenerated with `mkinitcpio -p linux` (systemd-boot) or `limine-update` (Limine) only when a managed input changed
+or an earlier regeneration is still pending in `/var/lib/mirroros/configure/boot-splash.state`. Completion is
+recorded only after the effective parameters, the referenced boot files and the theme inside each normal boot image
+are checked; a failed or interrupted regeneration stays pending and is retried by the next run. Configure never
+reboots. See the [greeter and Plymouth procedure](greeter-plymouth.md) for diagnostics and recovery.
 
 ## Evidence
 

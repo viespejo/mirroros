@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Run by hypridle's lock_cmd. Locks in the first layout (the configured one, decision J(a) and ADR 0015) and restores
+# the layout that was active before locking once hyprlock exits after unlocking. A failure to read or switch the
+# layout never prevents locking; without a recorded layout nothing is restored. Exits with hyprlock's status.
+set -uo pipefail
+export LC_ALL=C
+
+# Active layout index of the main keyboard from hyprctl's JSON, or of the first keyboard when none is marked main.
+index="$(hyprctl devices -j 2> /dev/null | awk '
+  /"active_layout_index":/ { value = $0; gsub(/[^0-9]/, "", value); if (first == "") first = value; last = value }
+  /"main":[[:space:]]*true/ { main = last }
+  END { print (main != "" ? main : first) }
+')"
+hyprctl switchxkblayout all 0 > /dev/null 2>&1
+hyprlock
+status=$?
+if [[ "$index" =~ ^[0-9]+$ ]]; then
+  hyprctl switchxkblayout all "$index" > /dev/null 2>&1
+fi
+exit "$status"

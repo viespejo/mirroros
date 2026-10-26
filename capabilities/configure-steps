@@ -9,5 +9,7 @@ CFG_STEPS=(
   desktop/compositor/providers/hyprland
   desktop/shell
   desktop/lock
+  visual/branding
+  system/boot-splash
   desktop/login
 )

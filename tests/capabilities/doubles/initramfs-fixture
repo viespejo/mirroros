@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+# Test helper shared by the mkinitcpio and limine-update doubles: writes a fake boot image at <root><image> as the
+# listing that lsinitcpio -l prints. Plymouth and the selected theme are included only when the effective HOOKS
+# (the last *.conf drop-in assigning HOOKS, otherwise mkinitcpio.conf) contain plymouth and the package is installed.
+set -Eeuo pipefail
+root="$1" image="$2"
+hooks="$(grep -h '^HOOKS=' "$root/etc/mkinitcpio.conf" || true)"
+for file in "$root"/etc/mkinitcpio.conf.d/*.conf; do
+  [[ -f "$file" ]] || continue
+  line="$(grep -h '^HOOKS=' "$file" || true)"
+  [[ -z "$line" ]] || hooks="$line"
+done
+mkdir -p "$(dirname -- "$root$image")"
+{
+  printf '%s\n' init usr/lib/modules
+  if [[ " ${hooks//[()]/ } " == *' plymouth '* && -e "$CFG_TEST_INSTALLED/plymouth" ]]; then
+    printf '%s\n' usr/lib/plymouth/script.so etc/plymouth/plymouthd.conf
+    theme="$(sed -n 's/^Theme=//p' "$root/etc/plymouth/plymouthd.conf" 2> /dev/null || true)"
+    directory="usr/share/plymouth/themes/${theme:-bgrt}"
+    if [[ -d "$root/$directory" ]]; then
+      find "$root/$directory" -mindepth 1 -maxdepth 1 -type f -printf "./$directory/%f\n"
+      images="$(sed -n 's/^ImageDir=//p' "$root/$directory/${theme:-bgrt}.plymouth" 2> /dev/null || true)"
+      [[ -z "$images" || ! -d "$root$images" ]] || find "$root$images" -mindepth 1 -maxdepth 1 -type f -printf "${images#/}/%f\n"
+    fi
+  fi
+} > "$root$image"

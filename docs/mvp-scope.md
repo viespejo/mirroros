@@ -57,7 +57,7 @@ project-owned QML.
 | Capability | Origin | Provider | Notes |
 |---|---|---|---|
 | Wayland compositor and graphical session | configure | Hyprland (provisional) | [ADR 0011](adr/0011-hyprland-compositor-provider.md); Hyprland is the provider, not the architectural capability |
-| Graphical login | configure | SDDM with its greeter on Hyprland and a small owned QML theme | Sessions always start through `uwsm start hyprland.desktop`; password login, no autologin |
+| Graphical login | configure | SDDM with its greeter on Hyprland and a small owned QML theme | Sessions always start through `uwsm start hyprland.desktop`; password login, no autologin; theme bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md) |
 | Desktop shell: bar, launcher, notifications, OSD, and session menu | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); bounded to these surfaces; started by its own systemd user unit with the uwsm graphical session |
 | Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; no DPMS or automatic suspend policy |
 | Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
@@ -110,7 +110,7 @@ This checkpoint selects no additional providers and does not qualify the complet
 |---|---|---|---|
 | Typography | configure | open — selected by Story 4.8 | The workbench terminal uses `ttf-jetbrains-mono-nerd` and `noto-fonts-emoji`; global typography remains Story 4.8 work |
 | Coherent color palette across components | configure | open — selected by Story 4.8 | |
-| SDDM greeter theme | configure | Owned QML theme | Designed so that it can later match a boot splash |
+| SDDM greeter theme | configure | Owned QML theme | [ADR 0014](adr/0014-native-login-and-boot-presentation.md); lock-screen palette and the shared MirrorOS wordmark (`visual/branding`), reused by the boot splash |
 | Cursor and icons | configure | open — selected by Story 4.8 | |
 
 ## Frequent-action list
@@ -214,7 +214,9 @@ These items are outside the frozen scope. None of them is decided here.
 - Plymouth boot splash, optional LUKS encryption, and autologin with LUKS, considered together. Adopting them
   requires a new ADR amending [ADR 0003](adr/0003-storage-and-recovery-baseline.md), and installation would own
   them. Validation would be bounded to automated tests, one boot per bootloader, one hibernate and resume cycle,
-  and one Limine snapshot boot.
+  and one Limine snapshot boot. [ADR 0014](adr/0014-native-login-and-boot-presentation.md) adopts only a static
+  splash as a configure-owned visual overlay, without encryption or autologin and without amending ADR 0003;
+  LUKS encryption and autologin remain deferred under this candidate.
 
 **Post-MVP candidates**, entering through Story 6.5 or an ADR as applicable:
 

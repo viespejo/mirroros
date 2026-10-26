@@ -1,4 +1,8 @@
 #!/usr/bin/bash
 set -Eeuo pipefail
 printf 'mountpoint %s\n' "$*" >> "$CFG_TEST_CALLS"
+if [[ "$1" == -q && "$2" == -- && "$3" == */boot ]]; then
+  [[ "${CFG_TEST_ESP_MOUNTED:-1}" == 1 ]]
+  exit
+fi
 [[ "$1" == -q && "$2" == -- && "$3" == "${CFG_TEST_TARGET_ROOT:-}" && "${CFG_TEST_MOUNTED:-1}" == 1 ]]

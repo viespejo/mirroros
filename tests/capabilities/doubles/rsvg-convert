@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'rsvg-convert %s\n' "$*" >> "$CFG_TEST_CALLS"
+if [[ "${1:-}" == --version ]]; then
+  printf 'rsvg-convert version %s\n' "${CFG_TEST_RSVG_VERSION:-2.59.2}"
+  # librsvg 2.63 and later report the linked library versions after the first line.
+  [[ "${CFG_TEST_RSVG_VERSION_DETAILS:-0}" != 1 ]] || printf '\nlibraries used:\n    cairo 1.18.6\n    pango 1.58.2\n'
+  exit 0
+fi
+width='' height=''
+while (( $# )); do
+  case "$1" in
+    --width) width="$2"; shift 2 ;;
+    --height) height="$2"; shift 2 ;;
+    *) printf 'Unexpected rsvg-convert argument: %s\n' "$1" >&2; exit 97 ;;
+  esac
+done
+grep -q '<svg' || exit 97
+[[ "${CFG_TEST_RSVG_FAIL:-0}" != 1 ]] || { printf 'rsvg-convert: simulated rendering failure\n' >&2; exit 1; }
+# A PNG signature and IHDR header with the requested size; enough for the delivery checks.
+be32() { printf '\\%03o\\%03o\\%03o\\%03o' $(($1 >> 24 & 255)) $(($1 >> 16 & 255)) $(($1 >> 8 & 255)) $(($1 & 255)); }
+# shellcheck disable=SC2059 # The format string carries the generated octal escapes.
+printf "\\211PNG\\r\\n\\032\\n\\000\\000\\000\\015IHDR$(be32 "${CFG_TEST_RSVG_WIDTH:-$width}")$(be32 "$height")\\010\\006\\000\\000\\000"

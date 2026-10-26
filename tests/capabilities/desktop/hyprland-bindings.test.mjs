@@ -120,6 +120,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
   assert.equal(new Set(required).size, bindings.length, 'every bound chord is in the approved list');
   for (const binding of bindings) assert.ok(binding.description && binding.description !== 'nil', binding.keys);
   assert.match(byChord.get('XF86POWEROFF').options, /locked=true/);
+  for (const chord of ['SUPER+I', 'SHIFT+SUPER+I']) assert.match(byChord.get(chord).options, /locked=true/, chord);
   assert.match(byChord.get('SUPER+MOUSE:272').options, /mouse=true/);
 });
 
@@ -167,6 +168,23 @@ test('the registry lists launchable entries for the current instance and leaves 
 test('Lua sources parse', { skip: !lua && 'no Lua interpreter' }, () => {
   const luac = ['luac5.4', 'luac'].find(name => spawnSync(name, ['-v']).status === 0);
   if (!luac) return;
-  execFileSync(luac, ['-p', ...['hyprland.lua', 'keyboard.lua', 'shell-bindings.lua', 'window-bindings.lua', 'greeter/hyprland.lua']
-    .map(file => path.join(provider, file))]);
+  execFileSync(luac, ['-p', ...['hyprland.lua', 'keyboard.lua', 'layouts.lua', 'shell-bindings.lua', 'window-bindings.lua',
+    'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
+});
+
+test('the session and greeter layout list starts with the resolved layout without duplicates', { skip: !lua && 'no Lua interpreter' }, () => {
+  const order = resolved => execFileSync(lua, ['-e', `package.preload['/usr/share/mirroros/hypr/keyboard.lua'] = function() return '${resolved}' end
+    package.path = ''
+    package.preload['/usr/share/mirroros/hypr/layouts.lua'] = loadfile(arg[1])
+    io.write((require('/usr/share/mirroros/hypr/layouts.lua')))`, '-', path.join(provider, 'layouts.lua')],
+  { input: '', encoding: 'utf8' });
+  assert.equal(order('es'), 'es,us');
+  assert.equal(order('us'), 'us,es');
+  assert.equal(order('de'), 'de,us,es');
+  for (const file of ['hyprland.lua', 'greeter/hyprland.lua'])
+    assert.match(fs.readFileSync(path.join(provider, file), 'utf8'), /kb_layout = require\("\/usr\/share\/mirroros\/hypr\/layouts\.lua"\)/);
+  const greeter = fs.readFileSync(path.join(provider, 'greeter/hyprland.lua'), 'utf8');
+  assert.match(greeter, /hl\.bind\("SUPER \+ I", hl\.dsp\.exec_cmd\(indicator \.\. " next"\)\)/);
+  assert.match(greeter, /hl\.bind\("SUPER \+ SHIFT \+ I", hl\.dsp\.exec_cmd\(indicator \.\. " prev"\)\)/);
+  assert.match(greeter, /hl\.on\("hyprland\.start", function\(\)\n    hl\.exec_cmd\(indicator \.\. " current"\)\nend\)/);
 });

@@ -1,0 +1,122 @@
+#!/usr/bin/bash
+# Publishes the shared MirrorOS wordmark (SVG source and its rendered PNG) as one tree. Run by the visual/branding
+# step on the host side (paths below the configure root); the PNG itself is rendered by the step through cfg_exec.
+#
+#   install-assets staging <dest>                                  staging path used by prepare and publish
+#   install-assets check   <svg> <dest> <identity>                 0 current, 1 publish needed, 4 conflict
+#   install-assets prepare <svg> <dest> <uid> <gid>                fresh staging holding the SVG
+#   install-assets publish <svg> <dest> <identity> <width> <height> <uid> <gid>
+#
+# <identity> names the SVG digest, renderer version and raster size. <dest>/.mirroros-manifest records it with the
+# delivered files, so a local edit is detected and an unchanged source and renderer cause no rendering. A tree is
+# published only when <dest> is absent or is the intact previous delivery; a link, an unknown directory or a modified
+# delivery is never overwritten. The staged tree is verified, then exchanged atomically, so an interruption leaves
+# either the previous or the new complete tree. Leftover staging from an interrupted run is removed by prepare.
+set -Eeuo pipefail
+export LC_ALL=C
+
+readonly manifest_name=.mirroros-manifest staging_name=.branding.mirroros-staging
+readonly svg_name=mirroros-wordmark.svg png_name=mirroros-wordmark.png
+
+usage() { printf 'Usage: install-assets staging|check|prepare|publish <arguments>\n' >&2; exit 6; }
+
+digest() { sha256sum < "$1" | cut -d' ' -f1; }
+
+staging_path() { printf '%s/%s\n' "$(dirname -- "$1")" "$staging_name"; }
+
+# "f <mode> <sha256> <path>" for every entry of a tree, sorted; links and other kinds are reported as such.
+tree_manifest() {
+  local dest="$1" kind mode path
+  ( cd -- "$dest" && find . -mindepth 1 ! -path "./$manifest_name" -printf '%y %m %p\n' ) | sort -k3 |
+    while read -r kind mode path; do
+      case "$kind" in
+        f) printf 'f %s %s %s\n' "$mode" "$(digest "$dest/$path")" "$path" ;;
+        *) printf '%s %s - %s\n' "$kind" "$mode" "$path" ;;
+      esac
+    done
+}
+
+recorded_files() { grep -v '^render ' "$1" | sort -k4; }
+recorded_identity() { sed -n 's/^render //p' "$1"; }
+
+check() {
+  local svg="$1" dest="$2" identity="$3" manifest="$2/$manifest_name"
+  [[ -e "$dest" || -L "$dest" ]] || return 1
+  if [[ -L "$dest" || ! -d "$dest" || ! -f "$manifest" || -L "$manifest" ]]; then
+    printf 'Conflict: %s is not a branding delivery by MirrorOS; move it aside, then rerun configure.\n' "$dest" >&2
+    return 4
+  fi
+  if [[ "$(tree_manifest "$dest")" != "$(recorded_files "$manifest")" ]] ||
+    ! grep -qxE "f 644 [0-9a-f]{64} \./$png_name" "$manifest" ||
+    ! grep -qxE "f 644 [0-9a-f]{64} \./$svg_name" "$manifest"; then
+    printf 'Conflict: %s differs from its last MirrorOS delivery (local edit); move it aside or restore it, then rerun configure.\n' "$dest" >&2
+    return 4
+  fi
+  grep -qxF "f 644 $(digest "$svg") ./$svg_name" "$manifest" || return 1
+  [[ "$(recorded_identity "$manifest")" == "$identity" ]] || return 1
+}
+
+prepare() {
+  local svg="$1" dest="$2" uid="$3" gid="$4" staging
+  staging="$(staging_path "$dest")"
+  install -d -m 0755 -o "$uid" -g "$gid" -- "$(dirname -- "$dest")"
+  rm -rf -- "$staging"
+  install -d -m 0755 -o "$uid" -g "$gid" -- "$staging"
+  install -m 0644 -o "$uid" -g "$gid" -- "$svg" "$staging/$svg_name"
+}
+
+# Width and height of a PNG file from its IHDR chunk, after checking the signature.
+png_size() {
+  local bytes
+  read -r -a bytes <<< "$(od -An -tu1 -N24 -- "$1" | tr -s ' \n' '  ')"
+  (( ${#bytes[@]} == 24 )) || return 1
+  [[ "${bytes[*]:0:8}" == '137 80 78 71 13 10 26 10' && "${bytes[*]:12:4}" == '73 72 68 82' ]] || return 1
+  printf '%sx%s\n' "$(( (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19] ))" \
+    "$(( (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23] ))"
+}
+
+publish() {
+  local svg="$1" dest="$2" identity="$3" width="$4" height="$5" uid="$6" gid="$7" staging status=0 size
+  [[ "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || usage
+  check "$svg" "$dest" "$identity" || status=$?
+  case "$status" in 0) return 0 ;; 1) ;; *) return "$status" ;; esac
+  staging="$(staging_path "$dest")"
+  [[ -d "$staging" && ! -L "$staging" && -f "$staging/$png_name" && ! -L "$staging/$png_name" ]] || {
+    printf 'The rendered wordmark is missing from %s.\n' "$staging" >&2
+    return 5
+  }
+  cmp -s -- "$svg" "$staging/$svg_name" || { printf 'The staged wordmark source changed during rendering.\n' >&2; return 5; }
+  size="$(png_size "$staging/$png_name")" || { printf 'The rendered wordmark is not a PNG image.\n' >&2; return 5; }
+  [[ "$size" == "${width}x$height" ]] || {
+    printf 'The rendered wordmark is %s, expected %sx%s.\n' "$size" "$width" "$height" >&2
+    return 5
+  }
+  chmod 0644 -- "$staging/$png_name"
+  chown "$uid:$gid" -- "$staging/$png_name"
+  { printf 'render %s\n' "$identity"; tree_manifest "$staging"; } > "$staging/$manifest_name"
+  chmod 0644 -- "$staging/$manifest_name"
+  chown "$uid:$gid" -- "$staging/$manifest_name"
+  if [[ -e "$dest" ]]; then
+    mv --exchange -T -- "$staging" "$dest"
+    rm -rf -- "$staging"
+  else
+    mv -T -- "$staging" "$dest"
+  fi
+  check "$svg" "$dest" "$identity"
+}
+
+(( $# >= 2 )) || usage
+case "$1" in
+  staging) (( $# == 2 )) || usage; staging_path "$2" ;;
+  check|prepare|publish)
+    [[ -f "$2" && ! -L "$2" ]] || { printf 'Missing wordmark source: %s\n' "$2" >&2; exit 6; }
+    case "$1" in
+      check) (( $# == 4 )) || usage; [[ "$4" != *$'\n'* ]] || usage; check "$2" "$3" "$4" ;;
+      prepare) (( $# == 5 )) || usage; [[ "$4" =~ ^[0-9]+$ && "$5" =~ ^[0-9]+$ ]] || usage; prepare "$2" "$3" "$4" "$5" ;;
+      publish)
+        (( $# == 8 )) || usage
+        [[ "$4" != *$'\n'* && "$7" =~ ^[0-9]+$ && "$8" =~ ^[0-9]+$ ]] || usage
+        publish "$2" "$3" "$4" "$5" "$6" "$7" "$8" ;;
+    esac ;;
+  *) usage ;;
+esac

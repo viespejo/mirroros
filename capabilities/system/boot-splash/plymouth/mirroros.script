@@ -1,0 +1,16 @@
+# managed by MirrorOS configure
+# MirrorOS boot splash: the shared wordmark centered on the greeter's background, scaled down to the display with its
+# aspect ratio kept. No progress, animation, password prompt, message or delay is drawn; Esc switches to Plymouth's
+# native details view of the boot messages.
+
+Window.SetBackgroundTopColor(16 / 255, 19 / 255, 21 / 255);
+Window.SetBackgroundBottomColor(16 / 255, 19 / 255, 21 / 255);
+
+logo.image = Image("mirroros-wordmark.png");
+logo.ratio = logo.image.GetWidth() / logo.image.GetHeight();
+# The same bound as the greeter logo: at most 42% of the width and 22% of the height, never enlarged.
+logo.width = Math.Int(Math.Min(logo.image.GetWidth(), Math.Min(Window.GetWidth() * 0.42, Window.GetHeight() * 0.22 * logo.ratio)));
+logo.height = Math.Int(logo.width / logo.ratio);
+logo.sprite = Sprite(logo.image.Scale(logo.width, logo.height));
+logo.sprite.SetX(Window.GetX() + Math.Int((Window.GetWidth() - logo.width) / 2));
+logo.sprite.SetY(Window.GetY() + Math.Int((Window.GetHeight() - logo.height) / 2));

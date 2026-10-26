@@ -7,7 +7,9 @@ set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_system_file "$STEP_DIR/keyboard.lua" /usr/share/mirroros/hypr/keyboard.lua 0644
+cfg_system_file "$STEP_DIR/layouts.lua" /usr/share/mirroros/hypr/layouts.lua 0644
 cfg_system_file "$STEP_DIR/greeter/hyprland.lua" /usr/share/mirroros/sddm/hyprland.lua 0644
+cfg_system_file "$STEP_DIR/greeter/layout-indicator" /usr/share/mirroros/sddm/layout-indicator 0755
 cfg_tracked_file "$STEP_DIR/shell-bindings.lua" /usr/share/mirroros/hypr/shell-bindings.lua 0644
 cfg_tracked_file "$STEP_DIR/window-bindings.lua" /usr/share/mirroros/hypr/window-bindings.lua 0644
 cfg_user_file "$STEP_DIR/hyprland.lua" .config/hypr/hyprland.lua
@@ -16,7 +18,9 @@ cfg_system_file "$STEP_DIR/sddm/20-mirroros-hyprland.conf" /etc/sddm.conf.d/20-m
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_system_file_present /usr/share/mirroros/hypr/keyboard.lua
+cfg_require cfg_system_file_present /usr/share/mirroros/hypr/layouts.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/sddm/hyprland.lua
+cfg_require cfg_system_file_present /usr/share/mirroros/sddm/layout-indicator
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/shell-bindings.lua
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/window-bindings.lua
 cfg_require cfg_user_file_present .config/hypr/hyprland.lua

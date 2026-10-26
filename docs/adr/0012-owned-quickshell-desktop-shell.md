@@ -117,6 +117,8 @@ After adoption, through Stories 4.4 and 4.7:
 - [Story 4.1 technical interview log](../technical-interviews/story-4-1-mvp-environment-scope_log.md)
 - [PRD](../prd.md), NFR37, NFR38
 - [ADR 0011](0011-hyprland-compositor-provider.md)
+- [ADR 0014](0014-native-login-and-boot-presentation.md): later bounded admission of the SDDM theme QML and the
+  Plymouth script theme; this decision's shell scope is unchanged
 
 ## Superseded by
 

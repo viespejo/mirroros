@@ -6,6 +6,8 @@ This index covers all externally incorporated material in the repository. Each e
 
 Original MirrorOS material is licensed under `GPL-3.0-only` unless a document states otherwise. Incorporated material keeps its own license terms and required notices; incorporation does not convert it to the MirrorOS license.
 
+Idea references without incorporated material receive no entry here; they are recorded in the owning sources record. For example, the Omarchy SDDM and Plymouth themes are idea references for the independently written MirrorOS login and boot themes ([login sources](../capabilities/desktop/login/sources.md), [branding sources](../capabilities/visual/branding/sources.md)).
+
 At this baseline there is no external incorporation entry. The applicable entry is added with the first vendor merge, together with its detailed provenance record.
 
 ## Entry format

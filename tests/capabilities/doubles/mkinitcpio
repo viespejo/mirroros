@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'mkinitcpio %s\n' "$*" >> "$CFG_TEST_CALLS"
+root="${CFG_TEST_TARGET_ROOT:-${MIRROROS_CONFIGURE_ROOT:-}}"
+[[ "$*" == '-p linux' ]] || { printf 'Unexpected mkinitcpio arguments: %s\n' "$*" >&2; exit 97; }
+if [[ "${CFG_TEST_MKINITCPIO_FAIL:-0}" == 1 ]]; then
+  printf '==> ERROR: simulated mkinitcpio failure\n' >&2
+  exit 1
+fi
+initramfs-fixture "$root" /boot/initramfs-linux.img
+if grep -qF 'fallback_image="/boot/initramfs-linux-fallback.img"' "$root/etc/mkinitcpio.d/linux.preset"; then
+  initramfs-fixture "$root" /boot/initramfs-linux-fallback.img
+fi

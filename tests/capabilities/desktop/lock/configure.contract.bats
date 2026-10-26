@@ -25,6 +25,8 @@ lock_packaged_unit() {
   cmp "$LOCK_CODE/hypridle.conf" "$CFG_TEST_HOME/.config/hypr/hypridle.conf"
   cmp "$LOCK_CODE/hyprlock.conf" "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
   cmp "$LOCK_CODE/systemd/10-mirroros.conf" "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/hypridle.service.d/10-mirroros.conf"
+  cmp "$LOCK_CODE/lock-screen" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/lock/lock-screen"
+  [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/lock/lock-screen")" = 755 ]
   [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/hypridle.service")" = \
     /usr/lib/systemd/user/hypridle.service ]
   run grep -qE '^(systemctl|sudo|qs|hyprctl|hyprlock|hypridle|loginctl) ' "$CFG_TEST_CALLS"
@@ -39,7 +41,7 @@ lock_packaged_unit() {
 @test "the lock configuration keeps the approved policy and never depends on the shell to lock" {
   local idle="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/lock/hypridle.conf"
   local lock="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/lock/hyprlock.conf"
-  grep -qxF '    lock_cmd = pidof hyprlock || { hyprctl switchxkblayout all 0; hyprlock; }' "$idle"
+  grep -qxF '    lock_cmd = pidof hyprlock || /usr/share/mirroros/lock/lock-screen' "$idle"
   grep -qxF '    before_sleep_cmd = loginctl lock-session' "$idle"
   grep -qxF '    timeout = 300' "$idle"
   grep -qxF '    on-timeout = loginctl lock-session' "$idle"

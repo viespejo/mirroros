@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MirrorOS wordmark: font-independent adaptation of install/confirmation/banner.txt.
+     Each terminal cell is 1x2 units; full and half blocks become filled unit rows. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 79 16" width="79" height="16" shape-rendering="crispEdges">
+  <path fill="rgb(202,204,204)" d="
+    M0 0h3v1h-3zM6 0h3v1h-3zM10 0h9v1h-9zM20 0h9v1h-9zM30 0h9v1h-9zM41 0h7v1h-7zM50 0h9v1h-9zM61 0h7v1h-7zM70 0h9v1h-9z
+    M0 1h4v1h-4zM5 1h4v1h-4zM10 1h9v1h-9zM20 1h9v1h-9zM30 1h9v1h-9zM40 1h9v1h-9zM50 1h9v1h-9zM60 1h9v1h-9zM70 1h9v1h-9z
+    M0 2h9v1h-9zM10 2h9v1h-9zM20 2h3v1h-3zM26 2h3v1h-3zM30 2h3v1h-3zM36 2h3v1h-3zM40 2h3v1h-3zM46 2h3v1h-3zM50 2h3v1h-3zM56 2h3v1h-3zM60 2h3v1h-3zM66 2h3v1h-3zM70 2h9v1h-9z
+    M0 3h9v1h-9zM10 3h9v1h-9zM20 3h3v1h-3zM26 3h3v1h-3zM30 3h3v1h-3zM36 3h3v1h-3zM40 3h3v1h-3zM46 3h3v1h-3zM50 3h3v1h-3zM56 3h3v1h-3zM60 3h3v1h-3zM66 3h3v1h-3zM70 3h9v1h-9z
+    M0 4h9v1h-9zM13 4h3v1h-3zM20 4h3v1h-3zM26 4h3v1h-3zM30 4h3v1h-3zM36 4h3v1h-3zM40 4h3v1h-3zM46 4h3v1h-3zM50 4h3v1h-3zM56 4h3v1h-3zM60 4h3v1h-3zM66 4h3v1h-3zM70 4h3v1h-3z
+    M0 5h3v1h-3zM4 5h1v1h-1zM6 5h3v1h-3zM13 5h3v1h-3zM20 5h3v1h-3zM26 5h3v1h-3zM30 5h3v1h-3zM36 5h3v1h-3zM40 5h3v1h-3zM46 5h3v1h-3zM50 5h3v1h-3zM56 5h3v1h-3zM60 5h3v1h-3zM66 5h3v1h-3zM70 5h3v1h-3z
+    M0 6h3v1h-3zM6 6h3v1h-3zM13 6h3v1h-3zM20 6h9v1h-9zM30 6h9v1h-9zM40 6h3v1h-3zM46 6h3v1h-3zM50 6h9v1h-9zM60 6h3v1h-3zM66 6h3v1h-3zM70 6h9v1h-9z
+    M0 7h3v1h-3zM6 7h3v1h-3zM13 7h3v1h-3zM20 7h9v1h-9zM30 7h9v1h-9zM40 7h3v1h-3zM46 7h3v1h-3zM50 7h9v1h-9zM60 7h3v1h-3zM66 7h3v1h-3zM70 7h9v1h-9z
+    M0 8h3v1h-3zM6 8h3v1h-3zM13 8h3v1h-3zM20 8h8v1h-8zM30 8h8v1h-8zM40 8h3v1h-3zM46 8h3v1h-3zM50 8h8v1h-8zM60 8h3v1h-3zM66 8h3v1h-3zM70 8h9v1h-9z
+    M0 9h3v1h-3zM6 9h3v1h-3zM13 9h3v1h-3zM20 9h6v1h-6zM30 9h6v1h-6zM40 9h3v1h-3zM46 9h3v1h-3zM50 9h6v1h-6zM60 9h3v1h-3zM66 9h3v1h-3zM70 9h9v1h-9z
+    M0 10h3v1h-3zM6 10h3v1h-3zM13 10h3v1h-3zM20 10h3v1h-3zM24 10h3v1h-3zM30 10h3v1h-3zM34 10h3v1h-3zM40 10h3v1h-3zM46 10h3v1h-3zM50 10h3v1h-3zM54 10h3v1h-3zM60 10h3v1h-3zM66 10h3v1h-3zM76 10h3v1h-3z
+    M0 11h3v1h-3zM6 11h3v1h-3zM13 11h3v1h-3zM20 11h3v1h-3zM25 11h3v1h-3zM30 11h3v1h-3zM35 11h3v1h-3zM40 11h3v1h-3zM46 11h3v1h-3zM50 11h3v1h-3zM55 11h3v1h-3zM60 11h3v1h-3zM66 11h3v1h-3zM76 11h3v1h-3z
+    M0 12h3v1h-3zM6 12h3v1h-3zM13 12h3v1h-3zM20 12h3v1h-3zM25 12h3v1h-3zM30 12h3v1h-3zM35 12h3v1h-3zM40 12h3v1h-3zM46 12h3v1h-3zM50 12h3v1h-3zM55 12h3v1h-3zM60 12h3v1h-3zM66 12h3v1h-3zM76 12h3v1h-3z
+    M0 13h3v1h-3zM6 13h3v1h-3zM13 13h3v1h-3zM20 13h3v1h-3zM26 13h3v1h-3zM30 13h3v1h-3zM36 13h3v1h-3zM40 13h3v1h-3zM46 13h3v1h-3zM50 13h3v1h-3zM56 13h3v1h-3zM60 13h3v1h-3zM66 13h3v1h-3zM76 13h3v1h-3z
+    M0 14h3v1h-3zM6 14h3v1h-3zM10 14h9v1h-9zM20 14h3v1h-3zM26 14h3v1h-3zM30 14h3v1h-3zM36 14h3v1h-3zM40 14h9v1h-9zM50 14h3v1h-3zM56 14h3v1h-3zM60 14h9v1h-9zM70 14h9v1h-9z
+    M0 15h3v1h-3zM6 15h3v1h-3zM10 15h9v1h-9zM20 15h3v1h-3zM26 15h3v1h-3zM30 15h3v1h-3zM36 15h3v1h-3zM41 15h7v1h-7zM50 15h3v1h-3zM56 15h3v1h-3zM61 15h7v1h-7zM70 15h9v1h-9z"/>
+</svg>

@@ -1,6 +1,6 @@
 -- managed by MirrorOS configure
 hl.config({
-    input = { kb_layout = "us,es", kb_options = "compose:ralt", repeat_delay = 230, repeat_rate = 62 },
+    input = { kb_layout = require("/usr/share/mirroros/hypr/layouts.lua"), kb_options = "compose:ralt", repeat_delay = 230, repeat_rate = 62 },
     dwindle = { preserve_split = true },
 })
 

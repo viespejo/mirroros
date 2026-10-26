@@ -1,0 +1,10 @@
+# managed by MirrorOS configure
+# The mkinitcpio plymouth hook copies this theme directory and ImageDir into the initramfs.
+[Plymouth Theme]
+Name=MirrorOS
+Description=Static MirrorOS wordmark on a solid background.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/mirroros/branding
+ScriptFile=/usr/share/plymouth/themes/mirroros/mirroros.script

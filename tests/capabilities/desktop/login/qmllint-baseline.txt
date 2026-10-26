@@ -1,0 +1,23 @@
+# qmllint from qt6-declarative 6.8.2 (development host); keys are [id, message, trimmed source line].
+# Reviewed: every entry is an access to a context object injected by sddm-greeter (config, sddm, userModel,
+# sessionModel, keyboard), which qmllint cannot resolve, except XMLHttpRequest: a QML JavaScript global provided by
+# the engine that qmllint 6.8 reports as unqualified (ADR 0015 layout state read). No category is disabled;
+# duplicate keys count.
+["unqualified","Unqualified access","color: config.background"]
+["unqualified","Unqualified access","model: sessionModel"]
+["unqualified","Unqualified access","model: userModel"]
+["unqualified","Unqualified access","readonly property color failure: config.failure"]
+["unqualified","Unqualified access","readonly property color foreground: config.foreground"]
+["unqualified","Unqualified access","readonly property int session: LoginModel.sessionIndex(sessionFiles, config.session)"]
+["unqualified","Unqualified access","readonly property string fontFamily: config.font"]
+["unqualified","Unqualified access","readonly property string layout: LoginModel.layoutLabel(layoutNames(), keyboard ? keyboard.currentLayout : -1,"]
+["unqualified","Unqualified access","sddm.login(userNames[userIndex], password.text, session);"]
+["unqualified","Unqualified access","source: config.logo"]
+["unqualified","Unqualified access","target: sddm"]
+["unqualified","Unqualified access","userIndex = LoginModel.initialUserIndex(names, userModel.lastUser);"]
+["unqualified","Unqualified access","userIndex = LoginModel.initialUserIndex(names, userModel.lastUser);"]
+["unqualified","Unqualified access","userIndex = LoginModel.initialUserIndex(names, userModel.lastUser);"]
+["unqualified","Unqualified access","var layouts = keyboard ? keyboard.layouts : [];"]
+["unqualified","Unqualified access","readonly property string layoutHint: config.layoutHint || \"\""]
+["unqualified","Unqualified access","readonly property string layoutStatePath: config.layoutState || \"\""]
+["unqualified","Unqualified access","var request = new XMLHttpRequest();"]

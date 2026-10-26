@@ -57,14 +57,14 @@ cfg_keyboard_validate() {
   ' "$listing"; then
     cfg_problem "Keyboard layout $CFG_LAYOUT is not a known XKB layout; set XKBLAYOUT in /etc/vconsole.conf to a supported layout."
   fi
-  # The managed session declares its own layout list (DEC-017); console and greeter keep the resolved layout above.
+  # The managed session and the greeter declare one layout list (DEC-017, ADR 0015), after the resolved layout above.
   local step session layouts
   [[ -r "$listing" ]] || return 0
   for step in "${CFG_STEPS[@]}"; do
     [[ "$step" == desktop/compositor/providers/hyprland ]] || continue
-    session="$(sed -nE 's/.*kb_layout = "([a-z,]+)".*/\1/p' "$CAPABILITIES_DIR/$step/hyprland.lua")"
+    session="$(sed -nE 's/^local declared = "([a-z,]+)"$/\1/p' "$CAPABILITIES_DIR/$step/layouts.lua")"
     IFS=, read -r -a layouts <<< "$session"
-    (( ${#layouts[@]} )) || { cfg_problem "The managed session declares no keyboard layout list; restore $step/hyprland.lua."; continue; }
+    (( ${#layouts[@]} )) || { cfg_problem "The managed session declares no keyboard layout list; restore $step/layouts.lua."; continue; }
     for layout in "${layouts[@]}"; do
       awk -v layout="$layout" '
         /^! layout/ { section=1; next }

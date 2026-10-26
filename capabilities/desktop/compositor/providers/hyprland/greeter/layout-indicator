@@ -1,0 +1,35 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Greeter keyboard-layout indicator (ADR 0015). Run by the greeter compositor as the SDDM user, once per action:
+#
+#   layout-indicator next|prev   switch every keyboard to the next or previous layout, then record it
+#   layout-indicator current     record the active layout only (compositor start)
+#
+# The active layout's XKB description is written atomically to the state file read by the MirrorOS SDDM theme.
+# Nothing keeps running; the theme falls back to the configure-resolved label when the file is missing or invalid.
+set -Eeuo pipefail
+export LC_ALL=C
+
+state="${MIRROROS_LAYOUT_STATE:-/var/lib/sddm/mirroros-greeter-layout}"
+
+case "${1:-}:$#" in
+  next:1|prev:1) hyprctl switchxkblayout all "$1" > /dev/null ;;
+  current:1) ;;
+  *) printf 'Usage: layout-indicator next|prev|current\n' >&2; exit 2 ;;
+esac
+
+# The main keyboard's active keymap from hyprctl's JSON, or the first keyboard's when none is marked main.
+name="$(hyprctl devices -j | awk '
+  /"active_keymap":/ { value = $0; sub(/^[^:]*:[[:space:]]*"/, "", value); sub(/",?[[:space:]]*$/, "", value)
+                       if (first == "") first = value; last = value }
+  /"main":[[:space:]]*true/ { main = last }
+  END { print (main != "" ? main : first) }
+')"
+[[ "$name" =~ ^[A-Za-z0-9\ ()\'._-]{1,64}$ ]] || { printf 'Unrecognized active keyboard layout: %s\n' "$name" >&2; exit 1; }
+
+tmp="$(mktemp -- "$state.XXXXXX")"
+trap 'rm -f -- "$tmp"' EXIT
+printf '%s\n' "$name" > "$tmp"
+chmod 0640 -- "$tmp"
+mv -f -- "$tmp" "$state"
+trap - EXIT

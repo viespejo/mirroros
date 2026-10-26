@@ -1,0 +1,2 @@
+# rsvg-convert renders the shared wordmark PNG during configure.
+librsvg extra

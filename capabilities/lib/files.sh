@@ -26,10 +26,12 @@ cfg_system_file_present() { cfg_context; [[ -e "$(cfg_path "$1")" ]]; }
 # A system file whose previous delivery is identified by its recorded SHA256, so a local edit that keeps the managed
 # header is still detected. An absent destination is created and an identical one is accepted. Any other destination
 # (edited, unknown, a link or not a regular file) is a conflict: it is never overwritten and the step fails.
+# Optional SHA256 arguments name exact earlier shipped contents, accepted as the previous delivery only when no record
+# exists, so a file delivered before tracking migrates without accepting any other local content.
 cfg_tracked_record() { cfg_path "/var/lib/mirroros/configure/delivered$1.sha256"; }
 
 cfg_tracked_file() {
-  local src="$1" path="$2" mode="$3" dest record owner group want current='' recorded=''
+  local src="$1" path="$2" mode="$3" dest record owner group want current='' recorded='' legacy
   cfg_context
   [[ "$path" == /* && "$path" != *..* ]] || exit 6
   cfg_managed "$src" || { printf 'Missing managed header: %s\n' "$src" >&2; exit 6; }
@@ -47,6 +49,9 @@ cfg_tracked_file() {
   if [[ -f "$dest" ]]; then
     current="$(sha256sum < "$dest")"
     current="${current%% *}"
+    if [[ -z "$recorded" ]]; then
+      for legacy in "${@:4}"; do [[ "$current" != "$legacy" ]] || recorded="$current"; done
+    fi
     if [[ "$current" == "$want" && "$recorded" == "$want" &&
       "$(stat -c '%a:%u:%g' -- "$dest")" == "${mode#0}:$owner:$group" ]]; then return 0; fi
     if [[ "$current" != "$want" && ( -z "$recorded" || "$current" != "$recorded" ) ]]; then

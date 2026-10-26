@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'lsinitcpio %s\n' "$*" >> "$CFG_TEST_CALLS"
+root="${CFG_TEST_TARGET_ROOT:-${MIRROROS_CONFIGURE_ROOT:-}}"
+[[ "$1" == -l && "$2" == -- && "$3" == /boot/* ]] || { printf 'Unexpected lsinitcpio arguments: %s\n' "$*" >&2; exit 97; }
+cat -- "$root$3"

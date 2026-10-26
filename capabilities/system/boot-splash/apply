@@ -1,0 +1,51 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages; the visual/branding step completed; a recognized MirrorOS boot configuration
+# (systemd-boot for ext4-systemd-boot and btrfs-rescue, Limine for btrfs-limine) with the ESP mounted at /boot.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, STEP_DIR and shared helpers.
+# Postconditions: plymouth installed; the MirrorOS Plymouth theme, its selection and the plymouth hook drop-in match
+# their last delivery; the normal boot entry carries quiet and splash exactly once with every other parameter kept;
+# every normal boot image holds the theme; the regeneration state is complete for the current inputs. A rerun with
+# unchanged inputs regenerates nothing. Nothing is started, restarted or rebooted.
+set -Eeuo pipefail
+# shellcheck source=capabilities/system/boot-splash/boot-splash.sh
+source "$STEP_DIR/boot-splash.sh"
+
+# plymouthd.conf as shipped by plymouth 26.134.222-3 (comments only); migrated only while unchanged.
+packaged_daemon=0033f4915526f0484fa1ef48a75725074b03f5855e6e1d7dfd043f608aac7d95
+hooks="$CFG_OUTPUT/.boot-splash-hooks.conf"
+
+cfg_packages_ensure "$STEP_DIR/packages"
+# Every structure is recognized before anything is written, so a conflict leaves the boot configuration untouched.
+bs_inspect
+cfg_tracked_file "$STEP_DIR/plymouth/mirroros.plymouth" "$BS_THEME/mirroros.plymouth" 0644
+cfg_tracked_file "$STEP_DIR/plymouth/mirroros.script" "$BS_THEME/mirroros.script" 0644
+cfg_tracked_file "$STEP_DIR/plymouth/plymouthd.conf" "$BS_DAEMON" 0644 "$packaged_daemon"
+bs_hooks_dropin "$hooks"
+cfg_tracked_file "$hooks" "$BS_HOOKS_DROPIN" 0644
+rm -f -- "$hooks"
+bs_cmdline_apply
+
+identity="$(bs_identity)"
+if ! bs_state_is complete "$identity"; then
+  if bs_regular "$BS_STATE" && [[ "$(< "$(cfg_path "$BS_STATE")")" == pending\ * ]]; then
+    cfg_log 'A previous boot image regeneration did not complete; regenerating again.'
+  fi
+  # Pending is recorded first: a failed or interrupted rebuild stays retryable and is never read as unchanged.
+  bs_state_write pending "$identity"
+  bs_regenerate
+  if ! bs_verify; then
+    printf 'The regenerated boot artifacts do not hold the splash; the regeneration stays pending. Review configure.log, then rerun configure.\n' >&2
+    exit 4
+  fi
+  bs_state_write complete "$identity"
+  cfg_changed
+fi
+cfg_source_record mirroros-boot-splash capabilities/system/boot-splash '' '' "scheme:$BS_SCHEME inputs-sha256:$identity"
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_tracked_file_present "$BS_THEME/mirroros.plymouth"
+cfg_require cfg_tracked_file_present "$BS_THEME/mirroros.script"
+cfg_require cfg_tracked_file_present "$BS_DAEMON"
+cfg_require cfg_tracked_file_present "$BS_HOOKS_DROPIN"
+cfg_require bs_verify
+cfg_require bs_state_is complete "$identity"
