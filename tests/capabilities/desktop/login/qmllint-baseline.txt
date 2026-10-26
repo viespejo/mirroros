@@ -4,6 +4,9 @@
 # the engine that qmllint 6.8 reports as unqualified (ADR 0015 layout state read). No category is disabled;
 # duplicate keys count.
 ["unqualified","Unqualified access","color: config.background"]
+["unqualified","Unqualified access","if (action === \"restart\") sddm.reboot();"]
+["unqualified","Unqualified access","readonly property bool canRestart: sddm.canReboot === true"]
+["unqualified","Unqualified access","readonly property bool canShutDown: sddm.canPowerOff === true"]
 ["unqualified","Unqualified access","model: sessionModel"]
 ["unqualified","Unqualified access","model: userModel"]
 ["unqualified","Unqualified access","readonly property color failure: config.failure"]

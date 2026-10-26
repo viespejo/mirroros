@@ -144,4 +144,6 @@ After adoption, through plan 02-20:
 
 ## Superseded by
 
-`None`
+[ADR 0016](0016-greeter-power-actions.md) supersedes only the exclusion of power menus: confirmed restart and
+shutdown through SDDM's native proxy are permitted. The other decisions remain in force, with the keyboard-layout
+extension already recorded in ADR 0015.

@@ -22,6 +22,14 @@ Rectangle {
     property bool pending: false
     property bool failed: false
     property bool selecting: false
+    property bool powerOpen: false
+    property string powerAction: ""
+    readonly property bool canRestart: sddm.canReboot === true
+    readonly property bool canShutDown: sddm.canPowerOff === true
+    readonly property bool powerAvailable: canRestart || canShutDown
+    readonly property bool powerActionAvailable: powerAction === "restart" ? canRestart
+                                               : powerAction === "shutdown" ? canShutDown : false
+    onPowerAvailableChanged: if (!powerAvailable && powerOpen) closePower()
     property string stateLayout: ""
     property int stateMisses: 0
     readonly property int session: LoginModel.sessionIndex(sessionFiles, config.session)
@@ -32,6 +40,10 @@ Rectangle {
     width: 1280
     height: 800
     color: config.background
+    Keys.onEscapePressed: event => {
+        if (root.powerOpen) root.closePower();
+        else event.accepted = false;
+    }
 
     function layoutNames() {
         var names = [];
@@ -95,17 +107,51 @@ Rectangle {
     }
 
     function openSelector() {
-        if (pending || userNames.length < 2) return;
+        if (pending || powerOpen || userNames.length < 2) return;
         selector.currentIndex = Math.max(userIndex, 0);
         selecting = true;
         selector.forceActiveFocus();
     }
 
     function submit() {
-        if (!LoginModel.canSubmit(userIndex, session, pending, password.text)) return;
+        if (powerOpen || !LoginModel.canSubmit(userIndex, session, pending, password.text)) return;
         pending = true;
         failed = false;
         sddm.login(userNames[userIndex], password.text, session);
+    }
+
+    // ADR 0016: only SDDM's native power proxy is used, after explicit confirmation.
+    function openPower() {
+        if (pending || !powerAvailable) return;
+        selecting = false;
+        password.clear();
+        powerAction = "";
+        powerOpen = true;
+        if (canRestart) restartButton.forceActiveFocus();
+        else shutdownButton.forceActiveFocus();
+    }
+
+    function closePower() {
+        powerOpen = false;
+        powerAction = "";
+        if (powerAvailable && !pending) powerButton.forceActiveFocus();
+        else password.forceActiveFocus();
+    }
+
+    function selectPower(action) {
+        if (pending || !powerOpen) return;
+        if (action !== "restart" && action !== "shutdown") return;
+        if (action === "restart" ? !canRestart : !canShutDown) return;
+        powerAction = action;
+        cancelButton.forceActiveFocus();
+    }
+
+    function confirmPower() {
+        if (pending || !powerOpen || !powerActionAvailable) return;
+        var action = powerAction;
+        closePower();
+        if (action === "restart") sddm.reboot();
+        else sddm.powerOff();
     }
 
     Connections {
@@ -194,6 +240,7 @@ Rectangle {
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Button
                 Accessible.name: "Change user"
+                KeyNavigation.tab: root.powerAvailable ? powerButton : password
                 Keys.onReturnPressed: root.openSelector()
                 Keys.onEnterPressed: root.openSelector()
                 Keys.onSpacePressed: root.openSelector()
@@ -235,11 +282,12 @@ Rectangle {
                 cursorDelegate: Item {}
                 font.family: root.fontFamily
                 font.pixelSize: 16
-                readOnly: root.pending || root.reason !== ""
+                readOnly: root.pending || root.powerOpen || root.reason !== ""
                 clip: true
                 focus: true
                 activeFocusOnTab: true
                 Accessible.name: "Password"
+                KeyNavigation.tab: switcher.visible ? switcher : powerButton.visible ? powerButton : password
                 Keys.onReturnPressed: root.submit()
                 Keys.onEnterPressed: root.submit()
                 onTextEdited: root.failed = false
@@ -363,6 +411,152 @@ Rectangle {
                     onClicked: root.chooseUser(entry.index)
                 }
             }
+        }
+    }
+
+    // A single peripheral control leaves the centered login layout unchanged.
+    component PowerButton: Rectangle {
+        id: button
+        property string label: ""
+        property int textSize: 14
+        signal activated()
+        width: 208
+        height: 36
+        color: activeFocus ? root.foreground : root.color
+        opacity: !enabled ? 0.35 : activeFocus || buttonArea.containsMouse ? 1 : 0.6
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: label
+        Accessible.onPressAction: if (enabled) activated()
+        Keys.onReturnPressed: activated()
+        Keys.onEnterPressed: activated()
+        Keys.onSpacePressed: activated()
+        Keys.onEscapePressed: root.closePower()
+
+        Text {
+            anchors.centerIn: parent
+            text: button.label
+            color: button.activeFocus ? root.color : root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: button.textSize
+        }
+
+        MouseArea {
+            id: buttonArea
+            anchors.fill: parent
+            hoverEnabled: true
+            onClicked: button.activated()
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        z: 2
+        visible: root.powerOpen
+        onClicked: root.closePower()
+    }
+
+    Column {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 24
+        spacing: 8
+        z: 3
+
+        Rectangle {
+            objectName: "powerPanel"
+            width: 232
+            height: powerContent.implicitHeight + 24
+            visible: root.powerOpen
+            color: root.color
+            border.width: 1
+            border.color: root.foreground
+
+            // Consume panel clicks so only clicks outside dismiss it.
+            MouseArea { anchors.fill: parent }
+
+            Column {
+                id: powerContent
+                anchors.centerIn: parent
+                spacing: 4
+
+                Text {
+                    objectName: "powerQuestion"
+                    width: 208
+                    height: 36
+                    visible: root.powerAction !== ""
+                    text: root.powerAction === "restart" ? "Restart the computer?" : "Shut down the computer?"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    color: root.foreground
+                    font.family: root.fontFamily
+                    font.pixelSize: 14
+                }
+
+                PowerButton {
+                    id: restartButton
+                    objectName: "restartButton"
+                    label: "Restart"
+                    visible: root.powerAction === "" && root.canRestart
+                    KeyNavigation.tab: shutdownButton.visible ? shutdownButton : cancelButton
+                    KeyNavigation.backtab: cancelButton
+                    KeyNavigation.down: restartButton.KeyNavigation.tab
+                    KeyNavigation.up: restartButton.KeyNavigation.backtab
+                    onActivated: root.selectPower("restart")
+                }
+
+                PowerButton {
+                    id: shutdownButton
+                    objectName: "shutdownButton"
+                    label: "Shut down"
+                    visible: root.powerAction === "" && root.canShutDown
+                    KeyNavigation.tab: cancelButton
+                    KeyNavigation.backtab: restartButton.visible ? restartButton : cancelButton
+                    KeyNavigation.down: shutdownButton.KeyNavigation.tab
+                    KeyNavigation.up: shutdownButton.KeyNavigation.backtab
+                    onActivated: root.selectPower("shutdown")
+                }
+
+                PowerButton {
+                    id: cancelButton
+                    objectName: "powerCancel"
+                    label: "Cancel"
+                    KeyNavigation.tab: root.powerAction !== "" ? (confirmButton.enabled ? confirmButton : cancelButton)
+                                       : restartButton.visible ? restartButton : shutdownButton
+                    KeyNavigation.backtab: root.powerAction !== "" ? (confirmButton.enabled ? confirmButton : cancelButton)
+                                           : shutdownButton.visible ? shutdownButton : restartButton
+                    KeyNavigation.down: cancelButton.KeyNavigation.tab
+                    KeyNavigation.up: cancelButton.KeyNavigation.backtab
+                    onActivated: root.closePower()
+                }
+
+                PowerButton {
+                    id: confirmButton
+                    objectName: "powerConfirm"
+                    label: root.powerAction === "restart" ? "Restart" : "Shut down"
+                    visible: root.powerAction !== ""
+                    enabled: root.powerActionAvailable && !root.pending
+                    KeyNavigation.tab: cancelButton
+                    KeyNavigation.backtab: cancelButton
+                    KeyNavigation.down: confirmButton.KeyNavigation.tab
+                    KeyNavigation.up: confirmButton.KeyNavigation.backtab
+                    onActivated: root.confirmPower()
+                }
+            }
+        }
+
+        PowerButton {
+            id: powerButton
+            objectName: "powerButton"
+            anchors.right: parent.right
+            width: 36
+            label: "\u23fb"
+            textSize: 22
+            Accessible.name: "Power options"
+            KeyNavigation.tab: password
+            visible: root.powerAvailable
+            enabled: !root.pending
+            onActivated: root.powerOpen ? root.closePower() : root.openPower()
         }
     }
 

@@ -6,8 +6,10 @@ SDDM from the Arch `extra` repository remains the login provider; its packaged P
 the session. The MirrorOS theme in `sddm/mirroros/` is independently written presentation code bounded by
 [ADR 0014](../../../docs/adr/0014-native-login-and-boot-presentation.md): it imports only `QtQuick` and its own
 `LoginModel.js`, and submits login only through SDDM's `sddm.login(user, password, sessionIndex)` proxy method. It
-runs no process, reads no system file, logs nothing and has no avatar, power menu, clock or settings. PAM, accounts
-and autologin are unchanged (`10-mirroros-login.conf` keeps autologin empty).
+runs no process, reads only the greeter layout state file under ADR 0015, logs nothing and has no avatar, clock or
+settings. [ADR 0016](../../../docs/adr/0016-greeter-power-actions.md) permits confirmed restart and shutdown only
+through SDDM's native power proxy. PAM, accounts and autologin are unchanged (`10-mirroros-login.conf` keeps
+autologin empty).
 
 Interfaces used, from the [SDDM theming documentation](https://github.com/sddm/sddm/blob/develop/docs/THEMING.md)
 and the SDDM `v0.21.0` source (SDDM 0.21.0-7 observed in the Arch repositories; not a pin):
@@ -16,6 +18,8 @@ and the SDDM `v0.21.0` source (SDDM 0.21.0-7 observed in the Arch repositories; 
   `config` object, with non-empty `.user` values overriding the defaults.
 - `userModel` (`name`, `realName`, `lastUser`), `sessionModel` (`file`), `keyboard` (`layouts`, `currentLayout`) and
   the `loginFailed`/`loginSucceeded` signals.
+- `canReboot` and `canPowerOff` gate the power actions; `reboot()` and `powerOff()` forward confirmed requests
+  to SDDM. No system policy or privilege is changed.
 
 Omarchy revision `1801adc1983b06f6ab218f8060e430cb3477d8d0` (`default/sddm/omarchy/Main.qml`) is an idea reference
 for a small centered theme with last-user selection; no Omarchy code or asset is copied, so no attribution entry
@@ -36,6 +40,17 @@ applies.
 - Enter submits a non-empty password once; further submissions and account changes wait for SDDM's answer. A
   failure clears the password, keeps focus in the field and shows a generic "Authentication failed" without PAM
   messages. Typing clears the failure state; an account change clears the password.
+
+## Power actions
+
+One low-emphasis power icon sits at the bottom right, outside the login content. Tab reaches it; Enter or Space
+opens a small menu with the available **Restart** and **Shut down** actions. Selecting one opens a confirmation,
+with **Cancel** focused by default. Up/Down arrows or Tab/Shift+Tab cycle through the available menu or confirmation
+buttons; Enter or Space requests the confirmed action once through SDDM. Escape, Cancel or clicking outside closes the panel without a request and returns focus to the power icon.
+Opening the menu clears the password and closes account selection; password submission is blocked until it closes.
+During authentication power controls are disabled. Capabilities are checked again before dispatch, and the icon
+is hidden when neither action is available. SDDM owns authorization and inhibitor handling; the theme does not
+force operations, automatically retry or claim success without evidence.
 
 ## Keyboard layout
 
@@ -79,4 +94,6 @@ reported instead of silently keeping the old greeter.
 
 - Automated UI checks use synthetic SDDM models; real authentication, failed login, account switching, logout and
   layout-sensitive passwords are attended VM checks (plan 02-20 Task 3).
+- Restart and shutdown are covered by recording proxy doubles only; real power behavior and the new panel's
+  visual acceptance require attended disposable-VM checks under ADR 0016.
 - Multi-output greeter layout and HiDPI scaling are unqualified.

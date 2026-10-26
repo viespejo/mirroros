@@ -1,6 +1,6 @@
 // Synthetic SDDM models for the MirrorOS theme. theme.test.mjs substitutes @THEME@, @LOGO@ and @STATE@ (a layout
 // state file holding "English (US)") and runs this file
-// with qmltestrunner on the offscreen platform. sddm.login only records its call; no authentication happens.
+// with qmltestrunner on the offscreen platform. Login and power proxy calls only record requests; no real operation happens.
 import QtQuick
 import QtTest
 
@@ -25,6 +25,11 @@ Item {
     QtObject {
         id: sddm
         property var calls: []
+        property var powerCalls: []
+        property bool canReboot: true
+        property bool canPowerOff: true
+        function reboot() { powerCalls.push("restart"); }
+        function powerOff() { powerCalls.push("shutdown"); }
         signal loginFailed()
         signal loginSucceeded()
         function login(user, password, session) {
@@ -93,6 +98,9 @@ Item {
             keyboard.currentLayout = 0;
             config.layoutState = "";
             sddm.calls = [];
+            sddm.powerCalls = [];
+            sddm.canReboot = true;
+            sddm.canPowerOff = true;
             reload();
         }
 
@@ -185,6 +193,8 @@ Item {
             verify(!item("selector").visible);
             verify(item("switcher").activeFocus);
             keyClick(Qt.Key_Tab);
+            verify(item("powerButton").activeFocus);
+            keyClick(Qt.Key_Tab);
             verify(item("password").activeFocus);
             type("pw");
             keyClick(Qt.Key_Return);
@@ -242,6 +252,197 @@ Item {
             compare(item("dotRepeater").count, 3);
             verify(Qt.colorEqual(item("password").color, "transparent"));
             compare(item("status").visible, false);
+        }
+
+        function test_power_menu_requires_confirmation_with_cancel_focused() {
+            type("secret");
+            keyClick(Qt.Key_Tab);
+            keyClick(Qt.Key_Tab);
+            verify(item("powerButton").activeFocus);
+            keyClick(Qt.Key_Space);
+            verify(item("powerPanel").visible);
+            verify(item("restartButton").activeFocus);
+            compare(item("password").text, "");
+            verify(item("password").readOnly);
+            keyClick(Qt.Key_Return);
+            compare(item("powerQuestion").text, "Restart the computer?");
+            verify(item("powerCancel").activeFocus);
+            compare(sddm.powerCalls.length, 0);
+            keyClick(Qt.Key_Tab);
+            verify(item("powerConfirm").activeFocus);
+            keyClick(Qt.Key_Tab);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Tab, Qt.ShiftModifier);
+            verify(item("powerConfirm").activeFocus);
+            keyClick(Qt.Key_Return);
+            keyClick(Qt.Key_Return);
+            compare(sddm.powerCalls, ["restart"]);
+            compare(sddm.calls.length, 0);
+        }
+
+        function test_power_arrows_cycle_menu_and_confirmation_without_dispatch() {
+            mouseClick(item("powerButton"));
+            verify(item("restartButton").activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item("shutdownButton").activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item("restartButton").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("shutdownButton").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("restartButton").activeFocus);
+            keyClick(Qt.Key_Return);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item("powerConfirm").activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("powerConfirm").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("powerCancel").activeFocus);
+            compare(sddm.powerCalls.length, 0);
+            keyClick(Qt.Key_Escape);
+            verify(!item("powerPanel").visible);
+            verify(item("powerButton").activeFocus);
+        }
+
+        function test_power_arrows_skip_unavailable_actions_data() {
+            return [
+                { tag: "restart-only", restart: true, shutdown: false, button: "restartButton" },
+                { tag: "shutdown-only", restart: false, shutdown: true, button: "shutdownButton" }
+            ];
+        }
+
+        function test_power_arrows_skip_unavailable_actions(data) {
+            sddm.canReboot = data.restart;
+            sddm.canPowerOff = data.shutdown;
+            mouseClick(item("powerButton"));
+            verify(item(data.button).activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item(data.button).activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Down);
+            verify(item(data.button).activeFocus);
+            keyClick(Qt.Key_Return);
+            verify(item("powerCancel").activeFocus);
+            sddm.canReboot = true;
+            sddm.canPowerOff = true;
+            sddm.canReboot = !data.restart;
+            sddm.canPowerOff = !data.shutdown;
+            verify(!item("powerConfirm").enabled);
+            keyClick(Qt.Key_Down);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Up);
+            verify(item("powerCancel").activeFocus);
+            compare(sddm.powerCalls.length, 0);
+        }
+
+        function test_mouse_shutdown_is_confirmed_once() {
+            mouseClick(item("powerButton"));
+            mouseClick(item("shutdownButton"));
+            compare(item("powerQuestion").text, "Shut down the computer?");
+            verify(item("powerCancel").activeFocus);
+            compare(sddm.powerCalls.length, 0);
+            mouseClick(item("powerConfirm"));
+            loader.item.confirmPower();
+            compare(sddm.powerCalls, ["shutdown"]);
+            verify(!item("powerPanel").visible);
+        }
+
+        function test_power_cancel_escape_and_outside_never_request_an_action() {
+            mouseClick(item("powerButton"));
+            keyClick(Qt.Key_Escape);
+            verify(!item("powerPanel").visible);
+            verify(item("powerButton").activeFocus);
+            keyClick(Qt.Key_Return);
+            keyClick(Qt.Key_Return);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Return);
+            verify(!item("powerPanel").visible);
+            mouseClick(item("powerButton"));
+            mouseClick(item("shutdownButton"));
+            keyClick(Qt.Key_Escape);
+            verify(!item("powerPanel").visible);
+            mouseClick(item("powerButton"));
+            mouseClick(loader.item, 10, 10);
+            verify(!item("powerPanel").visible);
+            compare(sddm.powerCalls.length, 0);
+            compare(sddm.calls.length, 0);
+        }
+
+        function test_power_capabilities_gate_visibility_and_are_rechecked() {
+            sddm.canReboot = false;
+            mouseClick(item("powerButton"));
+            verify(!item("restartButton").visible);
+            verify(item("shutdownButton").activeFocus);
+            keyClick(Qt.Key_Tab);
+            verify(item("powerCancel").activeFocus);
+            keyClick(Qt.Key_Tab);
+            verify(item("shutdownButton").activeFocus);
+            keyClick(Qt.Key_Return);
+            sddm.canPowerOff = false;
+            verify(!item("powerButton").visible);
+            verify(!item("powerPanel").visible);
+            verify(item("password").activeFocus);
+            loader.item.confirmPower();
+            loader.item.openPower();
+            compare(sddm.powerCalls.length, 0);
+            verify(!item("powerPanel").visible);
+            sddm.canReboot = true;
+            mouseClick(item("powerButton"));
+            verify(!item("shutdownButton").visible);
+            sddm.canPowerOff = true;
+            mouseClick(item("restartButton"));
+            sddm.canReboot = false;
+            verify(!item("powerConfirm").enabled);
+            loader.item.confirmPower();
+            compare(sddm.powerCalls.length, 0);
+            keyClick(Qt.Key_Escape);
+            verify(!item("powerPanel").visible);
+        }
+
+        function test_power_and_login_are_mutually_exclusive() {
+            mouseClick(item("powerButton"));
+            item("password").text = "secret";
+            loader.item.submit();
+            compare(sddm.calls.length, 0);
+            loader.item.closePower();
+            item("password").forceActiveFocus();
+            keyClick(Qt.Key_Return);
+            compare(sddm.calls.length, 1);
+            verify(!item("powerButton").enabled);
+            loader.item.openPower();
+            loader.item.selectPower("restart");
+            loader.item.confirmPower();
+            verify(!item("powerPanel").visible);
+            compare(sddm.powerCalls.length, 0);
+            sddm.loginFailed();
+            verify(item("powerButton").enabled);
+        }
+
+        function test_power_menu_closes_account_selection_and_fits_small_windows() {
+            loader.item.openSelector();
+            verify(item("selector").visible);
+            loader.item.openPower();
+            verify(!item("selector").visible);
+            var sizes = [[1280, 800], [800, 480]];
+            for (var i = 0; i < sizes.length; i++) {
+                harness.width = sizes[i][0];
+                harness.height = sizes[i][1];
+                waitForRendering(loader.item);
+                var panel = item("powerPanel");
+                var origin = panel.mapToItem(loader.item, 0, 0);
+                verify(origin.x >= 0 && origin.y >= 0);
+                verify(origin.x + panel.width <= harness.width && origin.y + panel.height <= harness.height);
+            }
         }
 
         function test_logo_is_proportional_and_unclipped() {

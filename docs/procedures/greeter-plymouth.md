@@ -19,7 +19,8 @@ animation, password prompt or delay. Configure never restarts SDDM, reloads the 
 and the splash take effect at the next boot. Sources and ownership: [branding](../../capabilities/visual/branding/sources.md),
 [login](../../capabilities/desktop/login/sources.md), [boot splash](../../capabilities/system/boot-splash/sources.md).
 Authority: [ADR 0014](../adr/0014-native-login-and-boot-presentation.md), and for keyboard layouts
-[ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md).
+[ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md). Confirmed greeter power requests are bounded by
+[ADR 0016](../adr/0016-greeter-power-actions.md).
 
 ## Keyboard layout at the greeter
 
@@ -27,6 +28,20 @@ The greeter starts in the layout resolved from `/etc/vconsole.conf`, with the ot
 the session and its lock screen use the same order. Press `SUPER+I` (or `SUPER+SHIFT+I`) at the greeter to switch
 before typing a password; the indicator below the field shows the active layout and the `Super+I` hint. Without the
 greeter's state file, the indicator shows the configured layout and no hint. There is no per-account layout.
+
+## Restart and shutdown at the greeter
+
+The discreet power icon at the bottom right opens **Restart** and **Shut down**, limited to actions SDDM reports
+as available. Tab reaches the power icon; Enter/Space opens it. Use Up/Down arrows or Tab/Shift+Tab to cycle through
+the available options, and Enter/Space to select. Selecting an action opens a confirmation with **Cancel**
+focused by default; arrows or Tab/Shift+Tab move between its buttons. Escape, Cancel or clicking outside dismisses the panel without
+requesting an operation. The password is cleared when opening the menu, and power actions are disabled during
+authentication. SDDM handles requests under the existing system policy; no forced fallback or automatic retry occurs.
+
+Apply through configure as described below; no SDDM restart is performed. The historical VM qualification record
+below predates this extension. Before qualifying it, use a disposable VM to check the icon and panel at 800x480
+and 1280x800, keyboard-only navigation, cancellation without a transition, real restart returning to the greeter,
+and shutdown stopping the VM. Automated proxy doubles do not establish these outcomes or inhibitor behavior.
 
 ## Base installation and configure overlay
 

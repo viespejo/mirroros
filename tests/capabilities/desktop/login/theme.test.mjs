@@ -1,6 +1,6 @@
-// MirrorOS SDDM theme: pure login logic, ADR 0014/0015 boundaries, qmllint baseline and synthetic-model UI behavior.
-// The UI cases run tst_theme.qml with qmltestrunner on the offscreen platform; sddm.login is a recording stub, so
-// these tests never authenticate and are not a substitute for the attended VM login checks.
+// MirrorOS SDDM theme: pure login logic, ADR 0014/0015/0016 boundaries, qmllint baseline and synthetic-model UI behavior.
+// The UI cases run tst_theme.qml with qmltestrunner on the offscreen platform; login and power proxy calls are
+// recording stubs, so these tests never authenticate or change system power and do not replace attended VM checks.
 // MIRROROS_QMLLINT_CAPTURE=1 prints candidate baseline keys for an explicit, reviewed update.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -63,21 +63,22 @@ test('unavailable states are actionable and block submission', () => {
   assert.equal(Model.displayName('bob', 'Bob B'), 'Bob B');
 });
 
-test('the theme stays within the ADR 0014 and ADR 0015 presentation boundary', () => {
+test('the theme stays within the ADR 0014, ADR 0015 and ADR 0016 presentation boundary', () => {
   const code = text => text.split('\n').filter(line => !/^\s*\/\//.test(line)).join('\n');
   const qml = code(read('Main.qml'));
   const js = code(read('LoginModel.js'));
   assert.deepEqual([...qml.matchAll(/^import\s+(\S+)/gm)].map(match => match[1]), ['QtQuick', '"LoginModel.js"']);
-  assert.equal(qml.match(/\bsddm\.\w+/g).join(' '), 'sddm.login');
+  assert.deepEqual(qml.match(/\bsddm\.\w+/g),
+    ['sddm.canReboot', 'sddm.canPowerOff', 'sddm.login', 'sddm.reboot', 'sddm.powerOff']);
   // ADR 0015: one local GET of the configured layout state file; no other request or method.
   assert.equal(qml.match(/XMLHttpRequest\(\)/g).length, 1);
   assert.deepEqual([...qml.matchAll(/\.open\(([^)]*)\)/g)].map(match => match[1]), ['"GET", "file://" + layoutStatePath']);
   assert.doesNotMatch(js, /XMLHttpRequest/);
   for (const source of [qml, js]) {
     assert.doesNotMatch(source, /openUrlExternally|console\.|Quickshell|Process|FileView|Qt\.labs|import\s+QtCore/);
-    assert.doesNotMatch(source, /powerOff|reboot|suspend|hibernate|hybridSleep/);
+    assert.doesNotMatch(source, /suspend|hibernate|hybridSleep/);
   }
-  assert.doesNotMatch(qml, /avatar|icon|Clock|Date\(/i);
+  assert.doesNotMatch(qml, /avatar|Clock|Date\(/i);
   const entries = fs.readdirSync(themeDir).sort();
   assert.deepEqual(entries, ['LoginModel.js', 'Main.qml', 'metadata.desktop', 'theme.conf']);
 });
