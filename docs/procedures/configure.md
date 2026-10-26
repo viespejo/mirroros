@@ -295,7 +295,8 @@ regenerated with `mkinitcpio -p linux` (systemd-boot) or `limine-update` (Limine
 or an earlier regeneration is still pending in `/var/lib/mirroros/configure/boot-splash.state`. Completion is
 recorded only after the effective parameters, the referenced boot files and the theme inside each normal boot image
 are checked; a failed or interrupted regeneration stays pending and is retried by the next run. Configure never
-reboots. See the [greeter and Plymouth procedure](greeter-plymouth.md) for diagnostics and recovery.
+reboots. See the [greeter and Plymouth procedure](greeter-plymouth.md) for diagnostics and recovery, and its
+[VM qualification record](greeter-plymouth.md#vm-qualification-record) for the bounded VM evidence.
 
 ## Evidence
 

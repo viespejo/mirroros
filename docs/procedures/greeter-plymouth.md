@@ -2,8 +2,9 @@
 
 **Availability:** implemented through configure for installed systems on the three supported storage options.
 Automated contracts cover the theme delivery, the boot convergence and its failure paths. Real boot, Esc,
-graphical login and attended visual acceptance are the VM qualification of plan 02-20 Task 3 and are not claimed
-here. No hardware, target-laptop, hibernation or full-MVP readiness follows from this procedure.
+graphical login and attended visual acceptance were qualified in VMs by plan 02-20 Task 3, with the limits in the
+[VM qualification record](#vm-qualification-record). No hardware, target-laptop, hibernation or full-MVP readiness
+follows from this procedure.
 
 ## What is delivered
 
@@ -101,7 +102,8 @@ or regeneration. Reboot only after reviewing the outcome and `configure.log`.
   `/mnt/etc/default/limine` and run `arch-chroot /mnt limine-update`. To also drop the hook, move
   `/mnt/etc/mkinitcpio.conf.d/90-mirroros-plymouth.conf` aside and regenerate (`arch-chroot /mnt mkinitcpio -p linux`
   or `limine-update`). This is a diagnostic state, not a supported opt-out: the next configure run restores the
-  overlay.
+  overlay. `boot-splash.state` may still read `complete` meanwhile; configure checks the effective entry, not the
+  state, so the restore rewrites only what was removed.
 
 ## Recovery after a failed regeneration
 
@@ -130,3 +132,47 @@ Each run's evidence is under `/var/log/mirroros/configure/<run-id>/` ([configure
 qualification evidence belongs under `evidence/greeter-plymouth/` on the development host, outside source control,
 allowlisted and scanned with `gitleaks dir --no-banner --redact <evidence-dir>`; it must not contain credentials or
 private screens.
+
+## VM qualification record
+
+Plan 02-20 Task 3 qualified commit `c595a09` (clean) in disposable QEMU/UEFI VMs (4 GiB, 2 vCPUs, virtio-vga).
+Clean installs used the final-source ISO `dist/20261026T151813Z-73344428-54e5-43c3-9629-3ceb35f1c9cc/`
+(`mirroros-2026.10.26-x86_64.iso`, SHA-256 `945dbe0fbd3ce82984c266bf49ad6a872426c40fde0ed86efab8907277ac3cff`;
+all build controls passed; `plymouth` absent from the live package list). Installed versions: `plymouth`
+26.134.222-3, `librsvg` 2:2.63.4-1, `sddm` 0.21.0-7, `qt6-declarative` 6.12.0-2, `hyprland` 0.56.2-4, `uwsm`
+0.27.1-1, `mkinitcpio` 42.2-1, `linux` 7.2.11.arch1-1, `limine` 12.9.4-1, `limine-mkinitcpio-hook` 1.40.0-1,
+`limine-snapper-sync` 1.32.1-1, `systemd` 262.1-1. Disposable passwords and accounts only; no credential was
+recorded.
+
+| Check | Observed outcome |
+|---|---|
+| Automated contracts at `c595a09` | Node 44/44; branding, login, boot-splash, layout-indicator and lock Bats 47/47; mechanism 86/86 (`--jobs 1`); target, operations, engine apply and image 111/111. `bash -n` clean; ShellCheck clean except the pre-existing SC2034 in `capabilities/configure-steps`. Selected suites, not the whole repository. |
+| `btrfs-limine`, hibernation on, `es` | Installed, base postconditions passed, target configure 12 changed. `quiet splash` once on the normal entry; root, `zswap.enabled=0`, `resume=`, `resume_offset=` and `subvol=@` kept; the baseline snapshot entry keeps its original command line and historical initramfs. Hooks `base systemd plymouth … sd-btrfs-overlayfs fsck`; the normal image contains the theme and wordmark. |
+| `ext4-systemd-boot`, hibernation on | Same base and overlay results. Fallback entry keeps the base line; preset `default` and `fallback` kept; both images contain the theme; `editor no` and `timeout 3` unchanged. |
+| `btrfs-rescue`, hibernation off | Same results without resume parameters; `rootflags=subvol=@` kept; fallback entry unchanged. |
+| Attended boot and login, all three | Splash visible, Esc shows boot messages, greeter shows `Spanish`, login with a password containing `ñ`, logout returns to the themed greeter, login again. |
+| Unchanged running configure, all three | All 12 steps `unchanged`, outcome 0, no package, render, install, regeneration or `systemctl` command; boot files, images, state and service PIDs identical before and after. |
+| Existing installation | Copy of a pre-change (`8c51c7d`) `btrfs-limine` installation updated from a checkout: first run installed `plymouth`, published the themes and regenerated once, no service restart; reboot with splash, Esc, login and logout; reruns all unchanged. Repeated for `c595a09` (theme and bindings republished only). |
+| Attended greeter review | On the updated installation at `c595a09`: logo and splash agreement, field, selected user and indicator, keyboard-only switch to a second account with password cleared, generic failure and `Authenticating…` on a wrong password, `ñ` password failing in English (US) and passing after `SUPER+I`, lock starting in the resolved layout and restoring the previous one, small window usable. |
+| No-splash paths | Limine: editing the normal entry for one boot removed `quiet splash`; next boot had the splash again. systemd-boot: the fallback entry booted without splash. Live rescue on `btrfs-rescue`: removing `quiet splash` from the entry booted without splash; the next configure changed only `system/boot-splash`, rewrote the entry and did not regenerate the image. |
+| Secrets and whitespace | `gitleaks` found no leaks in the evidence directory or in commits `8c51c7d..c595a09`; `git diff --check` clean. |
+
+Evidence: `evidence/greeter-plymouth/20261026T134735Z/reports/` (`btrfs-limine-*`, `ext4-systemd-boot-*`,
+`btrfs-rescue-*`, `existing-update/`). Earlier smoke runs under `evidence/greeter-plymouth/20261026T100647Z/`
+used a superseded development ISO and are not qualification evidence; the defects they found were fixed and
+retested.
+
+### Not performed and limits
+
+- Not performed: a hibernate and resume cycle, a Limine snapshot boot, a real interrupted or failed
+  regeneration (automated contracts only), `qmllint` against the installed Qt 6.12 (the reviewed baseline uses
+  host qmllint 6.8.2; SDDM loaded the theme in every VM), and any physical hardware.
+- hyprlock follows only the first layout change while locked, so layout switching is not offered at the lock; the
+  bar briefly shows the configured layout while locking when another layout is active.
+- SDDM stores no per-account layout; the greeter starts in the configured layout.
+- Inherited: snap-pac prints `fatal library error, lookup self` in the installer's chroot; Limine installations
+  keep an unreferenced `/boot/initramfs-linux.img` without the hook; a running-context package transaction lets
+  snap-pac snapshot the pre-overlay image; user edits under a managed header in `~/.config/foot/foot.ini` are
+  restored without notice.
+
+This is VM evidence only. It makes no target-laptop, hardware-hibernation, full-MVP or release claim.
