@@ -238,7 +238,7 @@ This does not identify an individual offending field. These settings do not chan
 `/etc/vconsole.conf`, which is not changed. The session and the greeter load one list from `layouts.lua`: the
 resolved layout first, then the declared product layouts `us,es` (DEC-017) without duplicates, switched with
 `SUPER+I` and `SUPER+SHIFT+I` in both ([ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md)); the lock
-screen starts in the resolved layout, accepts the same keys and restores the previous layout after unlocking.
+screen uses the resolved layout without switching and restores the previous layout after unlocking.
 Validation rejects a declared layout missing from the XKB data
 before any package change.
 This replaces Right Alt's normal AltGr role. Do not assume layouts that depend on AltGr are unaffected.

@@ -34,10 +34,11 @@ lock in place. Configure never starts, restarts or reloads hypridle.
   Behavior reference only: Omarchy `bin/omarchy-system-lock` at `7075b61c6aaa5d8589f6e816867508fc96dc49d9` (MIT)
   also selects the first layout when locking; no Omarchy file or script is copied or executed. Since plan 02-20
   index 0 is the configured layout ([ADR 0015](../../../docs/adr/0015-greeter-keyboard-layout-switching.md)), and
-  `SUPER+I` / `SUPER+SHIFT+I` also work at the lock screen. In the plan 02-20 VM (packaged hyprlock), hyprlock
+  `SUPER+I` / `SUPER+SHIFT+I` do not work at the lock screen. In the plan 02-20 VM (packaged hyprlock), hyprlock
   follows only the first layout change after locking; later changes switch the compositor layout but not the lock
-  screen's indicator. Keeping the active layout when locking was therefore rejected, so the lock always starts
-  from the configured layout.
+  screen's indicator. Keeping the active layout when locking and switching while locked were therefore rejected,
+  so the lock always uses the configured layout. Known cosmetic limitation: when another layout is active, the
+  shell bar briefly shows the configured layout before the lock surface covers it.
 - `on_lock_cmd` / `on_unlock_cmd` maintain `$XDG_RUNTIME_DIR/mirroros-shell-locked` and call the shell's
   `notifications lockChanged` IPC function for the while-away count (DEC-021/022; gate passed in plan 02-19
   Task 1). The marker carries no notification content.

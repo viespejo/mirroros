@@ -248,6 +248,7 @@ Rectangle {
             Row {
                 objectName: "dots"
                 anchors.centerIn: parent
+                visible: !root.pending
                 spacing: 4
                 Repeater {
                     objectName: "dotRepeater"
@@ -264,7 +265,7 @@ Rectangle {
             Text {
                 objectName: "status"
                 anchors.centerIn: parent
-                visible: password.text.length === 0
+                visible: password.text.length === 0 || root.pending
                 text: root.pending ? "Authenticating\u2026"
                     : root.failed ? "Authentication failed"
                     : root.reason !== "" ? "Login unavailable" : "Password"

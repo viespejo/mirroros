@@ -43,8 +43,9 @@ The historical laboratory recipe and results remain in
   `systemctl --user restart hypridle.service` only while unlocked).
 - Keyboard: the session has the resolved layout first, then `us,es` without duplicates (`SUPER+I` /
   `SUPER+SHIFT+I`; [ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md)), Compose on Right Alt, and every
-  lock starts in the resolved layout and restores the previous one after unlocking; `SUPER+I` also switches it at
-  the lock screen (hyprlock follows only the first switch after locking). The approved key table is registered at each configuration load; nothing is unbound
+  lock starts in the resolved layout and restores the previous one after unlocking; `SUPER+I` does not switch it
+  at the lock screen (hyprlock follows only the first switch after locking), and the bar may briefly show the
+  resolved layout while locking. The approved key table is registered at each configuration load; nothing is unbound
   at runtime. Keyboard help (`SUPER+K`) reads the registry the bindings export.
 - Approved keys without an owner yet stay unbound and documented in the
   [Hyprland bindings record](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md): bar toggle,

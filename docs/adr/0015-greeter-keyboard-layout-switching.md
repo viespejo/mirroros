@@ -73,7 +73,9 @@ authority over keyboard configuration or adding a daemon.
 - **Lock screen.** Locking still selects the first layout (now the configured one) and restores the previous
   layout after unlocking, and the session's `SUPER+I` and `SUPER+SHIFT+I` bindings also work while locked. Keeping the active layout when locking was rejected: in the
   plan 02-20 VM, hyprlock followed only the first layout change after locking, so later changes left its
-  indicator showing a layout other than the one used for typing.
+  indicator showing a layout other than the one used for typing. *Amended during plan 02-20 qualification
+  (2026-10-26): the session's layout bindings no longer work while locked; the lock always uses the configured
+  layout.*
 - **Switching.** The greeter compositor binds `SUPER+I` and `SUPER+SHIFT+I`, as in the session. Each binding, and the
   compositor's start event, runs one short-lived MirrorOS helper that switches the layout when asked and writes the
   active layout's XKB description to `/var/lib/sddm/mirroros-greeter-layout`. The helper exits after one action;
@@ -109,7 +111,7 @@ helper, per-account state or write access from the theme, or if the login provid
 - Automated tests cover the shared ordering, the helper with a `hyprctl` double, the theme's state handling and
   fallback, and configure delivery of the helper and greeter environment.
 - Plan 02-20 VM qualification covers switching in the greeter, a layout-sensitive password, and the lock screen
-  starting in the configured layout with one `SUPER+I` switch.
+  starting in the configured layout without switching.
 
 ## References
 

@@ -200,6 +200,17 @@ Item {
             compare(item("user").text, "bob");
         }
 
+        function test_pending_submission_shows_authenticating_instead_of_dots() {
+            type("secret");
+            keyClick(Qt.Key_Return);
+            verify(item("status").visible);
+            compare(item("status").text, "Authenticating\u2026");
+            verify(!item("dots").visible);
+            sddm.loginFailed();
+            verify(item("dots").visible);
+            compare(item("status").text, "Authentication failed");
+        }
+
         function test_single_account_hides_the_selector() {
             setUsers([["alice", "Alice A"]], "alice");
             reload();

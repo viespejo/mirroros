@@ -102,12 +102,12 @@ MirrorOSKeys.bind("menu.system", "SUPER + ESCAPE", "System menu", menu("toggle s
 MirrorOSKeys.bind("menu.system-power", "XF86PowerOff", "Power menu", menu("toggle system"), { locked = true })
 MirrorOSKeys.bind("help.keybindings", "SUPER + K", "Keybindings", menu("keybindings"))
 
--- Keyboard layouts (Omarchy input-method.lua:19-20, on XKB layouts instead of fcitx). Also active while locked, so
--- the password can be typed in another layout at the lock screen (ADR 0015).
+-- Keyboard layouts (Omarchy input-method.lua:19-20, on XKB layouts instead of fcitx). Not active while locked:
+-- the lock screen always uses the configured layout (ADR 0015).
 MirrorOSKeys.bind("input.layout-next", "SUPER + I", "Switch input language",
-  hl.dsp.exec_cmd("hyprctl switchxkblayout all next"), { locked = true })
+  hl.dsp.exec_cmd("hyprctl switchxkblayout all next"))
 MirrorOSKeys.bind("input.layout-prev", "SUPER + SHIFT + I", "Switch input language back",
-  hl.dsp.exec_cmd("hyprctl switchxkblayout all prev"), { locked = true })
+  hl.dsp.exec_cmd("hyprctl switchxkblayout all prev"))
 
 -- Notifications (Omarchy utilities.lua:24-28; shell notifications IPC).
 MirrorOSKeys.bind("notifications.dismiss-one", "SUPER + comma", "Dismiss last notification",

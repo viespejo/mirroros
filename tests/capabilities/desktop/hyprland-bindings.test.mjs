@@ -120,7 +120,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
   assert.equal(new Set(required).size, bindings.length, 'every bound chord is in the approved list');
   for (const binding of bindings) assert.ok(binding.description && binding.description !== 'nil', binding.keys);
   assert.match(byChord.get('XF86POWEROFF').options, /locked=true/);
-  for (const chord of ['SUPER+I', 'SHIFT+SUPER+I']) assert.match(byChord.get(chord).options, /locked=true/, chord);
+  for (const chord of ['SUPER+I', 'SHIFT+SUPER+I']) assert.doesNotMatch(byChord.get(chord).options, /locked=true/, chord);
   assert.match(byChord.get('SUPER+MOUSE:272').options, /mouse=true/);
 });
 
