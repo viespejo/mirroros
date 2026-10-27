@@ -4,6 +4,13 @@
 
 `docs/architecture.md` is the consolidated description of the current design. Architecture Decision Records (ADRs) preserve the reasoning, evidence, trade-offs, and history of individual decisions. The architecture and accepted ADRs are read together: the architecture describes the current shape, while ADRs explain why a decision was made and where its boundaries lie.
 
+## Shared presentation extension
+
+[ADR 0019: Shared Symbol and Live Splash](0019-shared-symbol-and-live-splash.md) narrowly extends
+[ADR 0014](0014-native-login-and-boot-presentation.md) and [ADR 0018](0018-native-live-display-and-installer-presentation.md)
+with the shared installer symbol, static greeter, reviewed splash animation, and live build integration.
+Their unrelated decisions and historical evidence remain in force; real boot qualification remains separate.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Publishes the shared MirrorOS wordmark (SVG source and its rendered PNG) as one tree. Run by the visual/branding
+# Publishes the shared MirrorOS wordmark and symbol (SVG sources and rendered PNGs) as one tree. Run by visual/branding
 # step on the host side (paths below the configure root); the PNG itself is rendered by the step through cfg_exec.
 #
 #   install-assets staging <dest>                                  staging path used by prepare and publish
@@ -7,7 +7,7 @@
 #   install-assets prepare <svg> <dest> <uid> <gid>                fresh staging holding the SVG
 #   install-assets publish <svg> <dest> <identity> <width> <height> <uid> <gid>
 #
-# <identity> names the SVG digest, renderer version and raster size. <dest>/.mirroros-manifest records it with the
+# <identity> names both SVG digests, renderer version and raster sizes. <dest>/.mirroros-manifest records it with the
 # delivered files, so a local edit is detected and an unchanged source and renderer cause no rendering. A tree is
 # published only when <dest> is absent or is the intact previous delivery; a link, an unknown directory or a modified
 # delivery is never overwritten. The staged tree is verified, then exchanged atomically, so an interruption leaves
@@ -17,6 +17,7 @@ export LC_ALL=C
 
 readonly manifest_name=.mirroros-manifest staging_name=.branding.mirroros-staging
 readonly svg_name=mirroros-wordmark.svg png_name=mirroros-wordmark.png
+readonly symbol_svg_name=mirroros-symbol.svg symbol_png_name=mirroros-symbol.png
 
 usage() { printf 'Usage: install-assets staging|check|prepare|publish <arguments>\n' >&2; exit 6; }
 
@@ -53,6 +54,9 @@ check() {
     return 4
   fi
   grep -qxF "f 644 $(digest "$svg") ./$svg_name" "$manifest" || return 1
+  # Intact wordmark-only deliveries migrate; edited deliveries were rejected above.
+  grep -qxF "f 644 $(digest "$(dirname -- "$svg")/$symbol_svg_name") ./$symbol_svg_name" "$manifest" || return 1
+  grep -qxE "f 644 [0-9a-f]{64} \./$symbol_png_name" "$manifest" || return 1
   [[ "$(recorded_identity "$manifest")" == "$identity" ]] || return 1
 }
 
@@ -63,6 +67,7 @@ prepare() {
   rm -rf -- "$staging"
   install -d -m 0755 -o "$uid" -g "$gid" -- "$staging"
   install -m 0644 -o "$uid" -g "$gid" -- "$svg" "$staging/$svg_name"
+  install -m 0644 -o "$uid" -g "$gid" -- "$(dirname -- "$svg")/$symbol_svg_name" "$staging/$symbol_svg_name"
 }
 
 # Width and height of a PNG file from its IHDR chunk, after checking the signature.
@@ -76,23 +81,34 @@ png_size() {
 }
 
 publish() {
-  local svg="$1" dest="$2" identity="$3" width="$4" height="$5" uid="$6" gid="$7" staging status=0 size
+  local svg="$1" dest="$2" identity="$3" width="$4" height="$5" uid="$6" gid="$7" staging status=0 size asset source expected
   [[ "$width" =~ ^[1-9][0-9]*$ && "$height" =~ ^[1-9][0-9]*$ ]] || usage
   check "$svg" "$dest" "$identity" || status=$?
   case "$status" in 0) return 0 ;; 1) ;; *) return "$status" ;; esac
   staging="$(staging_path "$dest")"
-  [[ -d "$staging" && ! -L "$staging" && -f "$staging/$png_name" && ! -L "$staging/$png_name" ]] || {
-    printf 'The rendered wordmark is missing from %s.\n' "$staging" >&2
-    return 5
-  }
-  cmp -s -- "$svg" "$staging/$svg_name" || { printf 'The staged wordmark source changed during rendering.\n' >&2; return 5; }
-  size="$(png_size "$staging/$png_name")" || { printf 'The rendered wordmark is not a PNG image.\n' >&2; return 5; }
-  [[ "$size" == "${width}x$height" ]] || {
-    printf 'The rendered wordmark is %s, expected %sx%s.\n' "$size" "$width" "$height" >&2
-    return 5
-  }
-  chmod 0644 -- "$staging/$png_name"
-  chown "$uid:$gid" -- "$staging/$png_name"
+  [[ -d "$staging" && ! -L "$staging" ]] || return 5
+  for asset in wordmark symbol; do
+    source="$(dirname -- "$svg")/mirroros-$asset.svg"
+    expected="${width}x$height"
+    [[ "$asset" != symbol ]] || expected=320x320
+    [[ -f "$staging/mirroros-$asset.png" && ! -L "$staging/mirroros-$asset.png" &&
+      -f "$staging/mirroros-$asset.svg" && ! -L "$staging/mirroros-$asset.svg" ]] || {
+      printf 'The rendered %s is missing from %s.\n' "$asset" "$staging" >&2
+      return 5
+    }
+    cmp -s -- "$source" "$staging/mirroros-$asset.svg" || {
+      printf 'The staged %s source changed during rendering.\n' "$asset" >&2; return 5;
+    }
+    size="$(png_size "$staging/mirroros-$asset.png")" || {
+      printf 'The rendered %s is not a PNG image.\n' "$asset" >&2; return 5;
+    }
+    [[ "$size" == "$expected" ]] || {
+      printf 'The rendered %s is %s, expected %s.\n' "$asset" "$size" "$expected" >&2
+      return 5
+    }
+    chmod 0644 -- "$staging/mirroros-$asset.png"
+    chown "$uid:$gid" -- "$staging/mirroros-$asset.png"
+  done
   { printf 'render %s\n' "$identity"; tree_manifest "$staging"; } > "$staging/$manifest_name"
   chmod 0644 -- "$staging/$manifest_name"
   chown "$uid:$gid" -- "$staging/$manifest_name"

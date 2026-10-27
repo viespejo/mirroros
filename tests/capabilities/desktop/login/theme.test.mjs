@@ -96,7 +96,12 @@ test('metadata selects the Qt 6 greeter and the configuration matches the lock s
   assert.match(conf, new RegExp(`^background="${hex('16,19,21')}"$`, 'm'));
   assert.match(conf, new RegExp(`^foreground="${hex('202,204,204')}"$`, 'm'));
   assert.match(conf, new RegExp(`^failure="${hex('165,85,85')}"$`, 'm'));
-  assert.match(conf, /^logo=\/usr\/share\/mirroros\/branding\/mirroros-wordmark\.png$/m);
+  assert.match(conf, /^logo=\/usr\/share\/mirroros\/branding\/mirroros-symbol\.png$/m);
+  const qml = read('Main.qml');
+  assert.match(qml, /width: Math\.min\(sourceSize\.width, root\.width \* 0\.42, root\.height \* 0\.22 \* ratio\)/);
+  assert.match(qml, /height: width \/ ratio/);
+  assert.match(qml, /fillMode: Image\.PreserveAspectFit/);
+  assert.doesNotMatch(qml, /\b(?:NumberAnimation|OpacityAnimator|SequentialAnimation|Behavior)\b/);
   assert.match(conf, new RegExp(`^session=${session}$`, 'm'));
   assert.match(conf, /^keyboardLayout=$/m);
   assert.match(conf, /^layoutState=\/var\/lib\/sddm\/mirroros-greeter-layout$/m);
@@ -133,9 +138,9 @@ test('synthetic SDDM models drive selection, submission, failure and keyboard na
   if (rsvg.error) return t.skip('rsvg-convert is not installed');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mirroros-sddm-ui-'));
   try {
-    const logo = path.join(tmp, 'mirroros-wordmark.png');
-    const svg = fs.readFileSync(path.join(root, 'capabilities/visual/branding/mirroros-wordmark.svg'));
-    const render = spawnSync('rsvg-convert', ['--width', '1580', '--height', '320'], { input: svg });
+    const logo = path.join(tmp, 'mirroros-symbol.png');
+    const svg = fs.readFileSync(path.join(root, 'capabilities/visual/branding/mirroros-symbol.svg'));
+    const render = spawnSync('rsvg-convert', ['--width', '320', '--height', '320'], { input: svg });
     assert.equal(render.status, 0);
     fs.writeFileSync(logo, render.stdout);
     const state = path.join(tmp, 'mirroros-greeter-layout');

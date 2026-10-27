@@ -10,7 +10,7 @@ Boot, VM, installation, and UEFI qualification are outside this procedure. The a
 
 ### Reduced live profile and identity
 
-The [approved live-package audit](iso-size-and-live-branding.md) retains 62 x86_64 declarations and removes 69 inherited declarations. The profile boots through `uefi.systemd-boot` only; firmware, Ethernet/Wi-Fi, OpenSSH, Vim, native installation tools and minimal FAT/ext4/Btrfs rescue remain. Build-host Archiso dependencies are not live declarations: removal of live mtools or GRUB does not remove host construction tools. Compression is unchanged.
+The [approved live-package audit](iso-size-and-live-branding.md) retains 62 x86_64 declarations and removes 69 inherited declarations. [ADR 0019](../adr/0019-shared-symbol-and-live-splash.md) adds `plymouth` separately for the live boot splash, bringing the current declaration count to 63; the audit remains the historical reduction baseline. The profile boots through `uefi.systemd-boot` only; firmware, Ethernet/Wi-Fi, OpenSSH, Vim, native installation tools and minimal FAT/ext4/Btrfs rescue remain. Build-host Archiso dependencies are not live declarations: removal of live mtools or GRUB does not remove host construction tools. Compression is unchanged.
 
 Output identity is `mirroros-YYYY.MM.DD-x86_64.iso`, label `MIRROROS_YYYYMM`, publisher `MirrorOS`, application `MirrorOS Live/Rescue`, and live hostname `mirroros`. Date evaluation still uses `SOURCE_DATE_EPOCH`. Technical `install_dir=arch` and Archiso parameters stay upstream-compatible. The regular `/etc/os-release` overlay identifies MirrorOS with `ID_LIKE=arch`; `/usr/lib/os-release` remains package-owned. Archiso 91 copies the overlay before package installation and appends image fields to the effective os-release. Inspect the built root to confirm that the override survived; this does not change the target installed independently by pacstrap.
 
@@ -48,7 +48,7 @@ Docker daemon access is effectively root-equivalent: a user who can control the 
 
 The image signature identity and issuer are maintained in `image/builder/arch-image-signature.conf`. The build pulls `docker.io/archlinux/archlinux:latest` for `linux/amd64`, requires exactly one usable digest, verifies that digest with Cosign, and runs the verified digest. An ambiguous digest or failed verification prevents container creation.
 
-Inside the container, the build performs a full Pacman update and installs Archiso. The installed Archiso package version must exactly match the version recorded in `image/archiso/UPSTREAM.md`. A mismatch stops before ISO construction with status `2`; evaluate and import the upstream change through [the Archiso update procedure](update-archiso.md), then retry explicitly. The build never updates the profile automatically.
+Inside the container, the build performs a full Pacman update and installs Archiso and `librsvg` from signed official repositories. `librsvg` supplies the build-container renderer; it is not a new live declaration. The installed Archiso package version must exactly match the version recorded in `image/archiso/UPSTREAM.md`. A mismatch stops before ISO construction with status `2`; evaluate and import the upstream change through [the Archiso update procedure](update-archiso.md), then retry explicitly. The build never updates the profile automatically.
 
 ### Updating the Cosign identity constants
 
@@ -86,6 +86,10 @@ The builder creates a privileged, run-labeled Docker container with `--init` (so
 
 **Limine snapshot tools stage.** Before `mkarchiso`, a stage in the same verified container prebuilds the Limine snapshot tools pinned in `image/builder/aur/limine-tools.json` ([ADR 0003](../adr/0003-storage-and-recovery-baseline.md), [ADR 0008](../adr/0008-installation-engine-execution-boundary.md)). The recipe lists the AUR packaging commit, the upstream commit, and the explicit `makedepends` of each package. The stage needs network access (AUR, GitLab, GitHub, and Maven Central) and runs `image/builder/lib/aur-build.sh` in the container. As root it installs the `makedepends` with `pacman -S --needed`; it then builds each package as an unprivileged user with `makepkg`, without sudoers and without `--syncdeps`, after verifying the AUR commit and replacing the movable `#tag=` source with the pinned `#commit=` and verifying that the build used it. The host recomputes the SHA-256 of each package, checks that the records match the recipe, and writes `packages.json` (name, version, file, SHA-256, AUR and upstream commits). The packages and `packages.json` are placed only in the private profile copy under `airootfs/usr/local/lib/mirroros/packages/`; they are never committed to Git. A pin mismatch or build failure fails the build with status `5` (or `6` when the recipe or the built records do not match) and no ISO is produced. The upstream Gradle dependencies are pinned by version only, which ADR 0003 records as an accepted limitation for Story 3.2.
 
+**Live splash preparation stage.** After the pinned Archiso check and Limine payload placement, the builder copies read-only `/profile` to container-local `/live-profile`. It reads the shared branding sources and Plymouth theme only from that copy's captured `airootfs/usr/local/lib/mirroros/capabilities/` snapshot. Container `rsvg-convert` renders the historical wordmark (1580x320) and shared symbol (320x320); the existing branding `install-assets` helper validates sources, PNG signatures/dimensions, and the complete delivery manifest before publication. Both source digests, renderer version and dimensions enter the manifest. The theme and daemon selection configuration are copied byte-for-byte from the same snapshot. No configure command runs on live. Generated assets remain container-local and outside source control. `mkarchiso` consumes `/live-profile`, including the Limine payload, never `/profile`. A copy, renderer, validation or theme-copy failure stops before `mkarchiso`, records the original status in `live-splash-preparation.log`/execution evidence, and follows the existing diagnostic and cleanup controls. The source capture and its secret-scan boundaries are unchanged; this is not an image-layer secret scan.
+
+The profile declares `plymouth`, inserts its initramfs hook immediately after `udev` without reordering the other hooks, and adds `quiet splash` once to normal systemd-boot and retained GRUB command lines. Root discovery, `%KERNEL_PARAMS%`, serial/NoCloud operation, firmware/kernel display choice, and automatic installer startup remain unchanged. See [live diagnostics and qualification](greeter-plymouth.md#live-splash-preparation-and-recovery) before an individually authorized boot; a successful build or double-based test is not real splash qualification.
+
 Stage output is displayed live and recorded with `tee` in private per-stage logs under `evidence/archiso-build/<run-id>/logs/`. After the build, the native package manifest is extracted from the ISO inside the container, and the effective container mirrorlist is copied into evidence. The exported ISO, manifest, and mirrorlist are checked before the container is removed.
 
 The current operation timeouts are:
@@ -94,7 +98,8 @@ The current operation timeouts are:
 | --- | ---: |
 | Image pull | 10 minutes |
 | Cosign verification | 10 minutes |
-| Package update and Archiso installation | 30 minutes |
+| Package update and Archiso/librsvg installation | 30 minutes |
+| Live splash preparation | 2 minutes |
 | Limine snapshot tools build | 60 minutes |
 | `mkarchiso` | 120 minutes |
 | ISO manifest and mirrorlist extraction | 30 minutes |

@@ -33,6 +33,7 @@ The supported boot scope is **UEFI/OVMF only**, using systemd-boot. The reviewed
 
 - **Baseline:** vendor import commit `bc4cd22b0e4294914f38f4ba800b88474ab3a50a`.
 - **Functional summary:** Embed the MirrorOS installer entry point and tty1 startup integration, Node.js/Gum runtime declarations and executable permissions; preserve NoCloud orchestration. Apply the [approved package audit](../../docs/procedures/iso-size-and-live-branding.md): 62 retained x86_64 declarations, 69 removed declarations, associated service/agent/speech and BIOS resource cleanup. Set MirrorOS ISO metadata, live hostname, welcome and boot titles; add a live-only regular `/etc/os-release` override with Arch lineage. Preserve upstream technical paths, firmware, network configuration, SSH policy and package signature policy. Installed-system policy is separate. Under [ADR 0018](../../docs/adr/0018-native-live-display-and-installer-presentation.md), the single normal live entry preserves the firmware/kernel display choice without a MirrorOS mode request; the ADR 0017 preference and redundant native-display entry are removed. Both retained GRUB configurations carry the same reversal without expanding boot qualification. No package, persistent font, installed boot parameter, or graphical scaling policy changes.
+- **Shared live splash (ADR 0019):** Add official-repository `plymouth` as a live-only presentation dependency beyond the 62-declaration reduction baseline (63 current declarations). Its rolling version is recorded in the built native package manifest. Add its hook immediately after `udev` and `quiet splash` once to normal systemd-boot and retained GRUB lines, preserving other hooks, root arguments, firmware/kernel display choice, editor policy and installer startup. The builder installs official-repository `librsvg` in the build container (not a new live declaration), then renders/validates branding and copies the original MirrorOS theme from captured capabilities into container-local `/live-profile`; captured `/profile` stays read-only. No vendor import or third-party theme code is added. [Build procedure](../../docs/procedures/build.md#construction-and-timeouts) and [ADR 0019](../../docs/adr/0019-shared-symbol-and-live-splash.md) govern this additive delta; the previous no-package-change statement describes ADR 0018 only.
 - **Statistics:** Use the baseline comparison below for the reviewed integration commit; include new profile paths before recording final statistics. `UPSTREAM.md` is excluded. No generated image or embedded code payload is committed.
 
 Run from `main` after the merge commit; `HEAD` then identifies the reviewed integration commit:
@@ -47,7 +48,7 @@ git diff --stat "$VENDOR_BASELINE_COMMIT" HEAD \
 
 ## Qualification states
 
-The ADR 0018 reversal and installer presentation have not been built or boot-qualified. Prior artifacts
+The ADR 0018 reversal, installer presentation, and ADR 0019 shared animated live splash have not been built or boot-qualified. Prior artifacts
 and attended temporary-preview observations do not qualify this source delta. Effective geometry,
 font restoration, cancellation, and remaining installer screens require attended verification.
 

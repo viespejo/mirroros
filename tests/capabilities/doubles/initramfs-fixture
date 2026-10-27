@@ -20,7 +20,9 @@ mkdir -p "$(dirname -- "$root$image")"
     if [[ -d "$root/$directory" ]]; then
       find "$root/$directory" -mindepth 1 -maxdepth 1 -type f -printf "./$directory/%f\n"
       images="$(sed -n 's/^ImageDir=//p' "$root/$directory/${theme:-bgrt}.plymouth" 2> /dev/null || true)"
-      [[ -z "$images" || ! -d "$root$images" ]] || find "$root$images" -mindepth 1 -maxdepth 1 -type f -printf "${images#/}/%f\n"
+      # Tests may omit one raster to simulate a successful rebuild with an incomplete theme.
+      [[ -z "$images" || ! -d "$root$images" ]] || find "$root$images" -mindepth 1 -maxdepth 1 -type f \
+        ! -name "${CFG_TEST_INITRAMFS_OMIT_IMAGE:-}" -printf "${images#/}/%f\n"
     fi
   fi
 } > "$root$image"

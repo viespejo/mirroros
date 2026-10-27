@@ -4,12 +4,28 @@
 
 `plymouth/mirroros.plymouth` and `plymouth/mirroros.script` are MirrorOS-owned material, written independently in
 Plymouth's native script-theme format as bounded by
-[ADR 0014](../../../docs/adr/0014-native-login-and-boot-presentation.md). The script draws only the shared wordmark
+[ADR 0014](../../../docs/adr/0014-native-login-and-boot-presentation.md), as narrowly amended by
+[ADR 0019](../../../docs/adr/0019-shared-symbol-and-live-splash.md). The script draws only the shared 320x320 symbol
 PNG of [`visual/branding`](../../visual/branding/sources.md), centered on `rgb(16, 19, 21)` and scaled down with its
-aspect ratio to at most 42% of the display width and 22% of its height, the same bound as the greeter logo. It
-registers no refresh, progress, password, question or message callback and adds no delay; Plymouth's native details
-view (Esc) shows the boot messages. `plymouth/plymouthd.conf` only selects the theme; Plymouth's distribution defaults
+aspect ratio to at most 42% of the display width and 22% of its height, never enlarged, the same bound as the greeter
+logo. Resizing updates the scale and centering without restarting the animation. Plymouth's native details view
+(Esc) shows the boot messages. `plymouth/plymouthd.conf` only selects the theme; Plymouth's distribution defaults
 (`/usr/share/plymouth/plymouthd.defaults`, including `ShowDelay=0`) are unchanged.
+
+The symbol fades from zero to full opacity over 400 ms of active elapsed time, then uses
+`0.875 + 0.125 * cos((elapsed - 0.4) * pi)` for a smooth two-second 75–100% pulse. The native refresh callback updates
+opacity; the boot-progress callback supplies only elapsed `duration`, with the percentage argument ignored. Its
+first sample establishes the origin. No frame counting, sleeps, helper processes, shell execution, progress
+indicator, password/question/message callbacks, quit callback or completion wait is introduced.
+
+API inspection of upstream Plymouth `main` used the independently written native callback bindings in
+[`script-lib-plymouth.c`](https://gitlab.freedesktop.org/plymouth/plymouth/-/blob/main/src/plugins/splash/script/script-lib-plymouth.c),
+the nominal 30 Hz duration delivery in
+[`ply-boot-splash.c`](https://gitlab.freedesktop.org/plymouth/plymouth/-/blob/main/src/libply-splash-core/ply-boot-splash.c),
+and the active elapsed clock in
+[`ply-progress.c`](https://gitlab.freedesktop.org/plymouth/plymouth/-/blob/main/src/libply/ply-progress.c).
+The refresh callback receives no clock argument; native timing pauses freeze duration and are excluded on resume.
+Rendering is sampled, not a hard real-time guarantee. No upstream source is copied.
 
 No external material is incorporated. Omarchy's Plymouth theme (revision
 `1801adc1983b06f6ab218f8060e430cb3477d8d0`, `default/plymouth/omarchy.script`) was consulted as an idea reference
@@ -42,6 +58,18 @@ systemd-boot, the installer's `10-mirroros-limine.conf` for Limine) with `plymou
 before `filesystems`. When the base sequence changes, the intact previous drop-in is updated and the images are
 regenerated once.
 
-The regeneration identity is the SHA256 of the scheme, the delivered theme, selection, drop-in and wordmark PNG,
+The regeneration identity is the SHA256 of the scheme, the delivered theme, selection, drop-in and symbol PNG,
 and the resulting command line. It is recorded as `mirroros-boot-splash` in `sources.tsv` and in the state file as
 `pending <identity>` before a rebuild and `complete <identity>` after the generated artifacts pass inspection.
+Every normal image must contain the symbol, as well as the script, theme selection and native script plugin;
+retaining the historical wordmark alone is insufficient. Tracked theme updates retain local-edit protection.
+
+## Verification limits
+
+`tests/capabilities/system/boot-splash/presentation.test.mjs` adapts the production script's bounded expression
+subset to JavaScript and supplies recording native-API doubles with controllable duration. It covers fade endpoints,
+pulse extrema and period, percentage independence, dropped refreshes, active-time pauses, resize bounds and the
+absence of blocking completion logic. It does not execute Plymouth's parser or native renderer. Configure contracts
+cover regeneration identity, unchanged reruns, missing-symbol failure and retry, and edited-theme protection.
+Real Plymouth timing, pause/resume lifecycle, Esc, fast-boot completion and matching SDDM presentation remain pending
+separately authorized attended boots. Physical-hardware qualification remains separate.

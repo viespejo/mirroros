@@ -27,8 +27,9 @@ applies.
 
 ## Behavior
 
-- Dark background, centered [shared wordmark](../../visual/branding/sources.md) scaled proportionally within 42% of
-  the width and 22% of the height, never above its rendered size; the lock screen's rectangular password field and
+- Dark background, centered static [shared symbol](../../visual/branding/sources.md) under
+  [ADR 0019](../../../docs/adr/0019-shared-symbol-and-live-splash.md), scaled proportionally within 42% of the width
+  and 22% of the height, never above its 320x320 rendered size; the lock screen's rectangular password field and
   colors; the keyboard layout below the field.
 - The selected account is always shown. The last successful user is selected while still listed, otherwise the
   first listed user. With more than one account a discreet `▾` control (Tab, then Enter or Space; arrows and Enter
@@ -96,4 +97,6 @@ reported instead of silently keeping the old greeter.
   layout-sensitive passwords are attended VM checks (plan 02-20 Task 3).
 - Restart and shutdown are covered by recording proxy doubles only; real power behavior and the new panel's
   visual acceptance require attended disposable-VM checks under ADR 0016.
+- The shared square symbol is exercised with synthetic models and a temporary raster of the real SVG; this does
+  not qualify its actual SDDM appearance. Attended greeter and matching animated-splash checks remain pending.
 - Multi-output greeter layout and HiDPI scaling are unqualified.

@@ -135,6 +135,15 @@ entry is **MirrorOS Live/Rescue**. It preserves the firmware/kernel display choi
 entry is removed. Retained GRUB configurations follow the same policy; Ventoy is not a qualified boot path.
 Installed boot parameters, desktop scaling, and the greeter's monitor policy remain separate.
 
+[ADR 0019](../adr/0019-shared-symbol-and-live-splash.md) adds the matching animated Plymouth symbol to the
+live boot, with `quiet splash` on the normal entry; it changes neither the display choice nor installation
+authorization or automatic tty1 welcome startup. Press Esc during Plymouth to show native boot details.
+For one boot without the splash, use the existing systemd-boot menu editor (`e`) to remove `splash` and
+`quiet` from the normal entry, then boot the edited line. Retained GRUB entries use their existing `e`
+editor and Ctrl+X/F10 to boot; this does not qualify GRUB/Ventoy. These edits are not persistent. No disabled
+editor is enabled, and installed systemd-boot's `editor no` policy remains separate. See
+[live splash recovery and pending qualification](greeter-plymouth.md#live-splash-preparation-and-recovery).
+
 The welcome offers **Change text size** on the live console:
 
 - **Original** restores the exact font and mapping captured when this assistant started.

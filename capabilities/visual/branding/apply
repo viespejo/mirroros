@@ -1,13 +1,14 @@
 #!/usr/bin/bash
 # Prerequisites: validated packages.
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, STEP_DIR and shared helpers.
-# Postconditions: librsvg installed; /usr/share/mirroros/branding holds the wordmark SVG and the PNG rendered from it
+# Postconditions: librsvg installed; /usr/share/mirroros/branding holds the wordmark and symbol SVGs and their PNGs
 # by the installed rsvg-convert, matching their last delivery. A rerun with the same source, renderer version and
 # size renders nothing. Nothing is started, restarted or reloaded.
 set -Eeuo pipefail
 
 branding=/usr/share/mirroros/branding
 svg="$STEP_DIR/mirroros-wordmark.svg"
+symbol="$STEP_DIR/mirroros-symbol.svg"
 # 20 pixels per wordmark unit (viewBox 79x16): every block edge stays on a pixel boundary.
 width=1580 height=320
 assets() { bash "$STEP_DIR/install-assets" "$@"; }
@@ -20,7 +21,7 @@ renderer="${renderer%%$'\n'*}"
   printf 'Unrecognized rsvg-convert version output: %s\n' "$renderer" >&2
   exit 4
 }
-identity="svg-sha256:$(sha256sum < "$svg" | cut -d' ' -f1) rsvg-convert:${BASH_REMATCH[1]} size:${width}x$height"
+identity="svg-sha256:$(sha256sum < "$svg" | cut -d' ' -f1) symbol-sha256:$(sha256sum < "$symbol" | cut -d' ' -f1) rsvg-convert:${BASH_REMATCH[1]} size:${width}x$height symbol-size:320x320"
 owner="$(stat -c %u -- "$(cfg_path /)")"
 group="$(stat -c %g -- "$(cfg_path /)")"
 status=0
@@ -34,6 +35,9 @@ case "$status" in
     cfg_log "rsvg-convert --width $width --height $height < $svg > $branding/mirroros-wordmark.png"
     cfg_exec rsvg-convert --width "$width" --height "$height" < "$staging/mirroros-wordmark.svg" \
       > "$staging/mirroros-wordmark.png"
+    cfg_log "rsvg-convert --width 320 --height 320 < $symbol > $branding/mirroros-symbol.png"
+    cfg_exec rsvg-convert --width 320 --height 320 < "$staging/mirroros-symbol.svg" \
+      > "$staging/mirroros-symbol.png"
     cfg_run_host bash "$STEP_DIR/install-assets" publish "$svg" "$(cfg_path "$branding")" "$identity" \
       "$width" "$height" "$owner" "$group"
     cfg_changed ;;

@@ -8,6 +8,10 @@ Original MirrorOS material is licensed under `GPL-3.0-only` unless a document st
 
 Idea references without incorporated material receive no entry here; they are recorded in the owning sources record. For example, the Omarchy SDDM and Plymouth themes are idea references for the independently written MirrorOS login and boot themes ([login sources](../capabilities/desktop/login/sources.md), [branding sources](../capabilities/visual/branding/sources.md)).
 
+The shared installer-derived SVG symbol and its delivery code are original MirrorOS material under
+`GPL-3.0-only`, with no additional external incorporation ([branding sources](../capabilities/visual/branding/sources.md),
+[ADR 0019](adr/0019-shared-symbol-and-live-splash.md)). The historical banner and wordmark remain intact.
+
 At this baseline there is no external incorporation entry. The applicable entry is added with the first vendor merge, together with its detailed provenance record.
 
 ## Entry format
@@ -27,7 +31,7 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 ### Archiso
 
 - **License (SPDX):** `GPL-3.0-or-later`
-- **Incorporated material:** Official `releng` profile at `image/archiso/`, locally modified for MirrorOS installer integration, reviewed live-package reduction, UEFI-only media, live branding and firmware/kernel-selected live display; upstream license and technical references remain intact
+- **Incorporated material:** Official `releng` profile at `image/archiso/`, locally modified for MirrorOS installer integration, reviewed live-package reduction, UEFI-only media, live branding, firmware/kernel-selected live display and the ADR 0019 Plymouth package/hook/boot-argument integration; the shared theme and build-time asset preparation are original MirrorOS material, with no external theme incorporation; upstream license and technical references remain intact
 - **Detailed provenance:** [Archiso upstream record](../image/archiso/UPSTREAM.md)
 
 ### Omarchy ISO configurator presentation

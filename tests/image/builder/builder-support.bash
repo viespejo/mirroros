@@ -100,6 +100,9 @@ if [[ "${1:-}" == 'exec' ]]; then
       fi
       shift
     done
+    if [[ "$script" == *'source_profile="$1"'* ]]; then
+      exit "${BUILDER_LIVE_SPLASH_STATUS:-0}"
+    fi
     if [[ "$script" == *'pacman -Syu'* ]]; then
       exit "${BUILDER_PACMAN_STATUS:-0}"
     fi

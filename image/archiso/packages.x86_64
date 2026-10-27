@@ -45,6 +45,7 @@ nvme-cli
 openssh
 parted
 pcsclite
+plymouth
 pv
 rxvt-unicode-terminfo
 smartmontools

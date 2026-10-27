@@ -6,7 +6,7 @@ PROFILE="${REPOSITORY_ROOT}/image/archiso"
 AUDIT="${REPOSITORY_ROOT}/docs/procedures/iso-size-and-live-branding.md"
 VENDOR_BASELINE='bc4cd22b0e4294914f38f4ba800b88474ab3a50a'
 
-@test "the x86_64 declarations match exactly the approved Keep rows" {
+@test "the x86_64 declarations match the approved Keep rows plus ADR 0019 Plymouth" {
   run node --input-type=module - "$AUDIT" "${PROFILE}/packages.x86_64" <<'JS'
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,7 +18,7 @@ assert.equal(new Set(rows.map(row => row[1])).size, 131);
 assert.match(audit, /Package-review state: approved/);
 const keep = rows.filter(row => row[2] === 'Keep').map(row => row[1].trim());
 assert.equal(keep.length, 62);
-assert.deepEqual(readFileSync(packagesPath, 'utf8').trim().split('\n'), keep);
+assert.deepEqual(readFileSync(packagesPath, 'utf8').trim().split('\n'), [...keep, 'plymouth'].sort());
 JS
   [ "$status" -eq 0 ]
 }
@@ -130,13 +130,14 @@ JS
   git -C "$REPOSITORY_ROOT" diff --exit-code "$VENDOR_BASELINE" -- image/archiso/airootfs/etc/systemd/network
 }
 
-@test "UEFI-only initramfs omits the Syslinux memdisk hook and preserves all other settings" {
+@test "UEFI-only initramfs omits memdisk and adds Plymouth after udev without other changes" {
   ! grep -Fxq syslinux "${PROFILE}/packages.x86_64"
   run bash -c '
     set -e
     baseline=$(git -C "$1" show "$2:image/archiso/airootfs/etc/mkinitcpio.conf.d/archiso.conf")
     [[ "$baseline" == *" kms memdisk archiso "* ]]
     expected="${baseline/ kms memdisk archiso / kms archiso }"
+    expected="${expected/base udev /base udev plymouth }"
     [[ "$(<"$3")" == "$expected" ]]
   ' _ "$REPOSITORY_ROOT" "$VENDOR_BASELINE" "${PROFILE}/airootfs/etc/mkinitcpio.conf.d/archiso.conf"
   [ "$status" -eq 0 ]

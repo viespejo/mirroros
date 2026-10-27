@@ -12,7 +12,7 @@
 
 readonly BS_THEME=/usr/share/plymouth/themes/mirroros
 readonly BS_DAEMON=/etc/plymouth/plymouthd.conf
-readonly BS_IMAGE=/usr/share/mirroros/branding/mirroros-wordmark.png
+readonly BS_IMAGE=/usr/share/mirroros/branding/mirroros-symbol.png
 readonly BS_MKINITCPIO=/etc/mkinitcpio.conf
 readonly BS_DROPINS=/etc/mkinitcpio.conf.d
 readonly BS_HOOKS_DROPIN=/etc/mkinitcpio.conf.d/90-mirroros-plymouth.conf
@@ -38,7 +38,7 @@ readonly BS_IMAGE_ENTRIES=(
   etc/plymouth/plymouthd.conf
   usr/share/plymouth/themes/mirroros/mirroros.plymouth
   usr/share/plymouth/themes/mirroros/mirroros.script
-  usr/share/mirroros/branding/mirroros-wordmark.png
+  usr/share/mirroros/branding/mirroros-symbol.png
 )
 
 BS_SCHEME=''

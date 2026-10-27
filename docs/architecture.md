@@ -473,6 +473,7 @@ MirrorOS introduces no custom TUI. [Gum](https://github.com/charmbracelet/gum) i
 
 - Hyprland ([ADR 0011](adr/0011-hyprland-compositor-provider.md)) and related desktop components are configured capabilities, not a MirrorOS management console.
 - No control panel, welcome application, or management daemon is introduced.
+- [ADR 0019](adr/0019-shared-symbol-and-live-splash.md) shares the installer symbol with static SDDM and matching installed/live splashes, preserving centering, square proportions, 22%-height/42%-width bounds, and no upscaling. Only the splashes animate; the lock screen, authentication, layout switching, and confirmed power semantics remain unchanged. Browser previews and doubles are not runtime qualification.
 - The first graphical session is either ready or represented accurately by explicit verification results.
 
 ### Infrastructure & Deployment
@@ -618,7 +619,7 @@ Technology mentions do not imply technology selection.
 | Python | Not selected for project-owned code | Upstream runtime dependency only unless an accepted ADR approves Archinstall API/plugin integration |
 | Lua | Tool-local only | Existing Neovim, Hyprland, or other tool-owned configuration |
 | QML | Selected for the owned desktop shell and the SDDM theme only | Quickshell configuration of the MirrorOS-owned desktop shell, bounded by [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); one presentation-only SDDM theme that submits login solely through SDDM's proxy, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md), whose layout indicator may read one greeter-compositor state file under [ADR 0015](adr/0015-greeter-keyboard-layout-switching.md) and whose confirmed restart and shutdown requests use only SDDM's proxy under [ADR 0016](adr/0016-greeter-power-actions.md) |
-| Plymouth script | Native theme format only | One static Plymouth theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md); no progress, animation, password dialogue or delay |
+| Plymouth script | Native theme format only | One shared installed/live Plymouth theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md) and [ADR 0019](adr/0019-shared-symbol-and-live-splash.md); only a 400 ms fade and two-second 75–100% opacity pulse; no progress, password dialogue or boot/diagnostic delay |
 | Gum | Selected for interactive presentation | Presents and collects input only, under the wrappers of [ADR 0004](adr/0004-interactive-presentation-with-gum.md); not part of the plan, its digest, or `install/engine/apply` |
 
 Invoking the packaged Archinstall CLI does not authorize project-owned Python code.
@@ -687,7 +688,7 @@ Use the smallest language appropriate to the responsibility:
 3. Python only when an approved ADR requires Archinstall API/plugin integration or another upstream Python interface.
 4. Lua remains local to tools that already use it, such as Neovim or Hyprland configuration.
 5. QML is used only for the MirrorOS-owned Quickshell desktop shell, bounded by [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md), and for the presentation-only SDDM theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md), for its keyboard-layout indicator, [ADR 0015](adr/0015-greeter-keyboard-layout-switching.md), and for confirmed restart and shutdown through SDDM's proxy, [ADR 0016](adr/0016-greeter-power-actions.md). Neither authenticates: SDDM and the lock screen keep their PAM services.
-6. Plymouth script is used only as the native format of the static MirrorOS Plymouth theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md).
+6. Plymouth script is used only as the native format of the shared installed/live MirrorOS Plymouth theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md) and [ADR 0019](adr/0019-shared-symbol-and-live-splash.md). Only the reviewed time-based opacity effect is admitted; Plymouth retains boot completion and native diagnostics.
 
 Do not rewrite simple shell operations in JavaScript for uniformity. Do not retain complex parsing or state models in Bash when JavaScript materially reduces risk.
 
@@ -1218,6 +1219,7 @@ No root `package.json` is required while JavaScript uses only Node built-ins and
 - Diagnostics.
 - Installation entry point.
 - Tools required by accepted installation and validation paths.
+- The shared symbol and native Plymouth splash under [ADR 0019](adr/0019-shared-symbol-and-live-splash.md): prepare from captured capabilities in a container-local writable profile, never mutate captured inputs or run configure on live. Preparation failure prevents mkarchiso; firmware/kernel display choice and installer startup remain unchanged.
 
 The live medium also embeds MirrorOS-owned installation code, `operations/configure`, and `capabilities/` at `/usr/local/lib/mirroros/`, captured from the repository at build time, with `mirroros-install` on `PATH`; the image does not own that code.
 

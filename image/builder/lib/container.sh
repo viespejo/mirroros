@@ -640,9 +640,53 @@ container_build_limine_tools() {
   CONTAINER_LIMINE_MANIFEST_PATH="${staging_directory}/packages.json"
 }
 
+container_prepare_live_splash() {
+  local status
+  # shellcheck disable=SC2016 # This script is interpreted inside the container against captured inputs.
+  local script='
+source_profile="$1"
+live_profile="$2"
+cp -a -- "$source_profile" "$live_profile"
+capabilities="$live_profile/airootfs$3/capabilities"
+branding="$capabilities/visual/branding"
+svg="$branding/mirroros-wordmark.svg"
+symbol="$branding/mirroros-symbol.svg"
+dest="$live_profile/airootfs/usr/share/mirroros/branding"
+renderer="$(rsvg-convert --version)"
+renderer="$(printf "%s\n" "$renderer" | head -n 1)"
+[[ "$renderer" =~ ^rsvg-convert\ version\ ([0-9][0-9A-Za-z.+~-]*)$ ]] || {
+  printf "Unrecognized rsvg-convert version output: %s\n" "$renderer" >&2
+  exit 5
+}
+identity="svg-sha256:$(sha256sum < "$svg" | cut -d" " -f1) symbol-sha256:$(sha256sum < "$symbol" | cut -d" " -f1) rsvg-convert:${BASH_REMATCH[1]} size:1580x320 symbol-size:320x320"
+owner="$(stat -c %u -- "$live_profile")"
+group="$(stat -c %g -- "$live_profile")"
+bash "$branding/install-assets" prepare "$svg" "$dest" "$owner" "$group"
+staging="$(bash "$branding/install-assets" staging "$dest")"
+rsvg-convert --width 1580 --height 320 < "$staging/mirroros-wordmark.svg" > "$staging/mirroros-wordmark.png"
+rsvg-convert --width 320 --height 320 < "$staging/mirroros-symbol.svg" > "$staging/mirroros-symbol.png"
+bash "$branding/install-assets" publish "$svg" "$dest" "$identity" 1580 320 "$owner" "$group"
+bash "$branding/install-assets" check "$svg" "$dest" "$identity"
+theme="$capabilities/system/boot-splash/plymouth"
+install -d -m 0755 -- "$live_profile/airootfs/usr/share/plymouth/themes/mirroros" "$live_profile/airootfs/etc/plymouth"
+install -m 0644 -- "$theme/mirroros.plymouth" "$theme/mirroros.script" "$live_profile/airootfs/usr/share/plymouth/themes/mirroros/"
+install -m 0644 -- "$theme/plymouthd.conf" "$live_profile/airootfs/etc/plymouth/plymouthd.conf"
+'
+
+  if container_run_stage live-splash-preparation "$CONTAINER_TIMEOUT_DOCKER" \
+    docker exec "$CONTAINER_ID" bash -Eeuo pipefail -c "$script" \
+      mirroros-live-splash /profile /live-profile "$SOURCE_CAPTURE_EMBEDDED_ISO_PATH"; then
+    return 0
+  else
+    status=$?
+    container_set_failure live-splash-preparation 5 "$status"
+    return 5
+  fi
+}
+
 container_construct() {
   local status
-  local prep_script='pacman -Syu --noconfirm && pacman -S --needed --noconfirm archiso'
+  local prep_script='pacman -Syu --noconfirm && pacman -S --needed --noconfirm archiso librsvg'
   # shellcheck disable=SC2016 # This script is interpreted inside the container.
   local extraction_script='xorriso -osirrox on -indev "$1" -extract /arch/pkglist.x86_64.txt /out/pkglist.x86_64.txt && cp /etc/pacman.d/mirrorlist /out/mirrorlist'
 
@@ -697,9 +741,14 @@ container_construct() {
   else
     return "$CONTAINER_FAILURE_STATUS"
   fi
+  if container_prepare_live_splash; then
+    :
+  else
+    return "$CONTAINER_FAILURE_STATUS"
+  fi
   if container_run_stage mkarchiso "$CONTAINER_TIMEOUT_BUILD" \
     docker exec --env "SOURCE_DATE_EPOCH=${BUILD_SOURCE_DATE_EPOCH}" \
-      "$CONTAINER_ID" mkarchiso -v -w /work -o /out /profile; then
+      "$CONTAINER_ID" mkarchiso -v -w /work -o /out /live-profile; then
     :
   else
     status=$?

@@ -16,8 +16,11 @@ while (( $# )); do
   esac
 done
 grep -q '<svg' || exit 97
-[[ "${CFG_TEST_RSVG_FAIL:-0}" != 1 ]] || { printf 'rsvg-convert: simulated rendering failure\n' >&2; exit 1; }
+[[ "${CFG_TEST_RSVG_FAIL:-0}" != 1 && ! ( "$width" == 320 && "${CFG_TEST_RSVG_SYMBOL_FAIL:-0}" == 1 ) ]] || {
+  printf 'rsvg-convert: simulated rendering failure\n' >&2; exit 1;
+}
 # A PNG signature and IHDR header with the requested size; enough for the delivery checks.
 be32() { printf '\\%03o\\%03o\\%03o\\%03o' $(($1 >> 24 & 255)) $(($1 >> 16 & 255)) $(($1 >> 8 & 255)) $(($1 & 255)); }
+[[ "$width" != 320 ]] || width="${CFG_TEST_RSVG_SYMBOL_WIDTH:-$width}"
 # shellcheck disable=SC2059 # The format string carries the generated octal escapes.
 printf "\\211PNG\\r\\n\\032\\n\\000\\000\\000\\015IHDR$(be32 "${CFG_TEST_RSVG_WIDTH:-$width}")$(be32 "$height")\\010\\006\\000\\000\\000"

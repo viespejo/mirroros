@@ -1,16 +1,47 @@
 # managed by MirrorOS configure
-# MirrorOS boot splash: the shared wordmark centered on the greeter's background, scaled down to the display with its
-# aspect ratio kept. No progress, animation, password prompt, message or delay is drawn; Esc switches to Plymouth's
-# native details view of the boot messages.
+# Shared symbol on the greeter's background. Only opacity animates; native details (Esc) and boot completion
+# remain under Plymouth control. ADR 0019 permits duration from the boot callback, never its percentage.
 
 Window.SetBackgroundTopColor(16 / 255, 19 / 255, 21 / 255);
 Window.SetBackgroundBottomColor(16 / 255, 19 / 255, 21 / 255);
 
-logo.image = Image("mirroros-wordmark.png");
+logo.image = Image("mirroros-symbol.png");
 logo.ratio = logo.image.GetWidth() / logo.image.GetHeight();
-# The same bound as the greeter logo: at most 42% of the width and 22% of the height, never enlarged.
-logo.width = Math.Int(Math.Min(logo.image.GetWidth(), Math.Min(Window.GetWidth() * 0.42, Window.GetHeight() * 0.22 * logo.ratio)));
-logo.height = Math.Int(logo.width / logo.ratio);
-logo.sprite = Sprite(logo.image.Scale(logo.width, logo.height));
-logo.sprite.SetX(Window.GetX() + Math.Int((Window.GetWidth() - logo.width) / 2));
-logo.sprite.SetY(Window.GetY() + Math.Int((Window.GetHeight() - logo.height) / 2));
+logo.width = 0;
+logo.height = 0;
+logo.sprite = Sprite();
+logo.sprite.SetOpacity(0);
+animation.start = NULL;
+animation.elapsed = 0;
+
+# Native duration excludes paused intervals. The first sample starts the fade; percentages are ignored.
+fun update_time(duration, unused_percentage) {
+    if (global.animation.start == NULL) global.animation.start = duration;
+    global.animation.elapsed = Math.Max(global.animation.elapsed, duration - global.animation.start);
+}
+
+fun refresh() {
+    # Match the static greeter: preserve aspect ratio, at most 42% width and 22% height, never enlarge.
+    local.width = Math.Int(Math.Min(global.logo.image.GetWidth(), Math.Min(Window.GetWidth() * 0.42, Window.GetHeight() * 0.22 * global.logo.ratio)));
+    local.height = Math.Int(local.width / global.logo.ratio);
+    if (local.width < 1 || local.height < 1) {
+        global.logo.sprite.SetOpacity(0);
+        return;
+    }
+    if (global.logo.width != local.width || global.logo.height != local.height) {
+        global.logo.width = local.width;
+        global.logo.height = local.height;
+        global.logo.sprite.SetImage(global.logo.image.Scale(local.width, local.height));
+    }
+    global.logo.sprite.SetX(Window.GetX() + Math.Int((Window.GetWidth() - local.width) / 2));
+    global.logo.sprite.SetY(Window.GetY() + Math.Int((Window.GetHeight() - local.height) / 2));
+    if (global.animation.elapsed < 0.4)
+        local.opacity = global.animation.elapsed / 0.4;
+    else
+        local.opacity = 0.875 + 0.125 * Math.Cos((global.animation.elapsed - 0.4) * 3.141592653589793);
+    global.logo.sprite.SetOpacity(local.opacity);
+}
+
+refresh();
+Plymouth.SetBootProgressFunction(update_time);
+Plymouth.SetRefreshFunction(refresh);

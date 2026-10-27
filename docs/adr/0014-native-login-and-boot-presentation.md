@@ -151,3 +151,8 @@ extension already recorded in ADR 0015.
 [ADR 0017](0017-live-console-display-preference.md) supersedes only the consequence that live boot visuals remain
 unchanged, for a best-effort display-mode preference and native-display recovery entry. Installed presentation
 and the live package list remain unchanged.
+
+[ADR 0019](0019-shared-symbol-and-live-splash.md) supersedes only the historical-wordmark selection, static-only
+splash restriction, and installed-only integration boundary: a shared installer symbol, static greeter, reviewed
+fade-plus-pulse splashes, and bounded live build integration are permitted. Authentication, diagnostic access,
+boot completion, storage, and the ADR 0015/0016 extensions remain unchanged; runtime qualification is separate.

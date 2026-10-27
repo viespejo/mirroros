@@ -37,7 +37,7 @@ SYSTEMCTL
 # The branding step's delivery is a prerequisite of the login postconditions.
 login_branding() {
   mkdir -p "$1/usr/share/mirroros/branding"
-  : > "$1/usr/share/mirroros/branding/mirroros-wordmark.png"
+  : > "$1/usr/share/mirroros/branding/mirroros-symbol.png"
 }
 
 login_theme_check() {
@@ -160,10 +160,11 @@ login_legacy() {
 }
 
 @test "a missing branding delivery fails the login postconditions" {
-  rm "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/branding/mirroros-wordmark.png"
+  rm "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/branding/mirroros-symbol.png"
+  : > "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/branding/mirroros-wordmark.png"
   run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/missing"
   [ "$status" -eq 4 ]
-  grep -qF 'Postcondition failed: cfg_system_file_present /usr/share/mirroros/branding/mirroros-wordmark.png' \
+  grep -qF 'Postcondition failed: cfg_system_file_present /usr/share/mirroros/branding/mirroros-symbol.png' \
     "$CFG_TEST_DIR/missing/configure.log"
 }
 

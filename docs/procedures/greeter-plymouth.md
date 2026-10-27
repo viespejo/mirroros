@@ -1,26 +1,65 @@
 # Greeter and boot splash procedure
 
-**Availability:** implemented through configure for installed systems on the three supported storage options.
-Automated contracts cover the theme delivery, the boot convergence and its failure paths. Real boot, Esc,
-graphical login and attended visual acceptance were qualified in VMs by plan 02-20 Task 3, with the limits in the
-[VM qualification record](#vm-qualification-record). No hardware, target-laptop, hibernation or full-MVP readiness
-follows from this procedure.
+**Availability:** implemented through configure for installed systems on the three supported storage options,
+and through container-local profile preparation for the live ISO.
+Automated contracts cover the theme delivery, the boot convergence and its failure paths. The shared symbol and
+fade-plus-pulse extension under ADR 0019 have automated checks only; their real Plymouth timing, Esc access,
+fast-boot completion, native timing pauses and attended greeter appearance remain pending individually authorized
+boots. Plan 02-20 Task 3 qualified the historical static wordmark, with the limits in the
+[VM qualification record](#vm-qualification-record); it does not qualify this extension. No hardware, target-laptop,
+hibernation or full-MVP readiness follows from this procedure.
 
 ## What is delivered
 
 | Surface | Capability | Effect |
 |---|---|---|
-| Wordmark | `visual/branding` | `/usr/share/mirroros/branding/mirroros-wordmark.{svg,png}`, the PNG rendered by the installed `rsvg-convert` |
+| Shared symbol | `visual/branding` | `/usr/share/mirroros/branding/mirroros-symbol.{svg,png}`, the 320x320 PNG rendered by the installed `rsvg-convert`; historical wordmark retained |
 | Greeter | `desktop/login` | The MirrorOS SDDM theme selected by `Current=mirroros`; SDDM, its login proxy and PAM authenticate unchanged |
-| Boot splash | `system/boot-splash` | Plymouth with the static MirrorOS theme, the `plymouth` hook and `quiet splash` on the normal boot entry |
+| Boot splash | `system/boot-splash` | Plymouth with the animated MirrorOS symbol theme, the `plymouth` hook and `quiet splash` on the normal boot entry |
 
-Both themes show the same wordmark in `rgb(202, 204, 204)` on `rgb(16, 19, 21)`. The splash has no progress,
-animation, password prompt or delay. Configure never restarts SDDM, reloads the desktop or reboots: the greeter
-and the splash take effect at the next boot. Sources and ownership: [branding](../../capabilities/visual/branding/sources.md),
+Both themes show the same square symbol in `rgb(202, 204, 204)` on `rgb(16, 19, 21)`, centered without upscaling,
+bounded by 42% of display width and 22% of height. The greeter stays static. The splash fades in once over 400 ms,
+then pulses smoothly between 75% and 100% opacity every two seconds of active elapsed time. Plymouth's duration
+callback supplies time only, never its progress percentage; native timing pauses freeze the effect. Sampled
+updates do not promise hard real-time precision. Fast boots may finish before the fade: no animation cycle is
+awaited and no progress, password prompt or boot delay is added. Configure never restarts SDDM, reloads the desktop
+or reboots: the greeter and the splash take effect at the next boot. Sources and ownership: [branding](../../capabilities/visual/branding/sources.md),
 [login](../../capabilities/desktop/login/sources.md), [boot splash](../../capabilities/system/boot-splash/sources.md).
 Authority: [ADR 0014](../adr/0014-native-login-and-boot-presentation.md), and for keyboard layouts
 [ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md). Confirmed greeter power requests are bounded by
-[ADR 0016](../adr/0016-greeter-power-actions.md).
+[ADR 0016](../adr/0016-greeter-power-actions.md). The shared symbol and bounded active-time animation are governed
+by [ADR 0019](../adr/0019-shared-symbol-and-live-splash.md).
+
+## Live splash preparation and recovery
+
+The live profile declares official-repository `plymouth`. Construction installs `librsvg` only in the build
+container, copies read-only `/profile` to `/live-profile` after the Limine payload is ready, renders and validates
+the shared branding delivery with `install-assets`, and copies the exact shared Plymouth theme and selection
+configuration from the captured capabilities snapshot. `mkarchiso` uses only the writable copy. No configure
+command runs on live, and preparation failure blocks construction with stage diagnostics retained. Details:
+[build preparation](build.md#construction-and-timeouts). Generated PNGs are not source files.
+
+The live initramfs hook follows `udev`; other hooks stay ordered as before. Normal systemd-boot and retained GRUB
+lines carry `quiet splash` without altering root discovery, serial/NoCloud paths, font/display policy, or the
+automatic tty1 installer welcome. The theme has the same active-time animation as the installed splash.
+
+- **Details:** press Esc during Plymouth. `quiet` reduces kernel verbosity but does not remove native diagnostics.
+- **One-boot no-splash:** enter the existing live systemd-boot menu editor with `e`, remove `splash` and `quiet`
+  from the normal entry, and boot it. In retained GRUB use its existing `e` editor, remove those words from the
+  `linux` line, and boot with Ctrl+X/F10. Edits last only for that boot. The profile does not disable the live
+  systemd-boot editor; no editor policy is changed. Installed systemd-boot still uses its no-splash fallback
+  instead of enabling its disabled editor. GRUB/Ventoy remains unqualified.
+- **Preparation failure:** retain `logs/live-splash-preparation.log` and execution evidence, fix the reported
+  input/renderer failure and explicitly rerun construction. Do not bypass validation or invoke `mkarchiso`
+  against the incomplete copy. Existing [build recovery controls](build.md#recovering-a-previous-run) apply.
+
+**Pending, individually authorized checks:** rebuild an ISO and inspect the actual package manifest/initramfs
+for Plymouth, the symbol and exact theme; attend a normal UEFI boot and confirm centering, the 400 ms fade,
+two-second 75–100% pulse, native pauses and prompt completion without waiting for a cycle; exercise Esc and
+one-boot no-splash recovery; confirm tty1 welcome, cancellation to shell and seeded serial/NoCloud behavior.
+Installed greeter appearance, login/layout behavior and power-menu cancellation require separately authorized
+installed-system checks. None is established by static profile tests, a browser preview, or native-API/renderer
+and builder doubles. Physical-hardware qualification is a separate pending gate.
 
 ## Keyboard layout at the greeter
 
@@ -98,7 +137,9 @@ Keep `$dest.old` until the run is reviewed. A first run installs `plymouth` (a p
 pending-upgrade guard), publishes the themes, applies the overlay and regenerates the boot images once; installing
 the package may itself trigger the distribution's initramfs rebuild before the overlay exists. A second unchanged
 run reports `system/boot-splash: unchanged` and performs no package transaction, asset publication, entry rewrite
-or regeneration. Reboot only after reviewing the outcome and `configure.log`.
+or regeneration. An intact historical theme delivery migrates; local edits remain a conflict. The symbol raster
+participates in regeneration identity and must be present in every normal boot image. Reboot only after reviewing
+the outcome and `configure.log`.
 
 ## Diagnostic access
 
@@ -149,6 +190,13 @@ allowlisted and scanned with `gitleaks dir --no-banner --redact <evidence-dir>`;
 private screens.
 
 ## VM qualification record
+
+This historical record predates the shared symbol and animation. Synthetic SDDM and Plymouth doubles do not extend
+its qualification. For the new presentation, separately authorize attended installed-system boots for each storage
+option: compare symbol proportions and centering at small and large display sizes, observe the fade and pulse
+without prolonging a fast boot, exercise Esc and the existing no-splash path, and verify greeter login, logout,
+layout switching and power-menu cancellation without requesting a power operation. Native timing pauses and
+completion must be observed in real Plymouth. Physical-hardware checks are a separate qualification.
 
 Plan 02-20 Task 3 qualified commit `c595a09` (clean) in disposable QEMU/UEFI VMs (4 GiB, 2 vCPUs, virtio-vga).
 Clean installs used the final-source ISO `dist/20261026T151813Z-73344428-54e5-43c3-9629-3ceb35f1c9cc/`

@@ -121,4 +121,7 @@ work must preserve complete warnings and confirmation boundaries rather than tru
 
 ## Superseded by
 
-`None`
+[ADR 0019](0019-shared-symbol-and-live-splash.md) supersedes only the exclusion of graphical changes: the installer
+symbol is shared with the static greeter and matching animated installed/live splashes. Firmware/kernel display
+choice, console font behavior, installation authorization, historical assets, and the lock-screen boundary remain
+unchanged. Synthetic animation approval is not runtime qualification.

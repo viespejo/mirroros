@@ -22,7 +22,7 @@ test('systemd-boot has one normal live entry preserving the firmware/kernel disp
   assert.match(read('efiboot/loader/loader.conf'), /^default 01-archiso-linux.conf$/m);
   assert.match(read('efiboot/loader/loader.conf'), /^timeout [1-9][0-9]*$/m);
   assert.equal(entry.title, 'MirrorOS Live/Rescue (%ARCH%, UEFI)');
-  assert.equal(entry.options, 'archisobasedir=%INSTALL_DIR% archisosearchuuid=%ARCHISO_UUID% %KERNEL_PARAMS%');
+  assert.equal(entry.options, 'archisobasedir=%INSTALL_DIR% archisosearchuuid=%ARCHISO_UUID% %KERNEL_PARAMS% quiet splash');
   assert.equal(entry.linux, '/%INSTALL_DIR%/boot/%ARCH%/vmlinuz-linux');
   assert.equal(entry.initrd, '/%INSTALL_DIR%/boot/%ARCH%/initramfs-linux.img');
 });
@@ -40,7 +40,7 @@ for (const path of ['grub/grub.cfg', 'grub/loopback.cfg']) {
     const location = path.includes('loopback')
       ? 'img_dev=UUID=${archiso_img_dev_uuid} img_loop="${iso_path}"'
       : 'archisosearchuuid=%ARCHISO_UUID%';
-    assert.equal(body.match(/^\s+linux (.+)$/m)[1], `/%INSTALL_DIR%/boot/%ARCH%/vmlinuz-linux archisobasedir=%INSTALL_DIR% ${location} %KERNEL_PARAMS%`);
+    assert.equal(body.match(/^\s+linux (.+)$/m)[1], `/%INSTALL_DIR%/boot/%ARCH%/vmlinuz-linux archisobasedir=%INSTALL_DIR% ${location} %KERNEL_PARAMS% quiet splash`);
     assert.equal(body.match(/^\s+initrd (.+)$/m)[1], '/%INSTALL_DIR%/boot/%ARCH%/initramfs-linux.img');
   });
 }

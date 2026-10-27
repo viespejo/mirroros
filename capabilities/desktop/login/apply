@@ -40,7 +40,7 @@ cfg_default_target graphical.target
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require bash "$STEP_DIR/install-theme" check "$STEP_DIR/sddm/mirroros" "$(cfg_path "$theme")" "$label"
-cfg_require cfg_system_file_present /usr/share/mirroros/branding/mirroros-wordmark.png
+cfg_require cfg_system_file_present /usr/share/mirroros/branding/mirroros-symbol.png
 cfg_require cfg_tracked_file_present "$login"
 cfg_require cfg_unit_enabled sddm.service
 cfg_require cfg_display_manager_is sddm.service

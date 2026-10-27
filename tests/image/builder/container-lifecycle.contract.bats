@@ -41,7 +41,7 @@ builder_last_result() {
   ! grep -Fq 'docker volume rm' "$BUILDER_CALL_LOG"
 
   grep -Fq 'docker exec --env SOURCE_DATE_EPOCH=' "$BUILDER_CALL_LOG"
-  grep -Fq 'mkarchiso -v -w /work -o /out /profile' "$BUILDER_CALL_LOG"
+  grep -Fq 'mkarchiso -v -w /work -o /out /live-profile' "$BUILDER_CALL_LOG"
   grep -Fq 'xorriso -osirrox on' "$BUILDER_CALL_LOG"
   local preparation_line
   local version_line
@@ -200,4 +200,32 @@ builder_last_result() {
   run_id="$(basename "$evidence_run")"
   ! grep -Fq 'docker rm ' "$BUILDER_CALL_LOG"
   [ -d "${BUILDER_REPOSITORY_ROOT}/build/archiso/${run_id}" ]
+}
+
+@test "live splash preparation follows version and Limine checks and precedes mkarchiso" {
+  builder_invoke
+  [ "$BUILDER_COMMAND_STATUS" -eq 0 ]
+  grep -Fq 'pacman -S --needed --noconfirm archiso librsvg' "$BUILDER_CALL_LOG"
+  local version_line limine_line splash_line build_line
+  version_line="$(grep -n 'pacman -Q archiso' "$BUILDER_CALL_LOG" | cut -d: -f1)"
+  limine_line="$(grep -n 'bash /usr/local/bin/mirroros-aur-build' "$BUILDER_CALL_LOG" | cut -d: -f1)"
+  splash_line="$(grep -n '^source_profile=' "$BUILDER_CALL_LOG" | cut -d: -f1)"
+  build_line="$(grep -n 'mkarchiso -v -w /work -o /out /live-profile' "$BUILDER_CALL_LOG" | cut -d: -f1)"
+  [ "$version_line" -lt "$limine_line" ]
+  [ "$limine_line" -lt "$splash_line" ]
+  [ "$splash_line" -lt "$build_line" ]
+  grep -Fq 'mirroros-live-splash /profile /live-profile /usr/local/lib/mirroros' "$BUILDER_CALL_LOG"
+  if grep -Eq 'docker exec .*operations/configure' "$BUILDER_CALL_LOG"; then return 1; fi
+}
+
+@test "live splash preparation failure blocks mkarchiso and retains original status and diagnostics" {
+  export BUILDER_LIVE_SPLASH_STATUS=19
+  builder_invoke
+  [ "$BUILDER_COMMAND_STATUS" -eq 5 ]
+  if grep -Fq 'mkarchiso -v' "$BUILDER_CALL_LOG"; then return 1; fi
+  grep -Fq '"failed_stage": "live-splash-preparation"' "$(builder_last_result)"
+  grep -Fq '"live-splash-preparation": 19' "$(builder_last_result)"
+  [ -s "$(builder_last_evidence_run)/logs/live-splash-preparation.log" ]
+  grep -Fq 'docker logs ' "$BUILDER_CALL_LOG"
+  grep -Fq 'docker rm ' "$BUILDER_CALL_LOG"
 }

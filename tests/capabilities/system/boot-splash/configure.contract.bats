@@ -30,7 +30,7 @@ invocations() { grep -v 'command -v' "$CFG_TEST_CALLS" || true; }
 regenerations() { invocations | grep -cE '(^| )(mkinitcpio -p linux|limine-update)$' || true; }
 entry() { sed -n 's/^options //p' "$ROOT/boot/loader/entries/$1"; }
 limine_default() { sed -n 's/^KERNEL_CMDLINE\[default\]="\(.*\)"$/\1/p' "$ROOT/etc/default/limine"; }
-image_has_theme() { grep -qxF ./usr/share/plymouth/themes/mirroros/mirroros.script "$ROOT$1" && grep -qxF usr/share/mirroros/branding/mirroros-wordmark.png "$ROOT$1"; }
+image_has_theme() { grep -qxF ./usr/share/plymouth/themes/mirroros/mirroros.script "$ROOT$1" && grep -qxF usr/share/mirroros/branding/mirroros-symbol.png "$ROOT$1"; }
 state() { cat "$ROOT/var/lib/mirroros/configure/boot-splash.state"; }
 
 # A second run with unchanged inputs regenerates and rewrites nothing.
@@ -268,6 +268,66 @@ splash_conflict() {
   splash_assert_unchanged_rerun
 }
 
+@test "an intact static wordmark theme upgrades once and a local script edit remains protected" {
+  local script="$CFG_TEST_DIR/code/capabilities/system/boot-splash/plymouth/mirroros.script"
+  cfg_test_boot_fixture ext4-systemd-boot
+  printf '# managed by MirrorOS configure\nlogo.image = Image("mirroros-wordmark.png");\n' > "$script"
+  run splash_run
+  [ "$status" -eq 0 ]
+  cp "$SPLASH_SOURCE/plymouth/mirroros.script" "$script"
+  : > "$CFG_TEST_CALLS"
+  run splash_run
+  [ "$status" -eq 0 ]
+  [ "$(regenerations)" -eq 1 ]
+  cmp "$script" "$ROOT/usr/share/plymouth/themes/mirroros/mirroros.script"
+  splash_assert_unchanged_rerun
+  printf '# local edit\n' >> "$ROOT/usr/share/plymouth/themes/mirroros/mirroros.script"
+  : > "$CFG_TEST_CALLS"
+  run splash_run --output "$CFG_TEST_DIR/edited-script"
+  [ "$status" -eq 4 ]
+  grep -qF 'mirroros.script differs from its last MirrorOS delivery' "$CFG_TEST_DIR/edited-script/configure.log"
+  [ "$(tail -n 1 "$ROOT/usr/share/plymouth/themes/mirroros/mirroros.script")" = '# local edit' ]
+  [ "$(regenerations)" -eq 0 ]
+}
+
+@test "the delivered symbol raster participates in regeneration identity" {
+  local symbol="$ROOT/usr/share/mirroros/branding/mirroros-symbol.png" before old new
+  cfg_test_boot_fixture ext4-systemd-boot
+  run splash_run
+  [ "$status" -eq 0 ]
+  before="$(state)"
+  old="$(sha256sum < "$symbol" | cut -d' ' -f1)"
+  # Simulate an intact branding publication of different raster bytes, not a local unmanaged edit.
+  printf 'new raster bytes\n' >> "$symbol"
+  new="$(sha256sum < "$symbol" | cut -d' ' -f1)"
+  sed -i "s/$old/$new/" "$ROOT/usr/share/mirroros/branding/.mirroros-manifest"
+  : > "$CFG_TEST_CALLS"
+  run splash_run
+  [ "$status" -eq 0 ]
+  [ "$(regenerations)" -eq 1 ]
+  [ "$before" != "$(state)" ]
+  splash_assert_unchanged_rerun
+}
+
+@test "a successful rebuild without the symbol stays pending and recovers on retry" {
+  cfg_test_boot_fixture ext4-systemd-boot
+  CFG_TEST_INITRAMFS_OMIT_IMAGE=mirroros-symbol.png run splash_run --output "$CFG_TEST_DIR/missing-symbol"
+  [ "$status" -eq 4 ]
+  grep -qF 'lacks usr/share/mirroros/branding/mirroros-symbol.png' "$CFG_TEST_DIR/missing-symbol/configure.log"
+  [[ "$(state)" =~ ^pending\  ]]
+  : > "$CFG_TEST_CALLS"
+  run splash_run
+  [ "$status" -eq 0 ]
+  [ "$(regenerations)" -eq 1 ]
+  [[ "$(state)" =~ ^complete\  ]]
+  image_has_theme /boot/initramfs-linux.img
+  splash_assert_unchanged_rerun
+  sed -i '\|usr/share/mirroros/branding/mirroros-symbol.png|d' "$ROOT/boot/initramfs-linux.img"
+  run splash_run --output "$CFG_TEST_DIR/lost-symbol"
+  [ "$status" -eq 4 ]
+  grep -qF 'lacks usr/share/mirroros/branding/mirroros-symbol.png' "$CFG_TEST_DIR/lost-symbol/configure.log"
+}
+
 @test "udev-based hook sequences place plymouth after udev" {
   cfg_test_boot_fixture ext4-systemd-boot
   sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)/' \
@@ -278,12 +338,15 @@ splash_conflict() {
     "$ROOT/etc/mkinitcpio.conf.d/90-mirroros-plymouth.conf"
 }
 
-@test "the theme is static, uses the shared wordmark and the step stays inside its effect boundary" {
+@test "the theme uses the shared symbol and native callbacks within its effect boundary" {
   local script="$SPLASH_SOURCE/plymouth/mirroros.script" code
   code="$(grep -vE '^[[:space:]]*#' "$script")"
-  grep -qF 'Image("mirroros-wordmark.png")' <<< "$code"
+  grep -qF 'Image("mirroros-symbol.png")' <<< "$code"
   [ "$(grep -c 'SetBackground.*Color(16 / 255, 19 / 255, 21 / 255)' <<< "$code")" -eq 2 ]
-  refute grep -qE 'Plymouth\.Set[A-Za-z]*Function|Progress|SetOpacity|Text|Sleep' <<< "$code"
+  grep -qxF 'Plymouth.SetBootProgressFunction(update_time);' <<< "$code"
+  grep -qxF 'Plymouth.SetRefreshFunction(refresh);' <<< "$code"
+  [ "$(grep -c 'Plymouth\.Set[A-Za-z]*Function' <<< "$code")" -eq 2 ]
+  refute grep -qE 'SetQuitFunction|SetDisplay|SetKeyboard|Text|Sleep|while|for[[:space:]]*\(' <<< "$code"
   grep -qxF 'ModuleName=script' "$SPLASH_SOURCE/plymouth/mirroros.plymouth"
   grep -qxF 'ImageDir=/usr/share/mirroros/branding' "$SPLASH_SOURCE/plymouth/mirroros.plymouth"
   grep -qxF 'ScriptFile=/usr/share/plymouth/themes/mirroros/mirroros.script' "$SPLASH_SOURCE/plymouth/mirroros.plymouth"
