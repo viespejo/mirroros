@@ -80,6 +80,7 @@ flow_plan() {
 }
 
 flow_cleanup() {
+  ui_cleanup
   [[ -z "$FLOW_TMP" ]] || rm -rf -- "$FLOW_TMP"
 }
 
@@ -127,7 +128,13 @@ flow_finish() {
   flow_log "outcome=${outcome} exit_status=${status} step=${operation}"
   # An ending menu (success or failure screen) runs after the records are written, so a killed menu loses nothing.
   if [[ -n "$FLOW_EXIT_MENU" ]]; then "$FLOW_EXIT_MENU" || true; fi
-  printf 'Evidence: %s\n' "$FLOW_RUN_DIR"
+  case "$outcome" in
+    blocked | invalidated | failed | not_verified | not_configured)
+      echo
+      ui_wrapped_style 8 --width 80 "Evidence: $FLOW_RUN_DIR"
+      ;;
+    *) printf 'Evidence: %s\n' "$FLOW_RUN_DIR" ;;
+  esac
   exit "$status"
 }
 
@@ -153,6 +160,34 @@ flow_finish_failed() {
   flow_finish "$status" failed "$2" "${3:-}"
 }
 
+# Keep terminal error outcomes even if their optional inspector fails. Recoverable menus propagate status.
+flow_failure_presentation() {
+  local rows=$1 phase=$2 cause=$3 next_step=$4 inspected=${5:-false} status=0
+  if ! ui_diagnostic_select_layout "$rows" "$FLOW_RUN_DIR" ui_failure "$phase" "$cause" "$next_step"; then
+    UI_DIAGNOSTIC_PAGED=false
+    ui_failure "$phase" "$cause" "$next_step"
+    return 0
+  fi
+  if [[ $UI_DIAGNOSTIC_PAGED == true ]]; then
+    if [[ $inspected != true ]]; then ui_diagnostic_pager || status=$?; fi
+    if ((status != 0)); then
+      if ((rows > 0)); then return "$status"; fi
+      ui_failure "$phase" "$cause" "$next_step"
+      return 0
+    fi
+    local summary_rows=$rows
+    if ((summary_rows > 0)); then summary_rows=$((summary_rows + 1)); fi
+    if ! ui_diagnostic_select_summary "$summary_rows" "$FLOW_RUN_DIR" ui_failure_summary "$phase" "$next_step"; then
+      UI_DIAGNOSTIC_PAGED=false
+      ui_failure "$phase" "$cause" "$next_step"
+      return 0
+    fi
+    ui_failure_summary "$phase" "$next_step"
+  else
+    ui_failure "$phase" "$cause" "$next_step"
+  fi
+}
+
 # Shows the first reason of a reasons file as a failed phase: phase, cause, and next action.
 flow_report_reasons() {
   local cause='' next_step=''
@@ -160,7 +195,7 @@ flow_report_reasons() {
   if [[ -s "$2" ]] && flow_assistant reasons-text "$2" > "${FLOW_TMP}/report.tsv" 2> /dev/null; then
     IFS=$'\t' read -r cause next_step < "${FLOW_TMP}/report.tsv" || true
   fi
-  ui_failure "$1" "${cause:-No cause was reported.}" "${next_step:-Check install.log in the run directory.}"
+  flow_failure_presentation "${3:-0}" "$1" "${cause:-No cause was reported.}" "${next_step:-Check install.log in the run directory.}" "${4:-false}"
 }
 
 # An unexpected failure of a phase: reported with phase, cause, and next action, with the original status
@@ -178,7 +213,7 @@ flow_unexpected() {
   flow_log "unexpected failure in ${operation}: status ${original}"
   flow_log_diagnostics
   flow_assistant reason stage_failed "$original" > "$reasons"
-  ui_failure "$phase" "The phase exited with status ${original}; it is reported as ${status}." 'Check install.log in the run directory, then rerun mirroros-install.'
+  flow_failure_presentation 0 "$phase" "The phase exited with status ${original}; it is reported as ${status}." 'Check install.log in the run directory, then rerun mirroros-install.'
   flow_finish "$status" failed "$operation" "$reasons"
 }
 
@@ -261,6 +296,8 @@ flow_init() {
   fi
   FLOW_TMP="$(mktemp -d "${TMPDIR:-/tmp}/mirroros-install.XXXXXX")"
   trap flow_cleanup EXIT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   mkdir -p -- "$FLOW_RUN_DIR"
   chmod 700 -- "$FLOW_RUN_DIR"
   mkdir -m 700 -- "${FLOW_RUN_DIR}/plans" "${FLOW_RUN_DIR}/discovery"
@@ -458,7 +495,8 @@ flow_load_given_plan() {
 # Back, or Cancel; every other failure ends the run. With --plan the plan is then compared with the facts.
 # Returns 0 when facts exist, or 1 for Back.
 flow_discover_initial() {
-  local status choice directory="${FLOW_RUN_DIR}/discovery/initial"
+  local status choice inspected directory="${FLOW_RUN_DIR}/discovery/initial"
+  local -a options=()
   local reasons="${FLOW_TMP}/discovery-reasons.json"
 
   if [[ "$FLOW_DISCOVERED" == true ]]; then return 0; fi
@@ -475,20 +513,40 @@ flow_discover_initial() {
       && flow_cli reasons facts "${directory}/target-facts.json" > "$reasons" 2> /dev/null \
       && flow_assistant recoverable "$reasons"; then
       flow_log_diagnostics
-      flow_report_reasons 'Machine discovery' "$reasons"
-      status=0
-      choice=$(gum choose --show-help --height 3 --selected Retry Retry Back Cancel) || status=$?
-      case "$status" in
-        0) ;;
-        1) return 1 ;;
-        130) flow_cancel discovery_initial ;;
-        *) flow_unexpected discovery_initial "$status" 'Machine discovery' ;;
-      esac
-      case "$choice" in
-        Retry) step 'Machine check'; continue ;;
-        Back) return 1 ;;
-        *) flow_cancel discovery_initial ;;
-      esac
+      inspected=false
+      while true; do
+        status=0
+        flow_report_reasons 'Machine discovery' "$reasons" 3 "$inspected" || status=$?
+        inspected=true
+        if ((status == 0)); then
+          options=(Retry Back Cancel)
+          if [[ $UI_DIAGNOSTIC_PAGED == true ]]; then options=('Inspect diagnostic' "${options[@]}"); fi
+          echo
+          choice=$(ui_choose --show-help --height "${#options[@]}" --selected Retry "${options[@]}") || status=$?
+        fi
+        case "$status" in
+          0) ;;
+          1) return 1 ;;
+          130) flow_cancel discovery_initial ;;
+          *) flow_unexpected discovery_initial "$status" 'Machine discovery' ;;
+        esac
+        case "$choice" in
+          'Inspect diagnostic')
+            status=0
+            ui_diagnostic_pager || status=$?
+            case $status in
+              0) continue ;;
+              130) flow_cancel discovery_initial ;;
+              *) flow_unexpected discovery_initial "$status" 'Machine discovery' ;;
+            esac
+            ;;
+          Retry) break ;;
+          Back) return 1 ;;
+          *) flow_cancel discovery_initial ;;
+        esac
+      done
+      step 'Machine check'
+      continue
     fi
     flow_finish_stage "$status" blocked discovery_initial facts "${directory}/target-facts.json"
   done
@@ -521,7 +579,8 @@ flow_discover_initial() {
 # combination is reported with its reason, keeps the last valid plan, and offers Back or Cancel.
 # Returns 0 when a valid plan matching the choices exists, or 1 for Back.
 flow_ensure_plan() {
-  local directory status=0 choice cause='' next_step=''
+  local directory status=0 choice cause='' next_step='' inspected=false
+  local -a options=()
 
   if [[ -n "$FLOW_PLAN_FILE" ]] && cmp -s "$FLOW_CHOICES" "$FLOW_PLAN_CHOICES"; then return 0; fi
   directory="${FLOW_RUN_DIR}/plans/$(printf '%02d' $((FLOW_PLAN_SEQ + 1)))"
@@ -545,17 +604,34 @@ flow_ensure_plan() {
       IFS=$'\t' read -r cause next_step < "$FLOW_INVALID_TEXT" || true
       rm -rf -- "$directory"
       flow_log 'plan generation rejected the combination; the last valid plan is kept'
-      ui_failure 'Plan generation' "${cause:-The choices do not form a valid plan.}" "${next_step:-Change a choice and try again.}"
-      status=0
-      choice=$(gum choose --show-help --height 2 --selected Back Back Cancel) || status=$?
-      case "$status" in
-        0) ;;
-        1) return 1 ;;
-        130) flow_cancel plan_generation ;;
-        *) flow_unexpected plan_generation "$status" 'Plan generation' ;;
-      esac
-      if [[ "$choice" == Back ]]; then return 1; fi
-      flow_cancel plan_generation
+      while true; do
+        status=0
+        flow_failure_presentation 2 'Plan generation' "${cause:-The choices do not form a valid plan.}" "${next_step:-Change a choice and try again.}" "$inspected" || status=$?
+        inspected=true
+        if ((status == 0)); then
+          options=(Back Cancel)
+          if [[ $UI_DIAGNOSTIC_PAGED == true ]]; then options=('Inspect diagnostic' "${options[@]}"); fi
+          echo
+          choice=$(ui_choose --show-help --height "${#options[@]}" --selected Back "${options[@]}") || status=$?
+        fi
+        case "$status" in
+          0) ;;
+          1) return 1 ;;
+          130) flow_cancel plan_generation ;;
+          *) flow_unexpected plan_generation "$status" 'Plan generation' ;;
+        esac
+        if [[ $choice == 'Inspect diagnostic' ]]; then
+          status=0
+          ui_diagnostic_pager || status=$?
+          case $status in
+            0) continue ;;
+            130) flow_cancel plan_generation ;;
+            *) flow_unexpected plan_generation "$status" 'Plan generation' ;;
+          esac
+        fi
+        if [[ "$choice" == Back ]]; then return 1; fi
+        flow_cancel plan_generation
+      done
       ;;
     *)
       flow_unexpected plan_generation "$status" 'Plan generation'
@@ -724,27 +800,43 @@ flow_success_menu() {
   local choice status=0
 
   flow_leave_interactive
-  choice=$(gum choose --show-help --height 2 --selected 'Restart now' 'Restart now' 'Return to shell') || status=$?
+  choice=$(ui_choose --padding "$UI_SUCCESS_PADDING" --show-help --height 2 --selected 'Restart now' 'Restart now' 'Return to shell') || status=$?
   if ((status == 0)) && [[ "$choice" == 'Restart now' ]]; then flow_power_action reboot; fi
 }
 
 flow_failure_menu() {
-  local choice status
+  local choice status inspected=false
+  local -a renderer=() summary=() options=() pager=(gum pager --border-foreground 4)
 
   flow_leave_interactive
   while true; do
     if [[ $FLOW_ENGINE_UNVERIFIED == true ]]; then
-      ui_not_verified "${FLOW_RUN_DIR}/engine/engine-run.json" "$FLOW_RUN_DIR"
+      renderer=(ui_not_verified "${FLOW_RUN_DIR}/engine/engine-run.json" "$FLOW_RUN_DIR")
+      summary=(ui_not_verified_summary)
     else
-      ui_engine_failure "$FLOW_ENGINE_FAILED_OPERATION" "$FLOW_ENGINE_FAILED_STATUS" "$FLOW_ENGINE_DESTRUCTIVE" \
-        "${FLOW_RUN_DIR}/engine/engine.log" "$FLOW_RUN_DIR"
+      renderer=(ui_engine_failure "$FLOW_ENGINE_FAILED_OPERATION" "$FLOW_ENGINE_FAILED_STATUS" "$FLOW_ENGINE_DESTRUCTIVE" "${FLOW_RUN_DIR}/engine/engine.log" "$FLOW_RUN_DIR")
+      summary=(ui_engine_failure_summary "$FLOW_ENGINE_FAILED_OPERATION" "$FLOW_ENGINE_FAILED_STATUS" "$FLOW_ENGINE_DESTRUCTIVE")
     fi
+    ui_diagnostic_select_layout 4 "$FLOW_RUN_DIR" "${renderer[@]}" || return 0
+    options=('View full log' 'Return to shell' Restart 'Power off')
+    if [[ $UI_DIAGNOSTIC_PAGED == true ]]; then
+      if [[ $inspected != true ]]; then ui_diagnostic_pager || return 0; fi
+      inspected=true
+      ui_diagnostic_select_summary 5 "$FLOW_RUN_DIR" "${summary[@]}" || return 0
+      "${summary[@]}"
+      options=('Inspect diagnostic' "${options[@]}")
+    else
+      inspected=false
+      "${renderer[@]}"
+    fi
+    echo
     status=0
-    choice=$(gum choose --show-help --height 4 --selected 'Return to shell' 'View full log' 'Return to shell' 'Restart' 'Power off') || status=$?
+    choice=$(ui_choose --show-help --height "${#options[@]}" --selected 'Return to shell' "${options[@]}") || status=$?
     ((status == 0)) || return 0
     case "$choice" in
+      'Inspect diagnostic') ui_diagnostic_pager || return 0 ;;
       'View full log')
-        gum pager < "${FLOW_RUN_DIR}/engine/engine.log" || true
+        "${pager[@]}" < "${FLOW_RUN_DIR}/engine/engine.log" || true
         ;;
       Restart) flow_power_action reboot; return 0 ;;
       'Power off') flow_power_action poweroff; return 0 ;;
@@ -754,18 +846,32 @@ flow_failure_menu() {
 }
 
 flow_configure_menu() {
-  local choice status step
+  local choice status step inspected=false
+  local -a options=()
 
   flow_leave_interactive
   step="$(flow_assistant get "${FLOW_RUN_DIR}/engine/engine-run.json" configure_failed_step)" || step=unknown
   while true; do
-    ui_not_configured "$step" "$FLOW_RUN_DIR"
+    ui_diagnostic_select_layout 4 "$FLOW_RUN_DIR" ui_not_configured "$step" "$FLOW_RUN_DIR" || return 0
+    options=('View configure log' Restart 'Return to shell' 'Power off')
+    if [[ $UI_DIAGNOSTIC_PAGED == true ]]; then
+      if [[ $inspected != true ]]; then ui_diagnostic_pager || return 0; fi
+      inspected=true
+      ui_diagnostic_select_summary 5 "$FLOW_RUN_DIR" ui_not_configured_summary "$step" || return 0
+      ui_not_configured_summary "$step"
+      options=('Inspect diagnostic' "${options[@]}")
+    else
+      inspected=false
+      ui_not_configured "$step" "$FLOW_RUN_DIR"
+    fi
+    echo
     status=0
-    choice=$(gum choose --show-help --height 4 --selected 'Return to shell' 'View configure log' 'Restart' 'Return to shell' 'Power off') || status=$?
+    choice=$(ui_choose --show-help --height "${#options[@]}" --selected 'Return to shell' "${options[@]}") || status=$?
     ((status == 0)) || return 0
     case "$choice" in
+      'Inspect diagnostic') ui_diagnostic_pager || return 0 ;;
       'View configure log')
-        sed -n '/^== configure ==$/,$p' "${FLOW_RUN_DIR}/engine/engine.log" | gum pager || true
+        sed -n '/^== configure ==$/,$p' "${FLOW_RUN_DIR}/engine/engine.log" | gum pager --border-foreground 4 || true
         ;;
       Restart) flow_power_action reboot; return 0 ;;
       'Power off') flow_power_action poweroff; return 0 ;;
@@ -809,6 +915,11 @@ flow_engine() {
   if ! flow_cli engine-result "${engine_dir}/engine-run.json" "$status" > "$reasons" 2> /dev/null; then
     flow_log 'the engine record is missing or invalid'
     flow_assistant reason stage_failed "$status" > "$reasons"
+    if ui_diagnostic_select_layout 0 "$FLOW_RUN_DIR" ui_engine_record_failure "$status" "$FLOW_RUN_DIR" \
+      && [[ $UI_DIAGNOSTIC_PAGED == true ]]; then
+      # The engine has already failed; inspector status cannot replace its recorded outcome.
+      ui_diagnostic_pager || true
+    fi
     ui_engine_record_failure "$status" "$FLOW_RUN_DIR"
     flow_finish 5 failed engine "$reasons"
   fi

@@ -70,6 +70,15 @@ live_console_keyboard_form() {
   live_keyboard_source='Selected in this guide'
 }
 
+# Text size is console-local presentation state, never an installed-system choice.
+live_console_text_size_form() {
+  local choice
+  gum style --foreground 8 --padding "$PADDING" 'Original restores the font selected at startup.' 'Original x2 doubles the saved font, preserving every glyph.'
+  echo
+  choice=$(ui_choose --show-help --height 2 --selected "$UI_TEXT_SIZE" 'Original' 'Original x2') || return $?
+  ui_apply_text_size "$choice"
+}
+
 # Waits for the ISO's enabled systemd-timesyncd to report synchronization. The wait counts one-second sleeps
 # instead of reading the wall clock, so a clock step during synchronization cannot shorten or extend it:
 # at most LIVE_CLOCK_WAIT_SECONDS seconds per attempt. Returns 0, LIVE_CLOCK_NOT_READY, or 5.
@@ -144,18 +153,20 @@ live_network_method_form() {
     step "Connect with $method"
     case $method in
       Ethernet)
-        gum style --padding "$PADDING" 'Connect a network cable, then retry the connection check.'
+        gum style --foreground 8 --padding "$PADDING" 'Connect a network cable, then retry the connection check.'
         ;;
       'Wi-Fi')
-        gum style --padding "$PADDING" 'Configure Wi-Fi with iwctl in another live console, then return here.'
+        gum style --foreground 8 --padding "$PADDING" 'Configure Wi-Fi with iwctl in another live console, then return here.'
         gum style --foreground 8 --padding "$PADDING" 'Select Show connection instructions for the complete Wi-Fi setup steps.'
         ;;
       *) return 6 ;;
     esac
     if [[ $failed == true ]]; then
+      echo
       gum style --foreground 1 --padding "$PADDING" 'Could not verify internet access. Check your connection and retry.'
     fi
-    action=$(gum choose --show-help --height "${#actions[@]}" --selected 'Retry connection check' "${actions[@]}") || return $?
+    echo
+    action=$(ui_choose --show-help --height "${#actions[@]}" --selected 'Retry connection check' "${actions[@]}") || return $?
     case $action in
       'Retry connection check')
         gum style --foreground 8 --padding "$PADDING" 'Checking internet connection...'
@@ -170,7 +181,7 @@ live_network_method_form() {
       'Show connection instructions')
         [[ $method == 'Wi-Fi' && -r "${FLOW_CODE_ROOT}/install/confirmation/instructions/live-wifi.txt" ]] || return 6
         status=0
-        gum pager < "${FLOW_CODE_ROOT}/install/confirmation/instructions/live-wifi.txt" || status=$?
+        gum pager --border-foreground 4 < "${FLOW_CODE_ROOT}/install/confirmation/instructions/live-wifi.txt" || status=$?
         case $status in
           0 | 1) ;;
           *) return "$status" ;;
@@ -189,7 +200,8 @@ live_connect_form() {
   while true; do
     step 'Connect to the internet'
     gum style --foreground 8 --padding "$PADDING" 'Internet access is needed to prepare and install MirrorOS.' 'This connection is for the live environment only.'
-    action=$(gum choose --show-help --height 3 --selected 'Ethernet' \
+    echo
+    action=$(ui_choose --show-help --height 3 --selected 'Ethernet' \
       'Ethernet' 'Wi-Fi' 'Cancel') || return $?
     case $action in
       Ethernet | 'Wi-Fi')
@@ -210,9 +222,10 @@ live_connect_form() {
 live_clock_form() {
   local action
   step 'Waiting for the system clock'
-  gum style --padding "$PADDING" 'Accurate time is needed to verify secure connections and package signatures.'
+  gum style --foreground 8 --padding "$PADDING" 'Accurate time is needed to verify secure connections and package signatures.'
   gum style --foreground 8 --padding "$PADDING" 'Automatic time synchronization is enabled. Make sure the network works, then retry.'
-  action=$(gum choose --show-help --height 2 --selected 'Retry clock check' 'Retry clock check' 'Cancel') || return $?
+  echo
+  action=$(ui_choose --show-help --height 2 --selected 'Retry clock check' 'Retry clock check' 'Cancel') || return $?
   case $action in
     'Retry clock check') return 0 ;;
     Cancel) flow_cancel preparation ;;
@@ -224,8 +237,9 @@ live_clock_form() {
 live_keyring_form() {
   local action
   step 'Package keyring not ready'
-  gum style --padding "$PADDING" 'Package signatures cannot be verified until the keyring is ready.' 'Wait a moment, then retry.'
-  action=$(gum choose --show-help --height 2 --selected 'Retry keyring check' 'Retry keyring check' 'Cancel') || return $?
+  gum style --foreground 8 --padding "$PADDING" 'Package signatures cannot be verified until the keyring is ready.' 'Wait a moment, then retry.'
+  echo
+  action=$(ui_choose --show-help --height 2 --selected 'Retry keyring check' 'Retry keyring check' 'Cancel') || return $?
   case $action in
     'Retry keyring check') return 0 ;;
     Cancel) flow_cancel preparation ;;

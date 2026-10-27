@@ -135,6 +135,13 @@ The screens and their order are the reference's, with the integration difference
    unrecognized CPU vendor. None of them blocks continuing. The review shows the hibernation state: enabled with the swapfile size and, when the size is below
    detected memory, the persistent warning; or disabled, stating that no swapfile will be created. No additional
    confirmation dialog is added.
+   - At every review redraw, the assistant measures terminal rows and columns and the fully rendered
+     review, including wrapped rows, explanations, and warnings. It reserves the two-line top margin,
+     title, native menu/help, and a cursor line. If the separate rows fit, they remain unchanged. Otherwise,
+     Hostname/Username/Root and Timezone/Language/Locales may each share one line, independently and only
+     when that entire group fits the form width. If the grouped review still exceeds the height, `gum pager`
+     shows the complete review before navigation. The menu then also offers **Inspect review** to reopen it.
+     This is presentation only: no content is dropped and neither pager grants authorization.
    - Inspecting the complete plan opens `gum pager` with the persisted plan text: disk and current layout, all
      choices with provenance and source, the destructive operations, warnings, secret requirements without
      values, and the plan reference. Leaving the pager returns to the review, preserves the answers, and grants no
@@ -156,7 +163,7 @@ The screens and their order are the reference's, with the integration difference
     Then one invocation of the engine, with the progress screen (D17) while it runs and then the success
     (D18), failure (D19), `not_verified` (D20), or `not_configured` (D22) screen.
 
-Going back from any screen after confirmation, including Esc at the password screen, clears the approval;
+Leaving any screen after confirmation to go back, including Esc at the first password field, clears the approval;
 renewed review and confirmation are required before the flow can reach the password screen again.
 
 ### Machine check
@@ -274,8 +281,9 @@ group and waits for cleanup. Outside configure it ends `failed` with `engine_int
 during configure it preserves `not_configured`/`4` with the configure outcome in the engine record.
 
 Esc differs by prompt. In configuration steps and the review it goes back without applying an incomplete
-answer; leaving the pager returns to the review. In either password field it returns to the review, discards any
-entered value, and clears the approval. At the authorization prompts (the final
+answer; leaving the pager returns to the review. In the first password field it returns to the review, discards any
+entered value, and clears the approval. In the repetition field it discards both values and restarts at the first
+password field within the same stage, retaining the bound approval; final revalidation remains mandatory. At the authorization prompts (the final
 No and the device-name input) Esc cancels, as do a No answer and a name mismatch.
 
 ## Password hand-over
@@ -287,7 +295,8 @@ The assistant owns the whole interaction. In order:
    `Confirm>`). The screen keeps the context of D10 and D12: one password for the user, and root either locked
    or sharing the same password, as the plan says. The only rules are a non-empty value and a matching pair; a
    blank or mismatched pair shows its message (D11) and asks both fields again, with no attempt limit and no
-   strength policy. Esc in either field returns to the review, discards the value, and clears the approval.
+   strength policy. Esc in `Confirm>` discards both values and restarts at `Password>` without leaving the stage
+   or clearing the bound approval. Esc in `Password>` returns to the review and clears the approval.
    Ctrl+C in either field cancels with exit `3` and outcome `cancelled`, and the engine is never started.
 3. The assistant revalidates the disk and the plan after the password was entered, so time spent answering
    cannot leave approval stale. A failed revalidation is `invalidated` and discards the password.
@@ -415,9 +424,10 @@ rejects them. Recognition in `profile` is not a qualification claim.
 ## Differences from the reference
 
 The reference is the frozen copy at
-[`prototypes/frontend/guided-installer/`](../prototypes/frontend/guided-installer/README.md): its logo, Tokyo
-Night palette, layout, centering, widgets, navigation, and screen order are reproduced. Only the differences
-below are intended. Any other visual, wording, workflow, or widget difference needs the maintainer's approval
+[`prototypes/frontend/guided-installer/`](../prototypes/frontend/guided-installer/README.md). Its screen order,
+navigation, and content remain the reference, with the visual baseline and welcome explicitly replaced
+under [ADR 0018](../docs/adr/0018-native-live-display-and-installer-presentation.md). Only the differences
+below and the ADR 0018 presentation amendment are intended. Any other visual, wording, workflow, or widget difference needs the maintainer's approval
 first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4, except D15, which was approved at plan 02-08, Task 1, with the acceptance of [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). The rewording of D7 and D10 to D14 and the new items D16 to D19 are proposed by plan 02-09 and await approval at its Task 2; their fidelity is confirmed at its attended review. The rewording of D18 and D19 and the new items D20 and D21 are proposed by plan 02-11 and await approval at its Task 2; their fidelity is confirmed at its attended review. Plan 02-16 updates D17/D18, extends D19 wrapping, and adds D22/D23 for installer-integrated configure; its graphical and console observations remain subject to the blocking human checkpoint.
 
 | # | Reference | Production | Why |
@@ -426,38 +436,252 @@ first. The wording shown is the proposed production text; every item awaits appr
 | D2 | Synthetic discovery facts; the disk screen says "Example discovery facts, not the current disk state." | Current validated discovery. The line becomes "Disks detected on this machine just now." The other disk lines, the label format, and the single-disk behavior are unchanged. | Replace synthetic facts with real ones. |
 | D3 | Live connectivity: one route and HTTPS probe, then "Preparing installation" / "Checking internet connection...". | The coordinated check of [Flow](#flow) step 3. When it passes there is no screen. Adds the gray line "Checking system clock..." during the check. | DEC-010: bounded clock readiness inside preparation. |
 | D4 | None. | A clock failure screen titled "Waiting for the system clock": "Accurate time is needed to verify secure connections and package signatures." and "Automatic time synchronization is enabled. Make sure the network works, then retry." with Retry clock check and Cancel. | DEC-010: help, retry, or cancellation. |
-| D5 | None. | A failure screen for a failed phase: red lines "Phase: …", "Cause: …", "Next: …", then Retry, Back, or Cancel for a recoverable failure only. | DEC-015. |
+| D5 | None. | A failure screen for a failed phase: two top blank lines, the symbol only when the complete inline diagnostic or post-inspection summary and its controls fit (and never below 32 rows), separate red blocks "Phase: …", "Cause: …", "Next: …", wrapped within the 80-column form or available narrower width. A recoverable discovery failure retains Retry / Back / Cancel with Retry selected; a rejected plan combination retains Back / Cancel with Back selected. Selectors use the shared accent-only style and native help; terminal failures gain no retry or menu. | DEC-015. |
 | D6 | Review row "Target: <profile>". | Row "Machine": "Recognized (<profile id>)" or "Unqualified (experimental)". A row "Plan" shows the plan reference. Other rows, including "Locales" and "Internet", are unchanged. | DEC-003, DEC-011, DEC-013. |
 | D7 | Review footer: "Review only: this does not approve a plan or authorize disk changes." / "Next: simulated confirmation, then password explanation; no installation runs." / "A real flow needs bound plan/disk confirmation, then passwords, before execution." | The first line is kept. The others become "Next: confirm the disk to erase, then set the password. Installation starts after that." The third line is removed. | Remove simulation claims. |
 | D8 | Review menu: "Continue to confirmation preview" / "Back". | "Continue to confirmation" / "Inspect complete plan" / "Back". "Inspect complete plan" opens `gum pager`. | DEC-011, DEC-012. |
 | D9 | Title "Confirmation preview - simulation only"; "SIMULATION ONLY …" warning; menu "Simulate confirmation" / "Back" / "Cancel preview" selecting Back. | Title "Confirm installation". Shows the disk label, path, "Disk ID", and the layout, "Plan reference: <ref>", and the red line "This will erase all existing content on this disk." An unqualified machine adds the yellow line "Experimental: this machine matches no known profile." Then `gum confirm` ("Erase <path> and apply plan <ref>?", "Yes, erase" / "No", No focused), then `gum input` with the header "Type the device name (<name>) to confirm." and the prompt "Device name> ". There is no Back at this prompt. | DEC-013: real authorization. |
 | D10 | Title "Password requirements - preview only"; "PREVIEW ONLY - do not enter a real password here." | Title "Password". The preview-only first line is removed. The line "A real flow asks for one password for $username, with repetition." becomes "One password is used for $username." The sudo and root lines are unchanged. | DEC-004, DEC-018. |
-| D11 | Password screen header "No password collection in this prototype"; menu "Finish preview" / "Back". | Two inputs, "Password> " and "Confirm> " (`gum input --password`), and no menu. A blank value shows "Password can't be blank" and a mismatch shows "Passwords didn't match"; both fields are asked again, with no attempt limit and no strength policy. Esc returns to the review and clears the approval; Ctrl+C cancels. | Truthful wording. |
+| D11 | Password screen header "No password collection in this prototype"; menu "Finish preview" / "Back". | Two inputs, "Password> " and "Confirm> " (`gum input --password`), and no menu. A blank value shows "Password can't be blank" and a mismatch shows "Passwords didn't match"; both fields are asked again, with no attempt limit and no strength policy. Esc in Confirm discards both values and restarts Password within the stage; Esc in Password returns to the review and clears the approval; Ctrl+C cancels. | Truthful wording; repetition-field Back navigation explicitly approved during password review. |
 | D12 | Root screen: "The intended flow asks for one password, with repetition, after plan approval." / "This preview does not collect passwords or change accounts." | "One password is asked, with repetition, after you approve the plan." The preview-only closing line is removed. When password login is enabled, a gray line is added: "Sharing the password does not give root an independent recovery credential." | DEC-004, DEC-005. |
 | D13 | Ending: "Presentation demo finished. No installation or disk operation executed." / "Synthetic example facts were used. No credentials or evidence were saved." | Replaced by the engine-phase screens D17 to D19. The run directory is named on the failure screen, and no approval is saved or can authorize a later run. | Truthful engine-unavailable ending. |
 | D14 | Screen titles list includes "Choose installation target", "Confirmation preview - simulation only", and "Password requirements - preview only". | "Choose installation target" is replaced by "Machine check" (D1); the other two are replaced as in D9 and D10; a titled screen is added for the clock failure (D4). The remaining titles are unchanged, except the title of the stage changed by D15. Titled screens are added for the keyring wait (D16), the progress (D17), the success (D18), the failure (D19), and the unverified installation (D20). | Consequence of D1, D4, D9, D10, D15. |
 | D15 | "Choose swapfile size" screen at the position after storage layout: gray lines "The swapfile is used for swap and hibernation." / "The default does not guarantee hibernation for every workload.", the range line, and the "Swapfile size (MiB)> " input. Review row "Swapfile": "<n> MiB". | The stage is titled "Choose hibernation" and is shown at the same position. A `gum choose` with the header "Hibernation" offers "Enabled" and "Disabled", with the current choice selected (Enabled initially) and the gray lines "Hibernation lets the machine power off and resume where it left off." / "Enabled keeps a swapfile on disk; it also serves as fallback swap when zram is full." Only when Enabled, the sizing screen titled "Choose swapfile size" follows, in the reference's style, with the gray lines "The swapfile holds the hibernation image and also serves as fallback swap after zram." / "The default does not guarantee hibernation for every workload.", the range line stating the RAM-derived minimum and maximum, and the unchanged input; it shows no warning. Back from the sizing returns to the hibernation choice. Disabling removes the explicit size and re-enabling proposes the RAM-derived default again. The review row "Swapfile" becomes "Hibernation": "Enabled (swapfile <n> MiB)", or "Disabled (no swapfile)" with the gray line "Hibernation is disabled: no swapfile will be created."; when the size is below detected memory, the persistent yellow line "Below detected memory: hibernation may be unavailable under large memory workloads. It depends on used memory and free swapfile space." appears under the rows. No additional confirmation dialog, and no claim that the default guarantees a successful resume. | DEC-013, DEC-014, DEC-028; [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md): hibernation is optional and the swapfile size is RAM-derived. |
 | D16 | None. | Drawn only while the package keyring is not ready. While waiting: a screen titled "Preparing the package keyring" with the gray line "Waiting for the package keyring to be initialized...". When the bound of 600 seconds expires or the service fails: a screen titled "Package keyring not ready" with "Package signatures cannot be verified until the keyring is ready." and "Wait a moment, then retry.", with Retry keyring check and Cancel. No screen is drawn when the keyring is already ready. | DEC-012, DEC-020: visible wait during live preparation, before any confirmation or password. |
-| D17 | None. | Engine progress screen: the logo, the title "Installing MirrorOS", a 34-column progress bar, and a dimmed line with the current position and description. For `N` plan operations the total is `N+1`, reserving the final unit for configure; base postconditions add no unit. During package installation a second dimmed line shows "Packages installed: <count>"; the count never moves the bar. During configure the main line is "[N+1/N+1] Configure the graphical environment." with numeric positions, and the second line is "Configure step: <k>/<total> <step>" when a marker is available, with no package count. The bar reaches the end only after configure succeeds; no time-based curve or tips. Every fixed engine-phase line fits 80 columns including its prefix; operation descriptions are at most 72 characters, and every configured step path must fit its complete prefixed line. Tests enforce both limits. | DEC-008: progress must be backed by completed work; Story 4.2 DEC-026, DEC-032. |
-| D18 | None. | Success screen: the logo, "Installed MirrorOS in <duration>", the dimmed line "Base system verified and graphical environment configured.", and a menu "Restart now" / "Return to shell". There is no animated effect. The machine restarts only when "Restart now" is chosen. | DEC-007, DEC-008. |
-| D19 | None. | Failure screen for an engine failure or interruption: the logo, the red title "MirrorOS installation stopped", "Failed operation: <id>", "Exit status: <status>", the red line "The disk was partially modified and installation did not complete." (or "The disk was not modified." when no destructive operation had started), the last 15 lines of `engine.log`, "Run directory: <path>", and a menu "View full log" (`gum pager`) / "Return to shell" / "Restart" / "Power off". It offers no log upload, no media diagnosis, and no automatic action. A stop before the first destructive operation (`blocked` or `invalidated`) uses the D5 screen instead. Every line of this screen, including each of the 15 log lines, is wrapped at word boundaries to the terminal width, so that no line overflows the right edge; the wrapping applies to this screen, D20, D22, and the engine-phase failure reporting that the engine left no valid record only. The `ui_failure` presentation in other phases is unchanged. | DEC-006, DEC-008; DEC-014 of Story 2.6. |
-| D20 | None. | `not_verified` screen, for the outcome `not_verified`: the logo, the red title "MirrorOS installation could not be verified", the red line "Installation finished, but the installed system failed verification. Do not rely on it.", one block per failed check with "Failed check: <id>" and its non-secret `detail` (expected and observed values), the gray line "The disk was modified. The full result is in the run directory.", "Run directory: <path>", and a menu "View full log" (`gum pager`) / "Return to shell" / "Restart" / "Power off". No automatic action and no retry. The restart is never the default. Every line is wrapped at word boundaries to the terminal width, as in D19. | DEC-008, DEC-014 of Story 2.6. |
+| D17 | None. | Engine progress screen: the logo, the title "Installing MirrorOS", a centered 34-column progress bar (narrowed only when the terminal is narrower), and a secondary-gray line with the current position and description. The composition is centered vertically and horizontally; completed blocks use the principal foreground and remaining blocks secondary gray. The symbol is omitted below 32 rows. Status lines wrap without truncation. At a subsequent state redraw, only the dynamic area is repainted unless geometry or rendered height changed. For `N` plan operations the total is `N+1`, reserving the final unit for configure; base postconditions add no unit. During package installation a second dimmed line shows "Packages installed: <count>"; the count never moves the bar. During configure the main line is "[N+1/N+1] Configure the graphical environment." with numeric positions, and the second line is "Configure step: <k>/<total> <step>" when a marker is available, with no package count. The bar reaches the end only after configure succeeds; no time-based curve or tips. Every fixed engine-phase line fits 80 columns including its prefix; operation descriptions are at most 72 characters, and every configured step path must fit its complete prefixed line. Tests enforce both limits. | DEC-008: progress must be backed by completed work; Story 4.2 DEC-026, DEC-032. |
+| D18 | None. | Success screen: the symbol and "Installed MirrorOS in <duration>" in a vertically and horizontally centered composition, omitting the symbol below 32 rows. The redundant configuration-success explanation is removed. A vertical menu "Restart now" / "Return to shell" uses the shared accent-only selector and native help, both aligned to the title's left margin, with Restart now selected. There is no animated effect. The machine restarts only when "Restart now" is chosen. | DEC-007, DEC-008. |
+| D19 | None. | Failure screen for an engine failure or interruption: a two-line top margin, a space-conditional symbol and adaptive diagnostic inspection as described below, the red title "MirrorOS installation stopped", "Failed operation: <id>", "Exit status: <status>", the red line "The disk was partially modified and installation did not complete." (or "The disk was not modified." when no destructive operation had started), the last 15 lines of `engine.log`, "Run directory: <path>", and a separated shared accent-only menu "View full log" (`gum pager` with a slot-4 border) / "Return to shell" (selected) / "Restart" / "Power off", with native help. It offers no log upload, no media diagnosis, and no automatic action. A stop before the first destructive operation (`blocked` or `invalidated`) uses the D5 screen instead. Every line of this screen, including each of the 15 log lines, is wrapped at word boundaries within the 80-column form or available narrower width, preserving complete text and continuation alignment. D20, D22, engine no-valid-record reporting, and other failed-phase diagnostics now use the same form-width wrapping under their separate batch approval. | DEC-006, DEC-008; DEC-014 of Story 2.6. |
+| D20 | None. | `not_verified` screen, for the outcome `not_verified`: two top blank lines, a space-conditional symbol and adaptive diagnostic inspection as described below, the red title "MirrorOS installation could not be verified", the red line "Installation finished, but the installed system failed verification. Do not rely on it.", one block per failed check with "Failed check: <id>" and its non-secret `detail` (expected and observed values), the gray line "The disk was modified. The full result is in the run directory.", "Run directory: <path>", and a separated shared accent-only menu "View full log" (`gum pager` with a slot-4 border) / "Return to shell" (selected) / "Restart" / "Power off", with native help. No automatic action and no retry. The restart is never the default. Blank lines separate the warning and each failed-check block. Every line wraps within the 80-column form or available narrower width, as in D19. | DEC-008, DEC-014 of Story 2.6. |
 | D21 | Review rows end with "Internet"; the hardware appears only in the full plan as `not_evaluated`. | Review rows "Graphics", "CPU microcode", "Battery", and "Virtualization" are added after the "Machine" row, each showing the rule outcome in one line (for example "Kernel driver, nothing additional", "Installs amd-ucode", "Battery detected", or "Virtual machine"). Every warning of the plan, including the hardware warnings of the plan contract, appears as a persistent yellow line under the rows, like the swapfile warning of D15. The complete plan (D8) shows each outcome with its fact, detected value, and explanation, and the rule packages with their provenance. Nothing here is editable or blocks continuing. | FR18, FR33–FR35 of Story 2.6: hardware-derived choices are explained before approval. |
-| D22 | None. | For `not_configured`/`4`: the logo, the red line "Base system installed and verified; environment configuration failed at step <step>." (unknown when no step is available), the next action "Boot the installed system, log in at the console, and run sudo mirroros-configure.", and "Run directory: <path>". The menu is "View configure log" / "Restart" / "Return to shell" / "Power off", with "Return to shell" selected. The pager shows the configure portion of `engine.log`. Lines wrap at word boundaries like D20. No retry from the live medium and no automatic action; leaving for the shell returns `4`. | Story 4.2 DEC-027, DEC-028, DEC-032. |
+| D22 | None. | For `not_configured`/`4`: two top blank lines, a space-conditional symbol and adaptive diagnostic inspection as described below, the red line "Base system installed and verified; environment configuration failed at step <step>." (unknown when no step is available), the next action "Boot the installed system, log in at the console, and run sudo mirroros-configure.", and "Run directory: <path>". The menu is "View configure log" / "Restart" / "Return to shell" / "Power off", with "Return to shell" selected. The shared accent-only selector retains native help. The slot-4-border pager shows only the configure portion of `engine.log`. Blank lines separate the failure, recovery action, run directory, and menu. Lines wrap at word boundaries like D20. No retry from the live medium and no automatic action; leaving for the shell returns `4`. | Story 4.2 DEC-027, DEC-028, DEC-032. |
 | D23 | No configure announcement under the review rows. | Adds the fixed dimmed line "After the base system is verified, the graphical environment is configured." under the review rows in both review presentations, before confirmation. It fits 80 columns and does not add an editable choice or a plan operation. | Story 4.2 DEC-031. |
 
-The live medium additionally requests a different display geometry under
-[ADR 0017](../docs/adr/0017-live-console-display-preference.md): its default boot entry requests
-`video=1280x720`, with a separate native-display entry omitting that request. This approved live-only
-difference changes neither these screens nor the kernel-default font. Temporary large text remains a
-manual session adjustment, not an assistant feature or an installation-plan choice.
+### ADR 0018 presentation amendment
 
-Unchanged and not differences: the logo and its two-tone drawing, the palette and the VT-only palette setting, the
-centering, the Gum widget styles, the welcome text and the live-keyboard screen (including "This layout is for the
-live installation, not the installed system."), the Wi-Fi instruction text and its pager, the timezone,
-installed-keyboard, hostname, username, root-policy, storage, and language and formats screens and
-options, Back and Esc navigation in configuration steps, the cancellation message, and the console font (the
-kernel default; the reference documents none).
+[ADR 0018](../docs/adr/0018-native-live-display-and-installer-presentation.md) replaces the previous
+ADR 0017 mode preference: the single normal live entry preserves the firmware/kernel display choice
+without a MirrorOS display request. The duplicate native-display entry is removed from each loader.
+
+The shared installer uses `symbol.txt`, centered on the screen independently of an 80-column form,
+and the ADR's minimal palette, accent-only Gum selection without inverse video, and native Gum help.
+`COLORTERM=yes` preserves the distinction between help keys and descriptions. The previous `banner.txt`
+is retained unchanged for the existing graphical-wordmark contract; no installed presentation asset changes.
+
+The welcome title remains "Welcome to MirrorOS". Its body is "Let's set up your machine.", a blank line,
+"Installation keyboard: <label>", and the gray explanation "Used only during installation." A blank line
+precedes the choices "Continue", "Change keyboard layout", and "Change text size". Continue keeps the
+existing preparation flow; keyboard changes remain live-only and retain their existing selector and effects.
+
+"Change text size" opens "Installation text size", with the gray lines "Original restores the font selected
+at startup." and "Original x2 doubles the saved font, preserving every glyph.", then a blank line and
+"Original" / "Original x2", selecting the current value. Esc returns to welcome unchanged. Both sizes
+load the exact saved font and mapping; x2 always doubles that saved original. A private temporary file
+is captured on the current real VT at startup and restored on exit before temporary-file cleanup.
+Capture/load errors stop the flow; restoration errors report a reboot recovery action. Pseudo-terminals
+cannot change a VT font. The welcome and size selector omit the symbol below 32 rows. This does not
+establish fit, pagination, or warning wrapping for other screens, which remain subject to individual review.
+No text-size value enters the plan, approval, installed system, or retained evidence.
+
+The individually reviewed "Connect to the internet" screen uses the welcome's two-line symbol gap
+and omits the symbol below 32 rows. It keeps the secondary text "Internet access is needed to prepare
+and install MirrorOS." and "This connection is for the live environment only.", followed by a blank
+line and the shared accent-only selector without a generic header. Its options remain "Ethernet",
+"Wi-Fi", and "Cancel", initially selecting Ethernet, with native Gum help. Esc, Ctrl+C, cancellation,
+and preparation checks are unchanged. The individually reviewed "Connect with Ethernet" screen uses
+the same heading gap and short-console symbol omission. Its cable instruction uses secondary gray;
+a blank line separates instructions from a red retry error, when present, and another precedes the
+shared selector. Retry connection check and Back retain their behavior. The individually reviewed
+"Connect with Wi-Fi" screen uses the same heading gap, short-console symbol omission, secondary-gray
+instructions, and separated error and selector blocks. Retry connection check, Show connection
+instructions, Back, and the unchanged instruction text and pager retain their behavior. The individually
+reviewed Wi-Fi instruction pager uses the blue-gray accent (slot 4) for its border without changing its
+content or navigation. The individually reviewed "Waiting for the system clock" screen uses the same
+heading gap and short-console symbol omission, both explanations in secondary gray, and a blank line
+before the shared headerless selector. Retry clock check, Cancel, Esc, Ctrl+C, and the bounded clock
+readiness check remain unchanged. The individually reviewed "Preparing the package keyring" and
+"Package keyring not ready" screens use the same heading gap and short-console symbol omission.
+The waiting status remains secondary gray. The failure explanations use secondary gray with a blank
+line before the shared headerless selector; Retry keyring check, Cancel, Esc, and Ctrl+C retain their
+behavior. Service checks, the 600-second bound, and signature-verification policy remain unchanged.
+The individually reviewed "Machine check" (recognized and unqualified), "Choose installation disk",
+and "Choose storage layout" screens use the same heading gap, short-console symbol omission, and
+shared headerless selector with a blank line before choices. The machine identity remains principal
+foreground; the experimental warning remains yellow and its compatibility disclaimer remains secondary.
+Disk instructions, including the entire-disk notice, use secondary gray. Storage layout and recovery
+explanations use secondary gray, with a blank line between those blocks. All text, options, selected
+values, provider boundaries, existing-plan review jump, Esc/Cancel behavior, and authorization limits
+remain unchanged. These approvals do not qualify complete doubled-size usability.
+
+The individually reviewed five-stage batch covers "Choose hibernation", its conditional "Choose swapfile
+size" sub-form, "Select your timezone", "Choose system language", "Choose regional formats", and
+"Choose installed console keyboard". All six headings use the same symbol gap and short-console
+symbol omission. Choices use the shared headerless selector, preserving the existing widgets, options,
+current values, and native help. Descriptions and instructions use secondary gray, including the sizing
+range and the current meaning of following the system language. Blank lines separate description blocks
+and choices. The swapfile remains a `gum input` with its original prompt and value; invalid submissions
+retain the entered value and show the unchanged red error after the instructions, separated by blank
+lines before the error and input. The RAM-derived bounds, normalization, provider validation, Enabled/
+Disabled branching, explicit-size preservation and reset, Back/Esc/Ctrl+C behavior, and installed-versus-live
+keyboard distinction remain unchanged. The batch was approved using disposable synthetic data, without
+running discovery, planning, credentials, the installation engine, or disk operations. This does not qualify
+complete doubled-size usability or the later review and confirmation screens.
+
+The individually reviewed account batch covers "Name your machine", "Let's setup your user account...",
+and "Choose root account policy", including the current-password-policy disclaimer. All three headings
+use the same symbol gap and short-console symbol omission. Hostname retry errors are separated from
+the input by a blank line. Username instructions precede the unchanged red validation error, when
+present, with blank lines separating instructions, error, and input. Root explanations use secondary
+gray and separated blocks before the shared headerless selector. The shared-password disclaimer remains
+conditional on the current password policy. Text, options, current values, provider validation, retry
+values, Back/Esc/Ctrl+C, and the password-after-approval boundary remain unchanged. Approval used
+synthetic data only, without account changes or password collection; later screens and complete
+doubled-size usability remain unqualified.
+
+The individually reviewed "Review your choices" screen omits the symbol at every height to prioritize
+review content, retaining the two-line top margin, title, and complete answer rows. It uses separated
+secondary-gray explanations and the shared headerless selector, retaining the original options,
+current default, and native help, with the conditional adaptive-review option described below. All plan warnings remain yellow and non-blocking. They wrap at word boundaries within
+80 columns, or the available width on narrower consoles, with continuation lines aligned to the form;
+long words split rather than truncate. The below-memory swapfile warning follows the same rule. Warning
+text and conditional disabled-hibernation information are retained. The complete-plan pager uses the
+blue-gray border (slot 4) without changing its text, navigation, or status handling. Inspection returns
+to review and grants no authorization. Approval covered synthetic no-warning and multiple-warning
+presentations. A subsequent individually approved adaptive review measures the rendered body on each
+redraw, keeps separate rows when they fit, and otherwise groups Hostname/Username/Root and Timezone/
+Language/Locales only if each complete group fits horizontally. Rows and explanations also wrap to the
+form width. If grouping is insufficient, the full review opens in the blue-gray-bordered pager, followed
+by the safety footer and navigation, including "Inspect review". Leaving or reopening that pager retains
+answers and grants nothing; Ctrl+C and unexpected pager failures propagate as before. The rendered body
+is a private transient file under the existing run temporary directory, never authorization or retained
+evidence. No forced-height override exists in production. Attended synthetic review covered 149x41,
+a simulated two-line deficit at original size, and 74x20 with the saved font doubled. Measurement is
+recomputed on redraw, not a promise of live reflow while a widget remains open. Arbitrary geometries,
+long answer values beyond the tested cases, and complete doubled-size usability of the installer remain
+unqualified; no general whole-screen-fit guarantee is made.
+
+The individually approved "Confirm installation" screen uses the reviewed heading gap and omits the
+symbol below 32 rows. Disk, Path, Disk ID, New layout, and Plan reference reuse the review's aligned
+principal-foreground rows and form-width wrapping. Blank lines separate the rows, complete red erasure
+warning, confirmation control, and device-name input. The confirmation control uses the blue-gray
+selection accent without inverse video and still focuses No. The device-name input uses a blue-gray
+prompt and cursor, secondary placeholder, and principal value. Its exact instruction text is rendered
+as a separate secondary-gray block, followed by a blank line and the unchanged Device name prompt,
+rather than as Gum's internal input header.
+No, Esc, Ctrl+C, and a non-matching name still cancel; there is no Back or second attempt. Provider
+boundaries and plan/disk binding remain unchanged. Approval used an isolated synthetic preview without
+passwords, real authorization, or disk operations. It does not qualify all long values, the unqualified
+variant's fit, or complete doubled-size usability.
+
+The subsequently approved "Password" presentation uses the reviewed heading gap and short-console
+symbol omission, secondary-gray account and safety explanations separated by a blank line, and the
+unchanged red validation error after those explanations, separated from the input. Both masked fields
+use the approved blue-gray prompt/cursor and secondary placeholder style; no extra blank line is added
+between Password and Confirm. Esc in Confirm clears both values and the displayed error before restarting
+Password; Esc in Password returns to review and clears approval. Non-empty matching values remain the
+only validation, without an attempt limit or strength policy. Approval used synthetic masked values only,
+without authorization, credential persistence, engine execution, or disk operations. Outcome screens
+and complete doubled-size usability remain pending.
+
+The subsequently approved progress composition is informed by the dashboard extracted read-only from
+the verified Omarchy 4.0.4 ISO. It centers the MirrorOS symbol, title, 34-column bar, and complete operation
+and package/configure details as one block. Completed `█` cells use principal foreground (slot 7), while
+remaining `░` cells and status text use secondary gray (slot 8). The symbol is omitted below 32 rows;
+status lines wrap rather than truncate. State redraws retain the static symbol when geometry and rendered
+height are unchanged; leaving progress restores the cursor and clears the cached layout. Geometry is
+measured on state redraw, not continuously while the engine state is unchanged. Progress still counts
+completed plan operations plus configure; package counts and elapsed time never advance the bar.
+No upstream estimator, supervisor, tips, animation, or installation code is incorporated. The repeating
+synthetic preview is not production behavior or installation evidence.
+
+The subsequently approved success screen continues the centered composition with the MirrorOS symbol
+and unchanged "Installed MirrorOS in <duration>" title, omitting the symbol below 32 rows. The redundant
+"Base system verified and graphical environment configured." explanation is removed from this screen;
+the installed outcome still requires both verification and configuration success. The vertical Restart now /
+Return to shell menu uses the shared accent-only selector with Restart now selected and native help.
+Options and help share the title's left margin, derived from the rendered title rather than a fixed duration.
+No animation, automatic restart, or change to outcome handling is added. Approval used a disposable
+synthetic success screen whose actions only closed the demo; failure screens and complete doubled-size
+usability remain pending.
+
+The subsequently approved engine-failure screen starts at the two-line top margin without the symbol,
+leaving room for diagnostics. The red title, principal operation/status, separated red partial-modification
+warning, complete last 15 sanitized log lines, secondary run directory, and separated shared selector
+retain their text and behavior. Every diagnostic line wraps within the 80-column form or available
+narrower width, with aligned continuations and no truncation. Return to shell remains selected. View
+full log opens the unchanged log in a slot-4-border pager and returns to the failure screen. Restart and
+Power off still require their explicit menu choices; there is no retry or automatic action. At that
+checkpoint, the D20 selector and pager remained pending review. Both the partially-modified and no-disk-modification
+variants were individually approved using synthetic failures and logs, without disk or power actions.
+The no-disk-modification variant retains the principal-foreground "The disk was not modified." line.
+The later nine-scenario error batch approves D20 (multiple failed checks), D22 (known and unknown
+configure step), missing/invalid engine record reporting, recoverable discovery, rejected plan combinations,
+blocked discovery, invalidated approval, and unexpected phase failure. These diagnostics use the two-line
+top margin without a symbol, separated complete blocks, and 80-column-form or narrower wrapping.
+D20 retains its red warning and all failed checks; D22 retains the installed-system recovery instruction.
+Their shared accent-only menus retain options, defaults, native help, explicit power actions, and existing
+return behavior; full/configure-only logs use slot-4 pager borders. Recoverable discovery still offers
+Retry / Back / Cancel with Retry selected; rejected combinations still offer Back / Cancel with Back
+selected. Other phase failures gain neither retry nor menu. Error outcomes render the unchanged
+"Evidence: <path>" label in secondary gray, wrapped and aligned to the diagnostic form. Success and
+cancellation evidence output are unchanged. Outcome/status normalization, approval invalidation, log
+filtering, recovery, and all safety boundaries remain intact. The preview-only navigator, Enter pause,
+and synthetic data are not integrated. Approval used only disposable synthetic failures and logs;
+long-content fit, arbitrary geometries, and complete doubled-size usability remained pending at that checkpoint.
+
+The later approved adaptive-error review supersedes the unconditional symbol omission of those error
+presentations. It covers both engine disk-modification variants, multiple failed postconditions, known/
+unknown configure steps, missing/invalid engine records, recoverable discovery, rejected combinations,
+blocked discovery, invalidated approval, and unexpected phase failures. On redraw, the complete wrapped
+diagnostic is measured with its menu/help or terminal Evidence output. If it fits, it remains inline.
+The symbol and its two-line gap appear only at 32 or more rows and only if that entire composition fits;
+otherwise the symbol is omitted before resorting to paging. If the diagnostic still needs more height,
+the complete body opens in a slot-4-border pager, followed by a compact outcome or phase/next-action
+summary. No log-tail line, failed-check detail, cause, or evidence path is removed from inspection.
+The summary retains the applicable disk warning, verification warning, or installed-system configure
+recovery instruction. It receives its own logo/height budget, including the additional inspection choice:
+a paged diagnostic can therefore return to a summary with a symbol when that smaller composition fits.
+
+Existing menu options and defaults are preserved; only paged menu-bearing errors add "Inspect diagnostic"
+to reopen the complete body. Inspection does not retry discovery, regenerate a plan, change approval,
+or perform a power action. Terminal-only errors gain neither menu nor retry. Their complete cause and
+Evidence path remain in the initial inspection, and normal ending output still reports Evidence. Private
+render files live only under the existing run temporary directory and are removed by normal cleanup;
+they never authorize anything. Final outcome menus and their inspectors remain after record writing.
+Leaving or failing an inspector cannot turn an existing terminal or recorded failure into success or
+replace its outcome; Ctrl+C in recoverable interactive inspection retains cancellation semantics.
+Geometry is measured on redraw, not continuously while a widget is open. Approval used only synthetic
+long logs, long paths, and failed checks at original and saved-font-doubled sizes, without installation,
+credentials, disk changes, or power actions. Preview navigators, pauses, font controls, and synthetic
+fixtures are excluded from production. Arbitrary geometries, unbounded summary text, other screen
+families, and complete doubled-size usability of the installer remain unqualified.
+
+A subsequent attended saved-font-doubled review approved the remaining displayed batches without
+product changes: unqualified machine, disk and storage; hibernation with conditional sizing, timezone,
+language, formats and installed keyboard; hostname, username, root policy and masked password entry;
+welcome and preparation; unqualified confirmation and device-name entry; and synthetic progress and
+success. Together with the earlier adaptive-review and adaptive-error approvals, this completes the
+planned synthetic screen-family review at Original x2 on this live VM. It does not qualify every branch,
+unbounded values, arbitrary geometries, live widget reflow, physical hardware, or a rebuilt ISO.
+No discovery, real credential, account change, installation engine, disk operation, or power action was
+used in these batches. Temporary font controls, navigation, waits and synthetic providers remain outside
+production. Earlier pending statements describe their respective checkpoints, not this later approval.
+
+Subsequent visual previews apply the agreed baseline before review: principal titles and options,
+secondary descriptions and instructions, red errors, separated content blocks, and shared selectors
+without a generic header. Editable-field prompts use the blue-gray interaction accent (slot 4), with a
+slot-4 cursor, secondary-gray placeholders (slot 8), and values in the principal foreground. This input
+style is individually approved and applied to swapfile size, hostname, and username, retaining their
+exact prompts, placeholders, values, validation, and navigation. Apply the same criterion to remaining
+editable fields during their individual review, including password and device-name confirmation fields;
+this does not approve those screens, alter masking, or weaken authorization. Gum 2.0.2 exposes prompt,
+placeholder, and cursor colors, but not an editable-value color flag; no Gum patch or terminal-color
+workaround is introduced. This baseline does not approve unreviewed screen content or navigation.
+
+Unchanged and not differences: the VT-only palette boundary, the live-keyboard selector and its effects,
+the Wi-Fi instruction text and pager behavior, timezone, installed-keyboard, language and formats
+options and behavior, the hostname, username, and root-policy screens, storage choices and behavior,
+Back and Esc navigation in configuration steps, and the cancellation message. The initial
+console font remains the kernel-selected font unless the operator has changed it before entering the guide.
 
 Complete simultaneous fit within 80x25 is not required, and no colorless variant or dedicated pager feature test
 is part of this contract.

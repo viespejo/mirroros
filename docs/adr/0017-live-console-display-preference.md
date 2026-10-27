@@ -130,4 +130,4 @@ installed boot policy. Selecting the native-display entry reverses the request f
 
 ## Superseded by
 
-`None`
+[ADR 0018](0018-native-live-display-and-installer-presentation.md) supersedes this decision in full: the live medium no longer requests 720p and the installer offers temporary text sizing.

@@ -150,4 +150,6 @@ These amendments are applied only when this ADR is accepted (plan 02-07, Task 5)
 
 ## Superseded by
 
-Partially superseded by [ADR 0008](0008-installation-engine-execution-boundary.md), which supersedes only the hand-over boundary: the premise that no installation engine is reachable and the reversal-boundary clause that required this supersession. The rest of this decision is unchanged.
+Partially superseded by [ADR 0008](0008-installation-engine-execution-boundary.md), which supersedes only the hand-over boundary: the premise that no installation engine is reachable and the reversal-boundary clause that required this supersession. The rest of this decision is unchanged by ADR 0008.
+
+[ADR 0018](0018-native-live-display-and-installer-presentation.md) supersedes only the kernel-default-font consequence by permitting an optional temporary Original / Original x2 selector. Its live-only presentation changes do not alter the safety boundaries.

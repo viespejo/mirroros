@@ -120,7 +120,6 @@ approve_plan_script() {
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.reasons.length === 0"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "!('reason' in d)"
   confirm_assert_output_contains 'Installed MirrorOS in'
-  confirm_assert_output_contains 'Base system verified and graphical environment configured.'
   confirm_assert_gum_called 'After the base system is verified, the graphical environment is configured.'
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.outcome === 'installed' && d.exit_status === 0 && d.not_started.length === 0"
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.plan_digest === JSON.parse(require('node:fs').readFileSync('${RUN_DIR}/plans/01/installation-plan.json', 'utf8')).digest.value"
@@ -135,10 +134,10 @@ approve_plan_script() {
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password,discovery_final,engine'"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "/^[0-9a-f]{64}$/.test(d.digest) && d.outcome === 'installed'"
-  confirm_assert_gum_called 'confirm --default=false --affirmative Yes, erase --negative No Erase /dev/vda and apply plan '
+  confirm_assert_gum_called 'confirm --prompt.foreground 7 --selected.foreground 4 --selected.background 0 --default=false --affirmative Yes, erase --negative No Erase /dev/vda and apply plan '
   confirm_assert_gum_called 'Recognized machine: reference-vm'
-  confirm_assert_gum_called 'input --password --show-help --prompt Password> '
-  confirm_assert_gum_called 'input --password --show-help --prompt Confirm> '
+  confirm_assert_gum_called 'input --password --show-help --prompt.foreground 4 --placeholder.foreground 8 --cursor.foreground 4 --prompt Password> '
+  confirm_assert_gum_called 'input --password --show-help --prompt.foreground 4 --placeholder.foreground 8 --cursor.foreground 4 --prompt Confirm> '
   confirm_assert_private
   confirm_assert_log_plain
 }
@@ -313,7 +312,7 @@ SH
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
-  [ "$(grep -c 'Select install disk' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
+  [ "$(grep -c '^choose .*--height 5 --selected /dev/vda (32G) /dev/vda (32G)$' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.digests.length === 1"
 }
 
@@ -397,7 +396,7 @@ SH
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
-  confirm_assert_gum_called '--header Select install disk /dev/vda (32G) /dev/vdb (32G)'
+  confirm_assert_gum_called '--height 5 --selected  /dev/vda (32G) /dev/vdb (32G)'
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.target_disk === '/dev/vdb'"
   confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.target.disk.path === '/dev/vdb'"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "d.disk.path === '/dev/vdb'"
@@ -415,7 +414,7 @@ SH
   [ "$(grep -c 'Experimental: this machine matches no known profile.' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'unqualified' && !('profile_id' in d.profile)"
   confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.target.profile.status === 'unqualified' && d.warnings.some(w => w.code === 'machine_unqualified')"
-  confirm_assert_gum_called 'confirm --default=false'
+  confirm_assert_gum_called '--default=false --affirmative Yes, erase --negative No'
 }
 
 @test "--plan reviews a copy of the plan, the original stays untouched, and confirmation is fresh" {
@@ -430,7 +429,7 @@ SH
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && Object.keys(d).length === 1"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.entry === 'plan_file' && d.digests.length === 1"
   confirm_assert_gum_not_called 'Choose installation disk'
-  confirm_assert_gum_called 'confirm --default=false'
+  confirm_assert_gum_called '--default=false --affirmative Yes, erase --negative No'
 }
 
 @test "a tampered plan given with --plan is invalidated before any prompt" {
@@ -478,7 +477,7 @@ SH
   confirm_assert_run 2 invalidated
   confirm_assert_reason policy_changed
   confirm_assert_gum_not_called '^(confirm|input) '
-  confirm_assert_gum_not_called 'Review navigation'
+  confirm_assert_gum_not_called '--selected Continue to confirmation'
 }
 
 @test "a changed layout invalidates the plan before review" {
@@ -489,7 +488,7 @@ SH
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason target_layout_changed
-  confirm_assert_gum_not_called 'Review navigation'
+  confirm_assert_gum_not_called '--selected Continue to confirmation'
 }
 
 @test "a changed machine identity invalidates the plan before review" {
@@ -501,7 +500,7 @@ SH
   confirm_assert_run 2 invalidated
   confirm_assert_reason machine_identity_changed
   confirm_assert_reason profile_binding_changed
-  confirm_assert_gum_not_called 'Review navigation'
+  confirm_assert_gum_not_called '--selected Continue to confirmation'
 }
 
 @test "a changed detected memory invalidates the plan before review" {
@@ -512,7 +511,7 @@ SH
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason machine_identity_changed
-  confirm_assert_gum_not_called 'Review navigation'
+  confirm_assert_gum_not_called '--selected Continue to confirmation'
 }
 
 @test "a changed or missing configuration asset invalidates the plan before review" {
@@ -525,7 +524,7 @@ SH
   [ "$CONFIRM_STATUS" -eq 2 ]
   confirm_assert_run 2 invalidated
   confirm_assert_reason configuration_assets_changed
-  confirm_assert_gum_not_called 'Review navigation'
+  confirm_assert_gum_not_called '--selected Continue to confirmation'
   rm -rf -- "$RUN_DIR" "$asset"
   confirm_queue choose '0|Continue'
   confirm_run_pty --plan "$PLAN_FILE" --output "$RUN_DIR"
@@ -603,7 +602,7 @@ SH
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
-  [ "$(grep -c -- '--header Hibernation' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
+  [ "$(grep -c '^choose .*--height 3 --selected Enabled Enabled Disabled$' "${DOUBLE_STATE}/gum-calls.log")" -eq 2 ]
 }
 
 # A hook that swaps the fixture root for another raw fixture, as if the disk changed under the run.
@@ -738,7 +737,7 @@ swap_scenario_hook() {
 }
 
 @test "the live keyboard change stays in the live session and does not alter the installed choices" {
-  confirm_queue choose '0|Change installation keyboard layout' '0|Spanish (ES)' '0|Continue' '0|Continue' '0|/dev/vda (32G)' \
+  confirm_queue choose '0|Change keyboard layout' '0|Spanish (ES)' '0|Continue' '0|Continue' '0|/dev/vda (32G)' \
     '0|ext4 + systemd-boot - Supported' '0|Enabled' '0|Europe/Madrid' '0|English (US)' '0|Follow system language' '0|English (US)' \
     '0|Locked (default)' '0|Continue to confirmation' '0|Return to shell'
   confirm_queue input '0|4096' '0|mirroros-ref' '0|mirroros' '0|vda' "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"

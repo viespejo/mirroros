@@ -8,7 +8,7 @@ FLOW_CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
 readonly REQUIRED_FILES=(
   operations/lib/timing.sh
   install/confirmation/assistant.mjs
-  install/confirmation/banner.txt
+  install/confirmation/symbol.txt
   install/confirmation/cli.mjs
   install/confirmation/compare-safety.mjs
   install/confirmation/edit-choices.mjs

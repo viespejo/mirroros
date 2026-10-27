@@ -129,37 +129,155 @@ On the live ISO the same assistant opens automatically on tty1 as root (ADR 0006
 
 ### Live display and text size
 
-Under [ADR 0017](../adr/0017-live-console-display-preference.md), the default USB/UEFI entry is
-**MirrorOS Live/Rescue - prefer 1280x720**. It requests `video=1280x720` for this live boot only. The kernel
-and driver decide the effective mode; this is not a forced connector or a check that the panel advertises
-720p. The font remains the kernel default. The boot menu itself need not change size.
+Under [ADR 0018](../adr/0018-native-live-display-and-installer-presentation.md), the normal USB/UEFI
+entry is **MirrorOS Live/Rescue**. It preserves the firmware/kernel display choice without requesting
+720p or any other mode. This does not guarantee the panel's native resolution. The redundant native-display
+entry is removed. Retained GRUB configurations follow the same policy; Ventoy is not a qualified boot path.
+Installed boot parameters, desktop scaling, and the greeter's monitor policy remain separate.
 
-If the screen is blank, distorted, or unsuitable, reboot to the USB menu and select
-**MirrorOS Live/Rescue - native display**. That entry omits the mode request and preserves the
-firmware/kernel choice; automatic fallback is not guaranteed. Do not interrupt an installation that is
-writing the disk just to adjust presentation. Neither entry changes installed boot parameters, desktop
-scaling, or the greeter's monitor policy. GRUB configuration retains the same alternatives for compatibility;
-Ventoy is not a qualified boot path.
+The welcome offers **Change text size** on the live console:
 
-Optional larger text is a temporary live-console adjustment, not the default. Before installation starts,
-cancel the assistant to its root shell on the console you want to adjust, then run:
+- **Original** restores the exact font and mapping captured when this assistant started.
+- **Original x2** doubles that same saved font using `setfont -d`, preserving its glyphs. Repeated selection
+  does not repeatedly double the current font. No packaged font is substituted.
 
-```bash
-setfont -d default8x16
-mirroros-install
-```
+The initial font is unchanged. Changes affect only the current virtual console, are restored when the
+assistant exits or handles cancellation/interruption, and are never copied to the installed system or
+retained evidence. Esc from the size selector returns to welcome unchanged. Capture or loading failures
+stop the flow; a restoration failure reports the recovery action. Forced termination cannot guarantee
+restoration; rebooting the live medium discards the temporary change. Pseudo-terminals cannot resize a VT font.
 
-This doubles the 8x16 font to 16x32. It can displace the logo or overflow long screens; check the review
-and warnings before proceeding. Restarting the assistant redraws the screen with the new glyphs instead
-of judging text left over from the previous rendering. Do not start a second assistant while one is active
-on another console. To restore the boot font and its mapping, cancel back to that console's shell and run
-`setfont -R`, then restart the assistant. Rebooting also discards the adjustment. No font setting is copied
-to the installed system.
+Doubled text reduces rows and columns. The welcome, size selector, and reviewed "Connect to the internet"
+screen, plus the reviewed "Connect with Ethernet", "Connect with Wi-Fi", "Waiting for the system clock",
+"Preparing the package keyring", "Package keyring not ready", "Machine check", "Choose installation disk",
+"Choose storage layout", "Choose hibernation", "Choose swapfile size", "Select your timezone",
+"Choose system language", "Choose regional formats", "Choose installed console keyboard", "Name your machine",
+"Let's setup your user account...", "Choose root account policy", and "Confirm installation" screens,
+omit their symbol below 32 rows. The connection screen retains its live-only text and Ethernet,
+Wi-Fi, and Cancel options, with a blank line before the shared selector and no generic header.
+The reviewed "Review your choices" screen omits its symbol at every height and retains the two-line
+top margin. Its answer rows and safety text remain complete, with secondary explanations, separated
+blocks, and the shared headerless selector. Yellow warnings wrap within the 80-column form, or the
+available narrower width, with aligned continuation lines and no truncation. The complete-plan pager
+uses the blue-gray border; inspecting it returns to review and grants no authorization. Synthetic
+no-warning and multiple-warning presentations were approved. The subsequently approved adaptive review
+measures its rendered height and terminal geometry on each redraw, reserving room for its title, margins,
+menu, and native help. It retains separate rows if they fit. Otherwise it independently groups Hostname/
+Username/Root and Timezone/Language/Locales only when each complete group fits horizontally. If the
+review still needs more height, a blue-gray-bordered pager shows it in full before navigation; the menu
+then also offers Inspect review. Neither viewing nor reopening the review authorizes installation.
+Rows and explanations wrap without truncation. A disposable synthetic review exercised original-size
+149x41, a simulated two-line deficit, and 74x20 with the captured font doubled; production has no forced
+height option. Redraw measurement is not live reflow during an open widget, qualification of arbitrary
+geometries or all long values, or complete doubled-size qualification of other screens. Ethernet and Wi-Fi use secondary-gray
+instructions, a separate red error block after a failed retry, and a blank line before the shared selector.
+Retry, Back, and Wi-Fi's Show connection instructions with its unchanged text and pager behavior are preserved;
+that pager's border uses the blue-gray accent. The clock screen uses secondary-gray explanations and a
+blank line before the shared selector, with Retry clock check and Cancel unchanged. Keyring waiting
+status and failure explanations use secondary gray; the failure adds a blank line before the shared
+selector, with Retry keyring check and Cancel unchanged. Service checks and their wait bound are unchanged.
+Machine check retains both recognized and experimental text, including the yellow warning and compatibility
+disclaimer, with a blank line before the shared selector. Disk instructions and storage recovery explanations
+use secondary gray and separated option blocks; all choices and defaults remain unchanged, and selecting
+a disk or layout authorizes no disk operation. The approved hibernation/timezone/language/formats/installed
+keyboard batch uses shared headerless selectors and separated secondary-gray instructions. Conditional
+swapfile sizing keeps its original input, current value, and RAM-derived range; a rejected value stays in
+the input and its unchanged red error appears after the instructions, separated from the input by a blank
+line. Disabling skips sizing and clears the explicit size; re-enabling proposes the RAM-derived default.
+Esc from sizing returns to hibernation. The approved account batch separates hostname retry errors
+from the input and places username errors after the instructions, with blank lines between blocks.
+Root explanations use secondary gray and a shared headerless selector after a blank line; the
+shared-password disclaimer remains conditional on the current password policy. Both root variants,
+text, options, values, validation, navigation, and the password-after-approval boundary are preserved.
+This approval used synthetic data without changing accounts or collecting passwords.
+The approved confirmation screen uses the review's aligned principal-foreground rows and form-width
+wrapping for Disk, Path, Disk ID, New layout, and Plan reference. Blank lines separate these rows,
+the full red erasure warning, the blue-gray-accented confirmation control, and the device-name input.
+No remains selected by default; No, Esc, Ctrl+C, and a name mismatch cancel without a second attempt.
+The device-name field uses the approved blue-gray prompt/cursor and secondary placeholder, retaining
+its exact instruction and prompt text. The instruction is a separate secondary-gray block with a blank
+line before the input, not an internal Gum header. The synthetic preview grants no real authorization and does not qualify
+all long values, the unqualified variant's fit, or doubled-size usability.
+The approved password screen uses the reviewed heading gap and short-console symbol omission,
+separated secondary-gray account and safety explanations, and unchanged red validation errors after
+those explanations with space before the input. Both fields remain masked and use the approved
+blue-gray prompts/cursors and secondary placeholders, with no extra blank line between the fields.
+Esc in Confirm clears the pair and displayed error before restarting Password; Esc in Password returns
+to review and clears approval. Only a non-empty matching pair is required, with no strength policy or
+attempt limit. Review used synthetic values only, without installation or credential persistence.
+The subsequently approved progress screen centers the symbol, title, bar, and complete status lines
+vertically and horizontally, with a 34-column bar (reduced only for narrower terminals), principal
+completed blocks, and secondary-gray remaining blocks and details. It omits the symbol below 32 rows
+and wraps status text without truncation. State redraws update only the dynamic area unless geometry
+or rendered height changed; leaving progress restores the cursor and clears the layout cache. Geometry
+is measured when state changes trigger a redraw, not continuously. The composition was informed by
+read-only inspection of the verified Omarchy 4.0.4 ISO; no upstream estimator, supervisor, tips, or
+installation code is used. The bar still counts completed operations plus configure, never elapsed time
+or package counts. Approval used repeating synthetic snapshots only; the repeat is not product behavior.
+The subsequently approved success screen keeps the symbol and installed-duration title centered as a
+block, omits the symbol below 32 rows, and removes the redundant configuration-success explanation.
+Its vertical Restart now / Return to shell menu uses the shared accent-only selector and native help,
+with both options and help aligned to the title's left margin. Restart now stays selected; only choosing it
+requests a restart. Verification and configuration still gate installed success. Approval used a synthetic
+demo with no power actions.
+The subsequently approved engine-failure presentation omits the symbol, preserves the two-line top
+margin, and separates operation/status, the red disk warning, the complete last 15 sanitized log lines,
+the secondary run directory, and the shared accent-only menu. Diagnostics wrap within the 80-column
+form or available narrower width without truncation; Return to shell stays selected and native help is
+retained. View full log uses the slot-4 pager border and returns to the failure screen. Text, outcomes,
+explicit power choices, and the absence of retry remain unchanged. Both partially-modified and
+no-disk-modification variants were individually approved with synthetic failures and logs only; the latter
+retains the principal-foreground "The disk was not modified." line.
+The later nine-scenario error batch also approves verification failure with multiple failed checks,
+configuration failure with a known or unknown step, missing/invalid engine records, recoverable discovery,
+rejected plan combinations, blocked discovery, invalidated approval, and unexpected phase failure.
+These screens keep the two-line top margin without a symbol, separated complete blocks, and form-width
+wrapping. Verification/configuration menus keep Return to shell selected and native help; full-log and
+configure-only inspection use slot-4 pager borders. Recoverable discovery retains Retry / Back / Cancel
+and rejected plans retain Back / Cancel, with their original defaults. Terminal failures gain no menu or
+retry. Error outcomes show the unchanged Evidence label in secondary gray at the form's margin; success
+and cancellation evidence output are unchanged. All outcome, approval, recovery, and explicit power
+semantics remain intact. The preview-only navigator, Enter pause, and synthetic data are not installed.
+The later approved adaptive-error presentation supersedes unconditional symbol omission for these
+error families. The complete diagnostic is measured on redraw, including the existing menu/help or
+terminal Evidence output. If it fits, it stays inline. At 32 or more rows the symbol and its two-line gap
+are shown only if the complete composition fits; otherwise the symbol is omitted first. If the diagnostic
+still overflows, a blue-gray-bordered pager shows all of it before the compact summary and existing
+navigation. Disk/verification warnings and the installed-system configure recovery instruction remain
+in the summary. Its logo budget is measured independently, so a summary can show the symbol even when
+the complete diagnostic needed a pager. Paged menu-bearing errors add Inspect diagnostic; their original
+options and defaults remain unchanged. Terminal-only failures gain no menu or retry. All causes, failed
+checks, 15 sanitized log-tail lines, and evidence paths remain inspectable, with full/configure-only log
+inspection unchanged. Inspection never retries discovery, regenerates a plan, authorizes installation,
+or triggers a power action. Private render files are transient, not authorization or retained evidence.
+Final menus and their inspectors still follow record writing; their failures cannot replace the recorded
+outcome. Terminal failure inspection preserves the existing error outcome, while recoverable interactive
+Ctrl+C still cancels. Approval used synthetic long logs and paths at original and saved-font-doubled sizes
+only. Preview controls and pauses are not installed. Arbitrary geometries, unbounded summary text,
+other screen families, and complete doubled-size installer usability remain unqualified.
+Swapfile size, hostname, and username inputs use blue-gray
+prompts and cursors, secondary-gray placeholders, and principal-foreground values, with their original
+text and behavior. The same input-accent criterion applies to remaining editable fields during individual
+review; password masking and destructive confirmation remain separate and unchanged. Installed console
+keyboard selection does not change the live keyboard or configure Wayland layouts. Approval was a synthetic presentation review, not installation
+or complete doubled-size qualification. Return to
+welcome and select Original if content cannot be inspected completely. Do not interrupt disk writes merely
+to adjust presentation, and do not start a second assistant on another console.
+
+A later attended Original x2 review approved the displayed machine/disk/storage, hibernation/sizing/
+locale/installed-keyboard, accounts/password, welcome/preparation, confirmation/device-name, and
+progress/success batches without further product changes. Alongside the earlier adaptive review and
+error approvals, this completes the planned synthetic screen-family review on this live VM, not an
+end-to-end installation or rebuilt-artifact qualification. Every branch, unbounded content, arbitrary
+geometries and physical hardware remain outside that claim. Demos used synthetic providers and values;
+no real credentials, network checks, account changes, engine, disk operations or power actions ran.
+Preview navigation, waits and font controls are not installed. Earlier pending notes retain their
+historical checkpoint scope.
 
 For a display check, read `cat /proc/cmdline`, `showconsolefont -i`, `stty size`, and, if present,
 `cat /sys/class/graphics/fb0/virtual_size`; virtual framebuffer size alone is not proof of the active
-connector mode. Record the effective connector mode too when qualifying the artifact. At effective
-1280x720 with an 8x16 font expect roughly 160 columns and 45 rows, not a universal fit guarantee.
+connector mode. Record the effective connector mode too when qualifying the artifact. No fixed mode,
+font dimensions, or universal screen-fit guarantee is implied.
 
 ### Inputs and flow
 
@@ -169,13 +287,13 @@ connector mode. Record the effective connector mode too when qualifying the arti
 - `--plan <file>` validates and copies an existing version 4 plan into `plans/01/`, preserving the original; plans of earlier versions are rejected with regeneration guidance, and a plan generated by a different build of the code (`engine_version_mismatch`) is rejected before review.
 - Only one installation run can be active. The assistant takes a non-blocking lock on `/run/mirroros/install.lock` right after the terminal gate and holds it through the engine; a second `mirroros-install` exits `2` with `install_already_running` on stderr, with no run directory, no records, and no mount touched. The lock is released when the run ends, however it ends. `--output <dir>` names an absent or empty run directory, defaulting to `evidence/install/<run-id>/`.
 
-After the TTY and Gum checks, the screens follow the frozen reference in `prototypes/frontend/guided-installer/`, in this order: welcome with the live keyboard; live connectivity and clock preparation; automatic machine discovery; installation disk (always shown, with real eligible candidates); storage; hibernation (with the swapfile size when enabled); timezone; system language; regional formats; installed console keyboard; hostname; username; root policy; compact review; real confirmation; password entry; final revalidation; installation progress; and the success or failure ending. Defaults, per-value validation, and plan generation come from the plan component (`plan preview-choices` and `plan validate-choice`); the assistant holds no policy of its own.
+After the TTY and Gum checks, the screens follow the frozen reference in `prototypes/frontend/guided-installer/`, with the approved ADR 0018 visual baseline, in this order: welcome with the live keyboard and temporary text-size choice; live connectivity and clock preparation; automatic machine discovery; installation disk (always shown, with real eligible candidates); storage; hibernation (with the swapfile size when enabled); timezone; system language; regional formats; installed console keyboard; hostname; username; root policy; compact review; real confirmation; password entry; final revalidation; installation progress; and the success or failure ending. Defaults, per-value validation, and plan generation come from the plan component (`plan preview-choices` and `plan validate-choice`); the assistant holds no policy of its own.
 
 - **Live settings are not installed settings.** The live keyboard and the live connection affect only this session. Wi-Fi credentials are never requested or retained and live connections are not copied to the installed system. Preparation gives the ISO's enabled time synchronization a bounded readiness check (60 seconds per attempt, measured by counted one-second waits); a clock failure offers help, retry, or cancellation and never bypasses TLS or signature verification. After the network and clock checks, preparation also waits visibly for `pacman-init.service` (the live package keyring, up to 10 minutes) and draws a screen only when it has to wait or fail; a failure offers help, retry, or cancellation with `live_keyring_not_ready`, before any confirmation or password is requested.
 - **Review and regeneration.** A validated plan is generated on entering review and regenerated whenever an answer changed, in a new `plans/NN/` with its `choices.json`. An invalid combination reports `message` and `next_step`, keeps the last valid plan, and grants no approval. Unchanged proposals keep their provenance and source. The compact review shows every hardware rule outcome and all warnings before confirmation, plus the fixed line "After the base system is verified, the graphical environment is configured." It can open the complete plan (disk and layout, choices with provenance, operations, warnings, secret requirements, and the plan reference) in the `gum pager`; returning keeps the answers and authorizes nothing. The pager has no dedicated feature test, an accepted limitation.
-- **Password.** One account password is requested after the bound confirmation and before any disk write, in two protected fields (`Password>` and `Confirm>`). It must be non-empty and match; a blank or mismatched pair asks both again, and there is no attempt limit or strength policy. Esc returns to the review and clears the approval; Ctrl+C cancels with exit `3` before the engine starts. The value is handed to the engine only on a dedicated file descriptor and reaches `chpasswd` on its stdin inside the target; the root account receives it only with the `password` root policy, otherwise root is locked. It never appears in arguments, the environment, the plan, the review, logs, records, or evidence.
+- **Password.** One account password is requested after the bound confirmation and before any disk write, in two protected fields (`Password>` and `Confirm>`). It must be non-empty and match; a blank or mismatched pair asks both again, and there is no attempt limit or strength policy. Esc in `Confirm>` discards both values and returns to `Password>` within the same stage, retaining the bound approval. Esc in `Password>` returns to the review and clears the approval; Ctrl+C cancels with exit `3` before the engine starts. The value is handed to the engine only on a dedicated file descriptor and reaches `chpasswd` on its stdin inside the target; the root account receives it only with the `password` root policy, otherwise root is locked. It never appears in arguments, the environment, the plan, the review, logs, records, or evidence.
 
-Confirmation starts focused on No and shows the disk, its path, and the plan reference. After Yes, type the kernel device name shown by the prompt, such as `vda` (not the plan reference); a mismatch cancels without retry. Backward navigation after authorization clears it. After the password explanation, final rediscovery checks the machine projection, profile binding, firmware, Secure Boot state, disk identity, eligibility and layout, policy and override hashes, and the plan file's digest. A change invalidates approval with a specific reason and the next step "Regenerate and review the installation plan." The engine then starts as a non-interactive child. Before it touches the disk it validates the plan and its digest, rejects a different operation set or code identity, and re-reads the disk one last time; a disk that changed ends the run `invalidated` and a disk that is mounted, swap, or held by LVM, dm-crypt, or md ends it `blocked`, both with the disk untouched. At the start of every run only `/run/mirroros/target` and a swapfile beneath it are released; no other mount is ever touched. The progress bar counts completed plan operations plus one final unit for configure; every fixed engine-phase line fits 80 columns including its prefix, and operation descriptions are limited to 72 characters. After the last operation, the engine checks the still-mounted target read-only: kernel and initramfs, mounts and UUID-based fstab, bootloader and root UUID, zswap and resume parameters, swapfile when enabled, zram and sysctl assets, NetworkManager prerequisites, and planned microcode in the initramfs. Only after those base postconditions pass, the engine copies configure's rerun code and `identity.json` to `/usr/local/lib/mirroros/` on the target and creates `/usr/local/bin/mirroros-configure`. It runs its embedded `operations/configure --target-root /run/mirroros/target --user <planned user>`, with package, user, and unit commands inside `arch-chroot`, target package transactions using `SNAP_PAC_SKIP=y`, and SDDM enabled but never started. The final progress line is "[N+1/N+1] Configure the graphical environment." with numeric positions; a second line shows "Configure step: <k>/<total> <step>" instead of a package count. Configure output is appended to `engine.log`; only outcome `0` permits `installed`/`0`, followed by normal target cleanup. On success the screen states the installed duration and "Base system verified and graphical environment configured.", and offers "Restart now" or "Return to shell"; on failure it states the failed operation and child status, warns that the disk was partially modified, shows the log tail and the run path, and offers "View full log", "Return to shell", "Restart", and "Power off". A failed postcondition produces `not_verified`/`4`, not success: its screen names every failed check and its non-secret detail, warns not to rely on the installed system, and offers the same diagnostic menu with "Return to shell" selected. A configure failure or interruption produces `not_configured`/`4`: the screen names the failed step, states that the base system is installed and verified, and directs you to boot it, log in at the console, and run `sudo mirroros-configure`. Its menu offers "View configure log", "Restart", "Return to shell" (selected), and "Power off", with no live-medium retry. Long lines on the failure, `not_verified`, `not_configured`, and engine no-valid-record screens are wrapped to the terminal width, including paths and log lines. Nothing restarts or powers off unless you choose it.
+Confirmation starts focused on No and shows the disk, its path, and the plan reference. After Yes, type the kernel device name shown by the prompt, such as `vda` (not the plan reference); a mismatch cancels without retry. Leaving a screen to go backward after authorization clears it; restarting password entry from its repetition field stays within that stage and retains the bound approval. After the password explanation, final rediscovery checks the machine projection, profile binding, firmware, Secure Boot state, disk identity, eligibility and layout, policy and override hashes, and the plan file's digest. A change invalidates approval with a specific reason and the next step "Regenerate and review the installation plan." The engine then starts as a non-interactive child. Before it touches the disk it validates the plan and its digest, rejects a different operation set or code identity, and re-reads the disk one last time; a disk that changed ends the run `invalidated` and a disk that is mounted, swap, or held by LVM, dm-crypt, or md ends it `blocked`, both with the disk untouched. At the start of every run only `/run/mirroros/target` and a swapfile beneath it are released; no other mount is ever touched. The progress bar counts completed plan operations plus one final unit for configure; every fixed engine-phase line fits 80 columns including its prefix, and operation descriptions are limited to 72 characters. After the last operation, the engine checks the still-mounted target read-only: kernel and initramfs, mounts and UUID-based fstab, bootloader and root UUID, zswap and resume parameters, swapfile when enabled, zram and sysctl assets, NetworkManager prerequisites, and planned microcode in the initramfs. Only after those base postconditions pass, the engine copies configure's rerun code and `identity.json` to `/usr/local/lib/mirroros/` on the target and creates `/usr/local/bin/mirroros-configure`. It runs its embedded `operations/configure --target-root /run/mirroros/target --user <planned user>`, with package, user, and unit commands inside `arch-chroot`, target package transactions using `SNAP_PAC_SKIP=y`, and SDDM enabled but never started. The final progress line is "[N+1/N+1] Configure the graphical environment." with numeric positions; a second line shows "Configure step: <k>/<total> <step>" instead of a package count. Configure output is appended to `engine.log`; only outcome `0` permits `installed`/`0`, followed by normal target cleanup. On success the centered screen states the installed duration and offers "Restart now" or "Return to shell" in a vertical menu aligned with the title; on failure it states the failed operation and child status, warns that the disk was partially modified, shows the log tail and the run path, and offers "View full log", "Return to shell", "Restart", and "Power off". A failed postcondition produces `not_verified`/`4`, not success: its screen names every failed check and its non-secret detail, warns not to rely on the installed system, and offers the same diagnostic menu with "Return to shell" selected. A configure failure or interruption produces `not_configured`/`4`: the screen names the failed step, states that the base system is installed and verified, and directs you to boot it, log in at the console, and run `sudo mirroros-configure`. Its menu offers "View configure log", "Restart", "Return to shell" (selected), and "Power off", with no live-medium retry. Long lines on failure screens, including failed-phase diagnostics, `not_verified`, `not_configured`, and engine no-valid-record reporting, wrap within the 80-column form or available narrower width, including paths and log lines. Nothing restarts or powers off unless you choose it.
 
 ### Evidence and exits
 
