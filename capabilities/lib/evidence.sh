@@ -94,6 +94,7 @@ cfg_evidence_finish() {
   (( CFG_REFRESH == 0 )) || mode=refresh
   {
     cfg_record record key value
+    cfg_record run format_version 2
     cfg_record run run_id "$CFG_RUN_ID"
     cfg_record run context "$CONFIGURE_CONTEXT"
     cfg_record run target_user "$TARGET_USER"
@@ -106,6 +107,14 @@ cfg_evidence_finish() {
     cfg_record run reason "$reason"
     cfg_record run package_mode "$mode"
     cfg_record run guard_result "$CFG_GUARD"
+    cfg_record record interval timing_status duration_ms reason
+    for step in "${TIMING_IDS[@]}"; do
+      if [[ -n "${TIMING_REASON[$step]:-}" ]]; then
+        cfg_record timing "$step" unavailable '' "${TIMING_REASON[$step]}"
+      else
+        cfg_record timing "$step" available "${TIMING_SUM[$step]}" ''
+      fi
+    done
     cfg_record record step status postcondition
     for step in "${CFG_STEPS[@]}"; do
       cfg_record step "$step" "${CFG_STATUS[$step]}" "${CFG_POST[$step]}"

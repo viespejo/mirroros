@@ -77,8 +77,8 @@ and session-file checks, the lock, and evidence use paths prefixed with the moun
 Invalid target contexts create no lock or evidence.
 
 The guided engine invokes configure only after all base postconditions pass and before unmounting the target.
-Before invocation it copies `operations/configure`, `operations/lib/lifecycle-discovery.sh`, `capabilities/`,
-and `identity.json` into the target's `/usr/local/lib/mirroros/`, root-owned with directories and executables
+Before invocation it copies `operations/configure`, `operations/lib/lifecycle-discovery.sh`,
+`operations/lib/timing.sh`, `capabilities/`, and `identity.json` into the target's `/usr/local/lib/mirroros/`, root-owned with directories and executables
 `0755` and other files `0644`. `/usr/local/bin/mirroros-configure` points to that copy's entry point. The entry
 point resolves symlinks, so `sudo mirroros-configure` works without a clone. This is a snapshot for reruns, not
 an automatically synchronized or updated installation of MirrorOS code; development still uses a checkout.
@@ -322,7 +322,7 @@ An explicit `--output` is used as supplied to the coordinator, not automatically
 | File | Contents |
 |---|---|
 | `configure.log` | Allowed step commands and their output, validation failures, and step diagnostics |
-| `configure-run.tsv` | Run identity, context, target user, code identity/dirty flag, start/end, outcome, failed step, reason, package mode, guard result, and every step's status/postcondition |
+| `configure-run.tsv` | Run format 2, identity, context, target user, code identity/dirty flag, start/end, outcome, failed step, reason, package mode, guard result, every step's status/postcondition, and total/validation/started-step timing |
 | `packages.tsv` | Declared package names, resolved or installed versions, and repositories; not a full dependency inventory |
 | `sources.tsv` (when consumed) | Public external source names/URLs, selected refs/commits and declared versions; no configuration or private-state dumps |
 
@@ -336,6 +336,25 @@ Help, parsing failures, damaged-checkout failures before execution, and unprivil
 evidence. Invalid target-root contexts also produce no run evidence. A non-root process cannot create
 root-owned evidence and does not escalate. If the output directory
 cannot be created, configure reports that failure; evidence is not guaranteed for an unwritable or invalid path.
+
+### Timing interpretation and collection
+
+Configure records `total`, `validation`, and each started `step.<capability-path>` in its existing TSV.
+Validation includes preflight and evidence initialization, not work attributed to the first capability.
+Timing rows have five columns (`timing`, interval id, status, duration_ms, reason), distinct from four-column
+step-status rows. Available durations are non-negative integer milliseconds at 10 ms effective resolution,
+from the first `/proc/uptime` value. Unavailable readings have a safe reason and an empty duration, never a
+wall-clock fallback or a placeholder zero. Unstarted steps have no timing row. Historical pre-timing TSV
+remains readable without invented timings. See the [field contract](../../capabilities/README.md#configure-timing-evidence).
+
+Total closes before evidence serialization and includes validation, steps, and orchestration. Handled failures
+and signals close reached intervals without changing outcomes; hard kills and unwritable evidence gain no
+persistence guarantee. Engine `configure` contains this total, which contains validation and steps: do not add
+nested durations. The engine retains only this invocation's native `configure-run.tsv`, `packages.tsv`, and
+`sources.tsv` when available under `engine/configure/`, through the existing safe VM collection boundary.
+The helper is embedded in the ISO/development overlay and copied with installed rerun code; no Node.js timing
+dependency or live per-step timing display is added. For the authorization-gated three-run protocol and private
+report, see [Installation time measurements](installation-time-measurements.md).
 
 ## Normalized outcomes and recovery
 

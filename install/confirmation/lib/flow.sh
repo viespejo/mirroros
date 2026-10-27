@@ -85,11 +85,22 @@ flow_cleanup() {
 
 # Records that a stage was reached; each stage is listed once, in flow order.
 flow_reached() {
-  local stage
+  local stage classification=automated
+  local reached=()
+  case "$1" in
+    review|confirmation|password) classification=interactive ;;
+    preparation) classification=mixed ;;
+  esac
+  timing_begin "$1" "$classification"
   for stage in "${FLOW_STAGES[@]}"; do
     if [[ "$stage" == "$1" ]]; then return 0; fi
   done
   FLOW_STAGES+=("$1")
+  # Keep the canonical reached-stage list independent of actual interval order (--plan starts early).
+  for stage in preparation discovery_initial plan review confirmation password discovery_final engine; do
+    if [[ " ${FLOW_STAGES[*]} " == *" $stage "* ]]; then reached+=("$stage"); fi
+  done
+  FLOW_STAGES=("${reached[@]}")
   flow_log "stage: $1"
 }
 
@@ -104,9 +115,10 @@ flow_finish() {
 
   trap - INT TERM HUP
   FLOW_PASSWORD=''
+  timing_end_all
   if ((${#FLOW_STAGES[@]} > 0)); then stages="$(IFS=,; printf '%s' "${FLOW_STAGES[*]}")"; fi
   if ! flow_cli record "$FLOW_RUN_DIR" "$FLOW_RUN_ID" "$(flow_timestamp)" "$FLOW_ENTRY" \
-    "$FLOW_GUM_VERSION" "$status" "$outcome" "$operation" "$reasons" "$stages"; then
+    "$FLOW_GUM_VERSION" "$status" "$outcome" "$operation" "$reasons" "$stages" "$(timing_json)"; then
     flow_log 'records could not be written'
     printf '%s\n' 'MirrorOS install: the run records could not be written.' \
       'Next step: check the output location and rerun mirroros-install.' >&2
@@ -454,9 +466,10 @@ flow_discover_initial() {
     gum style --foreground 8 --padding "$PADDING" 'Inspecting this machine...'
     flow_leave_interactive
     status=0
-    flow_run_discovery initial || status=$?
-    flow_enter_interactive
     flow_reached discovery_initial
+    flow_run_discovery initial || status=$?
+    timing_end discovery_initial
+    flow_enter_interactive
     if ((status == 0)); then break; fi
     if ((status == 2)) && [[ -f "${directory}/target-facts.json" ]] \
       && flow_cli reasons facts "${directory}/target-facts.json" > "$reasons" 2> /dev/null \
@@ -483,6 +496,7 @@ flow_discover_initial() {
   if [[ -n "$FLOW_PLAN_ARG" ]]; then
     flow_reached plan
     flow_compare "$FLOW_FACTS_INITIAL" '' safety_check_initial
+    timing_end plan
   fi
   # Detected memory bounds the swapfile; without it no choice can be resolved, so the run is blocked.
   status=0
@@ -514,14 +528,15 @@ flow_ensure_plan() {
   mkdir -m 700 -- "$directory"
   cp -- "$FLOW_CHOICES" "${directory}/choices.json"
   chmod 600 -- "${directory}/choices.json"
+  flow_reached plan
   flow_plan --facts "$FLOW_FACTS_INITIAL" --choices "${directory}/choices.json" --output "$directory" > /dev/null 2> "$FLOW_STDERR" || status=$?
+  timing_end plan
   case "$status" in
     0)
       FLOW_PLAN_SEQ=$((FLOW_PLAN_SEQ + 1))
       FLOW_PLAN_DIR="$directory"
       FLOW_PLAN_FILE="${directory}/installation-plan.json"
       cp -- "$FLOW_CHOICES" "$FLOW_PLAN_CHOICES"
-      flow_reached plan
       flow_log "plan ${FLOW_PLAN_SEQ} generated"
       return 0
       ;;
@@ -626,6 +641,13 @@ flow_screens() {
       14) confirmation_form || status=$? ;;
       15) password_form || status=$? ;;
     esac
+    # Close the actual visit, including Back; a later visit accumulates another interval.
+    case "$screen" in
+      1) timing_end preparation ;;
+      13) timing_end review ;;
+      14) timing_end confirmation ;;
+      15) timing_end password ;;
+    esac
     case "$status" in
       0)
         if [[ -n "$NEXT_SCREEN" ]]; then screen=$NEXT_SCREEN; else screen=$((screen + 1)); fi
@@ -650,13 +672,14 @@ flow_revalidate() {
   if [[ "$FLOW_CONFIRMED" != true ]]; then flow_unexpected approval_state 6 'Confirmation'; fi
   flow_leave_interactive
   gum style --foreground 8 --padding "$PADDING" 'Checking the machine and plan again...'
-  flow_run_discovery final || status=$?
   flow_reached discovery_final
+  flow_run_discovery final || status=$?
   if ((status != 0)); then
     flow_finish_stage "$status" invalidated discovery_final facts "${directory}/target-facts.json"
   fi
   flow_compare "$FLOW_FACTS_FINAL" "$FLOW_FACTS_INITIAL" safety_check_final
   flow_plan_field digest-prefix digest_recheck
+  timing_end discovery_final
 }
 
 # The regional selection of the live mirrorlist from the plan's time zone (ADR 0013), after the final revalidation
@@ -823,10 +846,15 @@ flow_engine() {
 }
 
 flow_main() {
+  timing_begin total
   flow_init
   flow_check_gum
   ui_setup "${FLOW_CODE_ROOT}/install/confirmation" || flow_unexpected presentation_setup 6 'Presentation'
-  if [[ -n "$FLOW_PLAN_ARG" ]]; then flow_load_given_plan; fi
+  if [[ -n "$FLOW_PLAN_ARG" ]]; then
+    flow_reached plan
+    flow_load_given_plan
+    timing_end plan
+  fi
   flow_enter_interactive
   flow_screens
   flow_revalidate

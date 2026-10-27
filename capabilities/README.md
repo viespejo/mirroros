@@ -68,6 +68,36 @@ automatically synchronized or updated. Target evidence is under `<root>/var/log/
 records `context target`, and uses `identity.json` for commit and dirty state when git or `.git` is absent.
 Markers `== <k>/<total> <step> ==` drive the engine's configure progress state.
 
+### Configure timing evidence
+
+`configure-run.tsv` adds `run\tformat_version\t2`. Existing run, step-status, package, and source rows keep their
+shape; pre-timing TSV remains readable as historical evidence without adding durations. Timing rows have five
+columns: `timing`, interval id, timing status, duration in integer milliseconds (empty when unavailable), and a
+safe reason (empty when available). The section header is `record`, `interval`, `timing_status`, `duration_ms`,
+`reason`. Consumers must distinguish it from the unchanged four-column step-status section.
+
+Intervals are `total`, `validation`, and `step.<capability-path>` for each started step. Total starts when
+configure loads its shared helper; validation includes helper/step preflight, argument validation, prerequisite
+and package checks, and evidence initialization, so these are not charged to the first capability. A step spans
+its execution and postcondition work and is closed on handled failure or signals. Not-run steps keep their
+existing status rows but have no timing row. Total closes in the common finalizer before evidence serialization;
+it includes validation, steps, and orchestration overhead. Early errors that previously created no evidence
+still create none.
+
+`operations/lib/timing.sh` uses Bash builtins to read the first `/proc/uptime` value, with no new runtime
+dependency and no process per sample. Effective resolution is 10 ms, even though the unit is milliseconds.
+Status `available` requires a non-negative integer duration, a multiple of 10. Status `unavailable` omits the
+number and uses `clock_unreadable`, `clock_malformed`, `clock_regressed`, or `duration_overflow`; input values
+are never copied into reasons. Wall-clock changes do not affect intervals and no wall-time fallback exists.
+Timing failures never change configure outcomes, traps, or readiness. Hard kills and unwritable evidence gain
+no new persistence guarantee.
+
+The helper is explicitly embedded in the ISO and development overlay and copied alongside installed rerun
+code. Engine `configure` contains configure total, which contains validation and steps: never add these nested
+measurements together. The engine retains only this invocation's native `configure-run.tsv`, `packages.tsv`,
+and `sources.tsv`, when available, under its `configure/` evidence directory for existing VM collection; the
+original records remain owned by configure. No timing table or live per-step duration is displayed.
+
 `MIRROROS_CONFIGURE_ROOT` is a test-only running-context variable, analogous to `MIRROROS_DISCOVERY_ROOT`: it
 redirects filesystem paths into a disposable root and cannot be combined with `--target-root`. It is not a safe
 chroot interface: package, unit, and user commands still need test doubles and must never be exercised against

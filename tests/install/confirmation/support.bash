@@ -41,6 +41,7 @@ confirm_setup() {
 
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/install" "${CODE_ROOT}/operations/install"
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/lib/lifecycle-discovery.sh" "${CODE_ROOT}/operations/lib/lifecycle-discovery.sh"
+  cp -p "${CONFIRM_SOURCE_ROOT}/operations/lib/timing.sh" "${CODE_ROOT}/operations/lib/timing.sh"
   cp -a "${CONFIRM_SOURCE_ROOT}/install" "${CODE_ROOT}/install"
   mkdir -p "${CODE_ROOT}/hardware"
   cp -a "${CONFIRM_SOURCE_ROOT}/hardware/discovery" "${CODE_ROOT}/hardware/discovery"

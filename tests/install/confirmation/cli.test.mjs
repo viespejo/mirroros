@@ -226,16 +226,25 @@ test('record writes both records from the run directory', () => {
   writeFileSync(join(directory, 'plans', '02', 'installation-plan.json'), JSON.stringify(second));
   writeFileSync(join(directory, 'discovery', 'initial', 'target-facts.json'), JSON.stringify(facts()));
   const reasons = write('reasons.json', JSON.parse(run('reasons', 'standard', 'confirmation_mismatch').stdout));
+  const timing = {
+    total: { status: 'available', duration_ms: 1000 },
+    intervals: ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation'].map(id => ({
+      id,
+      classification: id === 'preparation' ? 'mixed' : ['review', 'confirmation'].includes(id) ? 'interactive' : 'automated',
+      measurement: { status: 'available', duration_ms: 100 },
+    })),
+  };
   const result = run(
     'record', directory, 'run-1', '2026-10-08T12:00:00Z', 'guided', 'gum version 2.0.2', '3', 'cancelled', 'confirm', reasons,
-    'preparation,discovery_initial,plan,review,confirmation',
+    'preparation,discovery_initial,plan,review,confirmation', JSON.stringify(timing),
   );
   assert.equal(result.status, 0, result.stderr);
   const runRecord = JSON.parse(readFileSync(join(directory, 'install-run.json'), 'utf8'));
   const approval = JSON.parse(readFileSync(join(directory, 'approval-record.json'), 'utf8'));
   assert.deepEqual(validateRunRecord(runRecord), []);
   assert.deepEqual(validateApprovalRecord(approval), []);
-  assert.equal(runRecord.format_version, 6);
+  assert.equal(runRecord.format_version, 7);
+  assert.deepEqual(runRecord.timing, timing);
   assert.equal(runRecord.entry, 'guided');
   assert.deepEqual(runRecord.stages, ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation']);
   assert.deepEqual(runRecord.machine, plan.target.machine);
@@ -263,6 +272,9 @@ test('record takes the machine and profile of the last plan when no facts were k
   assert.deepEqual(runRecord.profile, { status: 'unqualified' });
   assert.deepEqual(runRecord.machine, unqualified.target.machine);
   assert.equal(runRecord.entry, 'plan_file');
+  assert.deepEqual(runRecord.timing.total, { status: 'unavailable', reason: 'not_sampled' });
+  assert.deepEqual(runRecord.timing.intervals, [{ id: 'plan', classification: 'automated',
+    measurement: { status: 'unavailable', reason: 'not_sampled' } }]);
 });
 
 test('record without a plan or Gum writes a blocked pair', () => {

@@ -10,6 +10,7 @@ import {
   operationsOf,
   parseOptions,
   validateRun,
+  validateTiming,
   verifyPostconditions,
   validateState,
   writeAtomic,
@@ -72,6 +73,34 @@ test('not_configured requires a failed configure outcome, passed checks, and no 
   assert.deepEqual(validateRun(installed), []);
   assert.notDeepEqual(validateRun({ ...installed, configure_outcome: undefined }), []);
   assert.notDeepEqual(validateRun({ ...installed, configure_outcome: 5 }), []);
+});
+
+test('new engine timing is validated and legacy format 3 remains unchanged', () => {
+  const timing = { total: { status: 'available', duration_ms: 1000 }, intervals: [
+    { id: 'prechecks', measurement: { status: 'available', duration_ms: 100 } },
+    { id: 'cleanup', measurement: { status: 'unavailable', reason: 'clock_regressed' } },
+  ] };
+  const options = parseOptions(['--started', NOW, '--outcome', 'failed', '--exit', '5', '--timing', JSON.stringify(timing)]);
+  const run = buildRun({ planText: '', options, now: NOW });
+  assert.equal(run.format_version, 4);
+  assert.deepEqual(run.timing, timing);
+  assert.deepEqual(validateRun(run), []);
+  assert.notDeepEqual(validateRun({ ...run, timing: undefined }), []);
+  const { timing: _timing, ...legacy } = run;
+  legacy.format_version = 3;
+  const before = JSON.stringify(legacy);
+  assert.deepEqual(validateRun(legacy), []);
+  assert.equal(JSON.stringify(legacy), before);
+  assert.equal('timing' in legacy, false);
+  assert.notDeepEqual(validateRun({ ...legacy, timing }), []);
+  for (const total of [null, { status: 'available', duration_ms: -10 }, { status: 'available', duration_ms: 1 },
+    { status: 'unavailable', reason: 'clock_malformed', duration_ms: 0 }, { status: 'unavailable', reason: 'private input' }]) {
+    assert.notDeepEqual(validateTiming({ ...timing, total }), []);
+  }
+  for (const intervals of [[null], [...timing.intervals, ...timing.intervals],
+    [{ id: '../unsafe input', measurement: timing.total }], [{ id: 'cleanup', measurement: timing.total, extra: true }]]) {
+    assert.notDeepEqual(validateTiming({ ...timing, intervals }), []);
+  }
 });
 
 test('the package count is recorded only when given', () => {

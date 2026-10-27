@@ -159,6 +159,9 @@ teardown() { cfg_test_teardown; }
   [[ "$output" == *'step first'* ]]
   [[ "$output" != *'available at the next boot'* ]]
   grep -q $'step\tsecond\tnot_run\tnot_checked' "$CFG_TEST_DIR/failure/configure-run.tsv"
+  grep -q $'timing\tstep.first\tavailable\t' "$CFG_TEST_DIR/failure/configure-run.tsv"
+  run grep -q $'timing\tstep.second\t' "$CFG_TEST_DIR/failure/configure-run.tsv"
+  [ "$status" -eq 1 ]
   printf 'cfg_require false\n' > "$CFG_TEST_DIR/code/capabilities/first/apply"
   run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/postcondition"
   [ "$status" -eq 4 ]
@@ -172,8 +175,22 @@ teardown() { cfg_test_teardown; }
   grep -q $'run\tcontext\trunning' "$CFG_TEST_DIR/evidence/configure-run.tsv"
   [[ "$output" == *'== 1/1 example =='* ]]
   grep -q $'run\toutcome\t0' "$CFG_TEST_DIR/evidence/configure-run.tsv"
+  grep -q $'run\tformat_version\t2' "$CFG_TEST_DIR/evidence/configure-run.tsv"
+  for interval in total validation step.example; do
+    grep -q $'timing\t'"$interval"$'\tavailable\t' "$CFG_TEST_DIR/evidence/configure-run.tsv"
+  done
   grep -q $'example\t1.0-1\textra' "$CFG_TEST_DIR/evidence/packages.tsv"
   [ "$(find "$CFG_TEST_DIR/evidence" -type f | wc -l)" -eq 3 ]
+}
+
+@test "unavailable timing does not change configure success or invent a duration" {
+  cfg_test_step
+  printf '\ntiming_clock_read() { TIMING_NOW=""; TIMING_CLOCK_REASON=clock_malformed; }\n' >> "$CFG_TEST_DIR/code/operations/lib/timing.sh"
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/no-clock"
+  [ "$status" -eq 0 ]
+  grep -q $'timing\ttotal\tunavailable\t\tclock_malformed' "$CFG_TEST_DIR/no-clock/configure-run.tsv"
+  grep -q $'timing\tvalidation\tunavailable\t\tclock_malformed' "$CFG_TEST_DIR/no-clock/configure-run.tsv"
+  grep -q $'timing\tstep.example\tunavailable\t\tclock_malformed' "$CFG_TEST_DIR/no-clock/configure-run.tsv"
 }
 
 @test "a linked bashrc is user-owned and its target stays untouched" {
@@ -196,6 +213,9 @@ teardown() { cfg_test_teardown; }
     [[ "$output" == *'step first'* ]]
     [[ "$output" != *'available at the next boot'* ]]
     grep -q $'step\tsecond\tnot_run' "$CFG_TEST_DIR/signal-$signal/configure-run.tsv"
+    grep -q $'timing\tstep.first\tavailable\t' "$CFG_TEST_DIR/signal-$signal/configure-run.tsv"
+    run grep -q $'timing\tstep.second\t' "$CFG_TEST_DIR/signal-$signal/configure-run.tsv"
+    [ "$status" -eq 1 ]
     printf ':\n' > "$CFG_TEST_DIR/code/capabilities/first/apply"
     run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/rerun-$signal"
     [ "$status" -eq 0 ]

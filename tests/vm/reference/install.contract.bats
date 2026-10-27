@@ -126,7 +126,8 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
         default: [0, "installed"], "limine-nohib": [0, "installed"], ext4: [0, "installed"], "btrfs-rescue": [0, "installed"], failure: [5, "failed"], "cancel-password": [3, "cancelled"],
       }[name];
       const exit = bad === "wrong-exit" ? 1 : expected[0];
-      const common = { format_version: bad === "old-record" ? 5 : 6, run_id: "install-run", outcome: expected[1] };
+      const common = { format_version: bad === "old-record" ? 5 : bad === "legacy" ? 6 : 7, run_id: "install-run", outcome: expected[1] };
+      const timing = { total: { status: "available", duration_ms: 1000 }, intervals: [] };
       const vendor = /^vendor_id\s*:\s*(\S+)/m.exec(require("node:fs").readFileSync("/proc/cpuinfo", "utf8"))?.[1];
       const microcode = vendor === "AuthenticAMD" ? ["amd-ucode", "AuthenticAMD.bin"] : ["intel-ucode", "GenuineIntel.bin"];
       const plan = { format_version: 4, choices: { storage_option: { value: name === "ext4" ? "ext4-systemd-boot" : "btrfs-limine" }, hibernation: { value: name === "default" || name === "ext4" } },
@@ -135,14 +136,16 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
           { kind: "configure_memory_reclaim", parameters: { "vm.swappiness": 180, "vm.page-cluster": 0, "vm.watermark_scale_factor": 125, "vm.watermark_boost_factor": 0 } },
         ] };
       const files = {
-        "install-run.json": JSON.stringify({ ...common, exit_status: exit, final_digest: digest }),
+        "install-run.json": JSON.stringify({ ...common, exit_status: exit, final_digest: digest,
+          ...(bad === "legacy" ? {} : { timing: bad === "bad-timing" ? {} : timing }) }),
         "approval-record.json": JSON.stringify({ ...common, digest }),
         "install.log": bad === "canary-leak" ? `password was ${canary}\n` : "plain log\n",
         "discovery/initial/target-facts.json": "{}",
         "plans/01/installation-plan.json": JSON.stringify(plan),
       };
       if (expected[1] !== "cancelled" && bad !== "missing-engine") {
-        const engine = { format_version: bad === "old-engine" ? 2 : 3, postconditions: { status: bad === "postconditions" ? "failed" : "passed", failed_checks: [], checks: [{ id: "kernel_installed", status: "passed" }] }, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
+        const engine = { format_version: bad === "old-engine" ? 2 : bad === "legacy" ? 3 : 4,
+          ...(bad === "legacy" ? {} : { timing }), postconditions: { status: bad === "postconditions" ? "failed" : "passed", failed_checks: [], checks: [{ id: "kernel_installed", status: "passed" }] }, outcome: expected[1], exit_status: exit, reasons: [], completed: [], not_started: [] };
         if (expected[1] === "installed" && bad !== "missing-configure") engine.configure_outcome = bad === "configure-failed" ? 5 : 0;
         const hibernating = name === "ext4" || name === "default";
         if (hibernating) engine.resolved = { resume_offset: bad === "no-resume" ? undefined : 1234 };
@@ -150,6 +153,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
         files["engine/engine-run.json"] = JSON.stringify(engine);
         files["engine/engine.log"] = "engine output\n";
         files["engine/state.json"] = "{}";
+        if (expected[1] === "installed") files["engine/configure/configure-run.tsv"] = "run\tformat_version\t2\ntiming\ttotal\tavailable\t1000\t\n";
       }
       const hibernation = name === "ext4" || name === "default";
       const observation = hibernation && bad !== "no-resume"
@@ -264,8 +268,10 @@ install_result_field() {
     [ "$(install_result_field counted)" == 'true' ]
     [ "$(install_result_field install.resume_as_expected)" == 'true' ]
     [ "$(install_result_field install.microcode_as_expected)" == 'true' ]
-    [ "$(install_result_field install.records_format_6)" == 'true' ]
+    [ "$(install_result_field install.records_format_supported)" == 'true' ]
     [ "$(install_result_field install.engine_record_as_expected)" == 'true' ]
+    [ "$(install_result_field install.timing_records_valid)" == 'true' ]
+    grep -q $'timing\ttotal\tavailable\t1000' "$(install_evidence_dir)/install/engine/configure/configure-run.tsv"
     grep -qx 'login tty2' "$REFERENCE_CALL_LOG"
     [ "$(install_result_field boot.first_boot.ok)" == 'true' ]
   done
@@ -402,7 +408,7 @@ install_result_field() {
 @test "old records, failed configuration, failed postconditions, or missing host microcode prevent qualification" {
   use_matching_bundle
   local bad
-  for bad in old-record old-engine missing-configure configure-failed postconditions microcode; do
+  for bad in old-record old-engine missing-configure configure-failed postconditions microcode bad-timing; do
     rm -rf -- "${REFERENCE_REPOSITORY_ROOT}/evidence" "${REFERENCE_REPOSITORY_ROOT}/build"
     export REFERENCE_INSTALL_CASE=ext4 REFERENCE_INSTALL_BAD="$bad"
     reference_invoke_install --case ext4 "$REFERENCE_BUNDLE_DIR"
@@ -455,6 +461,26 @@ install_result_field() {
   [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
   [ "$(install_result_field development_overlay)" == 'true' ]
   [ "$(install_result_field counted)" == 'false' ]
+}
+
+@test "supported legacy records remain readable without invented timing" {
+  use_matching_bundle
+  export REFERENCE_INSTALL_CASE=failure REFERENCE_INSTALL_BAD=legacy
+  reference_invoke_install --case failure "$REFERENCE_BUNDLE_DIR"
+  [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
+  [ "$(install_result_field install.records_format_supported)" == true ]
+  run grep -q '"timing"' "$(install_evidence_dir)/install/install-run.json"
+  [ "$status" -eq 1 ]
+  run grep -q '"timing"' "$(install_evidence_dir)/install/engine/engine-run.json"
+  [ "$status" -eq 1 ]
+}
+
+@test "the development overlay explicitly delivers the timing helper" {
+  run bash -Eeuo pipefail -c '
+    source "$1/vm/reference/lib/discovery.sh"
+    [[ " ${DISCOVERY_OVERLAY_PATHS[*]} " == *" operations/lib/timing.sh "* ]]
+  ' _ "$REFERENCE_TEST_SOURCE_ROOT"
+  [ "$status" -eq 0 ]
 }
 
 @test "a dirty bundle is never counted" {

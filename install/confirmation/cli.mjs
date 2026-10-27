@@ -254,7 +254,7 @@ function observedMachine(directory, last) {
   return {};
 }
 
-function record([directory, runId, timestamp, entry, gumVersion, exitStatus, outcome, operation, reasonsPath, stagesText]) {
+function record([directory, runId, timestamp, entry, gumVersion, exitStatus, outcome, operation, reasonsPath, stagesText, timingText]) {
   const list = reasonsPath === '' ? [] : JSON.parse(readFileSync(reasonsPath, 'utf8'));
   const shaped = list.map(item => structuredReason(item, { operation }));
   const { digests, last } = planDigests(directory);
@@ -269,6 +269,7 @@ function record([directory, runId, timestamp, entry, gumVersion, exitStatus, out
   const run = buildRunRecord({
     runId, timestamp, entry, machine, profile, gumVersion: optional(gumVersion), stages, digests,
     exitStatus: Number(exitStatus), outcome, reasons: shaped,
+    ...(timingText === undefined ? {} : { timing: JSON.parse(timingText) }),
   });
   const approval = buildApprovalRecord({
     runId, timestamp, digest: digests.at(-1), machine, profile, disk,

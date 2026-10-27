@@ -60,6 +60,41 @@ bats tests/operations
 
 All six contract files must pass. Their temporary-copy observations are not a security sandbox: absolute-path calls can bypass tool doubles.
 
+## Installation timing contract checks
+
+These checks require explicit test authorization; reading this procedure or approving instrumentation does
+not authorize tests, builds, VM runs, or commits. Use command doubles only for this source-level gate.
+Real measurement has a separate [authorization-gated protocol](installation-time-measurements.md).
+
+Run syntax checks and ShellCheck on the timing helper and affected production shell delivery/collection paths:
+
+```bash
+for file in operations/lib/timing.sh operations/configure \
+  install/confirmation/confirm-plan install/confirmation/lib/flow.sh \
+  install/engine/apply install/engine/lib/common.sh install/engine/lib/precheck.sh \
+  install/engine/lib/configure.sh capabilities/lib/common.sh capabilities/lib/evidence.sh \
+  image/builder/lib/source-capture.sh vm/reference/lib/discovery.sh vm/reference/lib/install.sh; do
+  bash -n "$file" || exit "$?"
+done
+shellcheck operations/lib/timing.sh operations/configure \
+  install/confirmation/confirm-plan install/confirmation/lib/flow.sh \
+  install/engine/apply install/engine/lib/common.sh install/engine/lib/precheck.sh \
+  install/engine/lib/configure.sh capabilities/lib/common.sh capabilities/lib/evidence.sh \
+  image/builder/lib/source-capture.sh vm/reference/lib/discovery.sh vm/reference/lib/install.sh
+bats tests/operations/timing.contract.bats \
+  tests/install/confirmation/confirm-plan.contract.bats tests/install/engine/apply.contract.bats \
+  tests/capabilities/mechanism.contract.bats tests/capabilities/target.contract.bats \
+  tests/image/builder/source-capture.contract.bats tests/vm/reference/install.contract.bats
+node --test tests/install/confirmation/records.test.mjs tests/install/confirmation/cli.test.mjs \
+  tests/install/engine/engine-record.test.mjs
+```
+
+Record each native status separately and stop on an unexpected result. These checks cover monotonic intervals,
+wall-clock independence, repeated visits, unavailable samples, failures/cancellation, unstarted work, cleanup,
+legacy readers/new writers, and helper delivery to the ISO, overlay, and installed rerun snapshot. Review
+configure TSV retention through the safe VM collection boundary. Passing doubles does not establish three-run
+measurement acceptance or runtime readiness; preserve the existing success-duration presentation.
+
 ## Gitleaks negative control
 
 This drill places a generated, fake GitHub-token-shaped value only in a temporary directory under ignored `build/`. It uses no real credentials. Gitleaks output and its JSON report are redacted. Do not copy the generated value into the summary, terminal transcript, or any retained file.

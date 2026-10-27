@@ -6,6 +6,14 @@ HELPER_PATH="${SCRIPT_DIR}/lib/lifecycle-discovery.sh"
 CODE_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 CAPABILITIES_DIR="$CODE_ROOT/capabilities"
 
+# shellcheck disable=SC1091 # Shared Bash-only timing is delivered with installed rerun code.
+if [[ ! -f "$SCRIPT_DIR/lib/timing.sh" ]] || ! source "$SCRIPT_DIR/lib/timing.sh"; then
+  printf '%s\n' 'MirrorOS: incomplete or damaged checkout; the timing helper could not be loaded.' >&2
+  exit 6
+fi
+timing_begin total
+timing_begin validation
+
 # shellcheck disable=SC1090 # Resolved from BASH_SOURCE for arbitrary working directories.
 if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
   printf '%s\n' \
@@ -63,6 +71,7 @@ if [[ "$(id -u)" == 0 && ( "$CONFIGURE_CONTEXT" == running || "$CFG_TARGET_VALID
     if (( validation_status == 0 )); then exit 2; fi
   fi
 fi
+timing_end validation
 if (( validation_status != 0 )); then
   if (( CFG_EVIDENCE )); then
     printf '%s\n' "${CFG_ERRORS[@]}" >> "$CFG_OUTPUT/configure.log"

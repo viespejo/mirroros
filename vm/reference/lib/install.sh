@@ -284,10 +284,12 @@ install_evaluate_report() {
   # shellcheck disable=SC2034 # Read by install_write_result.
   INSTALL_VERDICT="$(node --input-type=module - "$report_path" "$run_id" "$evidence_run_dir" "$INSTALL_CASE" \
     "$INSTALL_EXPECTED_EXIT" "$INSTALL_EXPECTED_OUTCOME" "$INSTALL_EXPECTED_FAILED_OPERATION" \
-    "$INSTALL_EXPECTED_HIBERNATION" <<'NODE'
+    "$INSTALL_EXPECTED_HIBERNATION" "$REPOSITORY_ROOT/install/engine/engine-record.mjs" <<'NODE'
 import { readFileSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
-const [reportPath, runId, evidenceDir, caseName, expectedExitText, expectedOutcome, expectedFailedOperation, hibernationText] = process.argv.slice(2);
+const [reportPath, runId, evidenceDir, caseName, expectedExitText, expectedOutcome, expectedFailedOperation, hibernationText, recordModule] = process.argv.slice(2);
+const { validateTiming } = await import(pathToFileURL(recordModule));
 const expectedExit = Number(expectedExitText);
 const hibernation = hibernationText === 'true';
 const errors = [];
@@ -341,12 +343,14 @@ if (errors.length === 0) {
     preparation_succeeded: report.exit_status === 0,
     exits_as_expected: install.exit_status === expectedExit && run?.exit_status === expectedExit,
     outcomes_as_expected: run?.outcome === expectedOutcome && approval?.outcome === expectedOutcome,
-    records_format_6: run?.format_version === 6 && approval?.format_version === 6,
+    records_format_supported: [6, 7].includes(run?.format_version) && approval?.format_version === run?.format_version,
+    timing_records_valid: (run?.format_version !== 7 || validateTiming(run.timing).length === 0)
+      && (engine?.format_version !== 4 || validateTiming(engine.timing).length === 0),
     plan_format_4: plan?.format_version === 4,
     records_agree: run?.run_id === approval?.run_id && run?.final_digest === approval?.digest,
     evidence_complete: required.every(name => typeof files[name] === 'string'),
     engine_record_as_expected: engineExpected
-      ? engine?.format_version === 3 && engine?.outcome === expectedOutcome && engine?.exit_status === expectedExit
+      ? [3, 4].includes(engine?.format_version) && engine?.outcome === expectedOutcome && engine?.exit_status === expectedExit
         && (expectedOutcome === 'installed'
           ? engine.configure_outcome === 0 && engine.not_started?.length === 0 && engine.failed_operation === undefined
             && engine.postconditions?.status === 'passed' && engine.postconditions.failed_checks?.length === 0

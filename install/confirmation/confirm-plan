@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 FLOW_CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
 
 readonly REQUIRED_FILES=(
+  operations/lib/timing.sh
   install/confirmation/assistant.mjs
   install/confirmation/banner.txt
   install/confirmation/cli.mjs
@@ -125,6 +126,9 @@ if ! command -v node > /dev/null 2>&1; then
   printf '%s\n' 'Next step: check that nodejs is installed and rerun mirroros-install.' >&2
   exit 5
 fi
+
+# shellcheck disable=SC1091 # Required shared helper from the same artifact.
+source "${FLOW_CODE_ROOT}/operations/lib/timing.sh" 2> /dev/null || damaged 'operations/lib/timing.sh could not be loaded.'
 
 for library in live screens flow; do
   # shellcheck disable=SC1090 # The library path is resolved from BASH_SOURCE to support arbitrary working directories.

@@ -1,7 +1,8 @@
 import { CHOICES_FORMAT_VERSION, PROFILE_STATUSES } from '../plan/validate-plan.mjs';
 import { OUTCOMES } from './outcomes.mjs';
+import { validateTiming } from '../engine/engine-record.mjs';
 
-export const RECORD_FORMAT_VERSION = 6;
+export const RECORD_FORMAT_VERSION = 7;
 export const ENTRIES = ['guided', 'plan_file'];
 export const STAGES = ['preparation', 'discovery_initial', 'plan', 'review', 'confirmation', 'password', 'discovery_final', 'engine'];
 
@@ -74,7 +75,7 @@ function checkProfile(profile, path, problems) {
 }
 
 function checkCommon(document, path, problems) {
-  if (document.format_version !== RECORD_FORMAT_VERSION) problems.push(`${path}.format_version must be ${RECORD_FORMAT_VERSION}`);
+  if (![6, RECORD_FORMAT_VERSION].includes(document.format_version)) problems.push(`${path}.format_version must be 6 or ${RECORD_FORMAT_VERSION}`);
   if (!isText(document.run_id)) problems.push(`${path}.run_id must be a non-empty string`);
   if (typeof document.timestamp !== 'string' || !RFC_3339.test(document.timestamp)) problems.push(`${path}.timestamp must be RFC 3339 UTC`);
   if ('gum_version' in document && !isText(document.gum_version)) problems.push(`${path}.gum_version must be a non-empty string`);
@@ -105,7 +106,21 @@ function checkStages(stages, path, problems) {
 export function validateRunRecord(document) {
   const problems = [];
   const required = ['format_version', 'run_id', 'timestamp', 'entry', 'stages', 'digests', 'exit_status', 'outcome', 'reasons'];
-  if (!checkFields(document, 'run', required, ['machine', 'profile', 'gum_version', 'final_digest'], problems)) return problems;
+  if (!checkFields(document, 'run', required, ['machine', 'profile', 'gum_version', 'final_digest', 'timing'], problems)) return problems;
+  if (document.format_version === RECORD_FORMAT_VERSION) {
+    problems.push(...validateTiming(document.timing));
+    const classes = { preparation: 'mixed', review: 'interactive', confirmation: 'interactive', password: 'interactive' };
+    if (Array.isArray(document.timing?.intervals) && Array.isArray(document.stages)) {
+      for (const item of document.timing.intervals) {
+        if (!document.stages.includes(item?.id) || item?.classification !== (classes[item?.id] ?? 'automated')) {
+          problems.push('timing interval must identify a reached stage with its classification');
+        }
+      }
+      for (const stage of document.stages) {
+        if (!document.timing.intervals.some(item => item?.id === stage)) problems.push(`timing is missing reached stage ${stage}`);
+      }
+    }
+  } else if (document.timing !== undefined) problems.push('legacy runs have no timing');
   secretKeys(document, 'run', problems);
   checkCommon(document, 'run', problems);
   if (!ENTRIES.includes(document.entry)) problems.push(`run.entry must be one of ${ENTRIES.join(', ')}`);

@@ -1,6 +1,7 @@
 # Installation engine (`install/engine/apply`)
 
-`ENGINE_RUN_FORMAT_VERSION: 3` and `ENGINE_STATE_FORMAT_VERSION: 3`. Version `3` adds the final configure phase,
+`ENGINE_RUN_FORMAT_VERSION: 4` and `ENGINE_STATE_FORMAT_VERSION: 3`. Version `4` adds engine timing;
+readers also accept pre-timing run version `3` without transforming it or inventing durations. Version `3` adds the final configure phase,
 its outcome and evidence fields, the outcome `not_configured`, and configure-step progress. Version `2` added the
 postconditions phase, the `postconditions` field of the run record, and the outcome `not_verified`; records and
 state files of versions `1` and `2` are historical evidence that is neither read nor transformed. `install/engine/apply` applies one approved
@@ -225,6 +226,7 @@ files. Configure writes separate evidence inside the target (see [Configure phas
 | `state.json` | Progress for the assistant; rewritten atomically after each change. |
 | `engine-run.json` | The run record, written atomically at the end and on every terminal path. |
 | `target-packages.txt` | The target's `pacman -Q` after `install_packages`. A description, not a pinning policy. |
+| `configure/configure-run.tsv`, `configure/packages.tsv`, `configure/sources.tsv` | Copies of the native configure records from this invocation, when available. Only these regular, non-symlink files are retained; no arbitrary target content or temporary files. Existing VM collection retains them recursively. Copy failures are diagnostic and never replace the configure outcome. |
 
 Each JSON file is written to a temporary file in the same directory, re-read, validated, and renamed.
 
@@ -247,7 +249,8 @@ Each JSON file is written to a temporary file in the same directory, re-read, va
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `3`. |
+| `format_version` | New writers emit `4`; readers also accept `3`. |
+| `timing` | Required in version `4`: `total` measurement and reached `intervals`; absent in legacy version `3`. |
 | `started_at`, `finished_at` | RFC 3339 times. |
 | `plan_digest` | The digest of the plan that was applied. |
 | `code_identity` | `commit` and `dirty` of the running artifact. |
@@ -268,6 +271,35 @@ Each JSON file is written to a temporary file in the same directory, re-read, va
 | `cleanup` | The cleanup actions taken and their results; present when cleanup ran. |
 
 The record contains no secret and no value derived from one.
+
+### Engine timing
+
+The `timing` shape and safe availability reasons are the same as
+[guided timing](installation-confirmation.md#guided-timing): a `total` measurement plus an `intervals` array.
+Engine intervals have `id` and `measurement`, without guided interaction classification. Values use integer
+milliseconds at 10 ms effective resolution from the first `/proc/uptime` value; no wall-clock fallback or
+per-sample external process is used. Measurement failure produces `unavailable` with a fixed safe reason and
+no `duration_ms`, never a fabricated zero. Supported legacy run version `3` has no timing fields.
+
+The total starts after argument validation, before the lock, and stops after terminal cleanup and before final
+record serialization. `prechecks` contains lock acquisition, output setup, identity, plan loading and validation,
+keyring, password-channel validation, and the final read-only block. Its identifiable nested subintervals are
+`precheck.lock`, `precheck.identity`, `precheck.plan`, `precheck.keyring`, `precheck.password`, and
+`precheck.final_block`. No password-derived value is measured or recorded. Early argument or lock rejection
+continues to write no record.
+
+Each `operation.<plan-operation-id>` starts before its state update and ends after its operation and immediate
+effect checks. `postconditions` includes checking and validation of the result. `configure` includes recovery
+code delivery, the configure invocation, progress/evidence handling, and retention of its native records.
+`cleanup` covers the existing best-effort swapoff/unmount cleanup, including an empty cleanup attempt.
+Reached intervals close on handled failure or signals; unstarted phases and operations have no entry and no
+duration. Blocked/invalidated runs still do not run cleanup.
+
+These are nested measurements: `precheck.*` is inside `prechecks`, configure's own total and steps are inside
+engine `configure`, and all engine phases are inside engine total and guided `engine`. Never add nested totals
+together. Phase sums can differ from their parent because of orchestration overhead and quantization.
+No deadline, trap, exit status, readiness requirement, secret channel, or presentation changes. Hard kills and
+unwritable evidence gain no persistence guarantees.
 
 ## Reasons
 
@@ -343,6 +375,7 @@ engine sets `current` to `configure`. This is a fixed engine phase, not an insta
 bound to approval through the artifact's code identity and does not change the plan schema or format.
 
 Before invoking configure, the engine copies `operations/configure`, `operations/lib/lifecycle-discovery.sh`,
+`operations/lib/timing.sh`,
 `capabilities/`, and `identity.json` from its embedded code into the target's `/usr/local/lib/mirroros/`.
 The copy is root-owned: directories and executables are `0755`, other files `0644`. It creates the root-owned
 launcher `/usr/local/bin/mirroros-configure` pointing to `/usr/local/lib/mirroros/operations/configure`.

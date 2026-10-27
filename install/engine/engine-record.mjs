@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 import { validateResult } from '../postconditions/evaluate.mjs';
 
-export const ENGINE_RUN_FORMAT_VERSION = 3;
+export const ENGINE_RUN_FORMAT_VERSION = 4;
 export const ENGINE_STATE_FORMAT_VERSION = 3;
 export const POSTCONDITIONS_OPERATION = 'postconditions';
 export const STATE_STATUSES = ['running', 'installed', 'not_verified', 'not_configured', 'failed', 'blocked', 'invalidated'];
@@ -50,9 +50,40 @@ export function validateState(state) {
   return errors;
 }
 
+// Shared evidence shape; legacy readers never add historical measurements.
+export const UNSAMPLED_TIMING = { total: { status: 'unavailable', reason: 'not_sampled' }, intervals: [] };
+
+export function validateTiming(timing) {
+  const errors = [];
+  const fields = (value, allowed) => isRecord(value) && Object.keys(value).every(key => allowed.includes(key));
+  const measurement = value => {
+    if (!isRecord(value)) return false;
+    if (value.status === 'available') return fields(value, ['status', 'duration_ms'])
+      && Number.isSafeInteger(value.duration_ms) && value.duration_ms >= 0 && value.duration_ms % 10 === 0;
+    return value.status === 'unavailable' && fields(value, ['status', 'reason'])
+      && ['clock_unreadable', 'clock_malformed', 'clock_regressed', 'duration_overflow', 'not_sampled'].includes(value.reason);
+  };
+  if (!fields(timing, ['total', 'intervals']) || !measurement(timing.total) || !Array.isArray(timing.intervals)) {
+    return ['timing must contain a total measurement and intervals'];
+  }
+  const seen = new Set();
+  for (const item of timing.intervals) {
+    if (!fields(item, ['id', 'classification', 'measurement']) || typeof item.id !== 'string'
+      || !/^[a-z0-9_./-]+$/.test(item.id) || item.id === 'total' || seen.has(item.id)
+      || !measurement(item.measurement)
+      || (item.classification !== undefined && !['automated', 'interactive', 'mixed'].includes(item.classification))) {
+      errors.push('timing interval is malformed or duplicated');
+    }
+    if (isRecord(item)) seen.add(item.id);
+  }
+  return errors;
+}
+
 export function validateRun(run) {
   const errors = [];
-  if (run.format_version !== ENGINE_RUN_FORMAT_VERSION) errors.push('format_version must be 3');
+  if (![3, ENGINE_RUN_FORMAT_VERSION].includes(run.format_version)) errors.push('format_version must be 3 or 4');
+  if (run.format_version === ENGINE_RUN_FORMAT_VERSION) errors.push(...validateTiming(run.timing));
+  else if (run.timing !== undefined) errors.push('legacy runs have no timing');
   if (!RUN_OUTCOMES.includes(run.outcome)) errors.push('outcome is not allowed');
   if (!Number.isInteger(run.exit_status) || run.exit_status < 0 || run.exit_status > 255) errors.push('exit_status must be 0..255');
   for (const key of ['started_at', 'finished_at']) if (typeof run[key] !== 'string') errors.push(`${key} is missing`);
@@ -192,6 +223,7 @@ export function buildRun({ planText, options, now }) {
     format_version: ENGINE_RUN_FORMAT_VERSION,
     started_at: options.started?.[0],
     finished_at: now,
+    timing: options.timing === undefined ? structuredClone(UNSAMPLED_TIMING) : JSON.parse(options.timing[0]),
   };
   if (options.digest?.[0] !== undefined) run.plan_digest = options.digest[0];
   if (options.commit?.[0] !== undefined) run.code_identity = { commit: options.commit[0], dirty: options.dirty?.[0] === 'true' };

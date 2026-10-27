@@ -8,6 +8,11 @@ umask 077
 # command, no non-interactive mode, and no option that bypasses any of those steps.
 SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
 CODE_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+# shellcheck disable=SC1091 # Explicitly embedded shared timing helper.
+source "$CODE_ROOT/operations/lib/timing.sh" 2> /dev/null || {
+  printf '%s\n' 'MirrorOS engine: the embedded timing helper could not be loaded.' >&2
+  exit 6
+}
 # engine.log is plain text: native tools (for example the Limine snapshot tools) color their output from TERM.
 export TERM=dumb
 
@@ -83,9 +88,11 @@ execute_plan() {
   local id
   for id in "${OP_IDS[@]}"; do
     CURRENT_OP="$id"
+    timing_begin "operation.$id"
     engine_log "== ${id} =="
     write_state running "$id"
     "${DISPATCH[$id]}"
+    timing_end "operation.$id"
     COMPLETED+=("$id")
   done
   CURRENT_OP=''
@@ -93,17 +100,30 @@ execute_plan() {
 
 main() {
   parse_arguments "$@"
+  timing_begin total
+  timing_begin prechecks
   acquire_lock
   prepare_output
   trap 'on_unexpected_error $?' ERR
   trap 'on_signal 2' INT
   trap 'on_signal 15' TERM
   trap 'on_signal 1' HUP
+  timing_begin precheck.identity
   read_identity
+  timing_end precheck.identity
+  timing_begin precheck.plan
   load_plan
+  timing_end precheck.plan
+  timing_begin precheck.keyring
   check_keyring
+  timing_end precheck.keyring
+  timing_begin precheck.password
   read_password
+  timing_end precheck.password
+  timing_begin precheck.final_block
   final_block
+  timing_end precheck.final_block
+  timing_end prechecks
   execute_plan
   run_postconditions
 }

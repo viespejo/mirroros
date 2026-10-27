@@ -179,7 +179,7 @@ Confirmation starts focused on No and shows the disk, its path, and the plan ref
 
 ### Evidence and exits
 
-Once the run starts, it writes `install-run.json`, non-authorizing `approval-record.json` (both format 6), and plain `install.log` (no ANSI or secrets), plus `discovery/initial/`, `discovery/final/` when reached, and `plans/NN/` with the plan, render, plan-run record, and choices. When the engine starts it also writes `engine/` with `engine.log` (plain native output), `state.json`, `engine-run.json` (format 3: failed operation, child command and status, completed and not-started operations, resolved values, per-check base postconditions, and configure outcome, failed step, and target-relative evidence path when applicable), and the target package list. Directories are `0700`, files `0600`; generated evidence is local and never committed. `state.json` is also format 3 and includes optional `configure_step` and `configure_position` fields. Configure's own private evidence stays on the installed system under `/var/log/mirroros/configure/<run-id>/`, recording `context target` and source identity from `identity.json`. Argument and TTY failures before the run starts report on stderr without records.
+Once the run starts, it writes `install-run.json`, non-authorizing `approval-record.json` (both format 7; readers also accept pre-timing format 6), and plain `install.log` (no ANSI or secrets), plus `discovery/initial/`, `discovery/final/` when reached, and `plans/NN/` with the plan, render, plan-run record, and choices. When the engine starts it also writes `engine/` with `engine.log` (plain native output), `state.json`, `engine-run.json` (format 4, with pre-timing format 3 also readable: timing, failed operation, child command and status, completed and not-started operations, resolved values, per-check base postconditions, and configure outcome, failed step, and target-relative evidence path when applicable), and the target package list. Directories are `0700`, files `0600`; generated evidence is local and never committed. `state.json` is also format 3 and includes optional `configure_step` and `configure_position` fields. Configure's own private evidence stays on the installed system under `/var/log/mirroros/configure/<run-id>/`, recording `context target` and source identity from `identity.json`. Argument and TTY failures before the run starts report on stderr without records.
 
 | Status | Meaning |
 | --- | --- |
@@ -192,6 +192,31 @@ Once the run starts, it writes `install-run.json`, non-authorizing `approval-rec
 | `128+n` | Signals outside the interactive phase; during the engine, outside configure, they end `failed` with `engine_interrupted`. During configure the engine waits and records `not_configured`/`4` with configure's outcome (`3` for SIGINT, `5` for SIGTERM/SIGHUP). |
 
 The guided installer returns `0` only after a completed installation; help alone also returns `0`. Ctrl+C mapping belongs to the orchestrator, not the ADR 0004 wrapper. Qualification boots exercise the route up to the confirmation in [Confirmation qualification](test.md#confirmation-qualification), and real installations in [Installation qualification](test.md#installation-qualification).
+
+### Timing boundaries
+
+`install-run.json` owns guided total and accumulated reached-stage intervals; `engine-run.json` owns engine
+total, prechecks and their nested subchecks, plan operations, postconditions, configure, and cleanup.
+Configure owns total, validation, and started-step timings in `configure-run.tsv`; allowlisted native TSV
+copies are retained under `engine/configure/` for existing VM evidence collection. Supported legacy records
+remain readable without historical timing fields.
+
+New elapsed values use the first `/proc/uptime` reading, integer milliseconds at 10 ms resolution, independent
+of UTC clock adjustments. Unreadable, malformed, or regressing samples produce explicit unavailable timing
+with a safe reason and no duration; they never change lifecycle outcomes. Unstarted items have no duration.
+Guided total starts at flow entry and stops at outcome finalization before final serialization: live boot and
+the final outcome menu are excluded. Repeated visits accumulate actual intervals, not the deduplicated stage
+list. Review, confirmation, and password are interactive; preparation is mixed; discovery, plan, final
+discovery, and engine are automated. This is not exact human-time subtraction.
+
+Engine timing ends after cleanup, before record serialization. Configure validation is separate from the
+first step. Configure steps are inside configure, engine phases inside engine total, and engine inside guided
+engine time; never add nested totals. Hard kills and unwritable evidence gain no persistence guarantee.
+The existing success-duration line remains unchanged; no timing table or live step durations are added.
+See the [guided contract](../../contracts/installation-confirmation.md#guided-timing),
+[engine contract](../../contracts/installation-engine.md#engine-timing), and the separately authorized
+[three-run measurement protocol](installation-time-measurements.md). Driver timings are not representative
+human reading times, and QEMU qualification duration has a different boundary and clock.
 
 ### Recovery
 

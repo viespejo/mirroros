@@ -116,6 +116,7 @@ approve_plan_script() {
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 0 ]
   confirm_assert_run 0 installed
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.timing.total.status === 'available' && d.timing.intervals.length === d.stages.length && d.timing.intervals.every(t => t.measurement.status === 'available' && t.measurement.duration_ms <= d.timing.total.duration_ms)"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.reasons.length === 0"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "!('reason' in d)"
   confirm_assert_output_contains 'Installed MirrorOS in'
@@ -130,7 +131,7 @@ approve_plan_script() {
   [ -f "${RUN_DIR}/plans/01/installation-plan.json" ]
   [ -f "${RUN_DIR}/plans/01/installation-plan.txt" ]
   confirm_json_assert "${RUN_DIR}/plans/01/choices.json" "d.format_version === 3 && d.storage_option === 'ext4-systemd-boot' && Object.keys(d).length === 2"
-  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 6 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.format_version === 7 && d.entry === 'guided' && d.digests.length === 1 && d.final_digest === d.digests[0] && /2\\./.test(d.gum_version)"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password,discovery_final,engine'"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.profile.status === 'matched' && d.profile.profile_id === 'reference-vm' && d.machine.architecture === 'x86_64'"
   confirm_json_assert "${RUN_DIR}/approval-record.json" "/^[0-9a-f]{64}$/.test(d.digest) && d.outcome === 'installed'"
@@ -189,6 +190,55 @@ approve_plan_script() {
   [ ! -e "${RUN_DIR}/discovery/final" ]
   confirm_assert_output_contains 'No installation or disk operation was executed.'
   confirm_assert_private
+}
+
+@test "repeated stage visits accumulate actual intervals independently of the reached list" {
+  run bash -Eeuo pipefail -s "$CONFIRM_SOURCE_ROOT" <<'SH'
+source "$1/operations/lib/timing.sh"
+source "$1/install/confirmation/lib/flow.sh"
+flow_log() { :; }
+clock=1000
+timing_clock_read() { TIMING_NOW="$clock"; TIMING_CLOCK_REASON=''; }
+timing_begin total
+flow_reached review
+clock=1200
+timing_end review
+clock=5000
+flow_reached review
+clock=5300
+timing_end_all
+[[ "${FLOW_STAGES[*]}" == review ]]
+[[ "${TIMING_SUM[review]}" == 500 ]]
+[[ "${TIMING_SUM[total]}" == 4300 ]]
+SH
+  [ "$status" -eq 0 ]
+}
+
+@test "guided total is sampled before records and excludes the final outcome menu" {
+  run bash -Eeuo pipefail -s "$CONFIRM_SOURCE_ROOT" <<'SH'
+source "$1/operations/lib/timing.sh"
+source "$1/install/confirmation/lib/flow.sh"
+flow_log() { :; }
+flow_timestamp() { printf '2026-10-26T00:00:00Z'; }
+clock=1000
+timing_clock_read() { TIMING_NOW="$clock"; TIMING_CLOCK_REASON=''; }
+flow_cli() { [[ "${TIMING_SUM[total]}" == 1000 ]]; }
+menu() { clock=900000; [[ "${TIMING_SUM[total]}" == 1000 ]]; }
+FLOW_EXIT_MENU=menu
+timing_begin total
+clock=2000
+flow_finish 0 installed engine
+SH
+  [ "$status" -eq 0 ]
+}
+
+@test "unavailable guided timing preserves success" {
+  printf '\ntiming_clock_read() { TIMING_NOW=""; TIMING_CLOCK_REASON=clock_unreadable; }\n' >> "$CODE_ROOT/operations/lib/timing.sh"
+  approve_script
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 0 ]
+  confirm_json_assert "$RUN_DIR/install-run.json" "d.timing.total.status === 'unavailable' && !('duration_ms' in d.timing.total) && d.timing.intervals.every(t => t.measurement.status === 'unavailable')"
+  confirm_assert_output_contains 'Installed MirrorOS in'
 }
 
 @test "No, Esc, and Ctrl+C at the confirmation cancel with 3 and never ask for the device name" {
@@ -764,6 +814,7 @@ swap_scenario_hook() {
   [ ! -e "${RUN_DIR}/discovery/final" ]
   ! grep -qE '^(wipefs|sfdisk|pacstrap) ' "${DOUBLE_STATE}/calls.log"
   confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.join() === 'preparation,discovery_initial,plan,review,confirmation,password'"
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.timing.total.status === 'available' && d.timing.intervals.find(t => t.id === 'password').measurement.status === 'available' && !d.timing.intervals.some(t => ['engine', 'discovery_final'].includes(t.id))"
   confirm_assert_no_canary
 }
 
@@ -899,7 +950,7 @@ swap_scenario_hook() {
   confirm_run_pty --output "$RUN_DIR"
   [ "$CONFIRM_STATUS" -eq 4 ]
   confirm_assert_run 4 not_configured
-  confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.format_version === 3 && d.configure_outcome === 5 && d.configure_failed_step === 'desktop/compositor/providers/hyprland'"
+  confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.format_version === 4 && d.configure_outcome === 5 && d.configure_failed_step === 'desktop/compositor/providers/hyprland'"
   confirm_assert_gum_called 'Base system installed and verified; environment configuration failed at step'
   confirm_assert_gum_called 'sudo mirroros-configure'
   confirm_assert_gum_called 'View configure log Restart Return to shell Power off'

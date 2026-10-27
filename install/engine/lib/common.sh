@@ -204,7 +204,14 @@ finish() {
   FINISHING=1
   trap - ERR INT TERM HUP
   if [[ -n "$OUTPUT" ]]; then
-    if [[ "$outcome" != blocked && "$outcome" != invalidated ]]; then cleanup_target; fi
+    # Close reached work before cleanup; total includes cleanup, not record serialization.
+    timing_end_work
+    if [[ "$outcome" != blocked && "$outcome" != invalidated ]]; then
+      timing_begin cleanup
+      cleanup_target
+      timing_end cleanup
+    fi
+    timing_end total
     local arguments=(--output "$OUTPUT" --started "$STARTED_AT" --outcome "$outcome" --exit "$status"
       --completed "$(join_by_comma "${COMPLETED[@]}")")
     [[ -z "$CONFIRMED_DIGEST" ]] || arguments+=(--digest "$CONFIRMED_DIGEST")
@@ -227,6 +234,7 @@ finish() {
     fi
     for item in "${CONSTANTS[@]}"; do arguments+=(--constant "$item"); done
     for item in "${CLEANUP[@]}"; do arguments+=(--cleanup "$item"); done
+    arguments+=(--timing "$(timing_json)")
     node_helper engine-record.mjs run "${arguments[@]}" || status=6
     write_state "$outcome" "" "$([[ "$outcome" == failed && "$code" != engine_interrupted ]] && printf '%s' "$operation")" || true
   fi
@@ -241,6 +249,7 @@ finish() {
 run_postconditions() {
   local result status=0 verdict failed first
   CURRENT_OP=postconditions
+  timing_begin postconditions
   engine_log '== postconditions =='
   write_state running postconditions
   LAST_ARGV=(install/postconditions/check)
@@ -258,6 +267,7 @@ run_postconditions() {
     stage_fail
   fi
   POSTCONDITIONS_JSON="$result"
+  timing_end postconditions
   CURRENT_OP=''
   if [[ "$status" == 0 ]]; then
     run_configure

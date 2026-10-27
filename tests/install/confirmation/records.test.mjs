@@ -30,8 +30,8 @@ test('the valid fixtures pass', () => {
   assert.deepEqual(validateApprovalRecord(fixture('valid-approval.json')), []);
 });
 
-test('the records are version 6 and the run record is install-run.json', () => {
-  assert.equal(RECORD_FORMAT_VERSION, 6);
+test('new records are version 7 and the run record is install-run.json', () => {
+  assert.equal(RECORD_FORMAT_VERSION, 7);
   assert.equal(RUN_RECORD_FILE, 'install-run.json');
   assert.equal(APPROVAL_RECORD_FILE, 'approval-record.json');
 });
@@ -210,6 +210,38 @@ test('the canary never reaches disk through the records', () => {
   }), RecordContractError);
   assert.ok(!existsSync(join(scratch, 'canary-2')));
   for (const name of readdirSync(directory)) assert.ok(!readFileSync(join(directory, name), 'utf8').includes(CANARY));
+});
+
+test('timed records validate classifications, availability, reached stages, and strict units', () => {
+  const measurement = { status: 'available', duration_ms: 120 };
+  const timing = { total: measurement, intervals: [{ id: 'review', classification: 'interactive', measurement }] };
+  const run = { ...fixture('valid-run.json'), format_version: 7, stages: ['review'], timing };
+  assert.deepEqual(validateRunRecord(run), []);
+  const withTotal = total => ({ ...run, timing: { ...timing, total } });
+  for (const duration_ms of [-10, 1, 1.5, '100', null, 2 ** 53]) {
+    assert.notDeepEqual(validateRunRecord(withTotal({ status: 'available', duration_ms })), []);
+  }
+  assert.deepEqual(validateRunRecord(withTotal({ status: 'unavailable', reason: 'clock_unreadable' })), []);
+  for (const total of [{ status: 'unavailable', duration_ms: 0, reason: 'clock_malformed' },
+    { status: 'unavailable', reason: 'unsafe input' }, { status: 'available' }]) {
+    assert.notDeepEqual(validateRunRecord(withTotal(total)), []);
+  }
+  for (const intervals of [[], [null], [...timing.intervals, ...timing.intervals],
+    [{ ...timing.intervals[0], classification: 'automated' }],
+    [{ ...timing.intervals[0], id: 'engine' }]]) {
+    assert.notDeepEqual(validateRunRecord({ ...run, timing: { ...timing, intervals } }), []);
+  }
+  assert.notDeepEqual(validateRunRecord({ ...run, timing: undefined }), []);
+});
+
+test('supported pre-timing evidence stays readable without added historical durations', () => {
+  const legacy = fixture('valid-run.json');
+  const before = JSON.stringify(legacy);
+  assert.equal(legacy.format_version, 6);
+  assert.deepEqual(validateRunRecord(legacy), []);
+  assert.equal(JSON.stringify(legacy), before);
+  assert.equal('timing' in legacy, false);
+  assert.notDeepEqual(validateRunRecord({ ...legacy, timing: { total: { status: 'available', duration_ms: 0 }, intervals: [] } }), []);
 });
 
 test('choices files are written 0600 and reject secret keys', () => {

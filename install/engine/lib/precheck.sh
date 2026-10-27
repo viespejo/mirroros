@@ -8,6 +8,7 @@ declare -A OP_DESC=()
 
 # Step 1. The installer lock is inherited as fd 4 or taken here; a second run never touches anything.
 acquire_lock() {
+  timing_begin precheck.lock
   install -d -m 0700 -- "$ENGINE_RUN_ROOT"
   # A descriptor 4 that is not the lock file is not an inherited lock: it is closed and the lock is taken here.
   if ! { [[ -e /proc/self/fd/4 ]] && [[ /proc/self/fd/4 -ef "$LOCK_FILE" ]]; }; then
@@ -17,6 +18,7 @@ acquire_lock() {
     printf 'MirrorOS engine: install_already_running: another installation run holds the installer lock.\n' >&2
     exit 2
   fi
+  timing_end precheck.lock
 }
 
 prepare_output() {

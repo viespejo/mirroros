@@ -29,6 +29,7 @@ DISCOVERY_OVERLAY_PATHS=(
   'operations/configure'
   'capabilities'
   'operations/lib/lifecycle-discovery.sh'
+  'operations/lib/timing.sh'
   'install'
   'hardware/discovery'
   'hardware/rules'

@@ -206,6 +206,7 @@ teardown() {
   [ -f "${embedded}/capabilities/lib/common.sh" ]
   [ -f "${embedded}/capabilities/configure-steps" ]
   [ -f "${embedded}/operations/lib/lifecycle-discovery.sh" ]
+  cmp "${BUILDER_REPOSITORY_ROOT}/operations/lib/timing.sh" "${embedded}/operations/lib/timing.sh"
   [ -x "${embedded}/install/discovery/discover" ]
   [ -f "${embedded}/install/plan/assets/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf" ]
   [ -f "${embedded}/install/plan/assets/usr/lib/sysctl.d/60-mirroros-memory.conf" ]

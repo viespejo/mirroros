@@ -1,6 +1,7 @@
 import { readFileSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { writePrivateFile } from '../discovery/write-facts.mjs';
+import { UNSAMPLED_TIMING } from '../engine/engine-record.mjs';
 import {
   RECORD_FORMAT_VERSION,
   RecordContractError,
@@ -17,7 +18,14 @@ function present(entries) {
   return Object.fromEntries(entries.filter(([, value]) => value !== undefined));
 }
 
-export function buildRunRecord({ runId, timestamp, entry, machine, profile, gumVersion, stages, digests, exitStatus, outcome, reasons }) {
+export function buildRunRecord({ runId, timestamp, entry, machine, profile, gumVersion, stages, digests, exitStatus, outcome, reasons, timing }) {
+  if (timing === undefined) {
+    const classes = { preparation: 'mixed', review: 'interactive', confirmation: 'interactive', password: 'interactive' };
+    timing = {
+      total: structuredClone(UNSAMPLED_TIMING.total),
+      intervals: stages.map(id => ({ id, classification: classes[id] ?? 'automated', measurement: structuredClone(UNSAMPLED_TIMING.total) })),
+    };
+  }
   return present([
     ['format_version', RECORD_FORMAT_VERSION],
     ['run_id', runId],
@@ -27,6 +35,7 @@ export function buildRunRecord({ runId, timestamp, entry, machine, profile, gumV
     ['profile', profile],
     ['gum_version', gumVersion],
     ['stages', stages],
+    ['timing', timing],
     ['digests', digests],
     ['final_digest', digests.at(-1)],
     ['exit_status', exitStatus],

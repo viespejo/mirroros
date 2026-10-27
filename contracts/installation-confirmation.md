@@ -1,6 +1,6 @@
 # Installation confirmation (`mirroros-install`)
 
-`format_version: 6`. Produced by `mirroros-install` (`operations/install`) without a subcommand, which runs the
+`format_version: 7`. Produced by `mirroros-install` (`operations/install`) without a subcommand, which runs the
 guided live installer: one interactive Gum flow that prepares the live environment, discovers the machine
 automatically, collects the installation choices, generates and reviews an
 [installation plan](installation-plan.md), and requires a machine-, disk-, and digest-bound confirmation.
@@ -14,7 +14,9 @@ that is neither read nor transformed. Version `4` added the `password` and `engi
 [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). Version `5` accepts the outcome `not_verified`
 (exit `4`) of the engine's [postconditions](installation-postconditions.md) and follows plan format 4, whose
 hardware rule outcomes the review shows. Version `6` adds `not_configured` (exit `4`) for the engine's final
-configure phase and follows engine run/state format `3`.
+configure phase and follows engine run/state format `3`. Version `7` adds guided timing and follows engine run
+format `4` (state remains `3`). Readers also accept pre-timing version `6`, unchanged: they do not add historical
+measurements. Earlier versions retain their unsupported historical status.
 
 In this version a valid approval is followed by the protected password entry, a final revalidation, and one
 invocation of the installation engine (`install/engine/apply`, defined in
@@ -341,19 +343,53 @@ secret. Historical evidence from earlier versions is not renamed or transformed.
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `6`. |
+| `format_version` | New writers emit `7`; readers also accept `6`. |
 | `run_id` | Run identifier. |
 | `timestamp` | RFC 3339 start time. |
 | `entry` | `guided` or `plan_file`. |
 | `machine` | The observed machine projection as in the plan's `target.machine`, including `memory_total_bytes`; omitted when discovery was not reached. |
 | `profile` | `status` and, only for a match, `profile_id`; omitted when discovery was not reached. |
 | `gum_version` | Output of `gum --version`; omitted when Gum was not found. |
-| `stages` | The stages reached, in order, from `preparation`, `discovery_initial`, `plan`, `review`, `confirmation`, `password`, `discovery_final`, and `engine`. |
+| `stages` | The stages reached, once each in canonical flow order, from `preparation`, `discovery_initial`, `plan`, `review`, `confirmation`, `password`, `discovery_final`, and `engine`. Actual timing visit order is independent, including early validation with `--plan`. |
+| `timing` | Version `7` only: `total` measurement and `intervals` list, described below. Required for new run records; absent in legacy version `6`. |
 | `digests` | Plan digests in order of generation, one per `plans/NN/`. |
 | `final_digest` | The digest of the plan shown last; omitted when no plan exists. |
 | `exit_status` | The exit status of the run. |
 | `outcome` | `installed`, `not_verified`, `not_configured`, `cancelled`, `invalidated`, `blocked`, or `failed`. |
 | `reasons` | List of structured reasons; may be empty. |
+
+### Guided timing
+
+`timing.total` is a measurement object: either `{"status":"available","duration_ms":120}` or
+`{"status":"unavailable","reason":"clock_unreadable"}`. Available values are non-negative safe integers in
+milliseconds, multiples of 10. Unavailable measurements omit `duration_ms` (never `null` or a placeholder zero).
+The fixed safe reasons are `clock_unreadable`, `clock_malformed`, `clock_regressed`, and `duration_overflow`.
+`not_sampled` is reserved for record-builder callers that supplied no samples; it is not a clock fallback.
+Readers reject incompatible combinations and unknown timing fields.
+
+`timing.intervals` contains one entry per reached stage: `id`, `classification`, and `measurement` with the
+same shape as `total`. Classification is `interactive` for `review`, `confirmation`, and `password`; `mixed`
+for `preparation`; and `automated` for `discovery_initial`, `plan`, `discovery_final`, and `engine`. No entry or
+duration is created for unstarted work. Interactive measurements include reading and answering; classification
+describes an interval, not exact human-time subtraction from mixed work or the total.
+
+The shared Bash helper `operations/lib/timing.sh` reads the first `/proc/uptime` value without an external
+process per sample or any wall-clock fallback. Effective resolution is 10 ms, not 1 ms. UTC timestamps remain
+chronological metadata. Unreadable, malformed, or regressing readings make affected measurements unavailable;
+clock input is never copied into reasons. A failed visit invalidates the accumulated measurement even if later
+visits can be sampled.
+
+The total begins at `flow_main` entry, before run initialization, and ends at outcome finalization, sampled
+before the final record write. It excludes live boot, record serialization, and the final outcome menu.
+Welcome, configuration screens, start-of-run cleanup, and orchestration overhead remain in the total; they are
+not inferred as named-stage time. Each actual preparation, review, confirmation, or password visit is timed
+and accumulated, including Back and handled cancellation. Discovery retries measure actual child intervals,
+not the intervening recovery menu. Plan timing includes existing-plan validation and each real generation;
+plan-failure recovery prompts remain outside that automated interval. Final discovery includes safety and
+digest revalidation. The guided engine interval includes engine-result processing; the engine owns its own
+nested timings. The existing success-duration line remains unchanged; no timing table or live step times are
+added. Timings survive handled terminal paths only where existing evidence can be written: hard kills and
+unwritable output gain no persistence guarantee. Timing availability never changes lifecycle outcomes.
 
 ### `approval-record.json`
 
@@ -362,7 +398,7 @@ confirmation.
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `6`. |
+| `format_version` | New writers emit `7`; readers also accept `6`. |
 | `run_id` | Run identifier, the same as in `install-run.json`. |
 | `timestamp` | RFC 3339 time the record was written. |
 | `digest` | The final plan digest; omitted when no plan exists. |

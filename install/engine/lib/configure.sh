@@ -6,6 +6,7 @@ copy_configure_code() {
   install -d -m 0755 -- "$destination/operations/lib" "$TARGET/usr/local/bin" &&
     cp -- "$CODE_ROOT/operations/configure" "$destination/operations/configure" &&
     cp -- "$CODE_ROOT/operations/lib/lifecycle-discovery.sh" "$destination/operations/lib/lifecycle-discovery.sh" &&
+    cp -- "$CODE_ROOT/operations/lib/timing.sh" "$destination/operations/lib/timing.sh" &&
     cp -R -- "$CODE_ROOT/capabilities" "$destination/" &&
     cp -- "$CODE_ROOT/identity.json" "$destination/identity.json" &&
     find "$destination" -type d -exec chmod 0755 {} + &&
@@ -18,13 +19,14 @@ copy_configure_code() {
 }
 
 run_configure() {
-  local user='' id line status=0 record old key value kind known
+  local user='' id line status=0 record old key value kind known name
   local evidence_root="$TARGET/var/log/mirroros/configure" pipe="$OUTPUT/.configure.pipe"
   local previous=()
   for id in "${OP_IDS[@]}"; do
     if [[ "${DISPATCH[$id]}" == op_create_user ]]; then user="${PARAM["${id}.user_name"]-}"; fi
   done
   CURRENT_OP=configure
+  timing_begin configure
   CONFIGURE_OUTCOME=6
   CONFIGURE_INTERRUPTED=0
   engine_log '== configure =='
@@ -88,6 +90,20 @@ run_configure() {
     while IFS=$'\t' read -r kind key value; do
       if [[ "$kind" == run && "$key" == failed_step ]]; then CONFIGURE_FAILED_STEP="$value"; fi
     done < "$record"
+    # Deliver native configure records through the existing installation evidence collector.
+    # Never copy arbitrary user content or configure temporary files; failure stays diagnostic.
+    if install -d -m 0700 -- "$OUTPUT/configure"; then
+      for name in configure-run.tsv packages.tsv sources.tsv; do
+        if [[ -f "${record%/*}/$name" && ! -L "${record%/*}/$name" ]]; then
+          if ! install -m 0600 -- "${record%/*}/$name" "$OUTPUT/configure/$name"; then
+            engine_log "configure evidence could not be retained: $name"
+          fi
+        fi
+      done
+    else
+      engine_log 'configure evidence directory could not be created'
+    fi
   done
+  timing_end configure
   if [[ "$CONFIGURE_OUTCOME" != 0 ]]; then finish not_configured 4; fi
 }

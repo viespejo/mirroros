@@ -290,6 +290,9 @@ NODE
   record="$(find "$CFG_TEST_TARGET_ROOT/var/log/mirroros/configure" -name configure-run.tsv)"
   [ -f "$record" ]
   grep -q $'run\tcontext\ttarget' "$record"
+  for interval in total validation step.example; do
+    grep -q $'timing\t'"$interval"$'\tavailable\t' "$record"
+  done
   grep -q $'run\tcode_identity\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$record"
   grep -q $'run\tdirty\tyes' "$record"
   grep -q $'run\toutcome\t0' "$record"

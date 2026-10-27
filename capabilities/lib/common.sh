@@ -74,6 +74,7 @@ cfg_finish() {
   (( CFG_FINISHING == 0 )) || exit "$outcome"
   CFG_FINISHING=1
   trap - ERR INT TERM HUP
+  timing_end_all
   if [[ "$outcome" != 0 && -n "$CFG_CURRENT" && "$CFG_CURRENT" != validation ]]; then
     CFG_STATUS["$CFG_CURRENT"]=failed
     CFG_POST["$CFG_CURRENT"]="$reason"
@@ -102,6 +103,7 @@ cfg_execute() {
   trap 'cfg_finish 5 "command failed (child status $?)"' ERR
   for step in "${CFG_STEPS[@]}"; do
     CFG_CURRENT="$step"
+    timing_begin "step.$step"
     position=$((position + 1))
     cfg_log "== $position/$total $step =="
     rm -f -- "$CFG_OUTPUT/.changed"
@@ -121,6 +123,7 @@ cfg_execute() {
       source "$STEP_DIR/apply"
     ) >> "$CFG_OUTPUT/configure.log" 2>&1
     child_status=$?
+    timing_end "step.$step"
     set -e
     trap 'cfg_finish 5 "command failed (child status $?)"' ERR
     if (( child_status != 0 )); then

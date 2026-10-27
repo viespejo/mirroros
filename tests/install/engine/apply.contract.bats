@@ -13,12 +13,14 @@ teardown() {
 @test "configure success copies the recovery code with normalized modes before execution" {
   engine_run
   [ "$ENGINE_STATUS" -eq 0 ]
-  [ "$(engine_json format_version)" = 3 ]
+  [ "$(engine_json format_version)" = 4 ]
   [ "$(engine_json configure_outcome)" = 0 ]
   [ "$(engine_json format_version state.json)" = 3 ]
   local target="$RUN_ROOT/target" code="$RUN_ROOT/target/usr/local/lib/mirroros"
   cmp "$CODE_ROOT/identity.json" "$code/identity.json"
   cmp "$CODE_ROOT/operations/lib/lifecycle-discovery.sh" "$code/operations/lib/lifecycle-discovery.sh"
+  cmp "$CODE_ROOT/operations/lib/timing.sh" "$code/operations/lib/timing.sh"
+  cmp "$RUN_ROOT/target/var/log/mirroros/configure/new-run/configure-run.tsv" "$OUTPUT/configure/configure-run.tsv"
   cmp "$CODE_ROOT/capabilities/lib/common.sh" "$code/capabilities/lib/common.sh"
   [ "$(readlink "$target/usr/local/bin/mirroros-configure")" = /usr/local/lib/mirroros/operations/configure ]
   [ "$(stat -c %a "$code/operations/configure")" = 755 ]
@@ -28,6 +30,16 @@ teardown() {
   grep -q '^configure --target-root .* --user ' "$DOUBLE_STATE/calls.log"
   grep -q 'configure double outcome 0' "$OUTPUT/engine.log"
   [ "$(engine_call_line configure)" -lt "$(engine_call_line umount)" ]
+}
+
+@test "unavailable timing preserves engine success without fabricated durations" {
+  printf '\ntiming_clock_read() { TIMING_NOW=""; TIMING_CLOCK_REASON=clock_malformed; }\n' >> "$CODE_ROOT/operations/lib/timing.sh"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ "$(engine_json timing.total.status)" = unavailable ]
+  [ "$(engine_json timing.total.reason)" = clock_malformed ]
+  [[ "$(engine_json timing)" != *duration_ms* ]]
+  engine_called umount
 }
 
 @test "configure failures preserve their outcome and only select new evidence from this invocation" {
@@ -60,6 +72,8 @@ teardown() {
   [ "$(engine_json outcome)" = not_verified ]
   ! engine_called configure
   [ ! -e "$RUN_ROOT/target/usr/local/bin/mirroros-configure" ]
+  [[ "$(engine_json timing)" != *'"id":"configure"'* ]]
+  [[ "$(engine_json timing)" == *'"id":"cleanup"'* ]]
 }
 
 @test "SIGINT during configure waits for its outcome, records progress, and cleans up" {
@@ -99,6 +113,20 @@ teardown() {
   [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 17 ]
   [ "$(engine_json status state.json)" = installed ]
   [ "$(engine_json resolved.resume_offset)" = 34816 ]
+  run node --input-type=module - "$OUTPUT/engine-run.json" <<'JS'
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+const run = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+assert.equal(run.timing.total.status, 'available');
+const intervals = new Map(run.timing.intervals.map(item => [item.id, item.measurement]));
+for (const id of ['prechecks', 'precheck.lock', 'precheck.identity', 'precheck.plan', 'precheck.keyring',
+  'precheck.password', 'precheck.final_block', 'postconditions', 'configure', 'cleanup',
+  ...run.completed.map(id => `operation.${id}`)]) {
+  assert.equal(intervals.get(id)?.status, 'available', id);
+  assert.ok(intervals.get(id).duration_ms <= run.timing.total.duration_ms, id);
+}
+JS
+  [ "$status" -eq 0 ]
   [ "$(engine_json mirrors.mirrorlist_sha256 | wc -c)" -eq 64 ]
   run engine_called umount
   [ "$status" -eq 0 ]
@@ -456,6 +484,9 @@ SCRIPT
   [ "$(engine_json reasons.0.code)" = stage_failed ]
   [ "$(engine_json failed_operation.id)" = install_packages ]
   [ "$(engine_json failed_operation.child_exit_status)" = 7 ]
+  [[ "$(engine_json timing)" == *'"id":"operation.install_packages"'* ]]
+  [[ "$(engine_json timing)" != *'"id":"operation.generate_fstab"'* ]]
+  [[ "$(engine_json timing)" == *'"id":"cleanup"'* ]]
   [ "$(engine_json reasons.0.child_exit_status)" = 7 ]
   ! engine_called genfstab
   ! engine_called mkswap
