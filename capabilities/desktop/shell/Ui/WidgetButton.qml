@@ -27,6 +27,7 @@ Item {
   property bool labelVisible: true
   // Off for icon-font labels, whose figure metrics say nothing about the glyph.
   property bool centerFigures: true
+  property bool opticalIcons: false
   property bool hasVisualContent: text !== ""
   property var revealHost: bar
   property string tooltipText: ""
@@ -65,7 +66,7 @@ Item {
   // Width of the painted label, for bar chrome that wants to line up with the
   // text rather than with the slot it sits in. Zero on icon-only buttons.
   readonly property real labelWidth: label.visible ? label.implicitWidth : 0
-  readonly property bool iconLabel: labelVisible && isIconGlyph(text)
+  readonly property bool iconLabel: labelVisible && opticalIcons && isIconGlyph(text)
   readonly property real iconPaintedWidth: iconLabel && iconLoader.item ? iconLoader.item.paintedWidth : 0
   readonly property real iconPaintedHeight: iconLabel && iconLoader.item ? iconLoader.item.paintedHeight : 0
   readonly property real iconCenterErrorX: iconLabel && iconLoader.item

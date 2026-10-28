@@ -5,6 +5,34 @@ adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but usi
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/Style.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var sh = shortHex[1]"]
+adapt ["Ui/BarIconButton.qml","Member \"iconCanvas\" not found on type \"QObject\" [missing-property]","property real opticalSize: Style.bar.iconCanvas"]
+adapt ["Ui/BarIconButton.qml","Member \"iconFont\" not found on type \"QObject\" [missing-property]","fontSize: Style.bar.iconFont"]
+adapt ["Ui/BarIconButton.qml","Member \"iconSize\" not found on type \"QObject\" [missing-property]","property real iconSize: Math.min(Style.bar.iconSize, opticalSize)"]
+adapt ["Ui/BarIconButton.qml","Member \"iconSize\" not found on type \"QObject\" [missing-property]","readonly property real visualIconSize: Style.bar.iconSize"]
+adapt ["Ui/BarIconButton.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","property real slotSize: Style.bar.iconSlot"]
+adapt ["Ui/BarIndicator.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","fontSize: Style.font.caption"]
+adapt ["Ui/BarIndicator.qml","Member \"statusSlot\" not found on type \"QObject\" [missing-property]","fixedHeight: vertical ? Style.bar.statusSlot : -1"]
+adapt ["Ui/BarIndicator.qml","Member \"statusSlot\" not found on type \"QObject\" [missing-property]","fixedWidth: vertical ? -1 : Style.bar.statusSlot"]
+adapt ["Ui/WidgetButton.qml","Member \"body\" not found on type \"QObject\" [missing-property]","property real fontSize: Style.font.body"]
+adapt ["Ui/WidgetButton.qml","Member \"family\" not found on type \"QObject\" [missing-property]","property string fontFamily: bar ? bar.fontFamily : Style.font.family"]
+adapt ["Ui/WidgetButton.qml","Member \"iconCanvas\" not found on type \"QObject\" [missing-property]","height: Style.bar.iconCanvas"]
+adapt ["Ui/WidgetButton.qml","Member \"iconCanvas\" not found on type \"QObject\" [missing-property]","width: Style.bar.iconCanvas"]
+adapt ["Ui/WidgetButton.qml","Member \"iconSize\" not found on type \"QObject\" [missing-property]","paintedSize: Style.bar.iconSize"]
+adapt ["Ui/WidgetButton.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]",": (vertical ? (iconLabel ? Style.bar.iconSlot : Math.max(12, label.implicitHeight + scaledVerticalPadding * 2)) : barSize)"]
+adapt ["Ui/WidgetButton.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]",": (vertical ? barSize : (iconLabel ? Style.bar.iconSlot : Math.max(12, label.implicitWidth + scaledHorizontalMargin * 2)))"]
+adapt ["Ui/WidgetButton.qml","Member \"paintedCenterX\" not found on type \"QObject\" [missing-property]","? iconLoader.x + iconLoader.item.paintedCenterX - width / 2 : 0"]
+adapt ["Ui/WidgetButton.qml","Member \"paintedCenterY\" not found on type \"QObject\" [missing-property]","? iconLoader.y + iconLoader.item.paintedCenterY - height / 2 : 0"]
+adapt ["Ui/WidgetButton.qml","Member \"paintedHeight\" not found on type \"QObject\" [missing-property]","readonly property real iconPaintedHeight: iconLabel && iconLoader.item ? iconLoader.item.paintedHeight : 0"]
+adapt ["Ui/WidgetButton.qml","Member \"paintedWidth\" not found on type \"QObject\" [missing-property]","readonly property real iconPaintedWidth: iconLabel && iconLoader.item ? iconLoader.item.paintedWidth : 0"]
+adapt ["Ui/WidgetButton.qml","Member \"sizeHorizontal\" not found on type \"QObject\" [missing-property]","readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","color: root.active && root.useActiveColor ? root.activeColor : root.foreground"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","color: root.active && root.useActiveColor ? root.activeColor : root.foreground"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","color: root.active && root.useActiveColor ? root.activeColor : root.foreground"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","color: root.active && root.useActiveColor ? root.activeColor : root.foreground"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","fontFamily: root.fontFamily"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","fontSize: root.fontSize"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","rotation: root.textRotation"]
+adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","text: root.text"]
 adapt ["bar/Bar.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: Commons.Color.tooltip.background"]
 adapt ["bar/Bar.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/Bar.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"tooltip\", \"border\", Commons.Color.tooltip.border, 1)"]
@@ -225,11 +253,6 @@ adapt ["osd/Osd.qml","var declaration in block scope is hoisted to function scop
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","if (root.writer.busy) return"]
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","onLoaded: if (!root.writer.busy) root.applyUserText(text(), true)"]
 copy Commons/InputDevices.qml:0:0
-copy Ui/BarIconButton.qml:10:40
-copy Ui/BarIconButton.qml:11:46
-copy Ui/BarIconButton.qml:12:52
-copy Ui/BarIconButton.qml:32:23
-copy Ui/BarIconButton.qml:9:37
 copy Ui/BarIconContent.qml:11:17
 copy Ui/BarIconContent.qml:23:18
 copy Ui/BarIconContent.qml:23:30
@@ -237,8 +260,6 @@ copy Ui/BarIconContent.qml:24:18
 copy Ui/BarIconContent.qml:24:31
 copy Ui/BarIconContent.qml:35:17
 copy Ui/BarIconContent.qml:8:39
-copy Ui/BarIndicator.qml:51:41
-copy Ui/BarIndicator.qml:52:37
 copy Ui/BarWidget.qml:35:35
 copy Ui/BarWidget.qml:36:13
 copy Ui/BorderSurface.qml:36:15
@@ -359,26 +380,6 @@ copy Ui/PopupCard.qml:95:5
 copy Ui/PopupCard.qml:95:5
 copy Ui/PopupCard.qml:98:5
 copy Ui/ToggleSwitch.qml:62:67
-copy Ui/WidgetButton.qml:10:65
-copy Ui/WidgetButton.qml:11:38
-copy Ui/WidgetButton.qml:132:22
-copy Ui/WidgetButton.qml:133:23
-copy Ui/WidgetButton.qml:138:15
-copy Ui/WidgetButton.qml:139:21
-copy Ui/WidgetButton.qml:140:19
-copy Ui/WidgetButton.qml:141:32
-copy Ui/WidgetButton.qml:142:16
-copy Ui/WidgetButton.qml:142:31
-copy Ui/WidgetButton.qml:142:53
-copy Ui/WidgetButton.qml:142:72
-copy Ui/WidgetButton.qml:143:19
-copy Ui/WidgetButton.qml:61:64
-copy Ui/WidgetButton.qml:69:91
-copy Ui/WidgetButton.qml:70:92
-copy Ui/WidgetButton.qml:72:38
-copy Ui/WidgetButton.qml:74:38
-copy Ui/WidgetButton.qml:90:52
-copy Ui/WidgetButton.qml:92:42
 copy bar/widgets/Tray.qml:195:35
 copy bar/widgets/Tray.qml:211:32
 copy bar/widgets/Tray.qml:211:57

@@ -7,6 +7,22 @@ shell_dir=$(cd "$tests_dir/../../../../capabilities/desktop/shell" && pwd)
 for tool in node qs hyprctl busctl; do
     command -v "$tool" >/dev/null || { printf 'BLOCKED missing tool: %s\n' "$tool"; exit 2; }
 done
+node - "$shell_dir" <<'JS'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const shell = process.argv[2];
+const button = fs.readFileSync(path.join(shell, 'Ui/WidgetButton.qml'), 'utf8');
+const iconButton = fs.readFileSync(path.join(shell, 'Ui/BarIconButton.qml'), 'utf8');
+const indicator = fs.readFileSync(path.join(shell, 'Ui/BarIndicator.qml'), 'utf8');
+const workspaces = fs.readFileSync(path.join(shell, 'bar/widgets/Workspaces.qml'), 'utf8');
+assert.match(button, /property bool opticalIcons: false/);
+assert.match(button, /iconLabel: labelVisible && opticalIcons && isIconGlyph\(text\)/);
+assert.match(workspaces, /centerFigures: !shown/);
+assert.doesNotMatch(iconButton, /paintedSize\s*:/);
+assert.match(indicator, /fontSize: Style\.font\.caption/);
+console.log('PASS bar glyph rendering contract');
+JS
 node "$tests_dir/qmllint-check.mjs"
 if [[ -z "${WAYLAND_DISPLAY:-}" || ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-}" ]]; then
     printf 'BLOCKED no reachable Wayland session\n'; exit 2

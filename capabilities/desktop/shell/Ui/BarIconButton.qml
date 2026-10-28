@@ -72,7 +72,6 @@ WidgetButton {
         text: root.text
         fontFamily: root.fontFamily
         fontSize: root.fontSize
-        paintedSize: root.visualIconSize
         color: root.active && root.useActiveColor ? root.activeColor : root.foreground
         rotation: root.textRotation
         debugBounds: root.debugOpticalBounds

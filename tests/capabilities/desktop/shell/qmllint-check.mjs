@@ -15,11 +15,11 @@ const baselinePath = path.join(testsDir, 'qmllint-baseline.txt');
 // files use file + complete message + trimmed source, independent of line shifts.
 const copied = new Set([
   'Commons/Border.qml', 'Commons/InputDevices.qml',
-  ...['BarIconButton', 'BarIconContent', 'BarIndicator', 'BarWidget',
+  ...['BarIconContent', 'BarWidget',
     'BorderOverlay', 'BorderSurface', 'Button', 'CursorSurface', 'IconContentBounds',
     'KeyboardPanel', 'OpticalGlyph', 'PanelActionButton', 'PanelController', 'PanelHero',
     'PanelKeyCatcher', 'PanelSectionHeader', 'PanelSeparator', 'PanelToolTip',
-    'PopupCard', 'ToggleSwitch', 'WidgetButton'].map(name => `Ui/${name}.qml`),
+    'PopupCard', 'ToggleSwitch'].map(name => `Ui/${name}.qml`),
   'bar/widgets/Tray.qml',
   ...['Toast', 'DeedButton', 'NotificationPanel', 'Picker'].map(name => `notifications/${name}.qml`),
 ]);

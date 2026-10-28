@@ -45,9 +45,9 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Commons/Style.qml` | Adapted | `shell/Commons/Style.qml` | Default tokens only; provisional local Nerd Font; no theme/fontconfig/Hyprland style loading. |
 | `Commons/Util.qml` | Adapted | `shell/Commons/Util.qml` | Used helpers only; no RTL key reversal; identity widget-id normalization. |
 | `Commons/qmldir` | New | — | Explicit included singleton declarations. |
-| `Ui/BarIconButton.qml` | Copied | `shell/Ui/BarIconButton.qml` | Unchanged. |
+| `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs retain upstream unscaled rendering. |
 | `Ui/BarIconContent.qml` | Copied | `shell/Ui/BarIconContent.qml` | Unchanged. |
-| `Ui/BarIndicator.qml` | Copied | `shell/Ui/BarIndicator.qml` | Unchanged. |
+| `Ui/BarIndicator.qml` | Adapted | `shell/Ui/BarIndicator.qml` | Uses the upstream caption font size for indicator glyphs. |
 | `Ui/BarWidget.qml` | Copied | `shell/Ui/BarWidget.qml` | Unchanged. |
 | `Ui/BorderOverlay.qml` | Copied | `shell/Ui/BorderOverlay.qml` | Unchanged. |
 | `Ui/BorderSurface.qml` | Copied | `shell/Ui/BorderSurface.qml` | Unchanged. |
@@ -68,7 +68,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Ui/PointerMoveGate.qml` | Copied | `shell/Ui/PointerMoveGate.qml` | Unchanged; Brief 1. |
 | `Ui/PopupCard.qml` | Copied | `shell/Ui/PopupCard.qml` | Unchanged; tray popups. |
 | `Ui/ToggleSwitch.qml` | Copied | `shell/Ui/ToggleSwitch.qml` | Unchanged; notification preferences. |
-| `Ui/WidgetButton.qml` | Copied | `shell/Ui/WidgetButton.qml` | Unchanged. |
+| `Ui/WidgetButton.qml` | Adapted | `shell/Ui/WidgetButton.qml` | Supports optional optical icon rendering; text rendering is the default as in Omarchy. |
 | `Ui/qmldir` | New | — | Explicit included UI declarations. |
 | `services/AppLibrary.qml` | Adapted | `shell/services/AppLibrary.qml` | Brief 1: hidden-entry/icon logic; every launch through uwsm app, availability checks; no Omarchy scripts or config. |
 | `services/AppSearch.js` | Copied | `shell/services/AppSearch.js` | Unchanged; Brief 1 ranking. |
@@ -100,7 +100,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `bar/widgets/Power.qml` | Adapted | `shell/plugins/panels/power/Panel.qml` | Bar-only battery state and persisted percentage toggle; provider inventory, unavailable glyph/reason; panel integration point. |
 | `bar/widgets/Tray.qml` | Copied | `shell/plugins/bar/widgets/Tray.qml` | Unchanged, including LocalSend/Dropbox filtering. |
 | `bar/widgets/TrayModel.js` | Copied | `shell/plugins/bar/widgets/TrayModel.js` | Unchanged. |
-| `bar/widgets/Workspaces.qml` | Adapted | `shell/plugins/bar/widgets/Workspaces.qml` | Native workspace state; Lua focus dispatch and tiledLayout instead of Omarchy scripts/state; layout cycling is an integration point. |
+| `bar/widgets/Workspaces.qml` | Adapted | `shell/plugins/bar/widgets/Workspaces.qml` | Native workspace state; Lua focus dispatch and tiledLayout instead of Omarchy scripts/state; layout cycling is an integration point; active glyph uses text rendering as in Omarchy. |
 | `notifications/DeedButton.qml` | Copied | `shell/plugins/notifications/DeedButton.qml` | Unchanged. |
 | `notifications/Delivery.js` | Copied | `shell/plugins/notifications/Delivery.js` | Unchanged quiet/delivery rules. |
 | `notifications/Detect.js` | Copied | `shell/plugins/notifications/Detect.js` | Unchanged heuristics, not a privacy guarantee. |

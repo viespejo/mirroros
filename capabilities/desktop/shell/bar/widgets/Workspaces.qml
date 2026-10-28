@@ -265,6 +265,7 @@ BarWidget {
         bar: root.bar
         text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? "0" : String(slot))
         opacity: occupied || shown ? 1 : 0.5
+        centerFigures: !shown
         horizontalMargin: 6
         verticalPadding: 6
         fixedWidth: root.vertical ? root.barSize : Style.space(20)
