@@ -29,7 +29,7 @@ The greeter changes require a normative amendment of ADR 0014 (always displaying
 - Only the password field: no clock and no keyboard layout. [DEC-007]
 - Background: `current/background`, `blur_passes = 3`, `blur_size = 8`, `brightness = 0.9`; theme background color
   as fallback. [DEC-008]
-- Field `31.5%, 9.5%`, 3 px accent border, no rounding, theme background at 80%, placeholder `Enter Password` in the
+- Field `31.5%, 8.4%`, 5 px accent border, no rounding, theme background at 80%, placeholder `Enter Password` in the
   foreground at 60%. [DEC-009]
 - Failure: `<i>$PAMFAIL</i>`, no attempt counter, `general:fail_timeout = 5000`. [DEC-010]
 - Colors: literal fallbacks, then `source = ~/.local/state/mirroros/current/theme/hyprlock.conf`; each theme
@@ -49,6 +49,8 @@ configurations under `~/.cache` that were removed afterwards; no product file wa
 | T4 | `size` is in physical pixels; `input-field:font_size` does not exist; Pango placeholder markup applies. |
 | T5 | `<i>$PAMFAIL</i>` shows `Authentication failed`; `input-field:fail_timeout` does not exist. |
 | T6 | `general:fail_timeout = 5000` keeps the failure readable; the maintainer accepted the result. |
+| T7 | After installation, a Pango `size` attribute in the placeholder is ignored; a 5 px border matches Omarchy's 3 logical pixels at scale 1.6. |
+| T8 | A `31.5%, 8.4%` field brings the text close to Omarchy's; the maintainer accepted it. |
 
 During T4, repeated failures triggered `pam_faillock` (10 minutes); `$PAMFAIL` then reports the remaining time.
 

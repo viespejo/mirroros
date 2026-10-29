@@ -48,8 +48,8 @@ lock in place. Configure never starts, restarts or reloads hypridle.
   [ADR 0021](../../../docs/adr/0021-neutral-greeter-and-themed-lock.md): one password field over the selected
   background (`~/.local/state/mirroros/current/background`, ADR 0020) with `blur_passes = 3`, `blur_size = 8` and
   `brightness = 0.9`, or the theme background color when the image is missing; no clock, keyboard layout,
-  screenshot, window or notification content. The field is `31.5%, 9.5%` of the output in physical pixels, with a
-  3-pixel accent border, no rounding, the theme background at 80% and an `Enter Password` placeholder at 60%
+  screenshot, window or notification content. The field is `31.5%, 8.4%` of the output in physical pixels (hyprlock derives the
+  text size from the field height), with a 5-pixel accent border, no rounding, the theme background at 80% and an `Enter Password` placeholder at 60%
   opacity. A failure shows PAM's message (`<i>$PAMFAIL</i>`, including faillock's remaining time) for five seconds
   (`general:fail_timeout = 5000`); the faillock policy is unchanged.
 - Colors are the variables `$background`, `$field`, `$foreground`, `$accent` and `$failure`. The managed file

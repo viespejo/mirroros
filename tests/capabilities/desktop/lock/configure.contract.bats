@@ -68,7 +68,8 @@ lock_packaged_unit() {
   grep -qxF '    color = $background' "$lock"
   grep -qxF '    fail_timeout = 5000' "$lock"
   grep -qxF '    fail_text = <i>$PAMFAIL</i>' "$lock"
-  grep -qxF '    size = 31.5%, 9.5%' "$lock"
+  grep -qxF '    size = 31.5%, 8.4%' "$lock"
+  grep -qxF '    outline_thickness = 5' "$lock"
   # The single source line follows every fallback variable and precedes every section.
   [ "$(grep -c '^source' "$lock")" -eq 1 ]
   local source_at last_variable first_section

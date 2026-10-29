@@ -98,8 +98,12 @@ materialized.
   hyprlock `0.9.6` sizes are physical pixels, not scaled by the monitor; percentages are accepted. At 1920x1080 and
   scale 1.6, `31.5%, 9.5%` matched Omarchy's field in the maintainer's screenshots. hyprlock has no input-field
   font size; text size follows the field height.
-- **User Response**: "3. cómo hace Omarchy?", then "me vale" after T6.
-- **Decision**: Field `31.5%, 9.5%`, 3 px border in the theme accent, no rounding, fill of the theme background at
+  During installed VM qualification of the delivered file, the maintainer found the border thinner and the text
+  slightly larger than Omarchy's. Omarchy 4's lock is Quickshell QML (`LockView.qml`), so its 3 px border and 18 px
+  text are logical pixels (about 5 px and 29 px at scale 1.6). T7 showed that hyprlock `0.9.6` ignores a Pango
+  `size` attribute in the placeholder; T8 showed that a lower field reduces the text.
+- **User Response**: "3. cómo hace Omarchy?", then "me vale" after T6; after T8, "yes".
+- **Decision**: Field `31.5%, 8.4%`, 5 px border in the theme accent, no rounding, fill of the theme background at
   80%, placeholder `Enter Password` in the theme foreground at 60% opacity.
 - **Status**: Accepted
 
