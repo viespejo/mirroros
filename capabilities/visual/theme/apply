@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+# Publish the reviewed theme without touching user state or a running session.
+set -Eeuo pipefail
+
+root="$(cfg_path /)"
+root="${root%/}"
+[[ -n "$root" ]] || root=/
+uid="$(stat -c %u -- "$root")"
+gid="$(stat -c %g -- "$root")"
+dest="$(cfg_path /usr/share/mirroros/themes/default)"
+
+cfg_run_host bash "$STEP_DIR/prepare-parent" "$root" "$uid" "$gid" || exit 4
+status=0
+bash "$STEP_DIR/install-theme" check "$STEP_DIR/default" "$dest" "$uid" "$gid" || status=$?
+case "$status" in
+  0) ;;
+  1)
+    cfg_run_host bash "$STEP_DIR/install-theme" publish "$STEP_DIR/default" "$dest" "$uid" "$gid"
+    cfg_changed ;;
+  *) exit 4 ;;
+esac
+cfg_require bash "$STEP_DIR/check-trusted-path" "$root" usr/share/mirroros/themes "$uid" directory
+cfg_tracked_file "$STEP_DIR/check-trusted-path" /usr/share/mirroros/themes/check-trusted-path 0644
+cfg_tracked_file "$STEP_DIR/resolve-current" /usr/share/mirroros/themes/resolve-current 0644
+cfg_require cfg_tracked_file_present /usr/share/mirroros/themes/check-trusted-path
+cfg_require cfg_tracked_file_present /usr/share/mirroros/themes/resolve-current
+cfg_require bash "$STEP_DIR/install-theme" check "$STEP_DIR/default" "$dest" "$uid" "$gid"
+if [[ "$CONFIGURE_CONTEXT" == target ]]; then
+  cfg_user_script "$STEP_DIR/prepare-current" --default || exit 4
+else
+  cfg_user_script "$STEP_DIR/prepare-current" --session || exit 4
+fi

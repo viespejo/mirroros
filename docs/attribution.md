@@ -48,6 +48,12 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **License texts:** Omarchy's MIT text and Omapager's complete MIT text (Copyright (c) 2026 Neil Jagdish Patel) are retained unchanged as `LICENSE.omarchy` and `LICENSE.omapager` in `capabilities/desktop/shell/`; the Omapager text was verified externally as license evidence only (not a code-source pin or full license audit)
 - **Detailed provenance:** [Desktop shell upstream record](../capabilities/desktop/shell/UPSTREAM.md) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md)
 
+### Omarchy Osaka Jade palette
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Osaka Jade palette adapted at `capabilities/visual/theme/default/colors.toml`; published by configure but not yet loaded by consumers
+- **Detailed provenance:** [Fixed theme source](../capabilities/visual/theme/sources.md) and [MIT notice](../capabilities/visual/theme/default/LICENSE.omarchy)
+
 ### Tokyo Night terminal palette
 
 - **License (SPDX):** `MIT` for the explicitly licensed terminal extra; other upstream repository material has its own terms

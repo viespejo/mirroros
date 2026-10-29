@@ -13,6 +13,9 @@ cfg_system_file "$STEP_DIR/greeter/hyprland.lua" /usr/share/mirroros/sddm/hyprla
 cfg_system_file "$STEP_DIR/greeter/layout-indicator" /usr/share/mirroros/sddm/layout-indicator 0755
 cfg_tracked_file "$STEP_DIR/shell-bindings.lua" /usr/share/mirroros/hypr/shell-bindings.lua 0644
 cfg_tracked_file "$STEP_DIR/window-bindings.lua" /usr/share/mirroros/hypr/window-bindings.lua 0644
+cfg_tracked_file "$STEP_DIR/theme-loader.lua" /usr/share/mirroros/hypr/theme-loader.lua 0644
+cfg_tracked_file "$STEP_DIR/theme-validation.lua" /usr/share/mirroros/hypr/theme-validation.lua 0644
+cfg_tracked_file "$STEP_DIR/theme-runtime.lua" /usr/share/mirroros/hypr/theme-runtime.lua 0644
 cfg_tracked_file "$STEP_DIR/defaults.lua" /usr/share/mirroros/hypr/defaults.lua 0644
 cfg_tracked_file "$STEP_DIR/personal-loader.lua" /usr/share/mirroros/hypr/personal-loader.lua 0644
 cfg_user_script "$STEP_DIR/prepare-hyprland" "$(base64 -w 0 < "$STEP_DIR/hyprland.lua")"
@@ -32,6 +35,9 @@ cfg_require cfg_system_file_present /usr/share/mirroros/sddm/hyprland.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/sddm/layout-indicator
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/shell-bindings.lua
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/window-bindings.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/theme-loader.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/theme-validation.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/theme-runtime.lua
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/defaults.lua
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/personal-loader.lua
 cfg_require cfg_user_file_present .config/hypr/hyprland.lua

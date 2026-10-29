@@ -1,0 +1,42 @@
+# MirrorOS shell surface settings; see ../sources.md.
+[bar]
+background = "background"
+background-alpha = 1.0
+text = "foreground"
+active = "urgent"
+
+[popups]
+background = "background"
+background-alpha = 1.0
+text = "foreground"
+border = "accent"
+border-alpha = 1.0
+
+[tooltip]
+background = "background"
+background-alpha = 0.97
+text = "foreground"
+border = "foreground"
+border-alpha = 1.0
+
+[notifications]
+background = "background"
+background-alpha = 1.0
+text = "foreground"
+border = "accent"
+border-alpha = 1.0
+countdown = "accent"
+
+[menu]
+background = "background"
+background-alpha = 1.0
+text = "foreground"
+border = "foreground"
+border-alpha = 1.0
+scrim = "background"
+scrim-alpha = 0.5
+selected-background = "foreground"
+selected-background-alpha = 0.08
+selected-text = "accent"
+selected-border = "foreground"
+selected-border-alpha = 0.25

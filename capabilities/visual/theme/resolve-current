@@ -1,0 +1,33 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Resolve the one reviewed theme without trusting the user-controlled selection link.
+# The anchor is / on a running system; other anchors are for isolated tests.
+set -Eeuo pipefail
+
+(( $# == 3 || $# == 4 )) || { printf 'Usage: resolve-current <anchor> <state-home> <owner-uid> [hyprland]\n' >&2; exit 6; }
+anchor="$1" state="$2" uid="$3" consumer="${4:-shell}"
+[[ "$anchor" == /* && "$state" == /* && "$uid" =~ ^[0-9]+$ && ( "$consumer" == shell || "$consumer" == hyprland ) ]] || exit 6
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+link="$state/mirroros/current/theme"
+selected=/usr/share/mirroros/themes/default
+if [[ ! -L "$link" ]] || [[ "$(readlink -- "$link")" != "$selected" ]]; then
+  printf 'Invalid or missing theme selection; using the default theme.\n' >&2
+fi
+bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/colors.toml "$uid" file || {
+  printf 'The default theme palette is unavailable or untrusted.\n' >&2
+  exit 4
+}
+if [[ "$consumer" == hyprland ]]; then
+  bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/hyprland.lua "$uid" file || {
+    printf 'The default Hyprland theme is unavailable or untrusted.\n' >&2
+    exit 4
+  }
+  printf '%s/hyprland.lua\n' "$selected"
+  exit 0
+fi
+printf '%s\n' "$selected"
+if bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/shell.toml "$uid" file 2>/dev/null; then
+  printf 'shell.toml\n'
+else
+  printf 'The default shell surface settings are unavailable or untrusted; using fallback.\n' >&2
+fi

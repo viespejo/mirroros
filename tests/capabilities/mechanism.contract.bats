@@ -322,8 +322,8 @@ terminal_desktop_entry() {
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/foot.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/xdg-terminals.list" "$CFG_TEST_HOME/.config/xdg-terminals.list"
   [ "$(grep -v '^#' "$CFG_TEST_HOME/.config/xdg-terminals.list")" = foot.desktop ]
-  grep -q '^font=JetBrainsMono Nerd Font Mono:size=14$' "$CFG_TEST_HOME/.config/foot/foot.ini"
-  grep -q '^pad=16x16 center$' "$CFG_TEST_HOME/.config/foot/foot.ini"
+  grep -q '^font=JetBrainsMono Nerd Font Mono:size=9$' "$CFG_TEST_HOME/.config/foot/foot.ini"
+  grep -q '^pad=14x14 center$' "$CFG_TEST_HOME/.config/foot/foot.ini"
   grep -qF '\x1b[13;2u=Shift+Return' "$CFG_TEST_HOME/.config/foot/foot.ini"
   [ -e "$CFG_TEST_INSTALLED/noto-fonts-emoji" ]
   : > "$CFG_TEST_CALLS"
@@ -344,6 +344,28 @@ terminal_desktop_entry() {
   [[ "$output" == *'desktop/terminal: changed'* ]]
   [ "$(< "$CFG_TEST_HOME/.config/foot/foot.ini")" = $'# user terminal\nfont=local' ]
   [ "$(< "$MIRROROS_CONFIGURE_ROOT/etc/xdg/foot/foot.ini")" = '# package terminal' ]
+}
+
+@test "terminal migrates only the exact previous Foot configuration" {
+  printf 'CFG_STEPS=(desktop/terminal)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  terminal_desktop_entry
+  mkdir -p "$CFG_TEST_HOME/.config/foot"
+  cp "$CFG_SOURCE_ROOT/tests/capabilities/desktop/terminal/foot-legacy.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/terminal/foot.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  cp "$CFG_SOURCE_ROOT/tests/capabilities/desktop/terminal/foot-legacy.ini" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  printf '\n# personal edit\n' >> "$CFG_TEST_HOME/.config/foot/foot.ini"
+  cp "$CFG_TEST_HOME/.config/foot/foot.ini" "$CFG_TEST_DIR/personal-foot"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  cmp "$CFG_TEST_DIR/personal-foot" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  rm "$CFG_TEST_HOME/.config/foot/foot.ini"
+  ln -s "$CFG_TEST_DIR/personal-foot" "$CFG_TEST_HOME/.config/foot/foot.ini"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [ -L "$CFG_TEST_HOME/.config/foot/foot.ini" ]
+  cmp "$CFG_TEST_DIR/personal-foot" "$CFG_TEST_HOME/.config/foot/foot.ini"
 }
 
 @test "a user-owned terminal list naming no installed terminal is an actionable conflict and is preserved" {

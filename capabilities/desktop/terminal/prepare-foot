@@ -1,0 +1,49 @@
+#!/usr/bin/bash
+# Run as the target user. Arguments are the standalone and layered configurations encoded as base64.
+set -Eeuo pipefail
+umask 022
+readonly legacy=51771bc3d811166221ca945ad971e26a7bee6284fc79b3dc29bb35123db21bb5
+dest="$HOME/.config/foot/foot.ini"
+if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) ]]; then
+  printf 'unchanged user-owned: .config/foot/foot.ini; left untouched\n'
+  exit 0
+fi
+mkdir -p -- "${dest%/*}"
+tmp=$(mktemp "${dest%/*}/.mirroros-foot.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+printf '%s' "$1" | base64 -d > "$tmp"
+if [[ -f "$dest" ]]; then
+  if cmp -s -- "$tmp" "$dest"; then
+    printf 'unchanged\n'
+    exit 0
+  fi
+  current=$(sha256sum < "$dest")
+  if [[ ${current%% *} != "$legacy" ]]; then
+    printf 'unchanged user-owned: .config/foot/foot.ini; left untouched\n'
+    exit 0
+  fi
+else
+  new_file=1
+  layered=$(mktemp "${dest%/*}/.mirroros-foot-layered.XXXXXX")
+  trap 'rm -f -- "$tmp" "$layered"' EXIT
+  printf '%s' "$2" | base64 -d > "$layered"
+  if command -v foot >/dev/null 2>&1 && foot --check-config --config "$layered" >/dev/null 2>&1; then
+    cp -- "$layered" "$tmp"
+  else
+    printf 'Layered Foot configuration unavailable; using standalone defaults.\n' >&2
+  fi
+fi
+chmod 0644 "$tmp"
+if [[ ${new_file:-0} == 1 ]]; then
+  if ln -T -- "$tmp" "$dest" 2>/dev/null; then
+    printf 'changed\n'
+  elif [[ -e "$dest" || -L "$dest" ]]; then
+    printf 'unchanged user-owned: .config/foot/foot.ini; left untouched\n'
+  else
+    printf 'Cannot create personal Foot configuration\n' >&2
+    exit 1
+  fi
+else
+  mv -T -- "$tmp" "$dest"
+  printf 'changed\n'
+fi

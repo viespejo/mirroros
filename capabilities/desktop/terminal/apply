@@ -6,10 +6,21 @@
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
-cfg_user_file "$STEP_DIR/foot.ini" .config/foot/foot.ini
+root="$(cfg_path /)"
+root="${root%/}"
+[[ -n "$root" ]] || root=/
+uid="$(stat -c %u -- "$root")"
+gid="$(stat -c %g -- "$root")"
+cfg_run_host bash "$CAPABILITIES_DIR/visual/theme/prepare-parent" "$root" "$uid" "$gid" foot || exit 4
+cfg_tracked_file "$STEP_DIR/foot.ini" /usr/share/mirroros/foot/recovery.ini 0644
+cfg_tracked_file "$STEP_DIR/defaults.ini" /usr/share/mirroros/foot/defaults.ini 0644
+cfg_user_script "$STEP_DIR/prepare-foot" "$(base64 -w 0 < "$STEP_DIR/foot.ini")" "$(base64 -w 0 < "$STEP_DIR/personal-foot.ini")"
+[[ "$CFG_USER_SCRIPT_RESULT" != 'unchanged user-owned:'* ]] || cfg_log "$CFG_USER_SCRIPT_RESULT"
 cfg_user_file "$STEP_DIR/xdg-terminals.list" .config/xdg-terminals.list
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_tracked_file_present /usr/share/mirroros/foot/recovery.ini
+cfg_require cfg_tracked_file_present /usr/share/mirroros/foot/defaults.ini
 cfg_require cfg_user_file_present .config/foot/foot.ini
 cfg_require cfg_user_file_present .config/xdg-terminals.list
 cfg_require cfg_user_script "$STEP_DIR/check-terminal-list"

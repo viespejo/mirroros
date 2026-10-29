@@ -57,6 +57,29 @@ locked remains untested: its packaged control-group kill mode could end its hypr
 claimed. Task 3 inspected the real packaged unit and verified `Terminal=true` through uwsm, Foot and a real TTY
 without foot-server; a maintainer-attended synthetic window confirmed the launch.
 
+## Fixed palette
+
+At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`
+(falling back to `~/.local/state`). The only accepted selection is currently the reviewed default; missing or
+unknown selections warn and use that default after its palette path is checked. If the resolver or the trusted
+default is unavailable, the shell keeps its built-in palette. While resolution runs, built-in colors are used.
+The shell reads `foreground`, `background`, `accent`, `muted` and `red` from the resolved product palette;
+`red` supplies the urgent role. Each must occur once as a
+quoted `#RRGGBB` string. If the file cannot be read or any required value is absent, duplicated or invalid,
+the shell logs a warning and retains its complete built-in palette. Other entries are ignored. This is a
+restricted reader, not general TOML or third-party theme support. The shell also reads the supported surface
+settings from the product `shell.toml` only when its path, owners and permissions pass the product trust check,
+otherwise it warns and uses fallback settings. This check is point-in-time and does not prevent concurrent
+privileged changes. It also reads optional `$XDG_CONFIG_HOME/mirroros/shell.toml` (defaulting to
+`~/.config`); personal settings take precedence per key. Supported sections and keys are listed in
+`Commons/SurfacePalette.js`. Colors accept quoted `#RRGGBB`, palette roles (`foreground`, `text`, `background`,
+`accent`, `urgent`, `muted`), `transparent`, and references to supported color settings such as
+`hyprland.active-border`; alpha values are finite decimals from 0 to 1. Invalid, duplicate, unknown-alias or
+cyclic settings are omitted individually with a bounded warning; missing files are optional. Unknown sections and
+keys are ignored. Theme and personal files are never written or watched, and this is not general TOML or Omarchy
+theme compatibility. With a valid product palette, tooltip background alpha is 0.97 and menu selected-border alpha
+is 0.25; otherwise the previous built-in values 1.0 and 0.0 apply unless personally overridden.
+
 ## Defaults, preferences and private state
 
 | Item | Path | Owner |

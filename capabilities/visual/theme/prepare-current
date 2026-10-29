@@ -1,0 +1,46 @@
+#!/usr/bin/bash
+# Run as the target user; prepare the default theme link without replacing user state.
+set -Eeuo pipefail
+umask 022
+
+if [[ "${1:-}" == --session && $# == 1 ]]; then
+  # The administrator's environment is not evidence of the target user's session.
+  state=''
+  runtime="/run/user/$(id -u)"
+  if environment=$(env -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$runtime" systemctl --user show-environment 2>/dev/null); then
+    while IFS= read -r line; do
+      if [[ "$line" == XDG_STATE_HOME=* ]]; then
+        [[ -z "$state" ]] || { printf 'Duplicate XDG_STATE_HOME in user manager environment.\n' >&2; exit 4; }
+        state="${line#XDG_STATE_HOME=}"
+      fi
+    done <<< "$environment"
+  fi
+  state="${state:-$HOME/.local/state}"
+elif [[ "${1:-}" == --default && $# == 1 ]]; then
+  state="$HOME/.local/state"
+elif (( $# == 0 )); then
+  state="${XDG_STATE_HOME:-$HOME/.local/state}"
+else
+  printf 'Usage: prepare-current [--session|--default]\n' >&2
+  exit 6
+fi
+if [[ "$state" != /* ]]; then
+  printf 'XDG_STATE_HOME must be an absolute path: %s\n' "$state" >&2
+  exit 4
+fi
+dest="$state/mirroros/current/theme"
+want=/usr/share/mirroros/themes/default
+result=unchanged
+if [[ ! -L "$dest" || "$(readlink -- "$dest")" != "$want" ]]; then
+  if [[ -e "$dest" || -L "$dest" ]]; then
+    printf 'Conflict: %s already exists; leave it untouched and resolve it manually.\n' "$dest" >&2
+    exit 4
+  fi
+  mkdir -p -- "${dest%/*}"
+  if ! ln -sT -- "$want" "$dest"; then
+    printf 'Conflict: could not create %s; existing state was not replaced.\n' "$dest" >&2
+    exit 4
+  fi
+  result=changed
+fi
+printf '%s\n' "$result"

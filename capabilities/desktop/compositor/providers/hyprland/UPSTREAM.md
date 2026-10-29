@@ -23,7 +23,10 @@
 `hyprland.lua`, `defaults.lua` and `personal-loader.lua` are original MirrorOS configuration. The provider's `dwindle.preserve_split = true` follows the observed need of
 SUPER+J (togglesplit) and matches Omarchy `default/hypr/looknfeel.lua` 93-95. The active border uses the
 reviewed fixed theme accent `#509475`; the inactive border uses Hyprland's native `rgba(595959aa)` default.
-The provider uses static border values and separately sets a 2 px border,
+The provider retains those literals as fallback and optionally resolves the reviewed product theme, loads its
+Lua as text with an empty global environment, and validates both border values before applying them. A missing,
+untrusted or invalid theme leaves the fallback. Checks are point-in-time and cannot protect against concurrent
+privileged changes; an empty environment is not a resource sandbox. The provider separately sets a 2 px border,
 active opacity 0.985, inactive opacity 0.96 and disables blur, without application-specific exceptions. Configure
 migrates only exact previous Tokyo Night, jade or themed `hyprland.lua` deliveries; modified files and links are preserved.
 A pre-existing `hyprland.conf` is also left untouched. The accent must stay in sync with the fixed palette.

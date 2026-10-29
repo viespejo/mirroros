@@ -1,5 +1,6 @@
 # Ordered capability paths relative to capabilities/. No discovery or resume state.
 CFG_STEPS=(
+  visual/theme
   desktop/terminal
   workflow/node
   workflow/shell

@@ -14,6 +14,21 @@ It applies minimal graphical login and user tools through the ordered steps in
 The actual graphical path remains subject to the plan's blocking VM checkpoint; successful postconditions are
 not a substitute for that proof or for independent readiness verification by `verify`.
 
+The `visual/theme` step publishes the reviewed theme under `/usr/share/mirroros/themes/default`. It refuses
+modified or unknown deliveries and unsafe parent directories. As the target user, it creates
+`$XDG_STATE_HOME/mirroros/current/theme` pointing to the default theme if absent, preserving conflicting paths
+and failing with an actionable diagnostic. It obtains `XDG_STATE_HOME` from the user's systemd manager when
+available in the running system, not from the administrator's environment; without an available value it uses
+`~/.local/state`. A mounted target always uses `~/.local/state`, not a session on the installation host.
+If the session later uses another state directory, configure does not move an existing link automatically.
+The step also publishes tracked selection and path-checking helpers under `/usr/share/mirroros/themes/`;
+modified or unknown helper files are preserved as conflicts. This link is not itself a trust guarantee, and
+the shell and Hyprland use the resolver and only accept the reviewed default. Other consumers do not yet use the link.
+This step does not restart or reload the session. The terminal step publishes the standalone tracked
+`/usr/share/mirroros/foot/recovery.ini`; edited or linked destinations are conflicts. It does not replace
+personal Foot settings. From a working Wayland session, use `foot --config /usr/share/mirroros/foot/recovery.ini`
+to bypass a broken personal configuration. Graphical recovery has not yet been validated.
+
 ```bash
 sudo operations/configure
 sudo operations/configure --user alice
@@ -112,10 +127,11 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The twelve steps run in this order:
+The thirteen steps run in this order:
 
 | Step | Applied state |
 |---|---|
+| `visual/theme` | Reviewed product theme and initialize-only current theme link |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
@@ -135,7 +151,7 @@ greeter uses Wayland. No `qt6-wayland` dependency or VM-specific workaround is a
 
 Managed destinations are:
 
-- `~/.config/foot/foot.ini`: Tokyo Night palette, `JetBrainsMono Nerd Font Mono:size=14`, centered 16x16 padding,
+- `~/.config/foot/foot.ini`: Osaka Jade palette, `JetBrainsMono Nerd Font Mono:size=9`, centered 14x14 padding,
   `term=foot`, and CSI-u Shift+Return / Alt+Shift+Return sequences. Foot reads this before its system default.
   The package-owned `/etc/xdg/foot/foot.ini` is deliberately left intact. See
   [terminal provenance and notices](../../capabilities/desktop/terminal/sources.md).
@@ -189,12 +205,12 @@ Managed destinations are:
   installed desktop entry, the step fails with an actionable message instead of passing.
 - `~/.config/hypr/hyprland.lua`: the managed entry point loads `/usr/share/mirroros/hypr/defaults.lua`, then optional
   personal layers. Product defaults include layouts from `layouts.lua` (the resolved layout first, then `us,es`
-  without duplicates), Right Alt Compose, repeat defaults, `dwindle.preserve_split`, static jade borders and
+  without duplicates), Right Alt Compose, repeat defaults, `dwindle.preserve_split`, the reviewed border theme and
   the approved bindings. Independently of the theme, window borders are 2 px, active and inactive opacity are
   0.985 and 0.96, and blur is disabled; no application-specific exceptions are supplied. Configure migrates only exact known earlier entry points and preserves modified files,
   links and existing `hyprland.conf`. The earlier `SUPER+SHIFT+Q` and `SUPER+SHIFT+E` bindings are removed (close:
   `SUPER+W` or `SUPER+Q`; logout: System menu); `SUPER+Return` still launches `uwsm app -- foot`.
-- `/usr/share/mirroros/hypr/defaults.lua` and `personal-loader.lua`: tracked product files. After defaults,
+- `/usr/share/mirroros/hypr/defaults.lua` and `personal-loader.lua`: tracked product files. After defaults and theme,
   the loader executes existing user-owned `~/.config/hypr/monitors.lua`, `input.lua`, `looknfeel.lua`, `bindings.lua`
   and `autostart.lua`, in that order. Configure creates commented `monitors.lua` and `bindings.lua` templates only when absent; it
   never overwrites personal layers or links and does not create the other layers. They are executable Lua;

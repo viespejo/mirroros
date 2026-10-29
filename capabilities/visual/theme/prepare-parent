@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+# Prepare reviewed product directories below the configure root.
+# The caller is responsible for the configure root and its ancestors.
+set -Eeuo pipefail
+
+(( $# == 3 || $# == 4 )) || { printf 'Usage: prepare-parent <configure-root> <uid> <gid> [themes|foot]\n' >&2; exit 6; }
+root="$1" uid="$2" gid="$3" leaf="${4:-themes}"
+[[ "$root" == /* && "$uid" =~ ^[0-9]+$ && "$gid" =~ ^[0-9]+$ && ( "$leaf" == themes || "$leaf" == foot ) ]] || exit 6
+[[ "$root" == / ]] || root="${root%/}"
+checker="$(dirname -- "${BASH_SOURCE[0]}")/check-trusted-path"
+[[ "$(realpath -e -- "$root")" == "$root" ]] || { printf 'Untrusted configure root: %s\n' "$root" >&2; exit 4; }
+# Check the root using the same owner and write-permission policy as its children.
+root_mode="$(stat -c '%a' -- "$root")"
+[[ ! -L "$root" && -d "$root" && "$(stat -c '%u' -- "$root")" == "$uid" && "$root_mode" =~ ^[0-7]+$ ]] || exit 4
+(( (8#$root_mode & 8#022) == 0 )) || { printf 'Untrusted configure root permissions: %s\n' "$root" >&2; exit 4; }
+
+relative=''
+for component in usr share mirroros "$leaf"; do
+  relative="${relative:+$relative/}$component"
+  path="${root%/}/$relative"
+  if [[ ! -e "$path" && ! -L "$path" ]]; then
+    mkdir -- "$path" || { printf 'Cannot create product directory: %s\n' "$path" >&2; exit 4; }
+    chmod 0755 "$path"
+    chown "$uid:$gid" "$path"
+  fi
+  bash "$checker" "$root" "$relative" "$uid" directory || exit 4
+done
