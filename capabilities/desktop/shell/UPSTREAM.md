@@ -50,7 +50,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Commons/Util.qml` | Adapted | `shell/Commons/Util.qml` | Used helpers only; no RTL key reversal; identity widget-id normalization. |
 | `Commons/qmldir` | New | — | Explicit included singleton declarations. |
 | `Ui/ScreenMoveRemap.qml` | Copied | Installed Omarchy `4.0.6-1` reference `shell/Ui/ScreenMoveRemap.qml`, SHA-256 `ae09782672877502015e517c6f58565cf79b82e0aa1dc56ee5655989863ad8a7` | Unchanged output-position remap guard; registered in Ui/qmldir and used by the bar and background. Package Git revision unverified; not assigned the general source pin. |
-| `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs retain upstream unscaled rendering. |
+| `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs retain upstream unscaled rendering. Labels omit the upstream figure-centering offset, as in `Ui/WidgetButton.qml`. |
 | `Ui/BarIconContent.qml` | Copied | `shell/Ui/BarIconContent.qml` | Unchanged. |
 | `Ui/BarIndicator.qml` | Adapted | `shell/Ui/BarIndicator.qml` | Uses the upstream caption font size for indicator glyphs. |
 | `Ui/BarWidget.qml` | Copied | `shell/Ui/BarWidget.qml` | Unchanged. |
@@ -73,7 +73,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Ui/PointerMoveGate.qml` | Copied | `shell/Ui/PointerMoveGate.qml` | Unchanged; Brief 1. |
 | `Ui/PopupCard.qml` | Copied | `shell/Ui/PopupCard.qml` | Unchanged; tray popups. |
 | `Ui/ToggleSwitch.qml` | Copied | `shell/Ui/ToggleSwitch.qml` | Unchanged; notification preferences. |
-| `Ui/WidgetButton.qml` | Adapted | `shell/Ui/WidgetButton.qml` | Supports optional optical icon rendering; text rendering is the default as in Omarchy. |
+| `Ui/WidgetButton.qml` | Adapted | `shell/Ui/WidgetButton.qml` | Supports optional optical icon rendering; text rendering is the default as in Omarchy. Labels are centered on their line box without the upstream `centerFigures` offset, which put figures one physical pixel below the icons beside them at scale 1.6; the property is kept inert for upstream callers. |
 | `Ui/qmldir` | New | — | Explicit included UI declarations. |
 | `WallpaperPicker.qml` | Adapted | `shell/plugins/image-picker/ImagePicker.qml` from installed Omarchy `4.0.6-1`, SHA-256 `9799f9cb52ffc4bd6d3089a50b73386b017e1c726b786e193e12d83561385ca8` | Skewed carousel, geometry, masks, keyboard and mouse selection. In-process thumbnail records and signals replace external response files; target-output selection, empty state and output-removal cancellation. Uses synchronous cached thumbnails as the reference and existing palette roles; no filter, labels, theme picker or external selector protocol. Package Git revision unverified. |
 | `services/WallpaperActions.qml` | Adapted | Installed Omarchy `4.0.6-1` `bin/omarchy-theme-bg-next` (hash below), `bin/omarchy-theme-bg-install`, SHA-256 `f23306136f240f330db1d477eaedbc378a67ba98ee2f7dda665fe78bf41a2ba5`; `Background.qml` readlink behavior | Integrated argv orchestration: read selection link at startup/refresh; helper saves before display; next scans afresh, wraps and notifies on empty; install creates personal folder and opens Nautilus. Theme name derived from resolved theme target; native five-action IPC, no status or external selector protocol. One in-flight operation; failures logged. Package Git revision unverified. |

@@ -50,13 +50,7 @@ WidgetButton {
       font.pixelSize: root.fontSize
       color: root.active && root.useActiveColor ? root.activeColor : root.foreground
       y: (parent.height - height) / 2
-        + (labelMetrics.descent - labelMetrics.ascent + labelMetrics.tightBoundingRect("0").height) / 2
       renderType: Text.NativeRendering
-    }
-
-    FontMetrics {
-      id: labelMetrics
-      font: label.font
     }
 
     Item {

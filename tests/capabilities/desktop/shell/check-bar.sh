@@ -19,6 +19,7 @@ const workspaces = fs.readFileSync(path.join(shell, 'bar/widgets/Workspaces.qml'
 assert.match(button, /property bool opticalIcons: false/);
 assert.match(button, /iconLabel: labelVisible && opticalIcons && isIconGlyph\(text\)/);
 assert.match(workspaces, /centerFigures: !shown/);
+for (const source of [button, iconButton]) assert.doesNotMatch(source, /tightBoundingRect\("0"\)/);
 assert.doesNotMatch(iconButton, /paintedSize\s*:/);
 assert.match(indicator, /fontSize: Style\.font\.caption/);
 console.log('PASS bar glyph rendering contract');
