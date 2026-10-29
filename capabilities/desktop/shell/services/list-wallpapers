@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+# Read-only catalog adapted from Omarchy's omarchy-theme-bg-next (MIT,
+# Copyright (c) David Heinemeier Hansson); see UPSTREAM.md for provenance.
+# Absolute directory arguments and NUL-separated output preserve opaque paths.
+set -Eeuo pipefail
+export LC_ALL=C
+
+[[ $# == 2 && $1 == /* && $2 == /* ]] || {
+  printf 'Usage: list-wallpapers <product-directory> <personal-directory>\n' >&2
+  exit 2
+}
+
+{
+  for directory in "$@"; do
+    if [[ -d "$directory" ]]; then
+      directory="$(readlink -f -- "$directory")"
+      find -L "$directory" -maxdepth 1 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
+        -print0
+    elif [[ -e "$directory" || -L "$directory" ]]; then
+      printf 'Cannot scan wallpaper directory: %s\n' "$directory" >&2
+      exit 1
+    fi
+  done
+} | sort -z

@@ -24,8 +24,8 @@ test('model: root injected with upstream label and first in order', () => {
   assert.equal(items.root.label, 'Go');
 });
 
-test('model: only Apps, Learn and System at root, upstream order', () => {
-  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'root'), ['apps', 'learn', 'system']);
+test('model: approved root groups retain upstream order', () => {
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'root'), ['apps', 'learn', 'style', 'install', 'system']);
 });
 
 test('model: Apps is a provider submenu, not an action', () => {
@@ -52,6 +52,11 @@ test('model: every action belongs to the closed table', () => {
 test('routing: ids and aliases, unknown falls through', () => {
   assert.equal(MenuModel.resolveRoute(items, itemOrder, 'power-menu'), 'system');
   assert.equal(MenuModel.resolveRoute(items, itemOrder, 'applications'), 'apps');
+  assert.equal(MenuModel.resolveRoute(items, itemOrder, 'wallpaper'), 'style.background');
+  assert.equal(items['style.background'].action, 'wallpaper:open');
+  assert.equal(items['install.style.background'].action, 'wallpaper:install');
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'style'), ['style.background']);
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'install'), ['install.style']);
   assert.equal(MenuModel.resolveRoute(items, itemOrder, ''), 'root');
   assert.equal(MenuModel.resolveRoute(items, itemOrder, 'nope'), 'nope');
 });

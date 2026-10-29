@@ -105,7 +105,7 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 116);
+  assert.equal(bindings.length, 117);
   for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
@@ -148,7 +148,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 116);
+  assert.equal(replaced.stdout.trim().split('\n').length, 117);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -157,7 +157,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
 
 test('every approved Story 4.3 key is bound with a description', { skip: !lua && 'no Lua interpreter' }, () => {
   const required = [
-    'SUPER+SPACE', 'SHIFT+SUPER+CODE:201', 'SUPER+D', 'ALT+SUPER+SPACE', 'SUPER+ESCAPE', 'XF86POWEROFF', 'SUPER+K',
+    'SUPER+SPACE', 'SHIFT+SUPER+CODE:201', 'SUPER+D', 'ALT+SUPER+SPACE', 'SUPER+ESCAPE', 'XF86POWEROFF', 'SUPER+K', 'CTRL+SUPER+SPACE',
     'SUPER+I', 'SHIFT+SUPER+I', 'SUPER+COMMA', 'SHIFT+SUPER+COMMA', 'CTRL+SUPER+COMMA', 'ALT+SUPER+COMMA',
     'ALT+SHIFT+SUPER+COMMA', 'SUPER+APOSTROPHE', 'ALT+SUPER+APOSTROPHE', 'CTRL+SUPER+L', 'SUPER+RETURN',
     'ALT+SUPER+RETURN', 'SUPER+W', 'SUPER+Q', 'SUPER+J', 'SUPER+P', 'SUPER+T', 'SUPER+F', 'ALT+SUPER+F', 'SUPER+TAB',
@@ -187,7 +187,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
 test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua interpreter' }, () => {
   const unbound = [
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
-    'SUPER+SLASH', 'ALT+SUPER+SLASH', 'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'CTRL+SUPER+SPACE', 'SUPER+H',
+    'SUPER+SLASH', 'ALT+SUPER+SLASH', 'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
     'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V', 'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
     'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+F', 'SHIFT+SUPER+N', 'CTRL+SUPER+A', 'CTRL+SUPER+B',
     'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P', 'XF86AUDIORAISEVOLUME', 'XF86MONBRIGHTNESSUP', 'SUPER+O',
@@ -202,9 +202,10 @@ test('shell actions call existing IPC functions of the installed shell', { skip:
   const sources = {
     menu: fs.readFileSync(path.join(shell, 'menu/Menu.qml'), 'utf8'),
     notifications: fs.readFileSync(path.join(shell, 'notifications/Service.qml'), 'utf8'),
+    wallpaper: fs.readFileSync(path.join(shell, 'services/WallpaperActions.qml'), 'utf8'),
   };
   for (const action of ipc) {
-    const match = action.match(/^qs ipc -p \/usr\/share\/mirroros\/shell call (menu|notifications) (\w+)(?: (\w+))?$/);
+    const match = action.match(/^qs ipc -p \/usr\/share\/mirroros\/shell call (menu|notifications|wallpaper) (\w+)(?: (\w+))?$/);
     assert.ok(match, action);
     assert.match(sources[match[1]], new RegExp(`function ${match[2]}\\(`), action);
   }
@@ -218,7 +219,7 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 110);
+  assert.equal(rows.length, 111);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));

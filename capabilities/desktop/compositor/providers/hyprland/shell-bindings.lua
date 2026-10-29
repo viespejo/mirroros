@@ -130,6 +130,9 @@ MirrorOSKeys.bind("menu.system", "SUPER + ESCAPE", "System menu", menu("toggle s
 MirrorOSKeys.bind("menu.system-power", "XF86PowerOff", "Power menu", menu("toggle system"), { locked = true })
 MirrorOSKeys.bind("help.keybindings", "SUPER + K", "Keybindings", menu("keybindings"))
 
+-- Background switcher (installed Omarchy 4.0.6 default/hypr/bindings/utilities.lua:17; shell wallpaper IPC).
+MirrorOSKeys.bind("style.background", "SUPER + CTRL + SPACE", "Background switcher", shell_ipc("wallpaper", "open"))
+
 -- Keyboard layouts (Omarchy input-method.lua:19-20, on XKB layouts instead of fcitx). Not active while locked:
 -- the lock screen always uses the configured layout (ADR 0015).
 MirrorOSKeys.bind("input.layout-next", "SUPER + I", "Switch input language",

@@ -122,4 +122,4 @@ After adoption, through Stories 4.4 and 4.7:
 
 ## Superseded by
 
-`None`
+[ADR 0020](0020-wallpaper-selection.md) amends the background-management exclusion for its bounded wallpaper capability only; the remaining decision is unchanged.

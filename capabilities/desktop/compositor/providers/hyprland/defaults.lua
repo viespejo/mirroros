@@ -16,6 +16,8 @@ hl.config({
     dwindle = { preserve_split = true },
     general = { border_size = 2, col = borders },
     decoration = { active_opacity = 0.985, inactive_opacity = 0.96, blur = { enabled = false } },
+    -- As Omarchy looknfeel.lua: without a shell background the compositor shows a plain color.
+    misc = { disable_hyprland_logo = true, disable_splash_rendering = true },
 })
 
 -- Approved Story 4.3 bindings. dofile runs them again at every configuration load; nothing is unbound at runtime.

@@ -24,6 +24,10 @@ If the session later uses another state directory, configure does not move an ex
 The step also publishes tracked selection and path-checking helpers under `/usr/share/mirroros/themes/`;
 modified or unknown helper files are preserved as conflicts. This link is not itself a trust guarantee, and
 the shell and Hyprland use the resolver and only accept the reviewed default. Other consumers do not yet use the link.
+The same step publishes the theme's backgrounds inside its manifest-checked tree at
+`/usr/share/mirroros/themes/default/backgrounds`; modified, removed, added or linked images are conflicts.
+It initializes `$XDG_STATE_HOME/mirroros/current/background` to the approved logo image (`2-mirroros-jade.png`) only when absent, preserving
+any existing link or other path. It never creates or writes personal backgrounds.
 This step does not restart or reload the session. The terminal step publishes the standalone tracked
 `/usr/share/mirroros/foot/recovery.ini`; edited or linked destinations are conflicts. It does not replace
 personal Foot settings. From a working Wayland session, use `foot --config /usr/share/mirroros/foot/recovery.ini`
@@ -131,7 +135,7 @@ The fourteen steps run in this order:
 
 | Step | Applied state |
 |---|---|
-| `visual/theme` | Reviewed product theme and initialize-only current theme link |
+| `visual/theme` | Reviewed product theme including its backgrounds, and initialize-only current theme/background links |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `desktop/files` | Nautilus from `extra`, with packaged dependencies; no personal settings, optional integrations or desktop-portal configuration ([sources](../../capabilities/desktop/files/sources.md)) |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
@@ -231,6 +235,8 @@ Managed destinations are:
 - `/etc/sddm.conf.d/20-mirroros-hyprland.conf`: Wayland greeter command and restricted Wayland session directory.
 - `/etc/sddm.conf.d/10-mirroros-login.conf`: `Current=mirroros` and disabled autologin; the exact earlier
   stock-theme file is migrated, any other content is a conflict.
+- `/usr/share/mirroros/themes/default/backgrounds`: the default theme's product backgrounds, published inside the
+  theme tree and manifest; see [theme sources](../../capabilities/visual/theme/sources.md#backgrounds).
 - `/usr/share/mirroros/branding`: the wordmark SVG and its rendered PNG, published as one manifest-checked tree; see
   [branding sources](../../capabilities/visual/branding/sources.md).
 - `/usr/share/sddm/themes/mirroros`: the MirrorOS SDDM theme, published as one manifest-checked tree; see

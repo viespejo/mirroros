@@ -23,6 +23,20 @@ ShellRoot {
     shell: desktopShell
   }
   property Osd osdService: Osd { }
+  property WallpaperLibrary wallpaperLibrary: WallpaperLibrary { }
+  property WallpaperActions wallpaperActions: WallpaperActions {
+    picker: desktopShell.wallpaperPicker
+    library: desktopShell.wallpaperLibrary
+    wallpaper: desktopShell.wallpaper
+    notifications: desktopShell.notificationService
+  }
+  property Wallpaper wallpaper: Wallpaper {
+    onSelectorRequested: function(output) { desktopShell.wallpaperActions.openPicker(output) }
+  }
+  property WallpaperPicker wallpaperPicker: WallpaperPicker {
+    images: desktopShell.wallpaperLibrary.images
+    onSelected: function(path) { desktopShell.wallpaperActions.selectPath(path) }
+  }
 
   property Bar bar: Bar {
     shell: desktopShell
@@ -58,5 +72,6 @@ ShellRoot {
     appLibrary: desktopShell.appLibrary
     sessionActions: desktopShell.sessionActions
     keybindingHelp: desktopShell.keybindingHelp
+    wallpaperActions: desktopShell.wallpaperActions
   }
 }

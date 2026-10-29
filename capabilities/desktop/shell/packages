@@ -1,5 +1,8 @@
 # Quickshell runtime; its package pulls Qt, Wayland and PipeWire libraries.
 quickshell extra
+# Wallpaper thumbnail cache locks (flock) and image generation (vipsthumbnail).
+util-linux core
+libvips extra
 # Keyboard-layout indicator: device watch (inotifywait) and layout names (xkbcli).
 inotify-tools extra
 libxkbcommon extra

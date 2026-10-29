@@ -31,6 +31,7 @@ Item {
   property var appLibrary: null
   property var sessionActions: null
   property var keybindingHelp: null
+  property var wallpaperActions: null
 
   // Lifecycle entry points kept from the plugin. open(payloadJson) is reached
   // through the native IPC below instead of `omarchy-shell shell summon`.
@@ -186,6 +187,10 @@ Item {
 
     if (command === "help:keybindings") {
       root.openKeybindings()
+    } else if (command === "wallpaper:open" && root.wallpaperActions) {
+      root.wallpaperActions.openPicker(null)
+    } else if (command === "wallpaper:install" && root.wallpaperActions) {
+      root.wallpaperActions.install()
     } else if (command.indexOf("session:") === 0 && root.sessionActions) {
       root.sessionActions.run(command.substring(8))
     }

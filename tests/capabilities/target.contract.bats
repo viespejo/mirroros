@@ -223,6 +223,8 @@ NODE
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/colors.toml" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/colors.toml"
   [ -f "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/LICENSE.omarchy" ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/backgrounds/1-phase-space-jade.png" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/backgrounds/1-phase-space-jade.png"
   grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT limine-update" "$CFG_TEST_CALLS"
   grep -qxF "KERNEL_CMDLINE[default]=\"$CFG_TEST_CMDLINE quiet splash\"" "$CFG_TEST_TARGET_ROOT/etc/default/limine"
   bash "$CFG_SOURCE_ROOT/capabilities/desktop/login/install-theme" check "$CFG_SOURCE_ROOT/capabilities/desktop/login/sddm/mirroros" \

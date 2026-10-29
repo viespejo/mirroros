@@ -87,3 +87,35 @@ teardown() { cfg_test_teardown; }
   [ -L "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes" ]
   [ ! -e "$CFG_TEST_DIR/default" ]
 }
+
+@test "configure publishes the theme backgrounds and selects the logo without replacing a selection" {
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&3; return 1; }
+  local source="$CFG_TEST_DIR/code/capabilities/visual/theme/default/backgrounds"
+  local dest="$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes/default/backgrounds"
+  local link="$CFG_TEST_HOME/.local/state/mirroros/current/background"
+  diff -r "$source" "$dest"
+  [ "$(stat -c %a "$dest/1-phase-space-jade.png")" = 644 ]
+  [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/backgrounds" ]
+  [ ! -e "$CFG_TEST_HOME/.config/mirroros/backgrounds" ]
+  [ "$(readlink "$link")" = /usr/share/mirroros/themes/default/backgrounds/2-mirroros-jade.png ]
+  ln -sfn /usr/share/mirroros/themes/default/backgrounds/1-phase-space-jade.png "$link"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'visual/theme: unchanged'* ]]
+  [ "$(readlink "$link")" = /usr/share/mirroros/themes/default/backgrounds/1-phase-space-jade.png ]
+  printf 'local' >> "$dest/2-mirroros-jade.png"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  [ "$(tail -c 5 "$dest/2-mirroros-jade.png")" = local ]
+}
+
+@test "target configure publishes the theme backgrounds only below the target root" {
+  cfg_test_target_context
+  run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
+  [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&3; return 1; }
+  cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/backgrounds/1-phase-space-jade.png" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/backgrounds/1-phase-space-jade.png"
+  [ "$(readlink "$CFG_TEST_HOME/.local/state/mirroros/current/background")" = \
+    /usr/share/mirroros/themes/default/backgrounds/2-mirroros-jade.png ]
+}

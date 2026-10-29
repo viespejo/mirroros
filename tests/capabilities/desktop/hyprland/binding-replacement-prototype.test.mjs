@@ -50,7 +50,7 @@ print('COUNT ' .. #applied)
     XDG_RUNTIME_DIR: dir, HYPRLAND_INSTANCE_SIGNATURE: 'test-instance' } });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /SUPER \+ W\tPersonal close action\tpersonal-action/);
-  assert.match(result.stdout, /COUNT 116/);
+  assert.match(result.stdout, /COUNT 117/);
   const registry = readFileSync(join(dir, 'mirroros-keybindings.tsv'), 'utf8');
   assert.match(registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
 });

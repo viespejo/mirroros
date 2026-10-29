@@ -33,6 +33,8 @@ adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","fontFamily: roo
 adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","fontSize: root.fontSize"]
 adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","rotation: root.textRotation"]
 adapt ["Ui/WidgetButton.qml","Unqualified access [unqualified]","text: root.text"]
+adapt ["Wallpaper.qml","Type PanelWindow is not creatable. [uncreatable-type]","PanelWindow {"]
+adapt ["WallpaperPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
 adapt ["bar/Bar.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: Commons.Color.tooltip.background"]
 adapt ["bar/Bar.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/Bar.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"tooltip\", \"border\", Commons.Color.tooltip.border, 1)"]

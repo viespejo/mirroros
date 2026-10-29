@@ -110,6 +110,7 @@ This checkpoint selects no additional providers and does not qualify the complet
 |---|---|---|---|
 | Typography | configure | open — selected by Story 4.8 | The workbench terminal uses `ttf-jetbrains-mono-nerd` and `noto-fonts-emoji`; global typography remains Story 4.8 work |
 | Coherent color palette across components | configure | open — selected by Story 4.8 | |
+| Wallpaper display and selection | configure | Owned Quickshell shell | Story 4.8; bounded by [ADR 0020](adr/0020-wallpaper-selection.md); no separate wallpaper daemon or theme manager |
 | SDDM greeter theme | configure | Owned QML theme | [ADR 0014](adr/0014-native-login-and-boot-presentation.md); lock-screen palette and the shared MirrorOS wordmark (`visual/branding`), reused by the boot splash; VM-qualified with the splash by plan 02-20, without hardware readiness ([record](procedures/greeter-plymouth.md#vm-qualification-record)) |
 | Cursor and icons | configure | open — selected by Story 4.8 | |
 

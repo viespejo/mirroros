@@ -52,6 +52,6 @@ print('STAGED ' .. #queued)
   const output = (result.stdout || '') + (result.stderr || '');
   assert.equal(result.status, 0, output);
   assert.match(output, /config ok/);
-  assert.match(output, /STAGED 116/);
+  assert.match(output, /STAGED 117/);
   assert.match(readFileSync(join(runtime, 'mirroros-keybindings.tsv'), 'utf8'), /^window\.close\tSUPER \+ W\tPersonal close action$/m);
 });

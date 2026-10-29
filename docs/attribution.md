@@ -12,6 +12,11 @@ The shared installer-derived SVG symbol and its delivery code are original Mirro
 `GPL-3.0-only`, with no additional external incorporation ([branding sources](../capabilities/visual/branding/sources.md),
 [ADR 0019](adr/0019-shared-symbol-and-live-splash.md)). The historical banner and wordmark remain intact.
 
+The default theme's product backgrounds are MirrorOS material under `GPL-3.0-only` to the extent rights exist:
+one MirrorOS-generated image, one composed from the shared symbol and four maintainer-generated with ChatGPT from a
+text prompt, without supplied input images. Omarchy's Osaka Jade was a style reference only; no Omarchy image is
+incorporated ([theme sources](../capabilities/visual/theme/sources.md#backgrounds)).
+
 At this baseline there is no external incorporation entry. The applicable entry is added with the first vendor merge, together with its detailed provenance record.
 
 ## Entry format
@@ -44,7 +49,7 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 ### Omarchy desktop shell fragments
 
 - **License (SPDX):** `MIT`
-- **Incorporated material:** Selective menu (including the Apps launcher and selector), bar, notification and OSD fragments copied or adapted into the owned shell at `capabilities/desktop/shell/`; key choices, binding descriptions and dispatcher shapes adapted into `capabilities/desktop/compositor/providers/hyprland/shell-bindings.lua` and `window-bindings.lua` (no upstream file copied); copyright holders David Heinemeier Hansson and Neil Jagdish Patel (Omapager notification-engine origin)
+- **Incorporated material:** Selective menu (including the Apps launcher and selector), bar, notification, OSD, background-surface, wallpaper-picker/model, wallpaper-enumeration, selection-link writer, personal-folder installer and libvips thumbnail-generator fragments, plus the unchanged screen-position remap guard copied or adapted into the owned shell at `capabilities/desktop/shell/`; key choices, binding descriptions and dispatcher shapes adapted into `capabilities/desktop/compositor/providers/hyprland/shell-bindings.lua` and `window-bindings.lua` (no upstream file copied); background menu rows and chord and the provider's logo/splash suppression settings are also adapted from the individually hashed installed Omarchy reference; copyright holders David Heinemeier Hansson and Neil Jagdish Patel (Omapager notification-engine origin)
 - **License texts:** Omarchy's MIT text and Omapager's complete MIT text (Copyright (c) 2026 Neil Jagdish Patel) are retained unchanged as `LICENSE.omarchy` and `LICENSE.omapager` in `capabilities/desktop/shell/`; the Omapager text was verified externally as license evidence only (not a code-source pin or full license audit)
 - **Detailed provenance:** [Desktop shell upstream record](../capabilities/desktop/shell/UPSTREAM.md) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md)
 

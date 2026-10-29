@@ -80,6 +80,86 @@ keys are ignored. Theme and personal files are never written or watched, and thi
 theme compatibility. With a valid product palette, tooltip background alpha is 0.97 and menu selected-border alpha
 is 0.25; otherwise the previous built-in values 1.0 and 0.0 apply unless personally overridden.
 
+## Wallpaper interface (deployment validation pending)
+
+[ADR 0020](../adr/0020-wallpaper-selection.md) extends the shell with bounded wallpaper display and selection.
+The aligned source is not permanently deployed or visually qualified. After deliberate publication and loading:
+
+```bash
+qs ipc -p /usr/share/mirroros/shell call wallpaper open
+qs ipc -p /usr/share/mirroros/shell call wallpaper close
+qs ipc -p /usr/share/mirroros/shell call wallpaper next
+qs ipc -p /usr/share/mirroros/shell call wallpaper set '/path/to/existing/image.png'
+qs ipc -p /usr/share/mirroros/shell call wallpaper refresh
+```
+
+`Super+Ctrl+Space` (Background switcher), Style > Background and double-left-click open the integrated picker.
+The chord supersedes its earlier exclusion in the Story 4.3 keyboard table. There is no default `next` chord;
+personal bindings can invoke the fixed IPC command. Double-right-click has no action.
+`open` uses the focused output, falling back to the first; double-click uses the clicked output. The picker
+retains Omarchy's skewed carousel, arrows, Tab/Shift+Tab, Enter, Escape and mouse selection, with thumbnails and
+without labels or a filter, matching Omarchy's background invocation. Output removal closes it.
+
+The theme step delivers six numerically prefixed images inside `/usr/share/mirroros/themes/default/backgrounds/`
+and initializes `$XDG_STATE_HOME/mirroros/current/background` to the approved logo image (`2-mirroros-jade.png`) only if that path is absent.
+Existing links, files and directories are preserved. State falls back to `~/.local/state` when the XDG path is
+absent or relative. The shell reads the selection with `readlink -f` at startup and on `refresh`; it does not
+choose a startup default or migrate obsolete `selection.json` files. Inspect the current selection with:
+
+```bash
+readlink -f "${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/current/background"
+```
+
+The catalog reads `current/theme/backgrounds/` and
+`$XDG_CONFIG_HOME/mirroros/backgrounds/<resolved-theme-name>/` (fallback `~/.config`). The theme name is the final
+component of the resolved `current/theme` target, not a second state file. Directories are resolved before
+`find -L`, image extensions are filtered and NUL paths sorted. Missing directories are empty; other scan errors
+are reported without acting on stale rows. `next` scans every call, wraps across all entries and starts at the
+first when the selection is outside the catalog. An empty scan sends “No background was found for theme” through
+the notification service for two seconds. The picker deduplicates by basename, first sorted path wins; `next`
+does not, reproducing Omarchy's distinction. Links to individual personal images can still differ from their
+saved resolved targets, as in Omarchy.
+
+Install > Style > Background creates the personal directory with `mkdir -p` and opens it in Nautilus. The file
+manager is delivered by `desktop/files`; no preferences or optional integrations are set by this action. Personal
+images are never copied, modified or deleted. Opening scans and generates missing thumbnails before showing the
+picker. Its cache is `$XDG_CACHE_HOME/mirroros/image-selector/` (fallback `~/.cache`), with size/mtime signatures,
+index and per-thumbnail locks; libvips generates 1536x864 centre-cropped JPEGs, Q82, metadata stripped.
+
+`set` accepts any existing file, not just catalog entries. The helper resolves it and writes the managed symlink
+with plain `ln -nsf` before requesting display. A non-symlink file or real directory at the selection path is a
+reported conflict and is not overwritten. There is no selection lock, external-edit detection or atomic rename.
+The shared 420 ms reveal starts on the first ready output; it does not wait for every output. There is no load
+timeout, rejection/acknowledgement protocol, rollback or fallback. A corrupt existing file is saved: the previous
+image stays during that session if the incoming image never becomes ready, but restarting with that selection
+leaves the background empty until a valid image is selected. Hyprland's provider disables its logo and splash,
+so the compositor's plain background remains visible. No custom fallback color is imposed.
+
+IPC returns `accepted` when starting an asynchronous operation, not when saving, decoding or displaying finishes;
+failures are reported in the shell journal. Overlapping operations return a busy error and are not queued. There
+is no `status` action. When the shell is absent, `qs ipc` fails; no fallback daemon or state writer runs.
+The dependency-gated `wallpaper-applications.test.mjs` probes real libvips decoding/cache reuse for all six product
+backgrounds and real Nautilus folder opening, confirmed through its D-Bus OpenLocations property, on private D-Bus
+and headless Weston with temporary user directories. These passed in the reference VM after separately authorized
+package installation. Nautilus warned about a missing Mutter-specific service channel; portal dialogs were not
+tested. After a separately authorized bounded deployment, installed manifests, tracked Hyprland files, wallpaper
+IPC and the registered chord were verified. The maintainer reported the jade background, chord and desktop
+double-left-click access, arrow/Enter selection, Escape cancellation and subsequent terminal typing all appeared
+OK on the reference VM's single output. This is a bounded attended smoke result, not exhaustive focus or visual
+qualification. A subsequent shell-only restart preserved the saved logo selection and restored the active service
+and IPC; the maintainer confirmed that the logo remained visible and Install > Style > Background opened Nautilus.
+One separately authorized VM reboot also preserved the selection, restored the shell and IPC without Hyprland
+configuration errors, and the maintainer confirmed the logo remained visible after login. This does not qualify
+arbitrary reboot/logout cycles or laptop behavior. Real multi-output lifecycle/hotplug is blocked because no second
+output is available in this context; it is neither passed nor failed and remains a qualification gate. PipeWire
+and its socket started after boot and the earlier connection error did not recur; actual audio remains unqualified.
+The portal app-ID registration warning recurred. Read-only follow-up confirmed that the main and GTK portal
+services were active, Settings reads succeeded and FileChooser was exposed. Duplicate/late registration during
+Qt startup is a plausible, unproven explanation; dialogs and the shell's own portal connection remain unqualified.
+No provider change or warning suppression was applied. Product backup and rollback material are retained; rollback has not been tested.
+See the [research checkpoint](../technical-interviews/wallpaper-selection-research.md#installed-session-and-attended-validation-checkpoint)
+for evidence and limits.
+
 ## Defaults, preferences and private state
 
 | Item | Path | Owner |
@@ -88,6 +168,7 @@ is 0.25; otherwise the previous built-in values 1.0 and 0.0 apply unless persona
 | Personal overrides | `$XDG_CONFIG_HOME/mirroros/shell.json` (fallback `~/.config`) | User |
 | Notification state | `$XDG_STATE_HOME/mirroros/shell/notifications/` (fallback `~/.local/state`) | Shell, private |
 | While-away count | `while-away.json` in the notification state directory | Shell, private |
+| Wallpaper selection | `$XDG_STATE_HOME/mirroros/current/background` (fallback `~/.local/state`) | Shell-managed symlink; theme configure initializes only if absent |
 | Lock marker | `$XDG_RUNTIME_DIR/mirroros-shell-locked` | hypridle lock hooks |
 
 To keep a device-local exception, set it in the interface or add only that key to `shell.json`, for example:

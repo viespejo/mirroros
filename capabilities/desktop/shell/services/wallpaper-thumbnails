@@ -1,0 +1,71 @@
+#!/usr/bin/bash
+# Adapted from Omarchy's omarchy-menu-images (MIT, David Heinemeier Hansson).
+# See UPSTREAM.md. Emit NUL-separated image/thumbnail pairs, not external IPC rows.
+set -Eeuo pipefail
+
+cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+[[ "$cache_home" == /* ]] || cache_home="$HOME/.cache"
+cache_dir="$cache_home/mirroros/image-selector"
+index_file="$cache_dir/index.tsv"
+mkdir -p -- "$cache_dir"
+pending_file="$(mktemp)"
+images_file="$(mktemp)"
+rows_file="$(mktemp)"
+trap 'rm -f -- "$pending_file" "$images_file" "$rows_file"' EXIT
+bash "${BASH_SOURCE[0]%/*}/list-wallpapers" "$@" >"$images_file"
+
+generate_thumbnail() {
+  local image="$1"
+  local thumbnail="$2"
+  local lock="$thumbnail.lock"
+  local lock_fd
+  local tmp="$thumbnail.$$.jpg"
+
+  if [[ -d $lock ]] && (( $(date +%s) - $(stat -c '%Y' "$lock" 2>/dev/null || date +%s) > 120 )); then
+    rmdir "$lock" 2>/dev/null || return
+  fi
+  exec {lock_fd}>"$lock" || return
+  flock -w 30 "$lock_fd" || return
+  rm -f "$thumbnail".*.jpg
+  [[ -f $thumbnail ]] && return
+
+  if VIPS_CONCURRENCY=1 vipsthumbnail "$image" --size 1536x864 --smartcrop=centre --path "${tmp}[Q=82,strip]" {lock_fd}>&-; then
+    mv -f "$tmp" "$thumbnail"
+  else
+    rm -f "$tmp" "$thumbnail"
+  fi
+}
+
+while IFS= read -r -d '' image; do
+  signature="$(stat -Lc '%s:%Y' -- "$image")" || continue
+  # TSV metadata stays unambiguous even for paths containing tabs/newlines.
+  path_key="$(printf '%s' "$image" | base64 -w 0)"
+  hash=""
+  if [[ -f $index_file ]]; then
+    hash="$(awk -F '\t' -v path="$path_key" -v sig="$signature" '$1 == path && $2 == sig { print $3; exit }' "$index_file")"
+  fi
+  if [[ -z $hash ]]; then
+    hash="$(printf '%s\t%s' "$image" "$signature" | md5sum | cut -d ' ' -f 1)"
+    exec {index_lock_fd}>"$index_file.lock"
+    flock -w 30 "$index_lock_fd"
+    printf '%s\t%s\t%s\n' "$path_key" "$signature" "$hash" >>"$index_file"
+    exec {index_lock_fd}>&-
+  fi
+  thumbnail="$cache_dir/$hash.jpg"
+  [[ -f $thumbnail ]] || printf '%s\0%s\0' "$image" "$thumbnail" >>"$pending_file"
+  printf '%s\0%s\0' "$image" "$thumbnail" >>"$rows_file"
+done <"$images_file"
+
+if [[ -s $pending_file ]]; then
+  export -f generate_thumbnail
+  # Failed generators are pruned below, as in the reference.
+  # Fixed script: positional parameters expand in the child, never here.
+  # shellcheck disable=SC2016
+  if ! xargs -a "$pending_file" -0 -n 2 -P "$(nproc)" \
+    bash -c 'generate_thumbnail "$1" "$2"' _; then
+    printf 'Some wallpaper thumbnails could not be generated.\n' >&2
+  fi
+fi
+while IFS= read -r -d '' image && IFS= read -r -d '' thumbnail; do
+  [[ ! -f $thumbnail ]] || printf '%s\0%s\0' "$image" "$thumbnail"
+done <"$rows_file"

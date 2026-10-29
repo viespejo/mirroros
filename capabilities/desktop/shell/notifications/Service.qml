@@ -1565,12 +1565,12 @@ Item {
     else restoreRows(rows, true)
   }
 
-  function showPlaceholder(summary) {
+  function showPlaceholder(summary, duration) {
     var key = "placeholder" + nextKey()
     if (!reserveLive(key)) return
     var row = Store.normalise({ key: key, app: "omarchy-action", summary: summary, glyph: "\u{f009a}",
                                 urgency: NotificationUrgency.Low, ts: Date.now() / 1000 })
-    row.duration = lowDuration
+    row.duration = duration === undefined ? lowDuration : duration
     row.restored = true
     showRow(row)
   }

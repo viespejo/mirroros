@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# Run as the target user; prepare the default theme link without replacing user state.
+# Run as the target user; prepare the default theme and background links without replacing user state.
 set -Eeuo pipefail
 umask 022
 
@@ -42,5 +42,11 @@ if [[ ! -L "$dest" || "$(readlink -- "$dest")" != "$want" ]]; then
     exit 4
   fi
   result=changed
+fi
+# Select the approved logo background, but only when no selection exists:
+# any existing link or path is the user's selection and stays untouched.
+background="$state/mirroros/current/background"
+if [[ ! -e "$background" && ! -L "$background" ]]; then
+  ln -sT -- "$want/backgrounds/2-mirroros-jade.png" "$background" 2>/dev/null && result=changed
 fi
 printf '%s\n' "$result"

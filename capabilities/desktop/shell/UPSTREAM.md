@@ -38,6 +38,8 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Commons/BorderGeometry.js` | Copied | `shell/Commons/BorderGeometry.js` | Border geometry, unchanged. |
 | `Commons/Color.qml` | Adapted | `shell/Commons/Color.qml` | Included-surface roles, validated product palette and bounded theme/personal surface settings. |
 | `Commons/ThemePalette.js` | New | — | Bounded root-level palette reader with atomic fallback. |
+| `Commons/WallpaperCatalog.js` | Adapted | Installed Omarchy `4.0.6-1` `shell/plugins/image-picker/ImagePickerModel.js`, SHA-256 `2eecf32b70811d0a39981e351ebe9843384aaf97b43dad1216651d2535a9a5da` | Basename deduplication and selected-path lookup only; NUL image/thumbnail pairs replace external rows. New ordered cycling and scan parser; no membership gate. Package Git revision unverified. |
+| `Wallpaper.qml` | Adapted | `shell/plugins/background/Background.qml` from the installed Omarchy `4.0.6-1` reference, SHA-256 `6135a06b4c17c9a5a251053c294a657ecd80eb3a339f6eea146455b3925fd65b` | Per-screen background surface, crop, shared current/displayed/incoming/old state and 420 ms slanted-mask reveal started by the first ready panel. Retains reference failure semantics without timeout, acknowledgements or rollback. Double-left-click emits an integrated selector signal; ScreenMoveRemap guards output moves. No theme synchronization or right-click theme gesture. The package's Git revision has not been established; the general source pin above is not claimed for this file. |
 | `Commons/SurfacePalette.js` | New | — | Bounded surface settings reader and alias resolver with per-setting fallback. |
 | `Commons/I18n.qml` | Adapted | `shell/Commons/I18n.qml` | English-only API and catalog; no language state or OMARCHY_PATH. |
 | `Commons/i18n-en.json` | Adapted | `default/i18n/en/shell.json` | Generated subset of used keys, values unchanged. |
@@ -47,6 +49,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Commons/Style.qml` | Adapted | `shell/Commons/Style.qml` | Default tokens only; provisional local Nerd Font; no theme/fontconfig/Hyprland style loading. |
 | `Commons/Util.qml` | Adapted | `shell/Commons/Util.qml` | Used helpers only; no RTL key reversal; identity widget-id normalization. |
 | `Commons/qmldir` | New | — | Explicit included singleton declarations. |
+| `Ui/ScreenMoveRemap.qml` | Copied | Installed Omarchy `4.0.6-1` reference `shell/Ui/ScreenMoveRemap.qml`, SHA-256 `ae09782672877502015e517c6f58565cf79b82e0aa1dc56ee5655989863ad8a7` | Unchanged output-position remap guard; registered in Ui/qmldir and used by the bar and background. Package Git revision unverified; not assigned the general source pin. |
 | `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs retain upstream unscaled rendering. |
 | `Ui/BarIconContent.qml` | Copied | `shell/Ui/BarIconContent.qml` | Unchanged. |
 | `Ui/BarIndicator.qml` | Adapted | `shell/Ui/BarIndicator.qml` | Uses the upstream caption font size for indicator glyphs. |
@@ -72,6 +75,12 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Ui/ToggleSwitch.qml` | Copied | `shell/Ui/ToggleSwitch.qml` | Unchanged; notification preferences. |
 | `Ui/WidgetButton.qml` | Adapted | `shell/Ui/WidgetButton.qml` | Supports optional optical icon rendering; text rendering is the default as in Omarchy. |
 | `Ui/qmldir` | New | — | Explicit included UI declarations. |
+| `WallpaperPicker.qml` | Adapted | `shell/plugins/image-picker/ImagePicker.qml` from installed Omarchy `4.0.6-1`, SHA-256 `9799f9cb52ffc4bd6d3089a50b73386b017e1c726b786e193e12d83561385ca8` | Skewed carousel, geometry, masks, keyboard and mouse selection. In-process thumbnail records and signals replace external response files; target-output selection, empty state and output-removal cancellation. Uses synchronous cached thumbnails as the reference and existing palette roles; no filter, labels, theme picker or external selector protocol. Package Git revision unverified. |
+| `services/WallpaperActions.qml` | Adapted | Installed Omarchy `4.0.6-1` `bin/omarchy-theme-bg-next` (hash below), `bin/omarchy-theme-bg-install`, SHA-256 `f23306136f240f330db1d477eaedbc378a67ba98ee2f7dda665fe78bf41a2ba5`; `Background.qml` readlink behavior | Integrated argv orchestration: read selection link at startup/refresh; helper saves before display; next scans afresh, wraps and notifies on empty; install creates personal folder and opens Nautilus. Theme name derived from resolved theme target; native five-action IPC, no status or external selector protocol. One in-flight operation; failures logged. Package Git revision unverified. |
+| `services/wallpaper-set` | Adapted | Installed Omarchy `4.0.6-1` reference `bin/omarchy-theme-bg-set`, SHA-256 `afee8d3bdd15917a2553c4f7a542de507f3f1b6e63eb92d38b5b1efe952209a0` | Resolves an existing file and replaces the selection link with `ln -nsf`; preserves a non-symlink state path. Returns the resolved path instead of invoking IPC; honors the shell's XDG state directory. Package Git revision unverified. |
+| `services/wallpaper-thumbnails` | Adapted | Installed Omarchy `4.0.6-1` `/usr/bin/omarchy-menu-images`, SHA-256 `9d113b2138c49a944fe4e25f5b062d875d8ef4aaa5e00e59cc9282229d8e2093` | Reuses thumbnail generation, stat signatures, hash/index lookup, per-thumbnail flock, aged-lock/partial cleanup, single-threaded vips and parallel xargs, and failed-row pruning. MirrorOS cache namespace, base64 path keys in TSV, NUL pairs; rescans per picker opening instead of external row/preload caches. No temporary selection/done protocol or generic selector modes. Package Git revision unverified. |
+| `services/WallpaperLibrary.qml` | New | — | Resolves current/theme on each request and derives the per-theme personal folder; fresh sorted scan for next or generated thumbnail records for the picker. |
+| `services/list-wallpapers` | Adapted | Installed Omarchy `4.0.6-1` reference `bin/omarchy-theme-bg-next`, SHA-256 `3dbef062b7bde6322f428969bde9eb76fe436e3ab969ca0bc1ca7c46d5835241` enumeration | Directories passed as separate absolute arguments; NUL output, directory resolution before find, sorted paths without deduplication, missing-directory tolerance and explicit scan errors. No selection, state writes, notifications or IPC. |
 | `services/AppLibrary.qml` | Adapted | `shell/services/AppLibrary.qml` | Brief 1: hidden-entry/icon logic; every launch through uwsm app, availability checks; no Omarchy scripts or config. |
 | `services/AppSearch.js` | Copied | `shell/services/AppSearch.js` | Unchanged; Brief 1 ranking. |
 | `services/hidden-entries.sh` | Copied | `shell/services/hidden-entries.sh` | Unchanged; Brief 1 desktop visibility scan. |
@@ -139,6 +148,8 @@ this shell. Availability is never inferred from synthetic OSD events.
 - Quickshell (`Quickshell`, `Io`, `Wayland`, `Hyprland`, `Networking`, `Bluetooth`,
   `Services.Notifications`, `Services.Pipewire`, `Services.SystemTray`, `Services.UPower`).
 - Qt Quick, Controls, Layouts, Effects and Shapes; Hyprland is the current compositor provider.
+- Wallpaper thumbnails: vipsthumbnail (libvips, official Arch extra) and flock (util-linux, core).
+  Nautilus is owned by the separate desktop/files capability and launched with an argv array.
 - Bash, coreutils/findutils/awk, pacman, busctl (systemd), hyprctl, nmcli (NetworkManager),
   xkbcli (libxkbcommon), inotifywait (inotify-tools), uwsm, wl-copy/wl-paste (wl-clipboard).
 - Session actions: loginctl and systemctl (systemd), uwsm. Lock availability probes for hyprlock and the

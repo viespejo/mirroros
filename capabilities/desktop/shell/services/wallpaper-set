@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+# Adapted from Omarchy's omarchy-theme-bg-set (MIT, Copyright (c) David Heinemeier Hansson).
+# See UPSTREAM.md. The calling shell displays the resolved path returned on stdout.
+set -Eeuo pipefail
+
+[[ $# == 1 && -n "$1" ]] || { printf 'Usage: wallpaper-set <path-to-image>\n' >&2; exit 1; }
+background="$(realpath -- "$1")"
+[[ -f "$background" ]] || { printf 'File does not exist: %s\n' "$background" >&2; exit 1; }
+state="${XDG_STATE_HOME:-$HOME/.local/state}"
+[[ "$state" == /* ]] || state="$HOME/.local/state"
+link="$state/mirroros/current/background"
+if [[ ( -e "$link" || -L "$link" ) && ! -L "$link" ]]; then
+  printf 'Conflict: %s is not a selection link; left untouched.\n' "$link" >&2
+  exit 4
+fi
+mkdir -p -- "${link%/*}"
+ln -nsf -- "$background" "$link"
+printf '%s' "$background"

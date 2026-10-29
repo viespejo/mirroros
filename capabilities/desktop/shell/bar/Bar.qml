@@ -250,6 +250,11 @@ Item {
 
   component BarPanel: PanelWindow {
     id: barWindow
+    visible: !remapGuard.remapping
+    ScreenMoveRemap {
+      id: remapGuard
+      window: barWindow
+    }
     anchors { top: true; left: true; right: true }
     implicitHeight: root.barSize
     exclusionMode: ExclusionMode.Auto

@@ -15,13 +15,19 @@ shell_private_fixture() {
   printf '{ "version": 1, "notifications": { "fontScale": 110 } }\n' > "$CFG_TEST_HOME/.config/mirroros/shell.json"
   printf '{"synthetic":true}\n' > "$CFG_TEST_HOME/.local/state/mirroros/shell/notifications/history.json"
   chmod 0600 "$CFG_TEST_HOME/.config/mirroros/shell.json" "$CFG_TEST_HOME/.local/state/mirroros/shell/notifications/history.json"
+  mkdir -p "$CFG_TEST_HOME/.local/state/mirroros/current"
+  ln -s /synthetic/personal.png "$CFG_TEST_HOME/.local/state/mirroros/current/background"
+  # Obsolete prototype state is not migrated or removed.
+  mkdir -p -m 0700 "$CFG_TEST_HOME/.local/state/mirroros/shell/wallpaper"
+  printf '{"version":1,"path":"/synthetic/personal.png"}\n' > "$CFG_TEST_HOME/.local/state/mirroros/shell/wallpaper/selection.json"
+  chmod 0600 "$CFG_TEST_HOME/.local/state/mirroros/shell/wallpaper/selection.json"
   (cd "$CFG_TEST_HOME" && find .config/mirroros .local/state/mirroros -type f -exec sha256sum {} + &&
-    find .config/mirroros .local/state/mirroros -printf '%m %p\n') | sort > "$CFG_TEST_DIR/private.before"
+    find .config/mirroros .local/state/mirroros -printf '%m %p %l\n') | sort > "$CFG_TEST_DIR/private.before"
 }
 
 shell_private_unchanged() {
   (cd "$CFG_TEST_HOME" && find .config/mirroros .local/state/mirroros -type f -exec sha256sum {} + &&
-    find .config/mirroros .local/state/mirroros -printf '%m %p\n') | sort | cmp - "$CFG_TEST_DIR/private.before"
+    find .config/mirroros .local/state/mirroros -printf '%m %p %l\n') | sort | cmp - "$CFG_TEST_DIR/private.before"
 }
 
 runtime_current() {
@@ -37,7 +43,7 @@ runtime_current() {
   cmp "$SHELL_CODE/systemd/mirroros-shell.service" "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/mirroros-shell.service"
   [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-shell.service")" = \
     /etc/systemd/user/mirroros-shell.service ]
-  for package in quickshell inotify-tools libxkbcommon ttf-liberation wl-clipboard; do
+  for package in quickshell util-linux libvips inotify-tools libxkbcommon ttf-liberation wl-clipboard; do
     [ -e "$CFG_TEST_INSTALLED/$package" ]
   done
   grep -q "^mirroros-shell-runtime	capabilities/desktop/shell			manifest-sha256:$(bash "$SHELL_CODE/install-runtime" digest "$SHELL_CODE")$" \

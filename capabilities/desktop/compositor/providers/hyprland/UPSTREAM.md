@@ -32,6 +32,21 @@ migrates only exact previous Tokyo Night, jade or themed `hyprland.lua` deliveri
 A pre-existing `hyprland.conf` is also left untouched. The accent must stay in sync with the fixed palette.
 The entry point loads product defaults, then existing user-owned `~/.config/hypr/{monitors,input,looknfeel,bindings,autostart}.lua` in that order. These are executable personal Lua, not trusted product theme files; configure creates commented monitor and bindings templates only when absent and never overwrites personal layers or links. Missing files are ignored, errors are reported and later layers continue, but changes made before an error are not rolled back. Use `MirrorOSKeys.bind` for new registered personal bindings; it rejects duplicate registered chords. Use `MirrorOSKeys.replace(id, description, dispatcher)` in personal `bindings.lua` to replace an existing registered action without changing its chord or options. Unknown ids, repeated replacements and invalid dispatchers are rejected. Bindings are staged until the personal binding layer has run, then registered and exported, including after a personal-file error; earlier personal changes are not rolled back. Direct `hl.bind` can bypass that registry and create duplicate chords. The shell leaves rows sharing a registered id non-launchable; an attended guest test confirmed that two direct bindings on the same chord both dispatched; graphical help with duplicate bindings remains unverified. Isolated config verification covers loading and fallback.
 
+## Wallpaper alignment additions
+
+The maintainer approved `SUPER+Ctrl+Space` ("Background switcher") for `wallpaper open` IPC, superseding its
+Story 4.3 exclusion when backgrounds were not in the menu model. The source is installed Omarchy `4.0.6-1`
+`default/hypr/bindings/utilities.lua:17`, SHA-256
+`60b4ad67084d71222f04b118d6b5df0da7bc7b48169655674b84ae6d2f36b5ff`. This newer installed reference is not assigned
+the global Git revision above. No default `next` or theme-switcher chord is added.
+
+`defaults.lua` also adopts `disable_hyprland_logo = true` and `disable_splash_rendering = true` from installed
+Omarchy `4.0.6-1` `default/hypr/looknfeel.lua:106-107`, SHA-256
+`d257ea9864abb9cac124083bef88374659e759144a3d2028ec9486e578978804`, so an unavailable shell wallpaper exposes the
+plain compositor background. The package's Git revision is unverified. These additions were deployed in the
+reference VM; the chord and valid-background behavior received bounded attended checks. Missing/corrupt startup
+presentation and real multi-output lifecycle are not visually qualified by those checks.
+
 ## Monitor defaults
 
 `monitors.lua` is original MirrorOS configuration, using `HL.MonitorSpec` and `hl.monitor` from the installed

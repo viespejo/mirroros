@@ -187,7 +187,7 @@ start_shell nolocker "$bin:$sysbin"
 
 # Root and direct routes.
 check "root: open accepted" "$(ipc open root)" ok
-check "root: rows" "$(field 's.labels.join("|")')" "Apps|Learn|System"
+check "root: rows" "$(field 's.labels.join("|")')" "Apps|Learn|Style|Install|System"
 check "root: overlay layer mapped" "$(expected=1 wait_for layer_count)" 1
 check "root: menu id and depth" "$(field 's.menu+":"+s.depth')" "root:0"
 ipc close >/dev/null
@@ -220,11 +220,14 @@ ipc back >/dev/null
 check "system direct: back to root" "$(field 's.menu')" root
 
 # Tree navigation from root.
+ipc open root >/dev/null
+ipc move 1 >/dev/null; ipc move 1 >/dev/null
 ipc move 1 >/dev/null; ipc move 1 >/dev/null
 ipc activate >/dev/null
 check "nav: System submenu pushed" "$(field 's.menu+":"+s.depth')" "system:1"
 ipc back >/dev/null
 check "nav: back pops" "$(field 's.menu+":"+s.depth')" "root:0"
+ipc open root >/dev/null
 ipc move 1 >/dev/null
 ipc activate >/dev/null
 check "nav: Learn holds Keybindings" "$(field 's.menu+"|"+s.labels.join("|")')" "learn|Keybindings"

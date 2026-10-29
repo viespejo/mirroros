@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 const script = resolve('capabilities/visual/theme/prepare-current');
 const target = '/usr/share/mirroros/themes/default';
+const defaultBackground = `${target}/backgrounds/2-mirroros-jade.png`;
 
 function fixture(t) {
   const home = mkdtempSync(join(tmpdir(), 'mirroros-current-'));
@@ -45,6 +46,28 @@ test('session mode ignores inherited state and uses the user manager when availa
   writeFileSync(systemctl, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
   assert.equal(run('/inherited/root-state', ['--session'], env).status, 0);
   assert.equal(readlinkSync(join(home, '.local/state/mirroros/current/theme')), target);
+});
+
+test('selects the approved logo background once and preserves an existing selection', (t) => {
+  const files = readdirSync(resolve('capabilities/visual/theme/default/backgrounds'));
+  assert.ok(files.includes('2-mirroros-jade.png'));
+  const { home, run } = fixture(t);
+  const background = join(home, '.local/state/mirroros/current/background');
+  assert.equal(run().stdout, 'changed\n');
+  assert.equal(readlinkSync(background), defaultBackground);
+  assert.equal(run().stdout, 'unchanged\n');
+  for (const kind of ['file', 'directory', 'link']) {
+    rmSync(background, { recursive: true, force: true });
+    if (kind === 'file') writeFileSync(background, 'personal');
+    if (kind === 'directory') mkdirSync(background);
+    if (kind === 'link') symlinkSync('/home/someone/picture.png', background);
+    const result = run();
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, 'unchanged\n');
+    if (kind === 'file') assert.equal(readFileSync(background, 'utf8'), 'personal');
+    if (kind === 'directory') assert.ok(statSync(background).isDirectory());
+    if (kind === 'link') assert.equal(readlinkSync(background), '/home/someone/picture.png');
+  }
 });
 
 test('preserves unknown files, directories and links', (t) => {
