@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+# Install the selected file manager without managing personal settings or starting a session process.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_require cfg_packages_present "$STEP_DIR/packages"

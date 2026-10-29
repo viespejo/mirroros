@@ -127,12 +127,13 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The thirteen steps run in this order:
+The fourteen steps run in this order:
 
 | Step | Applied state |
 |---|---|
 | `visual/theme` | Reviewed product theme and initialize-only current theme link |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
+| `desktop/files` | Nautilus from `extra`, with packaged dependencies; no personal settings, optional integrations or desktop-portal configuration ([sources](../../capabilities/desktop/files/sources.md)) |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
 | `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |

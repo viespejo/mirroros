@@ -202,7 +202,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the thirteen-step configuration converges in the target and reruns without transactions" {
+@test "the fourteen-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -214,10 +214,12 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/13 visual/theme =='* ]]
-  [[ "$output" == *'== 11/13 visual/branding =='* ]]
-  [[ "$output" == *'== 12/13 system/boot-splash =='* ]]
-  [[ "$output" == *'== 13/13 desktop/login =='* ]]
+  [[ "$output" == *'== 1/14 visual/theme =='* ]]
+  [[ "$output" == *'== 3/14 desktop/files =='* ]]
+  [[ "$output" == *'== 12/14 visual/branding =='* ]]
+  [[ "$output" == *'== 13/14 system/boot-splash =='* ]]
+  [[ "$output" == *'== 14/14 desktop/login =='* ]]
+  [ -e "$CFG_TEST_INSTALLED/nautilus" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/colors.toml" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/colors.toml"
   [ -f "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/LICENSE.omarchy" ]
@@ -270,7 +272,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 13 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 14 ]
   cfg_test_no_install
   run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]

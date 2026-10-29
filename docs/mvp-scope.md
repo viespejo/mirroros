@@ -81,7 +81,7 @@ This checkpoint selects no additional providers and does not qualify the complet
 | Terminal | configure | foot | Workbench-local Tokyo Night palette, JetBrainsMono Nerd Font Mono 14, centered 16x16 padding and CSI-u key paths; not a global visual provider selection |
 | Interactive shell | configure | Zsh with Starship | Default interactive login shell with Zplug, vi editing, autosuggestions, syntax highlighting, Fzf, Zoxide and local-only Atuin; plugins are provisioned by `configure`, never at shell startup. Bash remains the implementation language of bounded scripts |
 | Terminal multiplexer | configure | tmux | Native configuration with TPM plugins (Resurrect/Continuum, Neovim-aware navigation) and Sesh as the session selector from a reviewed local package recipe; Floax is excluded |
-| File manager | configure | open — selected by Story 4.5 | |
+| File manager | configure | Nautilus (Story 4.5) | Maintainer-selected during wallpaper review; package-only delivery, optional integrations remain separate ([sources](../capabilities/desktop/files/sources.md)) |
 | Browser | configure | open — selected by Story 4.5 | |
 
 ### Development

@@ -2,6 +2,7 @@
 CFG_STEPS=(
   visual/theme
   desktop/terminal
+  desktop/files
   workflow/node
   workflow/shell
   workflow/tmux
