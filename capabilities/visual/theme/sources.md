@@ -39,6 +39,15 @@ responsibility. These boundaries must be reviewed before executing theme code. N
 Omarchy themes is claimed. The theme's backgrounds are described below; opacity and application-specific
 presentation remain separate decisions.
 
+## Lock colors
+
+The MirrorOS-owned `default/hyprlock.conf` defines only five hyprlock color variables for the lock screen
+([ADR 0021](../../../docs/adr/0021-neutral-greeter-and-themed-lock.md)): `$background`, `$field` (the background at
+80%), `$foreground`, `$accent` and `$failure` (the palette's `red`). It is not copied from Omarchy's theme files; a
+test checks it against `colors.toml`. The managed lock configuration sources it through the `current/theme` link,
+like Foot, after its own neutral fallbacks; it is data for hyprlock, not executable Lua, so no trusted-path
+resolution is involved. Every future theme must publish this file.
+
 ## Backgrounds
 
 The images in `default/backgrounds/` are the default theme's reviewed backgrounds, displayed and selected by the shell

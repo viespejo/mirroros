@@ -7,7 +7,7 @@ wordmark in [`install/confirmation/banner.txt`](../../../install/confirmation/ba
 [greeter and Plymouth interview](../../../docs/technical-interviews/greeter-plymouth_log.md)). Each terminal cell
 becomes a 1x2-unit cell: `█` fills both halves, `▀` the upper and `▄` the lower; horizontally adjacent filled halves
 are merged into one path segment. Trailing spaces are not part of the 79x16 view box. The silhouette is unchanged;
-the banner itself is not modified. The fill is the lock screen's off-white `rgb(202, 204, 204)`; there is no
+the banner itself is not modified. The fill is the greeter's neutral off-white `rgb(202, 204, 204)`; there is no
 background, text, font, shadow or animation, so each theme supplies its own background. The branding test checks
 the SVG cell by cell against the banner.
 

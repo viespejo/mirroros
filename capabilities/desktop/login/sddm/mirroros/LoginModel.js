@@ -34,6 +34,11 @@ function stateLabel(text) {
   return /^[A-Za-z0-9 ()'._-]{1,64}$/.test(line) ? line : "";
 }
 
+// The account name and selector are shown only when there is more than one account to choose (ADR 0021).
+function accountVisible(count) {
+  return count > 1;
+}
+
 function displayName(name, realName) {
   return realName ? realName : name;
 }
@@ -55,6 +60,7 @@ if (typeof module !== "undefined") {
     sessionIndex: sessionIndex,
     layoutLabel: layoutLabel,
     stateLabel: stateLabel,
+    accountVisible: accountVisible,
     displayName: displayName,
     unavailableReason: unavailableReason,
     canSubmit: canSubmit

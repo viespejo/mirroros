@@ -18,7 +18,8 @@ hibernation or full-MVP readiness follows from this procedure.
 | Boot splash | `system/boot-splash` | Plymouth with the animated MirrorOS symbol theme, the `plymouth` hook and `quiet splash` on the normal boot entry |
 
 Both themes show the same square symbol in `rgb(202, 204, 204)` on `rgb(16, 19, 21)`, centered without upscaling,
-bounded by 42% of display width and 22% of height. The greeter stays static. The splash fades in once over 400 ms,
+bounded by 42% of display width and 22% of height. The greeter stays static, draws the symbol in exactly the splash
+rectangle (320-pixel cap in device pixels) and anchors its form below it; it follows no user theme. The splash fades in once over 400 ms,
 then pulses smoothly between 75% and 100% opacity every two seconds of active elapsed time. Plymouth's duration
 callback supplies time only, never its progress percentage; native timing pauses freeze the effect. Sampled
 updates do not promise hard real-time precision. Fast boots may finish before the fade: no animation cycle is
@@ -28,7 +29,8 @@ or reboots: the greeter and the splash take effect at the next boot. Sources and
 Authority: [ADR 0014](../adr/0014-native-login-and-boot-presentation.md), and for keyboard layouts
 [ADR 0015](../adr/0015-greeter-keyboard-layout-switching.md). Confirmed greeter power requests are bounded by
 [ADR 0016](../adr/0016-greeter-power-actions.md). The shared symbol and bounded active-time animation are governed
-by [ADR 0019](../adr/0019-shared-symbol-and-live-splash.md).
+by [ADR 0019](../adr/0019-shared-symbol-and-live-splash.md); the greeter layout and neutral colors by
+[ADR 0021](../adr/0021-neutral-greeter-and-themed-lock.md).
 
 ## Live splash preparation and recovery
 
@@ -65,7 +67,7 @@ and builder doubles. Physical-hardware qualification is a separate pending gate.
 
 The greeter starts in the layout resolved from `/etc/vconsole.conf`, with the other MirrorOS layouts after it;
 the session and its lock screen use the same order. Press `SUPER+I` (or `SUPER+SHIFT+I`) at the greeter to switch
-before typing a password; the indicator below the field shows the active layout and the `Super+I` hint. Without the
+before typing a password; the indicator in the bottom-left corner shows the active layout and the `Super+I` hint. Without the
 greeter's state file, the indicator shows the configured layout and no hint. There is no per-account layout.
 
 ## Restart and shutdown at the greeter

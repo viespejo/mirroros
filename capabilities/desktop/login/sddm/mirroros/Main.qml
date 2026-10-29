@@ -1,4 +1,4 @@
-// MirrorOS SDDM theme (ADR 0014). Presentation only: SDDM authenticates through its own PAM service when
+// MirrorOS SDDM theme (ADR 0014, layout under ADR 0021). Presentation only: SDDM authenticates through its own PAM service when
 // sddm.login() is called and starts the configured session. This file runs no process, reads no system file other
 // than the greeter layout state file (ADR 0015), and never logs or stores the typed password. Context objects (config, sddm, userModel, sessionModel, keyboard) are
 // provided by sddm-greeter.
@@ -11,6 +11,7 @@ Rectangle {
 
     readonly property color foreground: config.foreground
     readonly property color failure: config.failure
+    readonly property color fieldColor: config.field
     readonly property string fontFamily: config.font
     readonly property string layoutStatePath: config.layoutState || ""
     readonly property string layoutHint: config.layoutHint || ""
@@ -194,37 +195,48 @@ Rectangle {
         }
     }
 
+    // ADR 0021: the static symbol occupies exactly the splash rectangle. Plymouth works in device pixels, so the
+    // 320-pixel cap, the 42%/22% bounds and the rounding are computed in device pixels too.
+    Image {
+        id: logo
+        objectName: "logo"
+        readonly property real ratio: sourceSize.height > 0 ? sourceSize.width / sourceSize.height : 1
+        readonly property real pixelRatio: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+        readonly property int deviceWidth: Math.floor(Math.min(sourceSize.width, root.width * pixelRatio * 0.42,
+                                                               root.height * pixelRatio * 0.22 * ratio))
+        readonly property int deviceHeight: Math.floor(deviceWidth / ratio)
+        x: Math.floor((root.width * pixelRatio - deviceWidth) / 2) / pixelRatio
+        y: Math.floor((root.height * pixelRatio - deviceHeight) / 2) / pixelRatio
+        width: deviceWidth / pixelRatio
+        height: deviceHeight / pixelRatio
+        source: config.logo
+        fillMode: Image.PreserveAspectFit
+        smooth: true
+        mipmap: true
+    }
+
+    // The form is anchored below the symbol, so the symbol never moves when the form changes.
     Column {
         id: content
-        anchors.centerIn: parent
-        spacing: 24
-
-        Image {
-            id: logo
-            objectName: "logo"
-            readonly property real ratio: sourceSize.height > 0 ? sourceSize.width / sourceSize.height : 1
-            anchors.horizontalCenter: parent.horizontalCenter
-            source: config.logo
-            width: Math.min(sourceSize.width, root.width * 0.42, root.height * 0.22 * ratio)
-            height: width / ratio
-            fillMode: Image.PreserveAspectFit
-            smooth: true
-            mipmap: true
-        }
-
-        Item { width: 1; height: 24 }
+        objectName: "form"
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: logo.y + logo.height + Math.round(root.height * 0.05)
+        spacing: 14
 
         Row {
             id: account
+            objectName: "account"
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 10
+            visible: LoginModel.accountVisible(root.userNames.length)
+            spacing: 8
 
             Text {
                 objectName: "user"
                 text: root.userIndex >= 0 && root.userIndex < root.userLabels.length ? root.userLabels[root.userIndex] : ""
                 color: root.foreground
+                opacity: 0.85
                 font.family: root.fontFamily
-                font.pixelSize: 16
+                font.pixelSize: 15
             }
 
             Text {
@@ -233,9 +245,9 @@ Rectangle {
                 visible: root.userNames.length > 1
                 text: root.selecting ? "\u25b4" : "\u25be"
                 color: root.foreground
-                opacity: activeFocus || switchArea.containsMouse ? 1 : 0.55
+                opacity: activeFocus || switchArea.containsMouse ? 1 : 0.6
                 font.family: root.fontFamily
-                font.pixelSize: 16
+                font.pixelSize: 15
                 font.underline: activeFocus
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Button
@@ -257,13 +269,15 @@ Rectangle {
 
         Rectangle {
             id: field
+            objectName: "field"
             anchors.horizontalCenter: parent.horizontalCenter
-            // hyprlock draws its 2-pixel outline outside the 300x50 field.
-            width: 304
-            height: 54
-            color: root.color
-            border.width: 2
-            border.color: root.failed ? root.failure : root.foreground
+            width: 280
+            height: 44
+            color: root.fieldColor
+            border.width: 1
+            border.color: root.failed ? root.failure
+                : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b,
+                          password.length > 0 || root.pending ? 0.85 : 0.35)
             opacity: root.reason === "" ? 1 : 0.4
 
             TextInput {
@@ -275,7 +289,7 @@ Rectangle {
                 verticalAlignment: TextInput.AlignVCenter
                 horizontalAlignment: TextInput.AlignHCenter
                 echoMode: TextInput.Password
-                // The typed characters are drawn as hyprlock-sized dots below; the native echo stays invisible.
+                // The typed characters are drawn as dots below; the native echo stays invisible.
                 color: "transparent"
                 selectionColor: "transparent"
                 selectedTextColor: "transparent"
@@ -300,11 +314,11 @@ Rectangle {
                 spacing: 4
                 Repeater {
                     objectName: "dotRepeater"
-                    model: Math.min(password.length, Math.floor((field.width - 24) / 16))
+                    model: Math.min(password.length, Math.floor((field.width - 24) / 14))
                     delegate: Rectangle {
-                        width: 12
-                        height: 12
-                        radius: 6
+                        width: 10
+                        height: 10
+                        radius: 5
                         color: root.foreground
                     }
                 }
@@ -318,32 +332,9 @@ Rectangle {
                     : root.failed ? "Authentication failed"
                     : root.reason !== "" ? "Login unavailable" : "Password"
                 color: root.failed ? root.failure : root.foreground
-                opacity: root.failed ? 1 : 0.6
+                opacity: root.failed ? 1 : 0.45
                 font.family: root.fontFamily
-                font.pixelSize: 16
-            }
-        }
-
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 10
-
-            Text {
-                objectName: "layout"
-                text: root.layout
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: 16
-            }
-
-            Text {
-                objectName: "layoutHint"
-                visible: root.stateLayout !== "" && root.layoutHint !== ""
-                text: root.layoutHint
-                color: root.foreground
-                opacity: 0.55
-                font.family: root.fontFamily
-                font.pixelSize: 16
+                font.pixelSize: 15
             }
         }
 
@@ -361,17 +352,58 @@ Rectangle {
         }
     }
 
+    // ADR 0021: the active layout and its switching hint, de-emphasized, opposite the power control.
+    Row {
+        objectName: "layoutRow"
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 24
+        height: 36
+        spacing: 10
+
+        Text {
+            objectName: "layoutIcon"
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\udb80\udf0c"
+            color: root.foreground
+            opacity: 0.6
+            font.family: root.fontFamily
+            font.pixelSize: 14
+        }
+
+        Text {
+            objectName: "layout"
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.layout
+            color: root.foreground
+            opacity: 0.6
+            font.family: root.fontFamily
+            font.pixelSize: 14
+        }
+
+        Text {
+            objectName: "layoutHint"
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.stateLayout !== "" && root.layoutHint !== ""
+            text: root.layoutHint
+            color: root.foreground
+            opacity: 0.35
+            font.family: root.fontFamily
+            font.pixelSize: 14
+        }
+    }
+
     // The account list opens below the selected account and overlays the password field.
     Rectangle {
         x: content.x + (content.width - width) / 2
         y: content.y + account.y + account.height + 8
         z: 1
-        width: 300
+        width: 280
         height: Math.min(selector.contentHeight, root.height * 0.4) + 4
         visible: root.selecting
         color: root.color
         border.width: 1
-        border.color: root.foreground
+        border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.35)
 
         ListView {
             id: selector
@@ -414,7 +446,7 @@ Rectangle {
         }
     }
 
-    // A single peripheral control leaves the centered login layout unchanged.
+    // Peripheral controls leave the anchored login layout unchanged.
     component PowerButton: Rectangle {
         id: button
         property string label: ""

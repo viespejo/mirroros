@@ -10,6 +10,7 @@
 ["unqualified","Unqualified access","model: sessionModel"]
 ["unqualified","Unqualified access","model: userModel"]
 ["unqualified","Unqualified access","readonly property color failure: config.failure"]
+["unqualified","Unqualified access","readonly property color fieldColor: config.field"]
 ["unqualified","Unqualified access","readonly property color foreground: config.foreground"]
 ["unqualified","Unqualified access","readonly property int session: LoginModel.sessionIndex(sessionFiles, config.session)"]
 ["unqualified","Unqualified access","readonly property string fontFamily: config.font"]

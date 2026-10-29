@@ -59,7 +59,7 @@ project-owned QML.
 | Wayland compositor and graphical session | configure | Hyprland (provisional) | [ADR 0011](adr/0011-hyprland-compositor-provider.md); Hyprland is the provider, not the architectural capability |
 | Graphical login | configure | SDDM with its greeter on Hyprland and a small owned QML theme | Sessions always start through `uwsm start hyprland.desktop`; password login, no autologin; theme bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md) |
 | Desktop shell: bar, launcher, notifications, OSD, and session menu | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); bounded to these surfaces; started by its own systemd user unit with the uwsm graphical session |
-| Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; no DPMS or automatic suspend policy |
+| Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; no DPMS or automatic suspend policy; one password field over the blurred selected background in the selected theme's colors ([ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md)) |
 | Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
 | Desktop portals | configure | open — selected by Story 4.5 | |
 | Clipboard and history | configure | open — selected by Story 4.5 | |
@@ -111,7 +111,7 @@ This checkpoint selects no additional providers and does not qualify the complet
 | Typography | configure | open — selected by Story 4.8 | The workbench terminal uses `ttf-jetbrains-mono-nerd` and `noto-fonts-emoji`; global typography remains Story 4.8 work |
 | Coherent color palette across components | configure | open — selected by Story 4.8 | |
 | Wallpaper display and selection | configure | Owned Quickshell shell | Story 4.8; bounded by [ADR 0020](adr/0020-wallpaper-selection.md); no separate wallpaper daemon or theme manager |
-| SDDM greeter theme | configure | Owned QML theme | [ADR 0014](adr/0014-native-login-and-boot-presentation.md); lock-screen palette and the shared MirrorOS wordmark (`visual/branding`), reused by the boot splash; VM-qualified with the splash by plan 02-20, without hardware readiness ([record](procedures/greeter-plymouth.md#vm-qualification-record)) |
+| SDDM greeter theme | configure | Owned QML theme | [ADR 0014](adr/0014-native-login-and-boot-presentation.md); neutral splash palette and the shared MirrorOS wordmark (`visual/branding`), reused by the boot splash; VM-qualified with the splash by plan 02-20, without hardware readiness ([record](procedures/greeter-plymouth.md#vm-qualification-record)); the [ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md) anchored layout awaits VM qualification |
 | Cursor and icons | configure | open — selected by Story 4.8 | |
 
 ## Frequent-action list

@@ -1,5 +1,5 @@
-// Synthetic SDDM models for the MirrorOS theme. theme.test.mjs substitutes @THEME@, @LOGO@ and @STATE@ (a layout
-// state file holding "English (US)") and runs this file
+// Synthetic SDDM models for the MirrorOS theme. theme.test.mjs substitutes @THEME@, @LOGO@, @STATE@ (a layout
+// state file holding "English (US)") and @SCALE@ (the QT_SCALE_FACTOR of the run) and runs this file
 // with qmltestrunner on the offscreen platform. Login and power proxy calls only record requests; no real operation happens.
 import QtQuick
 import QtTest
@@ -14,6 +14,7 @@ Item {
         property string background: "#101315"
         property string foreground: "#cacccc"
         property string failure: "#a55555"
+        property string field: "#15191c"
         property string font: "monospace"
         property string logo: "@LOGO@"
         property string session: "/usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop"
@@ -225,6 +226,67 @@ Item {
             setUsers([["alice", "Alice A"]], "alice");
             reload();
             verify(!item("switcher").visible);
+            verify(!item("account").visible);
+            compare(item("field").mapToItem(item("form"), 0, 0).y, 0);
+            verify(item("password").activeFocus);
+            type("secret");
+            keyClick(Qt.Key_Return);
+            compare(sddm.calls[0], ["alice", "secret", 1]);
+        }
+
+        function test_multiple_accounts_show_the_account_above_the_field() {
+            verify(item("account").visible);
+            verify(item("field").mapToItem(item("form"), 0, 0).y > item("account").height);
+        }
+
+        // ADR 0021: the symbol occupies the Plymouth rectangle (device pixels) and the form starts 5% below it.
+        function test_symbol_keeps_the_splash_rectangle_and_anchors_the_form() {
+            var ratio = Screen.devicePixelRatio;
+            fuzzyCompare(ratio, Number("@SCALE@"), 0.001);
+            var sizes = [[1280, 800], [1200, 675], [800, 480], [2560, 1600]];
+            for (var i = 0; i < sizes.length; i++) {
+                harness.width = sizes[i][0];
+                harness.height = sizes[i][1];
+                var logo = item("logo");
+                tryVerify(function() { return logo.status === Image.Ready; });
+                var device = Math.floor(Math.min(320, sizes[i][0] * ratio * 0.42, sizes[i][1] * ratio * 0.22));
+                fuzzyCompare(logo.width * ratio, device, 0.001);
+                fuzzyCompare(logo.height * ratio, device, 0.001);
+                fuzzyCompare(logo.x * ratio, Math.floor((sizes[i][0] * ratio - device) / 2), 0.001);
+                fuzzyCompare(logo.y * ratio, Math.floor((sizes[i][1] * ratio - device) / 2), 0.001);
+                var form = item("form");
+                fuzzyCompare(form.y, logo.y + logo.height + Math.round(sizes[i][1] * 0.05), 0.001);
+                fuzzyCompare(form.x + form.width / 2, sizes[i][0] / 2, 1);
+                var field = item("field");
+                compare(field.width, 280);
+                compare(field.height, 44);
+                var bottom = field.mapToItem(loader.item, 0, field.height).y;
+                verify(bottom <= sizes[i][1] - 24 - 36);
+            }
+        }
+
+        function test_field_border_follows_typing_authentication_and_failure() {
+            var field = item("field");
+            verify(Qt.colorEqual(field.color, "#15191c"));
+            compare(field.border.width, 1);
+            fuzzyCompare(field.border.color.a, 0.35, 0.01);
+            type("x");
+            fuzzyCompare(field.border.color.a, 0.85, 0.01);
+            keyClick(Qt.Key_Return);
+            fuzzyCompare(field.border.color.a, 0.85, 0.01);
+            sddm.loginFailed();
+            verify(Qt.colorEqual(field.border.color, "#a55555"));
+            type("y");
+            fuzzyCompare(field.border.color.a, 0.85, 0.01);
+        }
+
+        function test_layout_sits_in_the_bottom_left_corner() {
+            var row = item("layoutRow");
+            var origin = row.mapToItem(loader.item, 0, 0);
+            compare(origin.x, 24);
+            compare(origin.y + row.height, harness.height - 24);
+            verify(item("layout").visible);
+            verify(item("layoutIcon").visible);
         }
 
         function test_native_keyboard_layout_takes_precedence() {

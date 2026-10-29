@@ -15,6 +15,7 @@ supplies their licenses.
 |---|---|---|
 | Idle and lock requests | `~/.config/hypr/hypridle.conf` | Managed user file (`hypridle.conf`) |
 | Lock surface | `~/.config/hypr/hyprlock.conf` | Managed user file (`hyprlock.conf`) |
+| Lock colors | `~/.local/state/mirroros/current/theme/hyprlock.conf` | Selected theme ([theme sources](../../visual/theme/sources.md)) |
 | Service | packaged `/usr/lib/systemd/user/hypridle.service` | Package |
 | MirrorOS addition | `/etc/systemd/user/hypridle.service.d/10-mirroros.conf` | MirrorOS, tracked delivery |
 | Enablement | `~/.config/systemd/user/graphical-session.target.wants/hypridle.service` | Selected user only |
@@ -43,8 +44,24 @@ lock in place. Configure never starts, restarts or reloads hypridle.
   `notifications lockChanged` IPC function for the while-away count (DEC-021/022; gate passed in plan 02-19
   Task 1). The marker carries no notification content.
 - No screensaver, DPMS, backlight or automatic suspend policy.
-- `hyprlock.conf` is an original MirrorOS layout: solid background, clock, password field and active layout; no
-  screenshot, window or notification content.
+- `hyprlock.conf` is an original MirrorOS layout under
+  [ADR 0021](../../../docs/adr/0021-neutral-greeter-and-themed-lock.md): one password field over the selected
+  background (`~/.local/state/mirroros/current/background`, ADR 0020) with `blur_passes = 3`, `blur_size = 8` and
+  `brightness = 0.9`, or the theme background color when the image is missing; no clock, keyboard layout,
+  screenshot, window or notification content. The field is `31.5%, 9.5%` of the output in physical pixels, with a
+  3-pixel accent border, no rounding, the theme background at 80% and an `Enter Password` placeholder at 60%
+  opacity. A failure shows PAM's message (`<i>$PAMFAIL</i>`, including faillock's remaining time) for five seconds
+  (`general:fail_timeout = 5000`); the faillock policy is unchanged.
+- Colors are the variables `$background`, `$field`, `$foreground`, `$accent` and `$failure`. The managed file
+  defines neutral literal fallbacks (the greeter's colors), then sources the selected theme's `hyprlock.conf`
+  through the `current/theme` link, as Foot does. A missing theme file is logged by hyprlock and the fallbacks
+  remain. The link is user-controlled and hyprlock configuration can run commands through labels, so the lock
+  trusts the selected theme like the user-writable lock file itself. Both paths use the default XDG state directory
+  (`~/.local/state`), not a custom `XDG_STATE_HOME`.
+- The previously shipped layout carried the managed header, so configure replaces it; a personal (unmarked) or
+  linked `hyprlock.conf` stays user-owned and keeps its own layout.
+- Behavior reference only: Omarchy `4.0.6-1` (inspected read-only on the reference VM) locks with one field over a
+  blurred background; no Omarchy file, value set or asset is copied.
 
 ## Open limits
 
@@ -52,3 +69,6 @@ lock in place. Configure never starts, restarts or reloads hypridle.
 - If hypridle itself fails while locked, its service stop also ends the hyprlock child (default kill mode);
   Hyprland then shows its lockdead screen. Recovery (`misc:allow_session_lock_restore`) is untested.
 - Multi-output lock, idle inhibition by applications and lock after resume remain unqualified.
+- The ADR 0021 behavior (theme sourcing through `~` and the link, missing theme file, missing background, blur,
+  percentage sizes and the failure display) was observed with temporary configurations on hyprlock `0.9.6`;
+  the delivered file still requires installed VM qualification.

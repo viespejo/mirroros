@@ -9,7 +9,8 @@ the session. The MirrorOS theme in `sddm/mirroros/` is independently written pre
 runs no process, reads only the greeter layout state file under ADR 0015, logs nothing and has no avatar, clock or
 settings. [ADR 0016](../../../docs/adr/0016-greeter-power-actions.md) permits confirmed restart and shutdown only
 through SDDM's native power proxy. PAM, accounts and autologin are unchanged (`10-mirroros-login.conf` keeps
-autologin empty).
+autologin empty). [ADR 0021](../../../docs/adr/0021-neutral-greeter-and-themed-lock.md) sets the layout and keeps
+the greeter neutral: it follows no user theme.
 
 Interfaces used, from the [SDDM theming documentation](https://github.com/sddm/sddm/blob/develop/docs/THEMING.md)
 and the SDDM `v0.21.0` source (SDDM 0.21.0-7 observed in the Arch repositories; not a pin):
@@ -27,12 +28,17 @@ applies.
 
 ## Behavior
 
-- Dark background, centered static [shared symbol](../../visual/branding/sources.md) under
-  [ADR 0019](../../../docs/adr/0019-shared-symbol-and-live-splash.md), scaled proportionally within 42% of the width
-  and 22% of the height, never above its 320x320 rendered size; the lock screen's rectangular password field and
-  colors; the keyboard layout below the field.
-- The selected account is always shown. The last successful user is selected while still listed, otherwise the
-  first listed user. With more than one account a discreet `▾` control (Tab, then Enter or Space; arrows and Enter
+- The splash's neutral colors (`#101315`, `#cacccc`, failure `#a55555`). The static
+  [shared symbol](../../visual/branding/sources.md) ([ADR 0019](../../../docs/adr/0019-shared-symbol-and-live-splash.md))
+  occupies exactly the Plymouth splash rectangle: centered, within 42% of the width and 22% of the height, never
+  above its 320x320 rendered size, with that cap and the rounding computed in device pixels
+  (`Screen.devicePixelRatio`), because Plymouth works in device pixels and QML in logical pixels.
+- The form is anchored 5% of the display height below the symbol, so the symbol never moves. The password field is
+  280x44 with a 1-pixel border in the foreground at 35% opacity (85% while typing or authenticating, `#a55555`
+  after a failure) and a `#15191c` fill (`field`). Typed characters are drawn as 10-pixel dots.
+- The account name and selector are shown above the field only when more than one account is listed; with one
+  account the greeter shows only the symbol and the field. The last successful user is selected while still
+  listed, otherwise the first listed user. With more than one account a discreet `▾` control (Tab, then Enter or Space; arrows and Enter
   in the list; Esc closes it) changes the account.
 - The session is the single entry whose file is exactly
   `/usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop`, the link the Hyprland provider creates and checks
@@ -59,8 +65,9 @@ SDDM 0.21's Wayland keyboard backend intentionally publishes no layouts, so the 
 Hyprland greeter compositor. The theme shows the native layout name when one is published and otherwise the label
 of the layout resolved by configure (`XKBLAYOUT`, `KEYMAP` or `us` from `/etc/vconsole.conf`, the same resolution as
 the greeter's `keyboard.lua`), which `install-theme` writes to `theme.conf.user`. The label is the layout's XKB
-description from the configured system's `base.lst` (`Spanish`, `English (US)`), matching hyprlock's `$LAYOUT` at
-the same 16-pixel size; the layout code is used when no description is listed. The label is informational; the greeter
+description from the configured system's `base.lst` (`Spanish`, `English (US)`), shown with a keyboard glyph at 14
+pixels and reduced opacity in the bottom-left corner, opposite the power control; the layout code is used when no
+description is listed. The label is informational; the greeter
 compositor applies the actual layout. A later layout change is shown after the next configure run, which republishes
 the theme.
 
@@ -70,8 +77,7 @@ indicator helper writes the active layout's description to `/var/lib/sddm/mirror
 (`layoutState`). The theme reads only that file, with a local `XMLHttpRequest` enabled by
 `GreeterEnvironment=QML_XHR_ALLOW_FILE_READ=1` in `10-mirroros-login.conf`, polls it every 300 ms, and shows it
 together with the `layoutHint` (`Super+I`). After ten consecutive missing or invalid reads it stops polling and
-keeps the configure label. The password field draws hyprlock-sized dots (12 pixels) inside a 304x54 outline, which
-matches hyprlock's 300x50 field with its outer 2-pixel outline.
+keeps the configure label and hides the hint.
 
 ## Ownership
 
@@ -99,4 +105,6 @@ reported instead of silently keeping the old greeter.
   visual acceptance require attended disposable-VM checks under ADR 0016.
 - The shared square symbol is exercised with synthetic models and a temporary raster of the real SVG; this does
   not qualify its actual SDDM appearance. Attended greeter and matching animated-splash checks remain pending.
-- Multi-output greeter layout and HiDPI scaling are unqualified.
+- Multi-output greeter layout and HiDPI scaling are unqualified. The device-pixel geometry is tested at scales 1
+  and 1.6 with synthetic models only; the ADR 0021 layout, one- and two-account display and the splash-to-greeter
+  symbol position require attended VM checks.

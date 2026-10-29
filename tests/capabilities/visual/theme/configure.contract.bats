@@ -16,6 +16,7 @@ teardown() { cfg_test_teardown; }
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/colors.toml" "$dest/colors.toml"
   [ -f "$dest/LICENSE.omarchy" ]
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/hyprland.lua" "$dest/hyprland.lua"
+  cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/hyprlock.conf" "$dest/hyprlock.conf"
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/resolve-current" "${dest%/default}/resolve-current"
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/check-trusted-path" "${dest%/default}/check-trusted-path"
   [ "$(readlink "$CFG_TEST_HOME/.local/state/mirroros/current/theme")" = /usr/share/mirroros/themes/default ]

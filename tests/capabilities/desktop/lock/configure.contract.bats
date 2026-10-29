@@ -54,8 +54,51 @@ lock_packaged_unit() {
   [ "$status" -eq 1 ]
   run grep -qiE 'screenshot|path *= *screenshot|notification' <<< "$(grep -viE '^[[:space:]]*#' "$lock")"
   [ "$status" -eq 1 ]
-  # shellcheck disable=SC2016 # Match hyprlock's literal layout variable, not a test-shell variable.
-  grep -qF 'text = $LAYOUT' "$lock"
+}
+
+@test "the lock shows only the field over the selected background with theme colors after literal fallbacks" {
+  local lock="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/lock/hyprlock.conf"
+  local theme="$BATS_TEST_DIRNAME/../../../../capabilities/visual/theme/default/hyprlock.conf"
+  local source_line='source = ~/.local/state/mirroros/current/theme/hyprlock.conf'
+  # ADR 0021: no clock or layout labels, one field, and the PAM message for five seconds.
+  run grep -qE '^[[:space:]]*label[[:space:]]*\{' "$lock"
+  [ "$status" -eq 1 ]
+  [ "$(grep -c '^input-field {' "$lock")" -eq 1 ]
+  grep -qxF '    path = ~/.local/state/mirroros/current/background' "$lock"
+  grep -qxF '    color = $background' "$lock"
+  grep -qxF '    fail_timeout = 5000' "$lock"
+  grep -qxF '    fail_text = <i>$PAMFAIL</i>' "$lock"
+  grep -qxF '    size = 31.5%, 9.5%' "$lock"
+  # The single source line follows every fallback variable and precedes every section.
+  [ "$(grep -c '^source' "$lock")" -eq 1 ]
+  local source_at last_variable first_section
+  source_at="$(grep -nxF "$source_line" "$lock" | cut -d: -f1)"
+  last_variable="$(grep -n '^\$' "$lock" | tail -1 | cut -d: -f1)"
+  first_section="$(grep -n '{$' "$lock" | head -1 | cut -d: -f1)"
+  [ -n "$source_at" ] && [ "$last_variable" -lt "$source_at" ] && [ "$source_at" -lt "$first_section" ]
+  # The theme file only defines variables, exactly the color fallbacks of the lock.
+  [ -z "$(grep -vE '^(#.*|\$[a-z_]+ = rgba?\([0-9., ]+\))$' "$theme")" ]
+  [ "$(grep -o '^\$[a-z_]*' "$theme" | sort)" = "$(grep -o '^\$[a-z_]*' "$lock" | grep -vx '\$font' | sort)" ]
+}
+
+@test "configure replaces the previously shipped lock and preserves personal or linked lock files" {
+  mkdir -p "$CFG_TEST_HOME/.config/hypr"
+  cp "$BATS_TEST_DIRNAME/hyprlock-legacy.conf" "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  cmp "$LOCK_CODE/hyprlock.conf" "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  printf 'general {\n}\n' > "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/owned"
+  [ "$status" -eq 0 ]
+  grep -qF 'user-owned: .config/hypr/hyprlock.conf' "$CFG_TEST_DIR/owned/configure.log"
+  [ "$(< "$CFG_TEST_HOME/.config/hypr/hyprlock.conf")" = $'general {\n}' ]
+  rm "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  cp "$BATS_TEST_DIRNAME/hyprlock-legacy.conf" "$CFG_TEST_DIR/personal-lock"
+  ln -s "$CFG_TEST_DIR/personal-lock" "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [ -L "$CFG_TEST_HOME/.config/hypr/hyprlock.conf" ]
+  cmp "$BATS_TEST_DIRNAME/hyprlock-legacy.conf" "$CFG_TEST_DIR/personal-lock"
 }
 
 @test "the drop-in only adds ignorable marker cleanup and a shell reread before the packaged command" {

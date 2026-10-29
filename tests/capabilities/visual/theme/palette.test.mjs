@@ -25,6 +25,25 @@ test('the reviewed palette has unique valid values and the approved jade roles',
   assert.equal(values.get('red'), '#FF5345');
 });
 
+test('the lock colors match the palette roles (ADR 0021)', () => {
+  const palette = new Map();
+  for (const match of readFileSync(resolve(theme, 'default/colors.toml'), 'utf8').matchAll(/^([a-z_]+) = "#([0-9a-fA-F]{6})"$/gm))
+    palette.set(match[1], match[2].match(/../g).map(pair => parseInt(pair, 16)));
+  const lock = new Map();
+  for (const line of readFileSync(resolve(theme, 'default/hyprlock.conf'), 'utf8').split('\n')) {
+    if (!line || line.startsWith('#')) continue;
+    const match = /^\$([a-z_]+) = rgba?\(([0-9., ]+)\)$/.exec(line);
+    assert.ok(match, `unexpected lock line: ${line}`);
+    lock.set(match[1], match[2].split(',').map(Number));
+  }
+  assert.deepEqual([...lock.keys()].sort(), ['accent', 'background', 'failure', 'field', 'foreground']);
+  assert.deepEqual(lock.get('background'), palette.get('background'));
+  assert.deepEqual(lock.get('field'), [...palette.get('background'), 0.8]);
+  assert.deepEqual(lock.get('foreground'), palette.get('foreground'));
+  assert.deepEqual(lock.get('accent'), palette.get('accent'));
+  assert.deepEqual(lock.get('failure'), palette.get('red'));
+});
+
 test('the Omarchy MIT notice is retained with the palette', () => {
   const notice = readFileSync(resolve(theme, 'default/LICENSE.omarchy'), 'utf8');
   assert.match(notice, /Copyright \(c\) David Heinemeier Hansson/);

@@ -251,8 +251,8 @@ Managed destinations are:
   (`~/.local/state/mirroros/shell`) are never read or written. See
   [shell sources](../../capabilities/desktop/shell/sources.md) and the [desktop shell procedure](desktop-shell.md).
 - `~/.config/hypr/hypridle.conf`, `~/.config/hypr/hyprlock.conf`: lock after 300 seconds idle and before sleep, the
-  `us` layout before every lock, the while-away lock marker hooks, and a solid lock surface with system PAM
-  authentication; `/etc/systemd/user/hypridle.service.d/10-mirroros.conf`: stale-marker cleanup before hypridle
+  `us` layout before every lock, the while-away lock marker hooks, and one password field over the blurred selected
+  background with the selected theme's colors (ADR 0021) and system PAM authentication; `/etc/systemd/user/hypridle.service.d/10-mirroros.conf`: stale-marker cleanup before hypridle
   starts; `~/.config/systemd/user/graphical-session.target.wants/hypridle.service`: enablement of the packaged unit
   for the selected user. See [lock sources](../../capabilities/desktop/lock/sources.md).
 
