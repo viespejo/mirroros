@@ -1,10 +1,14 @@
 -- managed by MirrorOS configure
-dofile("/usr/share/mirroros/hypr/monitors.lua")
-hl.config({
-    input = { kb_layout = require("/usr/share/mirroros/hypr/layouts.lua"), kb_options = "compose:ralt", repeat_delay = 230, repeat_rate = 62 },
-    dwindle = { preserve_split = true },
-})
-
--- Approved Story 4.3 bindings. dofile runs them again at every configuration load; nothing is unbound at runtime.
-dofile("/usr/share/mirroros/hypr/shell-bindings.lua")
-dofile("/usr/share/mirroros/hypr/window-bindings.lua")
+-- Product defaults load before optional personal files in ~/.config/hypr/.
+dofile("/usr/share/mirroros/hypr/defaults.lua")
+local ok, loader = pcall(dofile, "/usr/share/mirroros/hypr/personal-loader.lua")
+local home = os.getenv("HOME")
+if ok and type(loader) == "function" and home and home ~= "" then
+    loader(home .. "/.config/hypr", print)
+else
+    print("Cannot load personal Hyprland layers")
+    if type(MirrorOSKeys) == "table" and type(MirrorOSKeys.finalize) == "function" then
+        MirrorOSKeys.finalize()
+        MirrorOSKeys.export()
+    end
+end

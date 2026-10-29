@@ -1,0 +1,22 @@
+#!/usr/bin/bash
+# Create the personal bindings template only when its destination is absent.
+set -Eeuo pipefail
+umask 022
+dest="$HOME/.config/hypr/bindings.lua"
+mkdir -p -- "${dest%/*}"
+if [[ -e "$dest" || -L "$dest" ]]; then
+  printf 'unchanged user-owned: .config/hypr/bindings.lua; left untouched\n'
+  exit 0
+fi
+tmp=$(mktemp "${dest%/*}/.mirroros-bindings.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+printf '%s' "$1" | base64 -d > "$tmp"
+chmod 0644 "$tmp"
+if ln -T -- "$tmp" "$dest" 2>/dev/null; then
+  printf 'changed\n'
+elif [[ -e "$dest" || -L "$dest" ]]; then
+  printf 'unchanged user-owned: .config/hypr/bindings.lua; left untouched\n'
+else
+  printf 'Cannot create personal bindings template\n' >&2
+  exit 1
+fi

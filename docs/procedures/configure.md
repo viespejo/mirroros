@@ -187,11 +187,22 @@ Managed destinations are:
 - `~/.config/xdg-terminals.list`: `foot.desktop`, the terminal `uwsm app` uses for `Terminal=true` desktop entries.
   A user-owned list (or `~/.config/hyprland-xdg-terminals.list`) is preserved; when the effective list names no
   installed desktop entry, the step fails with an actionable message instead of passing.
-- `~/.config/hypr/hyprland.lua`: the session layouts from `/usr/share/mirroros/hypr/layouts.lua` (the resolved
-  layout first, then `us,es` without duplicates), Right Alt Compose, the repeat defaults,
-  `dwindle.preserve_split`, and the approved bindings loaded with `dofile` from the two files below at every
-  configuration load. The earlier `SUPER+SHIFT+Q` and `SUPER+SHIFT+E` bindings are removed (close: `SUPER+W` or
-  `SUPER+Q`; logout: System menu); `SUPER+Return` still launches `uwsm app -- foot`.
+- `~/.config/hypr/hyprland.lua`: the managed entry point loads `/usr/share/mirroros/hypr/defaults.lua`, then optional
+  personal layers. Product defaults include layouts from `layouts.lua` (the resolved layout first, then `us,es`
+  without duplicates), Right Alt Compose, repeat defaults, `dwindle.preserve_split`, static jade borders and
+  the approved bindings. Independently of the theme, window borders are 2 px, active and inactive opacity are
+  0.985 and 0.96, and blur is disabled; no application-specific exceptions are supplied. Configure migrates only exact known earlier entry points and preserves modified files,
+  links and existing `hyprland.conf`. The earlier `SUPER+SHIFT+Q` and `SUPER+SHIFT+E` bindings are removed (close:
+  `SUPER+W` or `SUPER+Q`; logout: System menu); `SUPER+Return` still launches `uwsm app -- foot`.
+- `/usr/share/mirroros/hypr/defaults.lua` and `personal-loader.lua`: tracked product files. After defaults,
+  the loader executes existing user-owned `~/.config/hypr/monitors.lua`, `input.lua`, `looknfeel.lua`, `bindings.lua`
+  and `autostart.lua`, in that order. Configure creates commented `monitors.lua` and `bindings.lua` templates only when absent; it
+  never overwrites personal layers or links and does not create the other layers. They are executable Lua;
+  errors are reported and later files still load, but changes made before an error are not rolled back. The loader
+  uses this HOME-relative path, not a custom `XDG_CONFIG_HOME`. Use `MirrorOSKeys.bind` to register personal
+  shortcuts and avoid duplicate registered chords. To replace an existing action without changing its chord, use
+  `MirrorOSKeys.replace(id, description, dispatcher)` in `bindings.lua`. Bindings are registered after this file
+  runs, even when it fails after partial changes. Direct `hl.bind` can bypass the registry.
 - `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`: the approved key table and the registry the
   shell's keyboard help reads (`$XDG_RUNTIME_DIR/mirroros-keybindings.tsv`). Nothing is unbound at runtime. See
   [Hyprland bindings provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md).
@@ -234,11 +245,11 @@ This does not identify an individual offending field. These settings do not chan
 
 ### Virtual display defaults
 
-The managed Hyprland session and SDDM greeter both load `/usr/share/mirroros/hypr/monitors.lua` with `dofile` at
-each configuration load. Its only `hl.monitor` rule matches `Virtual-1`, with `mode = "1920x1080@60"`,
-`position = "auto"` and `scale = 1.2` (1600x900 logical pixels). All other monitor fields and connectors keep
-Hyprland's defaults; there is no catch-all monitor rule. Any output named `Virtual-1` matches, not only the local
-QEMU lab. Future connector-specific rules remain possible in the native configuration.
+The managed Hyprland session loads `/usr/share/mirroros/hypr/monitors.lua` through provider defaults, and the SDDM
+greeter loads it directly with `dofile`, at each configuration load. A general rule requests preferred mode,
+automatic position and scale 1. A specific `Virtual-1` rule requests `1920x1080@60`, automatic position and
+scale 1.6. Any output named `Virtual-1` matches, not only the local QEMU lab. Personal monitor rules load after
+product defaults in the user session; the greeter does not load them. The session also sets `GDK_SCALE=1`.
 
 This rule does not configure the live console, kernel framebuffer, firmware or boot menu. Kernel `video=` changes
 are a separate boot-policy decision, not an implicit part of desktop scaling. Configure publishes the files but
@@ -255,12 +266,12 @@ Validation rejects a declared layout missing from the XKB data
 before any package change.
 This replaces Right Alt's normal AltGr role. Do not assume layouts that depend on AltGr are unaffected.
 
-To retain AltGr, deliberately take ownership of each applicable native file: remove its
-`managed by MirrorOS configure` comment and set `kb_options = ""` or the options required by the chosen layout.
-The session file is `~/.config/hypr/hyprland.lua`; the greeter file is
-`/usr/share/mirroros/sddm/hyprland.lua` and requires a separately reviewed root edit. Configure preserves those
-unmarked files. Review the resulting native configuration before the next session/greeter start; configure
-never reloads the compositor or restarts SDDM. No additional override schema is introduced.
+To retain AltGr in a session using the managed entry point, put the desired native configuration in the personal
+`~/.config/hypr/input.lua`, for example `hl.config({ input = { kb_options = "" } })`. It loads after the product
+defaults. The greeter uses `/usr/share/mirroros/sddm/hyprland.lua` and requires a separately reviewed root edit.
+Review the resulting native configuration before the next session/greeter start; configure never reloads the
+compositor or restarts SDDM. Existing customized session entry points remain user-owned and do not automatically
+adopt personal layers.
 
 The prototype confirmed the reported accented-character sequence in the graphical session. Contract checks
 prove native declaration delivery and unchanged layout resolution, not all keyboard layouts or graphical
@@ -271,7 +282,9 @@ greeter behavior; fresh-session and greeter interaction remain attended verifica
 All home-directory writes run as the target user through `runuser`. Files are created when absent and updated
 only when they carry the `managed by MirrorOS configure` header and differ. Non-managed files and symbolic links
 are preserved and reported as user-owned; their postconditions only check existence, not the managed contents.
-A user-owned legacy `~/.config/hypr/hyprland.conf` prevents creating a shadowing Lua configuration.
+A user-owned legacy `~/.config/hypr/hyprland.conf` prevents creating a shadowing Lua configuration. Hyprland's
+entry point is a stricter exception: only exact known earlier contents are migrated, even if a modified file retains
+the managed header. Personal layer files are not written by configure.
 
 The shell runtime, the shell unit, the hypridle drop-in and the binding files are tracked deliveries: configure
 records what it delivered (`/var/lib/mirroros/configure/delivered/`, or the runtime's `.mirroros-manifest`), so a

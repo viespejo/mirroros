@@ -42,9 +42,35 @@ hl = {
 local mode = arg[1]
 for load = 1, 2 do
   out = {}
+  MirrorOSStageBindings = mode == "replacement" or mode == "replacement-invalid"
   dofile(arg[2] .. "/shell-bindings.lua")
   if mode == "duplicate" then MirrorOSKeys.bind("extra.duplicate", "SHIFT + SUPER + i", "Duplicate", "x") end
   dofile(arg[2] .. "/window-bindings.lua")
+  if mode == "replacement" or mode == "replacement-invalid" then
+    assert(#out == 0)
+    if mode == "replacement" then
+      assert(not pcall(MirrorOSKeys.replace, "window.close", "Invalid", "not-a-dispatcher"))
+      MirrorOSKeys.replace("window.close", "Personal close action", hl.dsp.exec_cmd("personal-command"))
+      assert(not pcall(MirrorOSKeys.replace, "window.close", "Again", "x"))
+    else
+      assert(not pcall(MirrorOSKeys.replace, "unknown.id", "Unknown", "x"))
+    end
+    MirrorOSKeys.finalize()
+    MirrorOSKeys.export()
+  end
+  if mode == "personal" or mode == "personal-export" then
+    MirrorOSKeys.bind("personal.example", "SUPER + F12", "Personal example", hl.dsp.exec_cmd("personal-command"))
+    if mode == "personal-export" then MirrorOSKeys.export() end
+  end
+  if mode == "personal-error" or mode == "personal-error-export" then
+    local ok = pcall(function()
+      MirrorOSKeys.bind("personal.partial", "SUPER + F12", "Partial personal binding", hl.dsp.exec_cmd("personal-command"))
+      error("synthetic failure after binding")
+    end)
+    assert(not ok)
+    if mode == "personal-error-export" then MirrorOSKeys.export() end
+  end
+  if mode == "personal-duplicate" then MirrorOSKeys.bind("personal.duplicate", "SUPER + K", "Duplicate", "x") end
 end
 for _, line in ipairs(out) do print(line) end
 `;
@@ -80,12 +106,12 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
   assert.equal(bindings.length, 116);
-  for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hyprland.lua']) {
+  for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
     assert.doesNotMatch(code, /\brequire\s*\(\s*["'][^"']*bindings/, file);
   }
-  assert.match(fs.readFileSync(path.join(provider, 'shell-bindings.lua'), 'utf8'), /^MirrorOSKeys = \{ entries = \{\}, chords = \{\} \}$/m);
+  assert.match(fs.readFileSync(path.join(provider, 'shell-bindings.lua'), 'utf8'), /^MirrorOSKeys = \{ entries = \{\}, chords = \{\}, pending = \{\}, staged = MirrorOSStageBindings == true \}$/m);
 });
 
 test('no chord is bound twice and the helper rejects a repeated chord', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -93,6 +119,40 @@ test('no chord is bound twice and the helper rejects a repeated chord', { skip: 
   const duplicate = load('duplicate');
   assert.notEqual(duplicate.status, 0);
   assert.match(duplicate.stderr, /repeated chord SHIFT \+ SUPER \+ i/);
+});
+
+test('personal registry additions require a new export and reject product chords', { skip: !lua && 'no Lua interpreter' }, () => {
+  const withoutExport = load('personal');
+  assert.equal(withoutExport.status, 0, withoutExport.stderr);
+  assert.match(withoutExport.stdout, /SUPER \+ F12\tPersonal example/);
+  assert.doesNotMatch(withoutExport.registry, /personal\.example/);
+  const withExport = load('personal-export');
+  assert.equal(withExport.status, 0, withExport.stderr);
+  assert.match(withExport.registry, /personal\.example\tSUPER \+ F12\tPersonal example/);
+  const duplicate = load('personal-duplicate');
+  assert.notEqual(duplicate.status, 0);
+  assert.match(duplicate.stderr, /repeated chord SUPER \+ K/);
+});
+
+test('a personal error can leave a binding registered after the last export', { skip: !lua && 'no Lua interpreter' }, () => {
+  const failed = load('personal-error');
+  assert.equal(failed.status, 0, failed.stderr);
+  assert.match(failed.stdout, /SUPER \+ F12\tPartial personal binding/);
+  assert.doesNotMatch(failed.registry, /personal\.partial/);
+  const exported = load('personal-error-export');
+  assert.equal(exported.status, 0, exported.stderr);
+  assert.match(exported.registry, /personal\.partial\tSUPER \+ F12\tPartial personal binding/);
+});
+
+test('staged replacements bind once and export the selected action', { skip: !lua && 'no Lua interpreter' }, () => {
+  const replaced = load('replacement');
+  assert.equal(replaced.status, 0, replaced.stderr);
+  assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
+  assert.equal(replaced.stdout.trim().split('\n').length, 116);
+  assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
+  const invalid = load('replacement-invalid');
+  assert.equal(invalid.status, 0, invalid.stderr);
+  assert.match(invalid.registry, /^window\.close\tSUPER \+ W\tClose window$/m);
 });
 
 test('every approved Story 4.3 key is bound with a description', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -168,11 +228,11 @@ test('the registry lists launchable entries for the current instance and leaves 
 test('Lua sources parse', { skip: !lua && 'no Lua interpreter' }, () => {
   const luac = ['luac5.4', 'luac'].find(name => spawnSync(name, ['-v']).status === 0);
   if (!luac) return;
-  execFileSync(luac, ['-p', ...['hyprland.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua',
+  execFileSync(luac, ['-p', ...['hyprland.lua', 'defaults.lua', 'personal-loader.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua',
     'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
 });
 
-test('session and greeter reload only the shared Virtual-1 monitor rule', { skip: !lua && 'no Lua interpreter' }, () => {
+test('session and greeter reload shared monitor rules and session sets GDK scale', { skip: !lua && 'no Lua interpreter' }, () => {
   const result = execFileSync(lua, ['-e', `
     local original_dofile = dofile
     package.preload['/usr/share/mirroros/hypr/layouts.lua'] = function() return 'us,es' end
@@ -180,28 +240,38 @@ test('session and greeter reload only the shared Virtual-1 monitor rule', { skip
       if file == '/usr/share/mirroros/hypr/monitors.lua' then
         return original_dofile(arg[1] .. '/monitors.lua')
       end
+      if file == '/usr/share/mirroros/hypr/defaults.lua' then return original_dofile(arg[1] .. '/defaults.lua') end
+      if file == '/usr/share/mirroros/hypr/personal-loader.lua' then return function() end end
+      if file == '/usr/share/mirroros/hypr/theme-runtime.lua' then return function() return nil end end
       assert(file == '/usr/share/mirroros/hypr/shell-bindings.lua'
         or file == '/usr/share/mirroros/hypr/window-bindings.lua', file)
     end
     hl = {
       config = function() end, bind = function() end, on = function() end,
+      env = function(key, value) assert(key == 'GDK_SCALE' and value == '1'); print('GDK_SCALE') end,
       dsp = { exec_cmd = function() end },
       monitor = function(spec)
         local count = 0
         for _ in pairs(spec) do count = count + 1 end
         assert(count == 4)
-        assert(spec.output == 'Virtual-1')
-        assert(spec.mode == '1920x1080@60')
         assert(spec.position == 'auto')
-        assert(spec.scale == 1.2)
-        print(spec.output)
+        if spec.output == '' then
+          assert(spec.mode == 'preferred' and spec.scale == 1)
+          print('default')
+        else
+          assert(spec.output == 'Virtual-1' and spec.mode == '1920x1080@60' and spec.scale == 1.6)
+          print(spec.output)
+        end
       end,
     }
     for _, file in ipairs({'hyprland.lua', 'greeter/hyprland.lua'}) do
       for reload = 1, 2 do original_dofile(arg[1] .. '/' .. file) end
     end
   `, '-', provider], { input: '', encoding: 'utf8' });
-  assert.deepEqual(result.trim().split('\n'), Array(4).fill('Virtual-1'));
+  assert.deepEqual(result.trim().split('\n'), [
+    'GDK_SCALE', 'default', 'Virtual-1', 'GDK_SCALE', 'default', 'Virtual-1',
+    'default', 'Virtual-1', 'default', 'Virtual-1',
+  ]);
 });
 
 test('the session and greeter layout list starts with the resolved layout without duplicates', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -213,7 +283,7 @@ test('the session and greeter layout list starts with the resolved layout withou
   assert.equal(order('es'), 'es,us');
   assert.equal(order('us'), 'us,es');
   assert.equal(order('de'), 'de,us,es');
-  for (const file of ['hyprland.lua', 'greeter/hyprland.lua'])
+  for (const file of ['defaults.lua', 'greeter/hyprland.lua'])
     assert.match(fs.readFileSync(path.join(provider, file), 'utf8'), /kb_layout = require\("\/usr\/share\/mirroros\/hypr\/layouts\.lua"\)/);
   const greeter = fs.readFileSync(path.join(provider, 'greeter/hyprland.lua'), 'utf8');
   assert.match(greeter, /hl\.bind\("SUPER \+ I", hl\.dsp\.exec_cmd\(indicator \.\. " next"\)\)/);

@@ -13,7 +13,14 @@ cfg_system_file "$STEP_DIR/greeter/hyprland.lua" /usr/share/mirroros/sddm/hyprla
 cfg_system_file "$STEP_DIR/greeter/layout-indicator" /usr/share/mirroros/sddm/layout-indicator 0755
 cfg_tracked_file "$STEP_DIR/shell-bindings.lua" /usr/share/mirroros/hypr/shell-bindings.lua 0644
 cfg_tracked_file "$STEP_DIR/window-bindings.lua" /usr/share/mirroros/hypr/window-bindings.lua 0644
-cfg_user_file "$STEP_DIR/hyprland.lua" .config/hypr/hyprland.lua
+cfg_tracked_file "$STEP_DIR/defaults.lua" /usr/share/mirroros/hypr/defaults.lua 0644
+cfg_tracked_file "$STEP_DIR/personal-loader.lua" /usr/share/mirroros/hypr/personal-loader.lua 0644
+cfg_user_script "$STEP_DIR/prepare-hyprland" "$(base64 -w 0 < "$STEP_DIR/hyprland.lua")"
+[[ "$CFG_USER_SCRIPT_RESULT" != 'unchanged user-owned:'* ]] || cfg_log "$CFG_USER_SCRIPT_RESULT"
+cfg_user_script "$STEP_DIR/prepare-monitors" "$(base64 -w 0 < "$STEP_DIR/personal-monitors.lua")"
+[[ "$CFG_USER_SCRIPT_RESULT" != 'unchanged user-owned:'* ]] || cfg_log "$CFG_USER_SCRIPT_RESULT"
+cfg_user_script "$STEP_DIR/prepare-bindings" "$(base64 -w 0 < "$STEP_DIR/personal-bindings.lua")"
+[[ "$CFG_USER_SCRIPT_RESULT" != 'unchanged user-owned:'* ]] || cfg_log "$CFG_USER_SCRIPT_RESULT"
 cfg_system_link /usr/share/wayland-sessions/hyprland-uwsm.desktop /usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop
 cfg_system_file "$STEP_DIR/sddm/20-mirroros-hyprland.conf" /etc/sddm.conf.d/20-mirroros-hyprland.conf 0644
 
@@ -25,6 +32,8 @@ cfg_require cfg_system_file_present /usr/share/mirroros/sddm/hyprland.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/sddm/layout-indicator
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/shell-bindings.lua
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/window-bindings.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/defaults.lua
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/personal-loader.lua
 cfg_require cfg_user_file_present .config/hypr/hyprland.lua
 cfg_require cfg_system_file_present /etc/sddm.conf.d/20-mirroros-hyprland.conf
 cfg_require cfg_session_is_only /usr/share/mirroros/wayland-sessions hyprland-uwsm.desktop 'uwsm start' hyprland.desktop

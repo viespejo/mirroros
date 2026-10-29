@@ -1,8 +1,16 @@
 -- managed by MirrorOS configure
--- QEMU output only; other connectors keep Hyprland's defaults.
+-- Default for monitors without a more specific rule.
+hl.monitor({
+    output = "",
+    mode = "preferred",
+    position = "auto",
+    scale = 1,
+})
+
+-- QEMU output.
 hl.monitor({
     output = "Virtual-1",
     mode = "1920x1080@60",
     position = "auto",
-    scale = 1.2,
+    scale = 1.6,
 })

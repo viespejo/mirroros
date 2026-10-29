@@ -11,8 +11,8 @@ import Quickshell.Io
 // A description is shown only when the binding declares one; none is made up.
 // A row is launchable only when the MirrorOS Lua binding helper registered the
 // same keys under a stable id (compositor/providers/hyprland/shell-bindings.lua);
-// it is then dispatched by id through `hyprctl eval`. Every other row stays
-// visible and does nothing when chosen. Hyprland 0.56 reports no key for
+// it is then dispatched by id through `hyprctl eval`. Ambiguous rows sharing
+// an id and every other unregistered row stay visible and do nothing when chosen. Hyprland 0.56 reports no key for
 // bindings declared as `code:N`; such a row is matched to the registry by its
 // modifiers and description, and only when exactly one entry matches. `hyprctl eval` prints no returned
 // values, so the helper exports its registry to a runtime file; a file from
@@ -110,6 +110,16 @@ Item {
         if (match) { keys = match.keys; id = match.id }
       }
       out.push({ keys: keys, description: String(bind.description || ""), id: id, launchable: id !== "" })
+    }
+    var idCounts = ({})
+    for (var j = 0; j < out.length; j++) {
+      if (out[j].id) idCounts[out[j].id] = (idCounts[out[j].id] || 0) + 1
+    }
+    for (var k = 0; k < out.length; k++) {
+      if (out[k].id && idCounts[out[k].id] > 1) {
+        out[k].id = ""
+        out[k].launchable = false
+      }
     }
     root.records = out
   }

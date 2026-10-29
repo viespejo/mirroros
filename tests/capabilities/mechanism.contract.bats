@@ -382,13 +382,17 @@ terminal_desktop_entry() {
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
   local session="$CFG_TEST_HOME/.config/hypr/hyprland.lua" provider="$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland"
-  for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
+  local defaults="$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/defaults.lua"
+  grep -qF 'dofile("/usr/share/mirroros/hypr/defaults.lua")' "$session"
+  cmp "$provider/defaults.lua" "$defaults"
+  cmp "$provider/personal-loader.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/personal-loader.lua"
+  for file in "$defaults" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_options = "compose:ralt"' "$file"
   done
-  for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
+  for file in "$defaults" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qF 'kb_layout = require("/usr/share/mirroros/hypr/layouts.lua")' "$file"
   done
-  for file in "$session" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
+  for file in "$defaults" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua"; do
     grep -qxF 'dofile("/usr/share/mirroros/hypr/monitors.lua")' "$file"
   done
   cmp "$provider/monitors.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/monitors.lua"
@@ -397,10 +401,10 @@ terminal_desktop_entry() {
   [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/layouts.lua")" = 644 ]
   cmp "$provider/greeter/layout-indicator" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/layout-indicator"
   [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/layout-indicator")" = 755 ]
-  grep -qF 'preserve_split = true' "$session"
-  grep -qF 'dofile("/usr/share/mirroros/hypr/shell-bindings.lua")' "$session"
-  grep -qF 'dofile("/usr/share/mirroros/hypr/window-bindings.lua")' "$session"
-  refute grep -qE 'SHIFT \+ [QE]"' "$session"
+  grep -qF 'preserve_split = true' "$defaults"
+  grep -qF 'dofile("/usr/share/mirroros/hypr/shell-bindings.lua")' "$defaults"
+  grep -qF 'dofile("/usr/share/mirroros/hypr/window-bindings.lua")' "$defaults"
+  refute grep -qE 'SHIFT \+ [QE]"' "$defaults"
   for file in shell-bindings.lua window-bindings.lua; do
     cmp "$provider/$file" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/$file"
   done
@@ -408,8 +412,8 @@ terminal_desktop_entry() {
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
   [[ "$output" == *'desktop/compositor/providers/hyprland: unchanged'* ]]
-  grep -qF 'repeat_delay = 230' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
-  grep -qF 'repeat_rate = 62' "$CFG_TEST_HOME/.config/hypr/hyprland.lua"
+  grep -qF 'repeat_delay = 230' "$defaults"
+  grep -qF 'repeat_rate = 62' "$defaults"
   [[ "$(< "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua")" != *repeat_delay* ]]
   [[ "$(< "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/sddm/hyprland.lua")" != *repeat_rate* ]]
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland/keyboard.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/keyboard.lua"

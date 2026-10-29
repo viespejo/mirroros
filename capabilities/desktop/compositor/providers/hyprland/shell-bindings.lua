@@ -10,7 +10,7 @@
 
 local shell_path = "/usr/share/mirroros/shell"
 
-MirrorOSKeys = { entries = {}, chords = {} }
+MirrorOSKeys = { entries = {}, chords = {}, pending = {}, staged = MirrorOSStageBindings == true }
 
 local modifiers = { SUPER = true, SHIFT = true, CTRL = true, CONTROL = true, ALT = true }
 
@@ -39,9 +39,37 @@ function MirrorOSKeys.bind(id, keys, description, dispatcher, options)
   for name, value in pairs(options or {}) do
     if name == "launchable" then launchable = value ~= false else opts[name] = value end
   end
-  hl.bind(keys, dispatcher, opts)
+  if MirrorOSKeys.staged then
+    MirrorOSKeys.pending[#MirrorOSKeys.pending + 1] = id
+  else
+    hl.bind(keys, dispatcher, opts)
+  end
   MirrorOSKeys.chords[normalized] = id
-  MirrorOSKeys.entries[id] = { keys = keys, description = description, dispatcher = dispatcher, launchable = launchable }
+  MirrorOSKeys.entries[id] = { keys = keys, description = description, dispatcher = dispatcher, launchable = launchable, options = opts }
+end
+
+-- Replace an existing action before bindings are registered; the chord and options stay unchanged.
+function MirrorOSKeys.replace(id, description, dispatcher)
+  assert(MirrorOSKeys.staged, "binding replacements require staged configuration")
+  local entry = assert(MirrorOSKeys.entries[id], "unknown binding id: " .. tostring(id))
+  assert(not entry.replaced, "binding already replaced: " .. id)
+  assert(type(description) == "string" and description ~= "", "replacement description is required")
+  local dispatcher_type = type(dispatcher)
+  assert(dispatcher_type == "table" or dispatcher_type == "userdata" or dispatcher_type == "function", "invalid replacement dispatcher")
+  entry.description = description
+  entry.dispatcher = dispatcher
+  entry.options.description = description
+  entry.replaced = true
+end
+
+function MirrorOSKeys.finalize()
+  if not MirrorOSKeys.staged then return end
+  for _, id in ipairs(MirrorOSKeys.pending) do
+    local entry = MirrorOSKeys.entries[id]
+    hl.bind(entry.keys, entry.dispatcher, entry.options)
+  end
+  MirrorOSKeys.pending = {}
+  MirrorOSKeys.staged = false
 end
 
 function MirrorOSKeys.dispatch(id)

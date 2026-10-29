@@ -134,4 +134,4 @@ bind("terminal.open", "SUPER + RETURN", "Terminal", dsp.exec_cmd("uwsm app -- fo
 bind("terminal.tmux", "SUPER + ALT + RETURN", "Tmux",
   dsp.exec_cmd("uwsm app -- foot bash -c 'tmux attach || tmux new -s Work'"))
 
-MirrorOSKeys.export()
+if not MirrorOSKeys.staged then MirrorOSKeys.export() end

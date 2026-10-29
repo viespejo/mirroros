@@ -293,6 +293,17 @@ ipc move 4 >/dev/null
 ipc activate >/dev/null
 sleep 0.5
 check "help: ambiguous keyless row not dispatched" "$(wc -l <"$fake/eval.log")" 2
+cp "$fake/binds.json" "$fake/binds-original.json"
+node -e 'const fs=require("fs"), p=process.argv[1], b=JSON.parse(fs.readFileSync(p)); b.push({modmask:64,submap:"",key:"D",keycode:0,description:"Personal duplicate"}); fs.writeFileSync(p,JSON.stringify(b))' "$fake/binds.json"
+ipc close >/dev/null
+ipc keybindings >/dev/null
+check "help: both duplicate chord rows are non-launchable" \
+    "$(eventually 's.rows[0].detail+"|"+s.rows[7].detail' 'Not launchable from help|Not launchable from help')" \
+    "Not launchable from help|Not launchable from help"
+ipc activate >/dev/null
+sleep 0.5
+check "help: duplicate chord is not dispatched" "$(wc -l <"$fake/eval.log")" 2
+mv "$fake/binds-original.json" "$fake/binds.json"
 registry "another-instance"
 ipc close >/dev/null
 ipc keybindings >/dev/null

@@ -1,0 +1,12 @@
+-- Personal Hyprland shortcuts. This file belongs to you and is not updated by configure.
+-- Use MirrorOSKeys.bind for new shortcuts: it rejects registered duplicate ids and chords.
+-- Use MirrorOSKeys.replace to change a registered action without changing its shortcut.
+-- Direct hl.bind calls bypass duplicate detection. Errors can leave earlier changes applied.
+-- Find registered ids and shortcuts in /usr/share/mirroros/hypr/shell-bindings.lua and
+-- /usr/share/mirroros/hypr/window-bindings.lua. Reload Hyprland and check hyprctl configerrors.
+--
+-- Add a shortcut (choose a free chord):
+-- MirrorOSKeys.bind("personal.open-editor", "SUPER + E", "Open editor", hl.dsp.exec_cmd("foot -e nvim"))
+--
+-- Replace an existing action (the original shortcut and options remain unchanged):
+-- MirrorOSKeys.replace("menu.apps", "Open my launcher", hl.dsp.exec_cmd("my-launcher"))
