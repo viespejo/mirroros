@@ -69,6 +69,13 @@ During T4, repeated failures triggered `pam_faillock` (10 minutes); `$PAMFAIL` t
 
 Investigate code-answerable details directly; ask the maintainer only about consequential alternatives.
 
+All were resolved: delivery, migration (configure replaces managed-header files; personal or linked files stay
+user-owned), greeter layout and documentation in `1f26a7b`; lock styling in `0811073`; the scale-following field
+(DEC-012) in `a4dc299`; VM qualification recorded in
+[greeter-plymouth.md](../procedures/greeter-plymouth.md#adr-0021-greeter-and-lock).
+
 ## Final plan state
 
-Not yet approved or materialized.
+Approved with ADR 0021 (`fae03dd`) and materialized directly from this plan, without a separate implementation
+plan. Implemented and VM-qualified on the existing reference installation; clean-installation, multi-output and
+physical-hardware checks remain open. Closed.

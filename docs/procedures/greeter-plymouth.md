@@ -262,7 +262,7 @@ credential was recorded.
 | Greeter, one account | After a reboot the symbol stayed in place from the splash to the greeter; only the symbol and the password field were shown, with the layout and `Super+I` hint at the bottom left and the power control at the bottom right. |
 | Greeter failure, layout and login | A wrong password showed the failure border and `Authentication failed`; `SUPER+I` changed the indicator; login succeeded after returning to the configured layout. |
 | Greeter power menu | The menu opened and was cancelled; no power action was requested. |
-| Greeter, two accounts | With a temporary account `qualtest`, the account name and selector appeared above the field at its width, and both accounts could be selected. The account was never logged in and was removed with its home directory (`userdel -r`). |
+| Greeter, two accounts | With a temporary account `qualtest`, the account name and selector appeared above the field at its width, and both accounts could be selected; the maintainer selected `qualtest` manually. The account was never logged in and was removed with its home directory (`userdel -r`). |
 
 Not performed: multi-output lock and greeter, mixed output scales, physical hardware and a clean installation from
 a new ISO. The scale-following lock was implemented and committed before this installed check, without a

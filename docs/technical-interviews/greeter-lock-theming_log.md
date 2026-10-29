@@ -6,8 +6,8 @@ The maintainer asked to adapt the greeter and lock screen to the theming introdu
 (`visual/theme`) and compared the current surfaces with synthetic browser prototypes before deciding. Omarchy
 `4.0.6-1` on the reference VM was inspected read-only as an idea reference; no Omarchy code or asset is copied.
 Prototype files and screenshots stayed under the ignored `evidence/prototypes/greeter-lock-theme/` directory and are
-not committed. Browser previews are not runtime qualification. The implementation plan has not been approved or
-materialized.
+not committed. Browser previews are not runtime qualification. The plan was later approved and materialized; see its
+final state.
 
 ## DEC-001
 - **Question**: Should the Plymouth splash follow the selected theme?
