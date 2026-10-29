@@ -105,7 +105,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `bar/widgets/Indicators.qml` | Adapted | `shell/plugins/bar/widgets/Indicators.qml` | Static Dnd-only component map, no ShellIpc. |
 | `bar/widgets/KeyboardLayout.qml` | Adapted | `shell/plugins/bar/widgets/KeyboardLayout.qml` | Native Hyprland layouts and device watcher; removed fcitx InputMethodState and cycle path. |
 | `bar/widgets/KeyboardLayoutModel.js` | Copied | `shell/plugins/bar/widgets/KeyboardLayoutModel.js` | Unchanged. |
-| `bar/widgets/MenuButton.qml` | Adapted | `shell/plugins/menu/BarWidget.qml` | Nerd Font Arch glyph; direct menu-root toggle; terminal click is an integration point. |
+| `bar/widgets/MenuButton.qml` | Adapted | `shell/plugins/menu/BarWidget.qml` | Shared MirrorOS symbol path in the bar foreground; direct menu-root toggle; terminal click is an integration point. |
 | `bar/widgets/Monitor.qml` | Adapted | `shell/plugins/panels/monitor/Panel.qml` | Screen-count bar glyph; brightness controls/panel are integration points. |
 | `bar/widgets/Network.qml` | Adapted | `shell/plugins/panels/network/Panel.qml` | Bar-only native NM state/signal; provider-unavailable glyph/reason; panel integration point. |
 | `bar/widgets/Power.qml` | Adapted | `shell/plugins/panels/power/Panel.qml` | Bar-only battery state and persisted percentage toggle; provider inventory, unavailable glyph/reason; panel integration point. |
