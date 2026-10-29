@@ -131,3 +131,21 @@ materialized.
   defines literal fallbacks first and then sources `~/.local/state/mirroros/current/theme/hyprlock.conf`, following
   the link like Foot, with the same default-state-path limitation.
 - **Status**: Accepted
+
+## DEC-012
+- **Question**: Should the lock field follow the Hyprland monitor scale?
+- **Context/Nuances**: After changing the VM to 2383x1261 at scale 1, the maintainer saw an unchanged lock, while
+  Omarchy's lock follows the scale. hyprlock `0.9.6` lays out every widget in the lock surface's pixel buffer
+  (logical size times scale): percentages follow the physical resolution, pixel values and `outline_thickness` are
+  physical, and the text size follows the physical field height, so no hyprlock value follows the scale. Hyprlang
+  `0.6.8` does not substitute environment variables in values, and `source` expands only `~` and globs. The DEC-009
+  values were calibrated only at 1920x1080 and scale 1.6. Alternatives: document the limitation; generate the
+  field geometry from the scale when locking; or a custom QML lock (architecture change, new ADR).
+- **User Response**: "2" (generate the geometry when locking).
+- **Decision**: Amends the DEC-009 geometry. The field is 378x57 logical pixels with a 3 logical-pixel border, the
+  DEC-009 result at scale 1.6. `lock-screen` reads the focused monitor's scale from `hyprctl monitors -j` before
+  starting hyprlock and replaces `~/.cache/mirroros/lock/geometry.conf` with `$field_size` and `$field_border` in
+  physical pixels, rounded. The managed `hyprlock.conf` defines the DEC-009 values as fallbacks and sources that
+  file after the theme. When the scale cannot be read the file is removed, so the fallbacks apply; locking never
+  depends on it. With several outputs at different scales, the focused output's scale applies to all of them.
+- **Status**: Accepted

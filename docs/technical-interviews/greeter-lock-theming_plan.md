@@ -29,8 +29,9 @@ The greeter changes require a normative amendment of ADR 0014 (always displaying
 - Only the password field: no clock and no keyboard layout. [DEC-007]
 - Background: `current/background`, `blur_passes = 3`, `blur_size = 8`, `brightness = 0.9`; theme background color
   as fallback. [DEC-008]
-- Field `31.5%, 8.4%`, 5 px accent border, no rounding, theme background at 80%, placeholder `Enter Password` in the
-  foreground at 60%. [DEC-009]
+- Field 378x57 logical pixels with a 3 logical-pixel accent border, converted to physical pixels from the focused
+  monitor's scale when locking (fallback `31.5%, 8.4%` and 5 px), no rounding, theme background at 80%, placeholder
+  `Enter Password` in the foreground at 60%. [DEC-009, DEC-012]
 - Failure: `<i>$PAMFAIL</i>`, no attempt counter, `general:fail_timeout = 5000`. [DEC-010]
 - Colors: literal fallbacks, then `source = ~/.local/state/mirroros/current/theme/hyprlock.conf`; each theme
   publishes that file. [DEC-011]

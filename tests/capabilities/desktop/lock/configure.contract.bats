@@ -59,7 +59,7 @@ lock_packaged_unit() {
 @test "the lock shows only the field over the selected background with theme colors after literal fallbacks" {
   local lock="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/lock/hyprlock.conf"
   local theme="$BATS_TEST_DIRNAME/../../../../capabilities/visual/theme/default/hyprlock.conf"
-  local source_line='source = ~/.local/state/mirroros/current/theme/hyprlock.conf'
+  local source_lines=$'source = ~/.local/state/mirroros/current/theme/hyprlock.conf\nsource = ~/.cache/mirroros/lock/geometry.conf'
   # ADR 0021: no clock or layout labels, one field, and the PAM message for five seconds.
   run grep -qE '^[[:space:]]*label[[:space:]]*\{' "$lock"
   [ "$status" -eq 1 ]
@@ -68,18 +68,22 @@ lock_packaged_unit() {
   grep -qxF '    color = $background' "$lock"
   grep -qxF '    fail_timeout = 5000' "$lock"
   grep -qxF '    fail_text = <i>$PAMFAIL</i>' "$lock"
-  grep -qxF '    size = 31.5%, 8.4%' "$lock"
-  grep -qxF '    outline_thickness = 5' "$lock"
-  # The single source line follows every fallback variable and precedes every section.
-  [ "$(grep -c '^source' "$lock")" -eq 1 ]
+  # DEC-012: the field geometry comes from lock-screen's file, with the DEC-009 values as fallbacks.
+  grep -qxF '    size = $field_size' "$lock"
+  grep -qxF '    outline_thickness = $field_border' "$lock"
+  grep -qxF '$field_size = 31.5%, 8.4%' "$lock"
+  grep -qxF '$field_border = 5' "$lock"
+  # The theme, then the geometry, are sourced after every fallback variable and before every section.
+  [ "$(grep '^source' "$lock")" = "$source_lines" ]
   local source_at last_variable first_section
-  source_at="$(grep -nxF "$source_line" "$lock" | cut -d: -f1)"
+  source_at="$(grep -n '^source' "$lock" | head -1 | cut -d: -f1)"
   last_variable="$(grep -n '^\$' "$lock" | tail -1 | cut -d: -f1)"
   first_section="$(grep -n '{$' "$lock" | head -1 | cut -d: -f1)"
-  [ -n "$source_at" ] && [ "$last_variable" -lt "$source_at" ] && [ "$source_at" -lt "$first_section" ]
+  [ "$last_variable" -lt "$source_at" ] && [ "$((source_at + 1))" -lt "$first_section" ]
+  [ "$(sed -n "$((source_at + 1))p" "$lock")" = 'source = ~/.cache/mirroros/lock/geometry.conf' ]
   # The theme file only defines variables, exactly the color fallbacks of the lock.
   [ -z "$(grep -vE '^(#.*|\$[a-z_]+ = rgba?\([0-9., ]+\))$' "$theme")" ]
-  [ "$(grep -o '^\$[a-z_]*' "$theme" | sort)" = "$(grep -o '^\$[a-z_]*' "$lock" | grep -vx '\$font' | sort)" ]
+  [ "$(grep -o '^\$[a-z_]*' "$theme" | sort)" = "$(grep -o '^\$[a-z_]*' "$lock" | grep -vxE '\$(font|field_size|field_border)' | sort)" ]
 }
 
 @test "configure replaces the previously shipped lock and preserves personal or linked lock files" {
