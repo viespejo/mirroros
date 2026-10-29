@@ -11,6 +11,10 @@
 with the shared installer symbol, static greeter, reviewed splash animation, and live build integration.
 Their unrelated decisions and historical evidence remain in force; real boot qualification remains separate.
 
+[ADR 0021: Neutral Greeter and Themed Lock](0021-neutral-greeter-and-themed-lock.md) narrowly supersedes the
+selected-account display of ADR 0014 and the preserved greeter layout of ADR 0019, keeps system surfaces neutral, and
+lets the lock follow the selected theme.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

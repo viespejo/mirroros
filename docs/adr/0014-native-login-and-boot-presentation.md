@@ -156,3 +156,7 @@ and the live package list remain unchanged.
 splash restriction, and installed-only integration boundary: a shared installer symbol, static greeter, reviewed
 fade-plus-pulse splashes, and bounded live build integration are permitted. Authentication, diagnostic access,
 boot completion, storage, and the ADR 0015/0016 extensions remain unchanged; runtime qualification is separate.
+
+[ADR 0021](0021-neutral-greeter-and-themed-lock.md) supersedes only the requirement to always display the selected
+account: the account name and selector are shown only when more than one account is listed. The greeter stays
+neutral of user themes; authentication, file-read and process boundaries remain unchanged.

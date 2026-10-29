@@ -120,4 +120,6 @@ without altering storage or authentication policy.
 
 ## Superseded by
 
-`None`
+[ADR 0021](0021-neutral-greeter-and-themed-lock.md) supersedes only the requirement to preserve the existing
+greeter layout: the static symbol occupies exactly the splash rectangle, with the 320 px cap in device pixels, and the
+form is anchored below it. The shared symbol, splash animation, and live integration remain unchanged.
