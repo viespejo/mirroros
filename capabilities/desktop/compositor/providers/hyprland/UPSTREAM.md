@@ -57,6 +57,10 @@ scale 1.6. The local QEMU lab advertises that mode, but any other connector with
 The user session sets `GDK_SCALE=1`; the greeter does not load that setting. No kernel, firmware or live-console
 mode is changed by these rules.
 
+The QEMU-only `quirks.skip_non_kms_dmabuf_formats = false` in `defaults.lua` is original MirrorOS configuration;
+no upstream configuration is copied. See
+[Virtual display defaults](../../../../../docs/procedures/configure.md#virtual-display-defaults).
+
 ## Registration and reload
 
 The prototype loaded these files into a running session with `hyprctl eval` and removed them with

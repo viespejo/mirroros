@@ -278,6 +278,15 @@ This rule does not configure the live console, kernel framebuffer, firmware or b
 are a separate boot-policy decision, not an implicit part of desktop scaling. Configure publishes the files but
 never reloads the compositor or restarts SDDM; review them at the next session and greeter start.
 
+When `/sys/class/dmi/id/sys_vendor` reads `QEMU`, the reference VM identity of
+`targets/reference-vm/target.json`, session defaults also set `quirks.skip_non_kms_dmabuf_formats = false`.
+Hyprland 0.57 enables that quirk by default and then advertises only dmabuf formats that a monitor's primary
+plane can import. The virtio-gpu plane offers `XRGB8888` alone, so GPU-rendered clients lose their alpha channel
+and transparent surfaces, such as the idle notification layer, render black. Other machines keep Hyprland's
+default. A runtime `hl.config` change did not alter the formats offered to a new client; a new session did.
+The greeter does not load it. `tests/capabilities/desktop/hyprland/vm-dmabuf-formats.test.lua` covers the
+condition.
+
 ### Right Alt Compose and native overrides
 
 `kb_options = "compose:ralt"` makes Right Alt a Compose key in the managed session and greeter. The console keeps

@@ -20,6 +20,13 @@ hl.config({
     misc = { disable_hyprland_logo = true, disable_splash_rendering = true },
 })
 
+-- Reference VM (QEMU) only. Hyprland 0.57 advertises only KMS-importable dmabuf formats by default, and the
+-- virtio-gpu primary plane offers XRGB8888 alone, so transparent client surfaces render black. Keep the full set.
+local vendor_file = io.open("/sys/class/dmi/id/sys_vendor", "r")
+local vendor = vendor_file and vendor_file:read("l") or ""
+if vendor_file then vendor_file:close() end
+if vendor == "QEMU" then hl.config({ quirks = { skip_non_kms_dmabuf_formats = false } }) end
+
 -- Approved Story 4.3 bindings. dofile runs them again at every configuration load; nothing is unbound at runtime.
 MirrorOSStageBindings = true
 dofile("/usr/share/mirroros/hypr/shell-bindings.lua")
