@@ -81,5 +81,7 @@ lock in place. Configure never starts, restarts or reloads hypridle.
   different scales, the focused output's scale sizes the field on all of them; a scale change while locked applies
   at the next lock. The background `blur_size` stays in physical pixels.
 - The ADR 0021 behavior (theme sourcing through `~` and the link, missing theme file, missing background, blur,
-  percentage sizes and the failure display) was observed with temporary configurations on hyprlock `0.9.6`;
-  the delivered file still requires installed VM qualification.
+  percentage sizes and the failure display) was first observed with temporary configurations on hyprlock `0.9.6`;
+  the delivered file and the scale-following geometry are VM-qualified on the existing reference installation
+  ([record](../../../docs/procedures/greeter-plymouth.md#adr-0021-greeter-and-lock)), not on a clean installation
+  or physical hardware.

@@ -241,3 +241,29 @@ retested.
   restored without notice.
 
 This is VM evidence only. It makes no target-laptop, hardware-hibernation, full-MVP or release claim.
+
+### ADR 0021 greeter and lock
+
+The [ADR 0021](../adr/0021-neutral-greeter-and-themed-lock.md) greeter layout and themed lock were qualified on the
+existing reference VM installation, updated from a checkout with running configure: first at `0811073`, then at
+`a4dc299` (lock field following the monitor scale, DEC-012 of the
+[interview log](../technical-interviews/greeter-lock-theming_log.md)). Both runs ended with outcome 0; at `a4dc299`
+only `desktop/lock` changed and the installed `hyprlock.conf` matched the commit. Versions: `sddm` 0.21.0-7,
+`qt6-declarative` 6.12.0-3, `hyprland` 0.57.0-1, `hyprlock` 0.9.6-3; Virtual-1 at 1920x1080, scale 1.6, unless
+noted. The maintainer attended every check and reviewed screenshots, which were not retained as evidence. No
+credential was recorded.
+
+| Check | Observed outcome |
+|---|---|
+| Lock with theme and background | The theme-colored field over the blurred selected background; no clock, layout, window or notification content. A wrong password showed `Authentication failed` in red italics for about five seconds; the correct password then unlocked. |
+| Lock without background | With `current/background` temporarily missing, the theme background color filled the screen; no screenshot was used. |
+| Lock without theme file | With the theme's `hyprlock.conf` temporarily missing, hyprlock logged `globbing error: found no match` and locked with the neutral fallbacks. Both links were restored afterwards. |
+| Lock field and monitor scale | Locking at scales 1.6, 1.2 and 0.8 kept the field's apparent size; at 1.6 `lock-screen` generated `605, 91` and a 5-pixel border, the values accepted against Omarchy's reference lock. |
+| Greeter, one account | After a reboot the symbol stayed in place from the splash to the greeter; only the symbol and the password field were shown, with the layout and `Super+I` hint at the bottom left and the power control at the bottom right. |
+| Greeter failure, layout and login | A wrong password showed the failure border and `Authentication failed`; `SUPER+I` changed the indicator; login succeeded after returning to the configured layout. |
+| Greeter power menu | The menu opened and was cancelled; no power action was requested. |
+| Greeter, two accounts | With a temporary account `qualtest`, the account name and selector appeared above the field at its width, and both accounts could be selected. The account was never logged in and was removed with its home directory (`userdel -r`). |
+
+Not performed: multi-output lock and greeter, mixed output scales, physical hardware and a clean installation from
+a new ISO. The scale-following lock was implemented and committed before this installed check, without a
+temporary-configuration prototype first.
