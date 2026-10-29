@@ -93,12 +93,19 @@ test('removed: generated guard batch and plugin summon parsing', () => {
   assert.equal(/bash|pacman|GUARD_/.test(fs.readFileSync(path.join(shellDir, 'menu/MenuModel.js'), 'utf8').replace(/^\/\/.*$/gm, '')), false);
 });
 
-test('bar button: draws the shared MirrorOS symbol path, no Arch glyph', () => {
+test('bar button: draws the shared MirrorOS symbol path in the accent, on the pixel grid, no Arch glyph', () => {
   const button = fs.readFileSync(path.join(shellDir, 'bar/widgets/MenuButton.qml'), 'utf8');
   const svg = fs.readFileSync(path.join(shellDir, '../../visual/branding/mirroros-symbol.svg'), 'utf8');
   const symbol = svg.match(/ d="([^"]+)"/)[1];
   assert.equal(button.match(/PathSvg \{ path: "([^"]+)" \}/)[1], symbol);
   assert.doesNotMatch(button, /\\uf303/i);
+  assert.match(button, /fillColor: button\.active && button\.useActiveColor \? button\.activeColor : Commons\.Color\.accent/);
+  // Whole physical-pixel blocks from the bar window's ratio; Screen reports a
+  // rounded-up ratio under fractional scaling.
+  assert.match(button, /blockPx: Math\.max\(1, Math\.ceil\(Style\.bar\.iconSize \* dpr \/ 8\)\)/);
+  assert.match(button, /button\.QsWindow\.window/);
+  assert.doesNotMatch(button, /Screen\.devicePixelRatio/);
+  assert.match(button, /function onAfterAnimating\(\) \{ symbol\.snap\(\) \}/);
 });
 
 const upstream = process.argv[2];

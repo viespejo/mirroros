@@ -161,6 +161,7 @@ adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","y: root.
 adapt ["bar/widgets/Indicators.qml","Unqualified access [unqualified]","y: root.fixedAtStart ? activeVerticalBlock.height : 0"]
 adapt ["bar/widgets/KeyboardLayout.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","fontSize: Style.font.caption"]
 adapt ["bar/widgets/KeyboardLayout.qml","Member \"run\" not found on type \"QObject\" [missing-property]","root.bar.run(root.syncNames.map(name =>"]
+adapt ["bar/widgets/MenuButton.qml","Member \"iconSize\" not found on type \"QObject\" [missing-property]","readonly property int blockPx: Math.max(1, Math.ceil(Style.bar.iconSize * dpr / 8))"]
 adapt ["bar/widgets/MenuButton.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar.shell) root.bar.shell.toggle(\"menu\")"]
 adapt ["bar/widgets/MenuButton.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar.shell) root.bar.shell.toggle(\"menu\")"]
 adapt ["bar/widgets/Power.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","slotSize: Style.bar.iconSlot * (root.showPercentage && !vertical ? 2 : 1)"]
