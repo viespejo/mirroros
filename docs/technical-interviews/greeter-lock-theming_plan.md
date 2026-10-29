@@ -52,6 +52,7 @@ configurations under `~/.cache` that were removed afterwards; no product file wa
 | T6 | `general:fail_timeout = 5000` keeps the failure readable; the maintainer accepted the result. |
 | T7 | After installation, a Pango `size` attribute in the placeholder is ignored; a 5 px border matches Omarchy's 3 logical pixels at scale 1.6. |
 | T8 | A `31.5%, 8.4%` field brings the text close to Omarchy's; the maintainer accepted it. |
+| T9 | Installed `a4dc299` (DEC-012), tested after the commit rather than with a temporary configuration first: locking at scales 1.6, 1.2 and 0.8 generated the geometry for the focused monitor (605x91/5 px at 1.6) and kept the field's apparent size; the maintainer accepted it. |
 
 During T4, repeated failures triggered `pam_faillock` (10 minutes); `$PAMFAIL` then reports the remaining time.
 
