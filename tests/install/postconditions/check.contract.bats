@@ -38,6 +38,9 @@ target_snapshot() {
   cmp "${TEST_ROOT}/before" "${TEST_ROOT}/after"
   run grep -Ev '^(findmnt|blkid|pacman|systemctl|lsinitcpio) |^efibootmgr -v$' "${DOUBLE_STATE}/calls.log"
   [ "$status" -eq 1 ]
+  grep -q '^blkid -p -o value -s PART_ENTRY_UUID -- /dev/vda1$' "${DOUBLE_STATE}/calls.log"
+  run grep -q '^blkid -p -o value -s PARTUUID ' "${DOUBLE_STATE}/calls.log"
+  [ "$status" -eq 1 ]
   grep -q '^pacman .* -Q$' "${DOUBLE_STATE}/calls.log"
   grep -q '^systemctl .* is-enabled NetworkManager.service$' "${DOUBLE_STATE}/calls.log"
   run grep -q -- "$ENGINE_CANARY" <<< "$output"

@@ -3,7 +3,7 @@ import { loadFacts } from '../plan/generate-plan.mjs';
 import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_VALID } from '../plan/validate-plan.mjs';
 import { standardReason } from './outcomes.mjs';
 import { applyRegionalMirrors } from './regional-mirrors.mjs';
-import { digestPrefix, hibernationLabel, machineLabel, reviewWarnings, ruleRows, swapfileWarning, targetRows } from './review-content.mjs';
+import { digestPrefix, hibernationLabel, machineLabel, reviewWarnings, rootConfirmationIdentity, ruleRows, swapfileWarning, targetRows } from './review-content.mjs';
 import { detectedMemoryBytes, memoryUnavailableReason } from '../plan/generate-plan.mjs';
 
 // Read-only data helpers for the guided assistant (install/confirmation/lib). The assistant is a Bash flow
@@ -147,12 +147,17 @@ function reviewValues([path]) {
   const plan = readJson(path);
   const { choices } = plan;
   const { disk } = plan.target;
+  const rootConfirmation = rootConfirmationIdentity(plan);
   const rows = [
     ['machine', machineLabel(plan)],
     ['disk', diskLabel(disk, disk.current_layout?.partitions)],
     ['target_mode', plan.target_mode],
     ...targetRows(plan).map(([label, value]) => [label === 'Mode' ? 'target_mode_label' : `target_${label.toLowerCase().replaceAll(' ', '_')}`, value]),
-    ...(plan.target_mode === 'replace_installation' ? [['root_partuuid', plan.target.installation.root.partuuid]] : []),
+    ...(rootConfirmation === undefined ? [] : [
+      ['root_partuuid', plan.target.installation.root.partuuid],
+      ['root_confirmation_value', rootConfirmation.value],
+      ['root_confirmation_kind', rootConfirmation.kind],
+    ]),
     ['storage_option', choices.storage_option.value],
     ['storage_tier', choices.storage_option.tier],
     ['hibernation', choices.hibernation.value],

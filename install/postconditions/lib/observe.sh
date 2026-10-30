@@ -77,7 +77,7 @@ observe_mounts() {
   local esp partuuid
   esp="$(mount_source "$raw" "${TARGET_ROOT}/boot")"
   observe_filesystem_uuid /boot "$esp"
-  if [[ -n "$esp" ]] && partuuid="$(blkid -p -o value -s PARTUUID -- "$esp" 2> /dev/null)"; then
+  if [[ -n "$esp" ]] && partuuid="$(blkid -p -o value -s PART_ENTRY_UUID -- "$esp" 2> /dev/null)"; then
     obs 'partuuid:/boot' "$partuuid"
   fi
 }

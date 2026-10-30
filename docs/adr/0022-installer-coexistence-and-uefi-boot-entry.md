@@ -70,11 +70,11 @@ The following decision was accepted at the blocking decision checkpoint.
 
 ### TODO-001 (c): Typed identity
 
-**Proposal:** Require the full root PARTUUID in addition to the existing disk identity confirmation for replacement. Display both target partitions and their identities before approval.
+**Decision (user-approved usability amendment):** After the disk identity, require exactly the displayed first eight characters of the root PARTUUID when that prefix uniquely identifies the selected root among all partitions on the selected disk. Compare prefixes case-insensitively when establishing uniqueness. If the prefix collides, any partition lacks a valid full PARTUUID, or the layout does not establish that unique root match, require the full root PARTUUID instead. Display whether the requested value is a prefix or the full identity. Always show both target partitions and their full identities before approval; plans, approval records and engine revalidation retain full PARTUUIDs.
 
-**Alternatives:** A short PARTUUID is easier to type but risks collisions; disk-only confirmation does not distinguish installations on the same disk.
+**Alternatives:** The initially accepted full-PARTUUID-only prompt was rejected by the user during the live UI review as too burdensome. An unchecked short form risks collisions; disk-only confirmation does not distinguish installations on the same disk. The bounded prefix reduces typing without weakening the full-identity safety binding.
 
-**Prototype check:** Record the detected disk and partition identities and verify that the full root PARTUUID uniquely identifies the intended replacement target in the lab layout.
+**Prototype and implementation checks:** Record the detected disk and partition identities; test unique prefixes, collisions (including case differences), incomplete identity evidence, wrong input and cancellation. Confirm that the guided prefix path retains the full root PARTUUID in approval evidence. Live UI acceptance of the amended prompt remains a separate check.
 
 ### TODO-001 (d): Plan format and operations
 

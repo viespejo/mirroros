@@ -610,14 +610,21 @@ confirmation_form() {
   fi
   if [[ ${FLOW_REVIEW[target_mode]:-whole_disk} == replace_installation ]]; then
     echo
-    review_text 8 "Type the full root PARTUUID (${FLOW_REVIEW[root_partuuid]}) to confirm."
+    local root_identity=${FLOW_REVIEW[root_confirmation_value]:-} root_label
+    [[ -n $root_identity ]] || return 6
+    case ${FLOW_REVIEW[root_confirmation_kind]:-} in
+      prefix) root_label='root PARTUUID prefix' ;;
+      full) root_label='full root PARTUUID' ;;
+      *) return 6 ;;
+    esac
+    review_text 8 "Type the $root_label ($root_identity) to confirm."
     typed=$(gum input --show-help --prompt.foreground 4 --placeholder.foreground 8 --cursor.foreground 4 --prompt 'Root PARTUUID> ') || status=$?
     case $status in
       0) ;;
       1 | 130) flow_cancel confirmation ;;
       *) return "$status" ;;
     esac
-    if [[ $typed != "${FLOW_REVIEW[root_partuuid]}" ]]; then flow_mismatch; fi
+    if [[ $typed != "$root_identity" ]]; then flow_mismatch; fi
   fi
   flow_confirmed
 }

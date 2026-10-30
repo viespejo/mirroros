@@ -6,7 +6,7 @@ import { discover } from '../discovery/helpers.mjs';
 import { assets, currentHashes, generate, repository } from './helpers.mjs';
 import { compareSafety, diskDifferences } from '../../../install/confirmation/compare-safety.mjs';
 import { applyEdit, startingChoices } from '../../../install/confirmation/edit-choices.mjs';
-import { compactReview, confirmationLines, confirmationPrompt } from '../../../install/confirmation/review-content.mjs';
+import { compactReview, confirmationLines, confirmationPrompt, rootConfirmationIdentity } from '../../../install/confirmation/review-content.mjs';
 import { buildApprovalRecord } from '../../../install/confirmation/write-records.mjs';
 import { validateApprovalRecord } from '../../../install/confirmation/validate-records.mjs';
 
@@ -40,6 +40,35 @@ for (const option of ['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine']) {
     assert.equal(startingChoices(plan).replace_root_partuuid, plan.target.installation.root.partuuid);
   });
 }
+
+test('root confirmation uses a unique eight-character prefix without changing full identities', () => {
+  const { plan } = replacement();
+  for (const partition of plan.target.disk.current_layout.partitions) {
+    if (partition.path !== plan.target.installation.root.path) partition.partuuid = partition.partuuid.replace(/^10000000/, '20000000');
+  }
+  const before = structuredClone(plan);
+  assert.deepEqual(rootConfirmationIdentity(plan), { value: '10000000', kind: 'prefix' });
+  assert.deepEqual(plan, before);
+  plan.target_mode = 'whole_disk';
+  assert.equal(rootConfirmationIdentity(plan), undefined);
+});
+
+test('root confirmation requires the full identity for colliding or incomplete disk identities', () => {
+  const { plan } = replacement();
+  const full = { value: plan.target.installation.root.partuuid, kind: 'full' };
+  assert.deepEqual(rootConfirmationIdentity(plan), full);
+  for (const partition of plan.target.disk.current_layout.partitions) {
+    if (partition.path !== plan.target.installation.root.path) partition.partuuid = partition.partuuid.replace(/^10000000/, '20000000');
+  }
+  delete plan.target.disk.current_layout.partitions[0].partuuid;
+  assert.deepEqual(rootConfirmationIdentity(plan), full);
+  plan.target.disk.current_layout.partitions[0].partuuid = 'invalid';
+  assert.deepEqual(rootConfirmationIdentity(plan), full);
+  plan.target.installation.root.partuuid = 'abcdef12-0000-4000-8000-000000000002';
+  plan.target.disk.current_layout.partitions[1].partuuid = plan.target.installation.root.partuuid;
+  plan.target.disk.current_layout.partitions[0].partuuid = 'ABCDEF12-0000-4000-8000-000000000001';
+  assert.deepEqual(rootConfirmationIdentity(plan), { value: plan.target.installation.root.partuuid, kind: 'full' });
+});
 
 test('replacement rejects lost, ambiguous or changed candidate evidence even with an unchanged layout', () => {
   const changes = [
@@ -115,5 +144,7 @@ test('the assistant exposes both the technical mode and its presentation label',
   assert.equal(rows.target_mode, 'replace_installation');
   assert.equal(rows.target_mode_label, 'Replace existing MirrorOS');
   assert.equal(rows.root_partuuid, plan.target.installation.root.partuuid);
+  assert.equal(rows.root_confirmation_kind, 'full');
+  assert.equal(rows.root_confirmation_value, plan.target.installation.root.partuuid);
   assert.ok(rows.target_preserve.includes('/dev/nvme0n1p4'));
 });

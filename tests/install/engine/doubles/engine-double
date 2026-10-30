@@ -86,7 +86,8 @@ JS
     done
     node="$last"
     case "$tag" in
-      PARTUUID) cat "$state/esp-guid" ;;
+      PARTUUID) if [[ " $* " != *' -p '* ]]; then cat "$state/esp-guid"; fi ;;
+      PART_ENTRY_UUID) cat "$state/esp-guid" ;;
       UUID) if [[ "$node" == *1 ]]; then printf 'ABCD-1234\n'; else printf '11111111-2222-4333-8444-555555555555\n'; fi ;;
       TYPE)
         if [[ "$node" == *1 ]]; then printf 'vfat\n'

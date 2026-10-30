@@ -123,8 +123,8 @@ An existing layout alone never makes a disk ineligible.
   GUID `0fc63daf-8483-4772-8e79-3d69d8477de4`, formatted as ext4 or Btrfs.
 - Require root and ESP paths, positive sizes, partition numbers, start offsets, filesystem UUIDs and
   GPT PARTUUIDs. Filesystem UUIDs and PARTUUIDs must be unique on the disk.
-- Read `/etc/fstab` from the unmounted root through `ro,noload` for ext4 or `ro,nologreplay,subvol=@`
-  for Btrfs (falling back to `ro,nologreplay,subvolid=5` if `@` cannot be mounted). No journal or tree-log
+- Read `/etc/fstab` from the unmounted root through `ro,noload` for ext4 or `ro,rescue=nologreplay,subvol=@`
+  for Btrfs (falling back to `ro,rescue=nologreplay,subvolid=5` if `@` cannot be mounted). No journal or tree-log
   replay is allowed. Never elevate or inspect a mounted disk. Unmount every successful inspection mount;
   an unmount failure terminates discovery as an external-command failure.
 - Require exactly one `/` fstab entry bound by `UUID=` to that root and exactly one `/boot` entry bound

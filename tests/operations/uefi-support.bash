@@ -89,6 +89,8 @@ delete state.raw;
 switch (process.argv[2]) {
   case 'missing': state.entries = state.entries.filter((e) => e.id !== '0001'); state.order.pop(); break;
   case 'duplicate': state.entries.push({ ...state.entries[0], id: '0005' }); break;
+  case 'mixed-format-duplicate': state.entries.push({ ...state.entries[0], id: '0005', path_format: 'file' }); break;
+  case 'file-format': state.path_format = 'file'; break;
   case 'systemd': state.entries[0].path = '\\EFI\\systemd\\systemd-bootx64.efi'; state.entries[0].label = 'MirrorOS'; break;
   case 'first': state.order = ['0001', '0003', '0002']; break;
   case 'empty': state.order = []; break;

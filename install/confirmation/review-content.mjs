@@ -40,6 +40,18 @@ export function targetRows(plan) {
   return rows;
 }
 
+export function rootConfirmationIdentity(plan) {
+  if (plan.target_mode !== 'replace_installation') return undefined;
+  const root = plan.target.installation.root;
+  const prefix = root.partuuid.slice(0, 8);
+  const partitions = plan.target.disk.current_layout.partitions;
+  const complete = partitions.every(partition => /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(partition.partuuid ?? ''));
+  const matches = partitions.filter(partition => partition.partuuid?.toLowerCase().startsWith(prefix.toLowerCase()));
+  const unique = complete && matches.length === 1 && matches[0].path === root.path
+    && matches[0].partuuid.toLowerCase() === root.partuuid.toLowerCase();
+  return { value: unique ? prefix : root.partuuid, kind: unique ? 'prefix' : 'full' };
+}
+
 export function confirmationPrompt(plan) {
   if (plan.target_mode === 'replace_installation') return `Replace MirrorOS on ${plan.target.installation.root.path} and apply plan ${digestPrefix(plan)}?`;
   return `Erase ${diskLabel(plan)} and apply plan ${digestPrefix(plan)}?`;

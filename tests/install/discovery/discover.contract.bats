@@ -386,7 +386,7 @@ EOF
     if [[ "$option" == ext4-systemd-boot ]]; then
       grep -Fq 'mount -t ext4 -o ro,noload --' "${DOUBLE_STATE}/calls.log"
     else
-      grep -Fq 'mount -t btrfs -o ro,nologreplay,subvol=@ --' "${DOUBLE_STATE}/calls.log"
+      grep -Fq 'mount -t btrfs -o ro,rescue=nologreplay,subvol=@ --' "${DOUBLE_STATE}/calls.log"
     fi
     grep -Fq 'umount --' "${DOUBLE_STATE}/calls.log"
     ! grep -Eq 'wipefs|sfdisk|mkfs|efibootmgr' "${DOUBLE_STATE}/calls.log"
@@ -484,7 +484,7 @@ EOF
   discovery_run --output "$OUTPUT_DIR"
   [ "$DISCOVERY_STATUS" -eq 0 ]
   discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_candidates.length === 1"
-  grep -Fq 'mount -t btrfs -o ro,nologreplay,subvolid=5 --' "${DOUBLE_STATE}/calls.log"
+  grep -Fq 'mount -t btrfs -o ro,rescue=nologreplay,subvolid=5 --' "${DOUBLE_STATE}/calls.log"
 }
 
 @test "discover --help prints help and exits 0 without touching the system" {

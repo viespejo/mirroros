@@ -172,7 +172,9 @@ refer to their respective checkpoints.
 
 The ADR 0022 coexistence extension is original MirrorOS work with no additional external material.
 It adds the plan-preview-owned target-mode selector, formatted/preserved partition identities in review
-and confirmation, and exact full-root-PARTUUID confirmation after the disk name for replacement. It uses
+and confirmation, and exact root-PARTUUID confirmation after the disk name for replacement: a unique
+first-eight-character prefix across fully identified disk partitions, otherwise the full identity. Plans,
+approval evidence and engine checks retain full PARTUUIDs under ADR 0022's user-approved usability amendment. It uses
 the existing Gum controls, shared accent, wrapped review rows and cancellation rules. Earlier attended
 screen approvals do not qualify this new branch, long replacement identities or its geometry.
 

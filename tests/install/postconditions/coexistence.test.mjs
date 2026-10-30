@@ -16,6 +16,23 @@ for (const option of OPTIONS) {
       assert.equal(applicableChecks(plan).includes('untouched_partitions'), mode === 'replace');
     });
 
+    test(`${option} ${mode}: bare EFI paths pass and mixed-format duplicates fail closed`, () => {
+      const plan = planFixture(`${option}--${mode}`);
+      const good = goodObservations(plan);
+      const bare = good.get('uefi_entries').replaceAll(/\/File\(([^)]*)\)/g, '/$1');
+      assert.equal(evaluateChecks(plan, changed(good, { uefi_entries: bare })).status, 'passed');
+      const uppercase = bare.replace(/HD[^\n]+/g, match => match.toUpperCase());
+      assert.equal(evaluateChecks(plan, changed(good, { uefi_entries: uppercase })).status, 'passed');
+      const entry = bare.split('\n')[1];
+      const wrapped = entry.replace('0001', '0003').replace(/(HD\([^)]*\))\/(.+)$/, '$1/File($2)');
+      const loader = plan.operations.find(op => op.kind === 'register_uefi_boot_entry').parameters.loader_path;
+      for (const listing of [`${bare}\n${wrapped}`, bare.replace(loader, `${loader}.other`),
+        bare.replace(loader, `${loader}/VenHw(unrelated)`),
+        `BootOrder: 0002\nBoot0002* ${entry.slice(entry.indexOf('HD('))}\tVenHw(example)`]) {
+        assert.deepEqual(failures(plan, changed(good, { uefi_entries: listing })), ['uefi_boot_entry']);
+      }
+    });
+
     test(`${option} ${mode}: UEFI entry fails closed on missing, duplicate, wrong path or identity, and bad order`, () => {
       const plan = planFixture(`${option}--${mode}`);
       const good = goodObservations(plan);

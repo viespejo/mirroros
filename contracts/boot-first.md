@@ -44,6 +44,9 @@ against the approved plan before calling. Functions return status explicitly and
 
 - `uefi_read_entries`: snapshot `efibootmgr -v` into `UEFI_ORDER`, parallel arrays `UEFI_IDS`,
   `UEFI_GUIDS`, `UEFI_PATHS`. Non-GPT entries remain represented with empty GPT identity/path.
+  Accept the loader immediately after the GPT `HD(...)` node either as `/File(\EFI\...)` or as
+  `/\EFI\...`, as emitted by the lab's native `efibootmgr`. Match the complete loader suffix, never
+  description text or a path substring; equivalent formats still count as duplicate matching entries.
   Reject malformed/duplicate boot numbers or ambiguous, malformed, duplicate or dangling BootOrder.
   Missing or empty BootOrder means an empty order.
 - `uefi_select_loader <limine|systemd-boot>`: set `UEFI_LABEL` and `UEFI_LOADER`.

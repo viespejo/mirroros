@@ -16,8 +16,9 @@ if (args.join(' ') === '-v') {
   }
   console.log(`BootOrder: ${state.order.join(',')}`);
   for (const entry of state.entries) {
+    const loader = (entry.path_format ?? state.path_format) === 'file' ? `File(${entry.path})` : entry.path;
     const path = entry.guid
-      ? `HD(1,GPT,${entry.guid},0x800,0x100000)/File(${entry.path})`
+      ? `HD(1,GPT,${entry.guid},0x800,0x100000)/${loader}`
       : 'PciRoot(0x0)/VenHw(firmware)';
     console.log(`Boot${entry.id}* ${entry.label}\t${path}`);
   }

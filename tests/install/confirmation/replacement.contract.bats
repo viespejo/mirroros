@@ -7,12 +7,13 @@ setup() {
   FLOW_TMP="$BATS_TEST_TMPDIR" FLOW_PREVIEW=synthetic-preview FLOW_PLAN_FILE=synthetic-plan
   FLOW_PROFILE_STATUS=unqualified CALLS="${BATS_TEST_TMPDIR}/calls"
   ROOT_ID=10000000-0000-4000-8000-000000000002
-  ROOT_TYPED=$ROOT_ID ROOT_STATUS=0 DISK_TYPED=vda MODE_COUNT=2 CHOOSE_STATUS=0
+  ROOT_TYPED=${ROOT_ID:0:8} ROOT_STATUS=0 DISK_TYPED=vda MODE_COUNT=2 CHOOSE_STATUS=0
   MODE_ANSWER='Replace existing MirrorOS'
   declare -gA FLOW_REVIEW=([disk]='Synthetic disk' [storage_option]=btrfs-limine [storage_tier]=default
     [plan_reference]=0123456789ab [target_mode]=replace_installation [target_mode_label]='Replace existing MirrorOS'
     [target_format_esp]='/dev/vda1 PARTUUID=synthetic-esp' [target_format_root]="/dev/vda2 PARTUUID=$ROOT_ID"
-    [target_preserve]='/dev/vda3, /dev/vda4' [root_partuuid]="$ROOT_ID")
+    [target_preserve]='/dev/vda3, /dev/vda4' [root_partuuid]="$ROOT_ID"
+    [root_confirmation_value]="${ROOT_ID:0:8}" [root_confirmation_kind]=prefix)
   TERM_WIDTH=100 PADDING_LEFT=10 PADDING='0 0 0 10'
   : > "$CALLS"
   flow_assistant() {
@@ -84,7 +85,7 @@ setup() {
   done
 }
 
-@test "replacement confirmation shows exact scope and requires disk plus full root PARTUUID" {
+@test "replacement confirmation shows full scope and requires disk plus unique root PARTUUID prefix" {
   run confirmation_form
   [ "$status" -eq 0 ]
   grep -qF '/dev/vda1 PARTUUID=synthetic-esp' "$CALLS"
@@ -95,11 +96,37 @@ setup() {
   [ "$status" -eq 1 ]
   grep -qF -- '--default=false --affirmative Yes, replace --negative No' "$CALLS"
   [ "$(grep -c '^gum input ' "$CALLS")" -eq 2 ]
+  grep -qF "Type the root PARTUUID prefix (${ROOT_ID:0:8}) to confirm." "$CALLS"
   grep -qxF confirmed "$CALLS"
 }
 
+@test "replacement requires the full root PARTUUID when its prefix is ambiguous" {
+  FLOW_REVIEW[root_confirmation_value]=$ROOT_ID
+  FLOW_REVIEW[root_confirmation_kind]=full
+  ROOT_TYPED=$ROOT_ID
+  run confirmation_form
+  [ "$status" -eq 0 ]
+  grep -qF "Type the full root PARTUUID ($ROOT_ID) to confirm." "$CALLS"
+  grep -qxF confirmed "$CALLS"
+  : > "$CALLS"
+  ROOT_TYPED=${ROOT_ID:0:8}
+  run confirmation_form
+  [ "$status" -eq 3 ]
+  grep -qxF mismatch "$CALLS"
+  run grep -qxF confirmed "$CALLS"
+  [ "$status" -eq 1 ]
+}
+
+@test "replacement refuses missing confirmation data without approval" {
+  unset 'FLOW_REVIEW[root_confirmation_value]'
+  run confirmation_form
+  [ "$status" -eq 6 ]
+  run grep -qxF confirmed "$CALLS"
+  [ "$status" -eq 1 ]
+}
+
 @test "replacement rejects short wrong or empty root identity without retry or approval" {
-  for value in 00000002 wrong '' "$ROOT_ID "; do
+  for value in 00000002 1000000 wrong '' "${ROOT_ID:0:8} "; do
     : > "$CALLS"
     ROOT_TYPED=$value
     run confirmation_form

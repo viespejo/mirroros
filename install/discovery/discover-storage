@@ -104,10 +104,10 @@ while IFS=$'\t' read -r root_path root_fs root_uuid esp_path esp_uuid; do
   limine_present=false
   systemd_boot_present=false
   options=ro,noload
-  [[ "$root_fs" != btrfs ]] || options=ro,nologreplay,subvol=@
+  [[ "$root_fs" != btrfs ]] || options=ro,rescue=nologreplay,subvol=@
   if mount -t "$root_fs" -o "$options" -- "$root_path" "${inspection_dir}/root"; then
     root_mounted=1
-  elif [[ "$root_fs" == btrfs ]] && mount -t btrfs -o ro,nologreplay,subvolid=5 -- "$root_path" "${inspection_dir}/root"; then
+  elif [[ "$root_fs" == btrfs ]] && mount -t btrfs -o ro,rescue=nologreplay,subvolid=5 -- "$root_path" "${inspection_dir}/root"; then
     root_mounted=1
   fi
   if [[ "$root_mounted" == 1 ]] && mount -t vfat -o ro -- "$esp_path" "${inspection_dir}/esp"; then

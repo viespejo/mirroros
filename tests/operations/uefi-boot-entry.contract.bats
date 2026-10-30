@@ -37,6 +37,27 @@ setup() { uefi_test_setup; }
   uefi_test_no_mutation
 }
 
+@test "UEFI accepts File nodes for both bootloaders without recreating existing entries" {
+  local loader
+  uefi_test_state_change file-format
+  for loader in limine systemd-boot; do
+    if [[ $loader == systemd-boot ]]; then uefi_test_state_change systemd; fi
+    run uefi_ensure_first /dev/vda 1 "$UEFI_TEST_ESP_GUID" "$loader"
+    [ "$status" -eq 0 ]
+    uefi_test_order 0001,0003,0002
+    run grep -Eq -- '--create|--delete' "$UEFI_TEST_CALLS"
+    [ "$status" -eq 1 ]
+  done
+}
+
+@test "UEFI mixed bare and File duplicate paths refuse every mutation" {
+  uefi_test_state_change mixed-format-duplicate
+  run uefi_ensure_first /dev/vda 1 "$UEFI_TEST_ESP_GUID" limine
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'duplicate matching entries'* ]]
+  uefi_test_no_mutation
+}
+
 @test "UEFI already first is idempotent" {
   uefi_test_state_change first
   run uefi_ensure_first /dev/vda 1 "$UEFI_TEST_ESP_GUID" limine

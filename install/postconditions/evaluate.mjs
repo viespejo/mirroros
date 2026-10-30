@@ -391,7 +391,8 @@ function uefiBootEntry(context) {
     entries.set(id, true);
     const device = line.includes('\t') ? line.slice(line.indexOf('\t') + 1) : '';
     const hd = /HD\([0-9]+,GPT,([0-9a-f-]+),[^)]*\)/i.exec(device);
-    const loader = /File\(([^)]*)\)/i.exec(device);
+    const suffix = hd === null ? '' : device.slice(hd.index + hd[0].length);
+    const loader = /^\/File\(([^)]*)\)$/i.exec(suffix) ?? /^\/([\\/][^\u0000-\u001f\u007f]*)$/.exec(suffix);
     if (hd?.[1].toLowerCase() === guid.toLowerCase() && loader?.[1].replaceAll('/', '\\').toLowerCase() === path) matches.push(id);
   }
   if (orders.length !== 1 || !/^[0-9A-F]{4}(,[0-9A-F]{4})*$/.test(orders[0])) return ['BootOrder is missing or invalid'];

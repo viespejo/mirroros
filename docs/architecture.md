@@ -312,7 +312,7 @@ MirrorOS exposes no remote product API and introduces no application-specific au
 
 - Read-only discovery precedes plan generation.
 - Plans identify the selected device using its path, model, size, and available stable identifiers.
-- Confirmation is bound to the concrete plan and target mode (`whole_disk` or `replace_installation`). Replacement additionally requires the full root PARTUUID after the disk identity, with both format targets and preserved partitions shown ([ADR 0022](adr/0022-installer-coexistence-and-uefi-boot-entry.md)).
+- Confirmation is bound to the concrete plan and target mode (`whole_disk` or `replace_installation`). Replacement additionally requires the displayed root PARTUUID confirmation after the disk identity: an eight-character prefix only when unique across the disk's fully identified partitions, otherwise the full PARTUUID. Plans and authorization retain full identities, with both format targets and preserved partitions shown ([ADR 0022](adr/0022-installer-coexistence-and-uefi-boot-entry.md)).
 - Changed target state or regenerated plans invalidate prior approval.
 - Retries require renewed confirmation.
 - Cancellation performs none of the rejected destructive operations.

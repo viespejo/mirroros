@@ -7,11 +7,11 @@ printf '%s %s\n' "$tool" "$*" >> "${DOUBLE_STATE}/calls.log"
 if [[ "$tool" == mount ]]; then
   [[ "$#" == 7 && "$1" == -t && "$3" == -o && "$5" == -- ]] || exit 91
   case "$2:$4" in
-    ext4:ro,noload|btrfs:ro,nologreplay,subvol=@|btrfs:ro,nologreplay,subvolid=5|vfat:ro) ;;
+    ext4:ro,noload|btrfs:ro,rescue=nologreplay,subvol=@|btrfs:ro,rescue=nologreplay,subvolid=5|vfat:ro) ;;
     *) exit 92 ;;
   esac
   [[ ! -f "${DOUBLE_STATE}/mount_fail.${6##*/}" ]] || exit 32
-  [[ ! -f "${DOUBLE_STATE}/btrfs_top_level" || "$4" != ro,nologreplay,subvol=@ ]] || exit 32
+  [[ ! -f "${DOUBLE_STATE}/btrfs_top_level" || "$4" != ro,rescue=nologreplay,subvol=@ ]] || exit 32
   source_dir="${DOUBLE_STATE}/filesystems/${6##*/}"
   [[ -d "$source_dir" ]] || exit 32
   cp -a -- "$source_dir/." "$7/"

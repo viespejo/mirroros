@@ -17,11 +17,12 @@ uefi_select_loader() {
 
 # Snapshot arrays include every entry, including firmware and non-GPT device paths.
 uefi_read_entries() {
-  local listing line id guid path device_path order_count=0 hd_re file_re
+  local listing line id guid path device_path suffix order_count=0 hd_re file_re bare_re
   listing=$(efibootmgr -v) || return 5
   UEFI_ORDER=''; UEFI_IDS=(); UEFI_GUIDS=(); UEFI_PATHS=()
   hd_re='HD\([0-9]+,GPT,([[:xdigit:]-]+),[^)]*\)'
-  file_re='File\(([^)]*)\)'
+  file_re='^/File\(([^)]*)\)$'
+  bare_re='^/([\\/][^[:cntrl:]]*)$'
   while IFS= read -r line; do
     if [[ "$line" == BootOrder:* ]]; then
       order_count=$((order_count + 1))
@@ -38,8 +39,9 @@ uefi_read_entries() {
       if [[ "$line" == *$'\t'* ]]; then device_path=${line#*$'\t'}; fi
       if [[ "$device_path" =~ $hd_re ]]; then
         guid=${BASH_REMATCH[1],,}
+        suffix=${device_path#*"${BASH_REMATCH[0]}"}
         uefi_guid_valid "$guid" || { uefi_error 'invalid GPT device path'; return 2; }
-        if [[ "$device_path" =~ $file_re ]]; then
+        if [[ "$suffix" =~ $file_re || "$suffix" =~ $bare_re ]]; then
           path=${BASH_REMATCH[1]//\//\\}; path=${path,,}
         fi
       fi

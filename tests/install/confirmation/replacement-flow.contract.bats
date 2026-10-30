@@ -37,6 +37,27 @@ queue_replacement_review() {
   [ ! -e "${RUN_DIR}/engine" ]
 }
 
+@test "guided replacement accepts a unique root prefix while approval retains the full identity" {
+  ROOT_ID=abcdef12-0000-4000-8000-000000000002
+  node - "${DOUBLE_STATE}/lsblk.json" "$ROOT_ID" <<'JS'
+const fs = require('node:fs');
+const file = process.argv[2];
+const raw = JSON.parse(fs.readFileSync(file));
+raw.blockdevices.find(disk => disk.path === '/dev/nvme0n1').children[1].partuuid = process.argv[3];
+fs.writeFileSync(file, JSON.stringify(raw));
+JS
+  queue_replacement_review
+  confirm_queue input "0|${ROOT_ID:0:8}" '1'
+  confirm_queue choose '130'
+  confirm_run_pty --output "$RUN_DIR"
+  [ "$CONFIRM_STATUS" -eq 3 ]
+  confirm_assert_run 3 cancelled
+  confirm_assert_gum_called "Type the root PARTUUID prefix (${ROOT_ID:0:8}) to confirm."
+  confirm_json_assert "${RUN_DIR}/install-run.json" "d.stages.includes('password') && !d.stages.includes('engine')"
+  confirm_json_assert "${RUN_DIR}/approval-record.json" "d.partitions.root.partuuid === '$ROOT_ID'"
+  [ ! -e "${RUN_DIR}/engine" ]
+}
+
 @test "guided replacement changed binding at final discovery invalidates approval before engine" {
   queue_replacement_review
   confirm_queue input "0|$ROOT_ID" "0|$CONFIRM_PASSWORD" "0|$CONFIRM_PASSWORD"
