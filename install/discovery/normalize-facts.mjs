@@ -125,8 +125,59 @@ function normalizePartition(partition) {
     label: text(partition.label),
     uuid: text(partition.uuid),
     partuuid: text(partition.partuuid),
+    type_guid: text(partition.parttype)?.toLowerCase(),
+    partition_number: toCount(partition.partn),
+    start_sector: toCount(partition.start),
+    partition_label: text(partition.partlabel),
     mountpoints: mountpoints.length > 0 ? mountpoints : undefined,
   });
+}
+
+const LINUX_TYPE_GUID = '0fc63daf-8483-4772-8e79-3d69d8477de4';
+const ESP_TYPE_GUID = 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b';
+const GUID_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+function replacementFacts(diskPath, tableType, partitions, inspections, ineligible) {
+  const roots = partitions.filter(partition => partition.label === 'mirroros');
+  const candidates = [];
+  const rejections = [];
+  const reject = (root, code) => rejections.push({ root_path: root.path, reason: code });
+  const complete = partition => GUID_PATTERN.test(partition.partuuid ?? '') && text(partition.uuid)
+    && partition.size_bytes > 0 && partition.partition_number > 0 && partition.start_sector > 0;
+  for (const root of roots) {
+    if (roots.length !== 1) { reject(root, 'ambiguous_roots'); continue; }
+    if (tableType !== 'gpt' || root.type_guid !== LINUX_TYPE_GUID || !['ext4', 'btrfs'].includes(root.fstype)) {
+      reject(root, 'unsupported_root'); continue;
+    }
+    if (ineligible.length > 0) { reject(root, 'disk_ineligible'); continue; }
+    if (!complete(root) || !GUID_PATTERN.test(root.uuid ?? '')) { reject(root, 'incomplete_identity'); continue; }
+    const esps = partitions.filter(partition => partition.type_guid === ESP_TYPE_GUID && partition.fstype === 'vfat');
+    const matches = [];
+    let failure = 'missing_esp_binding';
+    for (const esp of esps) {
+      const evidence = inspections.filter(item => item.root_path === root.path && item.esp_path === esp.path);
+      if (evidence.length !== 1 || evidence[0].status !== 'inspected') { failure = 'inspection_unavailable'; continue; }
+      const inspected = evidence[0];
+      if (inspected.fstab_matches !== true) continue;
+      if (!complete(esp) || !/^[0-9a-f]{4}-[0-9a-f]{4}$/i.test(esp.uuid ?? '')) { failure = 'incomplete_identity'; continue; }
+      if (partitions.filter(p => p.uuid?.toLowerCase() === root.uuid.toLowerCase()).length !== 1
+        || partitions.filter(p => p.uuid?.toLowerCase() === esp.uuid.toLowerCase()).length !== 1
+        || partitions.filter(p => p.partuuid?.toLowerCase() === root.partuuid.toLowerCase()).length !== 1
+        || partitions.filter(p => p.partuuid?.toLowerCase() === esp.partuuid.toLowerCase()).length !== 1) {
+        failure = 'ambiguous_identity'; continue;
+      }
+      const limine = inspected.limine_present === true;
+      const systemd = inspected.systemd_boot_present === true;
+      if (limine === systemd) { failure = 'ambiguous_boot_configuration'; continue; }
+      if (limine && (root.fstype !== 'btrfs' || inspected.limine_matches !== true)
+        || systemd && inspected.systemd_boot_matches !== true) { failure = 'boot_root_mismatch'; continue; }
+      matches.push({ disk_path: diskPath, root: { ...root }, esp: { ...esp },
+        storage_option: limine ? 'btrfs-limine' : root.fstype === 'btrfs' ? 'btrfs-rescue' : 'ext4-systemd-boot' });
+    }
+    if (matches.length === 1) candidates.push(matches[0]);
+    else reject(root, matches.length > 1 ? 'ambiguous_esp_binding' : failure);
+  }
+  return { replace_candidates: candidates, replace_rejections: rejections };
 }
 
 function normalizeDisk(device, context, missing) {
@@ -176,10 +227,11 @@ function normalizeDisk(device, context, missing) {
     read_only: readOnly,
     layout: compact({
       partition_table: tableType !== undefined || tableUuid !== undefined
-        ? compact({ type: tableType, uuid: tableUuid })
+        ? compact({ type: tableType, uuid: tableUuid, sector_size_bytes: toCount(device['log-sec']) })
         : undefined,
       partitions,
     }),
+    ...replacementFacts(path, tableType, partitions, context.inspections, ineligible),
     eligible: ineligible.length === 0,
     ineligible_reasons: ineligible.length > 0 ? ineligible : undefined,
   });
@@ -195,7 +247,8 @@ export function normalizeStorage(raw, minimumBytes) {
     const target = text(record(link).target);
     if (name !== undefined && target !== undefined) byId.set(target, [...(byId.get(target) ?? []), name]);
   }
-  const context = { byId, liveMedium: text(source.live_medium_device), minimumBytes };
+  const context = { byId, liveMedium: text(source.live_medium_device), minimumBytes,
+    inspections: (Array.isArray(source.installation_inspections) ? source.installation_inspections : []).filter(isRecord) };
   const disks = (Array.isArray(source.blockdevices) ? source.blockdevices : [])
     .filter(isRecord)
     .map(device => normalizeDisk(device, context, missing))

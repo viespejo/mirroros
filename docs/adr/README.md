@@ -15,6 +15,15 @@ Their unrelated decisions and historical evidence remain in force; real boot qua
 selected-account display of ADR 0014 and the preserved greeter layout of ADR 0019, keeps system surfaces neutral, and
 lets the lock follow the selected theme.
 
+## Installer coexistence extension
+
+[ADR 0022: Installer Coexistence and UEFI Boot Entry](0022-installer-coexistence-and-uefi-boot-entry.md) is
+Accepted and extends [ADR 0003](0003-storage-and-recovery-baseline.md) and
+[ADR 0009](0009-storage-option-promotion-and-esp-size.md) with whole-disk and partition-scoped replacement
+modes, explicit selected-loader UEFI registration and `mirroros-boot-first`. Narrow forward notes in those
+records preserve their historical decisions; neither record is superseded by ADR 0022. Storage choices,
+ESP policy and unrelated decisions remain in force.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

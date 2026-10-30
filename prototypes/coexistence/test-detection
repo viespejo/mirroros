@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# Disposable loop-image tests for the coexistence candidate detector.
+set -euo pipefail
+
+[[ $EUID -eq 0 && -d /run/archiso ]] || { echo 'Run as root in the lab live environment.' >&2; exit 1; }
+[[ $# == 1 && -f $1 ]] || { echo 'Usage: bash test-detection /path/to/replace-partitions' >&2; exit 2; }
+detector=$(realpath "$1")
+work=$(mktemp -d /run/mirroros-detection-tests.XXXXXX)
+loop=''
+root_mounted=0
+esp_mounted=0
+# shellcheck disable=SC2329 # Called by the EXIT trap.
+cleanup() {
+  if (( esp_mounted )); then umount "$work/esp" || :; fi
+  if (( root_mounted )); then umount "$work/root" || :; fi
+  if [[ -n $loop ]]; then losetup -d "$loop" || :; fi
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
+mkdir "$work/root" "$work/esp"
+
+make_image() {
+  local fs=$1 loader=$2 esp_uuid root_uuid
+  truncate -s 400M "$work/disk.img"
+  sfdisk "$work/disk.img" >/dev/null <<'LAYOUT'
+label: gpt
+size=64MiB, type=U
+size=256MiB, type=L
+LAYOUT
+  loop=$(losetup --find --show --partscan "$work/disk.img")
+  udevadm settle
+  [[ -b ${loop}p1 && -b ${loop}p2 ]] || { echo 'Loop partitions missing.' >&2; return 1; }
+  mkfs.fat -F 32 "${loop}p1" >/dev/null
+  if [[ $fs == btrfs ]]; then
+    mkfs.btrfs -f -L mirroros "${loop}p2" >/dev/null
+    mount -o subvolid=5 "${loop}p2" "$work/root"
+    root_mounted=1
+    btrfs subvolume create "$work/root/@" >/dev/null
+    umount "$work/root"
+    root_mounted=0
+    mount -o subvol=@ "${loop}p2" "$work/root"
+  else
+    mkfs.ext4 -F -L mirroros "${loop}p2" >/dev/null 2>&1
+    mount "${loop}p2" "$work/root"
+  fi
+  root_mounted=1
+  mount "${loop}p1" "$work/esp"
+  esp_mounted=1
+  esp_uuid=$(blkid -s UUID -o value "${loop}p1")
+  root_uuid=$(blkid -s UUID -o value "${loop}p2")
+  mkdir -p "$work/root/etc"
+  printf 'UUID=%s /boot vfat defaults 0 2\n' "$esp_uuid" > "$work/root/etc/fstab"
+  if [[ $loader == limine ]]; then
+    printf 'cmdline: root=UUID=%s rw\n' "$root_uuid" > "$work/esp/limine.conf"
+  else
+    mkdir -p "$work/esp/loader/entries"
+    printf 'options root=UUID=%s rw\n' "$root_uuid" > "$work/esp/loader/entries/mirroros.conf"
+  fi
+  sync
+  umount "$work/esp"
+  esp_mounted=0
+  umount "$work/root"
+  root_mounted=0
+}
+
+release_image() {
+  losetup -d "$loop"
+  loop=''
+  rm "$work/disk.img"
+}
+
+for scenario in ext4:systemd btrfs:systemd btrfs:limine; do
+  fs=${scenario%:*}
+  loader=${scenario#*:}
+  make_image "$fs" "$loader"
+  printf '\nTesting %s\n' "$scenario"
+  bash "$detector" --inspect-loop "$loop"
+  release_image
+done
+
+make_image ext4 systemd
+mount "${loop}p1" "$work/esp"
+esp_mounted=1
+root_uuid=$(blkid -s UUID -o value "${loop}p2")
+printf 'cmdline: root=UUID=%s rw\n' "$root_uuid" > "$work/esp/limine.conf"
+sync
+umount "$work/esp"
+esp_mounted=0
+printf '\nTesting ambiguous bootloader evidence\n'
+if bash "$detector" --inspect-loop "$loop" > "$work/rejection.txt" 2>&1; then
+  echo 'Ambiguous bootloader evidence was accepted.' >&2
+  exit 1
+fi
+grep -F 'Bootloader evidence is missing or ambiguous' "$work/rejection.txt" >/dev/null
+
+mount "${loop}p1" "$work/esp"
+esp_mounted=1
+rm "$work/esp/limine.conf"
+umount "$work/esp"
+esp_mounted=0
+mount "${loop}p2" "$work/root"
+root_mounted=1
+printf 'UUID=DEAD-BEEF /boot vfat defaults 0 2\n' > "$work/root/etc/fstab"
+sync
+umount "$work/root"
+root_mounted=0
+printf '\nTesting missing ESP binding\n'
+if bash "$detector" --inspect-loop "$loop" > "$work/rejection.txt" 2>&1; then
+  echo 'A missing ESP binding was accepted.' >&2
+  exit 1
+fi
+grep -F 'The fstab ESP is missing or ambiguous' "$work/rejection.txt" >/dev/null
+
+printf '\nTesting ambiguous roots\n'
+printf 'size=48MiB, type=L\n' | sfdisk --append --no-reread "$loop" >/dev/null
+partprobe "$loop"
+udevadm settle
+[[ -b ${loop}p3 ]] || { echo 'Second loop root is missing.' >&2; exit 1; }
+mkfs.ext4 -F -L mirroros "${loop}p3" >/dev/null 2>&1
+if bash "$detector" --inspect-loop "$loop" > "$work/rejection.txt" 2>&1; then
+  echo 'Ambiguous roots were accepted.' >&2
+  exit 1
+fi
+grep -F 'Expected exactly one labelled MirrorOS root' "$work/rejection.txt" >/dev/null
+release_image
+printf '\nAll loop-image detection checks passed.\n'

@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Lab-only candidate inspection and partition-scoped replacement.
+set -euo pipefail
+
+inspect_only=0
+if [[ ${1:-} == --inspect-loop && $# == 2 && $2 =~ ^/dev/loop[0-9]+$ ]]; then
+  DISK=$2
+  inspect_only=1
+elif [[ $# == 0 ]]; then
+  DISK=/dev/vda
+else
+  printf 'Usage: %s [--inspect-loop /dev/loopN]\n' "$0" >&2
+  exit 2
+fi
+readonly DISK
+readonly ROOT_TYPE=0fc63daf-8483-4772-8e79-3d69d8477de4
+readonly ESP_TYPE=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+[[ $EUID -eq 0 ]] || fail 'Run as root in the lab live environment.'
+[[ -d /run/archiso && -b $DISK ]] || fail 'The live environment or lab disk is missing.'
+
+work=$(mktemp -d)
+root_mounted=0
+esp_mounted=0
+# shellcheck disable=SC2329 # Called by the EXIT trap.
+cleanup() {
+  if (( esp_mounted )); then umount "$work/esp"; fi
+  if (( root_mounted )); then umount "$work/root"; fi
+  rmdir "$work/root" "$work/esp" "$work"
+}
+trap cleanup EXIT
+mkdir "$work/root" "$work/esp"
+
+roots=()
+esps=()
+while read -r node kind; do
+  [[ $kind == part ]] || continue
+  type=$(lsblk -dnro PARTTYPE "$node")
+  type=${type,,}
+  if [[ $type == "$ROOT_TYPE" && $(blkid -s LABEL -o value "$node" || :) == mirroros ]]; then
+    roots+=("$node")
+  elif [[ $type == "$ESP_TYPE" ]]; then
+    esps+=("$node")
+  fi
+done < <(lsblk -lnpo NAME,TYPE "$DISK")
+
+(( ${#roots[@]} == 1 )) || fail 'Expected exactly one labelled MirrorOS root; ambiguous or absent roots are rejected.'
+root=${roots[0]}
+[[ -z $(findmnt -rn -S "$root") ]] || fail 'The root partition is already mounted.'
+filesystem=$(blkid -s TYPE -o value "$root")
+root_uuid=$(blkid -s UUID -o value "$root")
+[[ -n $root_uuid ]] || fail 'The root filesystem UUID is missing.'
+case $filesystem in
+  btrfs) mount -o ro,rescue=nologreplay,subvol=@ "$root" "$work/root" ;;
+  ext4) mount -o ro,noload "$root" "$work/root" ;;
+  *) fail "Unsupported root filesystem: $filesystem" ;;
+esac
+root_mounted=1
+fstab="$work/root/etc/fstab"
+[[ -f $fstab ]] || fail 'The installed root has no fstab.'
+mapfile -t esp_ids < <(awk '$1 !~ /^#/ && $2 == "/boot" && $1 ~ /^UUID=/ {sub(/^UUID=/, "", $1); print $1}' "$fstab")
+(( ${#esp_ids[@]} == 1 )) || fail 'The fstab must identify exactly one /boot ESP by UUID.'
+esp_matches=()
+for node in "${esps[@]}"; do
+  id=$(blkid -s UUID -o value "$node" || :)
+  if [[ ${id^^} == "${esp_ids[0]^^}" ]]; then esp_matches+=("$node"); fi
+done
+(( ${#esp_matches[@]} == 1 )) || fail 'The fstab ESP is missing or ambiguous on the selected disk.'
+esp=${esp_matches[0]}
+[[ -z $(findmnt -rn -S "$esp") ]] || fail 'The ESP is already mounted.'
+mount -o ro "$esp" "$work/esp"
+esp_mounted=1
+
+matches=0
+if [[ -f $work/esp/limine.conf ]] && grep -Eq "(^|[[:space:]])root=UUID=${root_uuid}([[:space:]]|$)" "$work/esp/limine.conf"; then
+  printf 'Matched Limine configuration.\n'
+  matches=$((matches + 1))
+fi
+entry="$work/esp/loader/entries/mirroros.conf"
+if [[ -f $entry ]] && grep -Eq "(^|[[:space:]])root=UUID=${root_uuid}([[:space:]]|$)" "$entry"; then
+  printf 'Matched systemd-boot configuration.\n'
+  matches=$((matches + 1))
+fi
+(( matches == 1 )) || fail 'Bootloader evidence is missing or ambiguous.'
+printf 'Candidate: disk=%s root=%s root_partuuid=%s esp=%s esp_partuuid=%s\n' \
+  "$DISK" "$root" "$(blkid -s PARTUUID -o value "$root")" "$esp" "$(blkid -s PARTUUID -o value "$esp")"
+if (( inspect_only )); then
+  printf 'Read-only loop inspection completed; replacement was not attempted.\n'
+  exit 0
+fi
+[[ $root == /dev/vda2 && $esp == /dev/vda1 ]] || fail 'The candidate does not match the prepared lab layout.'
+[[ $(sfdisk --disk-id "$DISK") == 8D882759-509C-4D72-8942-493CFACA76FF ]] || fail 'Unexpected lab disk GUID.'
+[[ $(blkid -s PARTUUID -o value "$root") == 91739a9a-ee37-4d33-926c-ee4e7d5a5478 ]] || fail 'Unexpected root PARTUUID.'
+[[ $(blkid -s PARTUUID -o value "$esp") == 025c3948-1fbd-486c-a328-13881802c184 ]] || fail 'Unexpected ESP PARTUUID.'
+(( $(blockdev --getsize64 "$esp") >= 2147483648 && $(blockdev --getsize64 "$root") >= 16106127360 )) || fail 'A target partition is below the policy minimum.'
+[[ -b /dev/vda3 && -b /dev/vda4 ]] || fail 'The stand-in partitions are missing.'
+[[ -z $(findmnt -rn -S /dev/vda3) && -z $(findmnt -rn -S /dev/vda4) ]] || fail 'A stand-in partition is mounted.'
+[[ -s $work/esp/EFI/BOOT/BOOTX64.EFI ]] || fail 'The target fallback EFI binary is missing.'
+
+results=$(mktemp -d /run/mirroros-coexistence-results.XXXXXX)
+printf 'Evidence directory: %s (live tmpfs; copy before reboot)\n' "$results"
+cp "$work/esp/EFI/BOOT/BOOTX64.EFI" "$results/BOOTX64.EFI"
+sfdisk --dump "$DISK" > "$results/table-before.txt"
+awk '$1 != "/dev/vda1" && $1 != "/dev/vda2"' "$results/table-before.txt" > "$results/non-target-table-before.txt"
+lsblk -b -dnpo NAME,SIZE,PARTTYPE,PARTUUID /dev/vda3 /dev/vda4 > "$results/non-target-identities-before.txt"
+printf 'Hashing stand-in partitions before replacement.\n'
+sha256sum /dev/vda3 /dev/vda4 > "$results/non-target-sha256-before.txt"
+umount "$work/esp"
+esp_mounted=0
+umount "$work/root"
+root_mounted=0
+[[ -z $(findmnt -rn -S "$root") && -z $(findmnt -rn -S "$esp") ]] || fail 'A target is still mounted.'
+
+printf 'Wiping signatures only on %s and %s.\n' "$esp" "$root"
+wipefs --all "$esp" "$root"
+printf 'Formatting only the selected ESP and %s root.\n' "$filesystem"
+mkfs.fat -F 32 "$esp"
+case $filesystem in
+  btrfs) mkfs.btrfs -f -L mirroros "$root" ;;
+  ext4) mkfs.ext4 -F -L mirroros "$root" ;;
+esac
+printf 'Restoring the fallback EFI binary to the newly formatted test ESP.\n'
+mount "$esp" "$work/esp"
+esp_mounted=1
+mkdir -p "$work/esp/EFI/BOOT"
+cp "$results/BOOTX64.EFI" "$work/esp/EFI/BOOT/BOOTX64.EFI"
+sync
+umount "$work/esp"
+esp_mounted=0
+
+sfdisk --dump "$DISK" > "$results/table-after.txt"
+awk '$1 != "/dev/vda1" && $1 != "/dev/vda2"' "$results/table-after.txt" > "$results/non-target-table-after.txt"
+lsblk -b -dnpo NAME,SIZE,PARTTYPE,PARTUUID /dev/vda3 /dev/vda4 > "$results/non-target-identities-after.txt"
+printf 'Hashing stand-in partitions after replacement.\n'
+sha256sum /dev/vda3 /dev/vda4 > "$results/non-target-sha256-after.txt"
+cmp "$results/non-target-table-before.txt" "$results/non-target-table-after.txt" || fail 'Non-target partition table changed.'
+cmp "$results/non-target-identities-before.txt" "$results/non-target-identities-after.txt" || fail 'Non-target partition identities changed.'
+cmp "$results/non-target-sha256-before.txt" "$results/non-target-sha256-after.txt" || fail 'Stand-in partition checksums changed.'
+printf 'Partition table, identities and stand-in checksums match. Evidence: %s\n' "$results"

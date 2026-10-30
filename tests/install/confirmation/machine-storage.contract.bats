@@ -12,7 +12,7 @@ setup() {
   FLOW_PLAN_ARG='' FLOW_PLAN_JUMPED=false NEXT_SCREEN=''
   PROFILE_STATUS=matched DISK_COUNT=2 CHOOSE_STATUS=0 DISCOVERY_STATUS=0
   ANSWER=Continue ROWS=40 COLS=149
-  declare -gA CHOICES=([target_disk]=synthetic-b [storage_option]=btrfs-limine)
+  declare -gA CHOICES=([target_disk]=synthetic-b [storage_option]=btrfs-limine [target_mode]=whole_disk)
   ui_interactive() { return 1; }
   measure_terminal() {
     TERM_WIDTH=$COLS TERM_HEIGHT=$ROWS
@@ -37,6 +37,7 @@ setup() {
           printf 'synthetic-b\t/dev/vdb (128.0G) - Synthetic disk B [ext4]\t/dev/vdb\n'
         fi
         ;;
+      target-modes) printf 'whole_disk\n' ;;
       storage) printf 'ext4-systemd-boot\tsupported\nbtrfs-rescue\tsupported\nbtrfs-limine\tdefault\n' ;;
       *) return 6 ;;
     esac
@@ -85,7 +86,7 @@ setup() {
   disk_selection_form > "${BATS_TEST_TMPDIR}/disk-output"
   [ "$(wc -l < "${BATS_TEST_TMPDIR}/disk-output")" -eq 1 ]
   grep -qxF 'gum style --foreground 8 --padding 0 0 0 0 Disks detected on this machine just now. Only eligible disks are shown. Selection does not authorize erasure.' "$CALLS"
-  grep -qxF 'gum style --foreground 8 --padding 0 0 0 0 The installation plan will use the entire selected disk.' "$CALLS"
+  grep -qxF 'gum style --foreground 8 --padding 0 0 0 0 Choose the target mode after selecting a disk.' "$CALLS"
   grep -qF -- '--height 5 --selected /dev/vdb (128.0G) - Synthetic disk B [ext4] /dev/vda (64.0G) - Synthetic disk A /dev/vdb (128.0G) - Synthetic disk B [ext4]' "$CALLS"
   grep -qF 'gum choose --header  --cursor › ' "$CALLS"
   [ "${CHOICES[target_disk]}" = synthetic-a ]

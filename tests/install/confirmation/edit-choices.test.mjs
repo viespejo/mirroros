@@ -8,8 +8,8 @@ import { CANARY, facts, generate, policy } from './helpers.mjs';
 
 test('the editable keys match the plan contract', () => {
   assert.deepEqual([...editableKeys()].sort(), [
-    'console_keymap', 'hibernation', 'hostname', 'lang', 'regional_format', 'root_account',
-    'storage_option', 'swapfile_size', 'target_disk', 'timezone', 'user_name',
+    'console_keymap', 'hibernation', 'hostname', 'lang', 'regional_format', 'replace_root_partuuid', 'root_account',
+    'storage_option', 'swapfile_size', 'target_disk', 'target_mode', 'timezone', 'user_name',
   ]);
 });
 

@@ -44,5 +44,11 @@ export function applyEdit(choices, key, value) {
   }
   // Toggling hibernation drops any explicit size: re-enabling proposes the RAM-derived default again.
   if (key === 'hibernation') delete rest.swapfile_size;
+  if (key === 'target_disk' && rest.target_disk !== value) {
+    delete rest.target_mode;
+    delete rest.replace_root_partuuid;
+  }
+  if (key === 'target_mode' && value === 'whole_disk') delete rest.replace_root_partuuid;
+  if (key === 'replace_root_partuuid') rest.target_mode = 'replace_installation';
   return { choices: { format_version: CHOICES_FORMAT_VERSION, ...rest, [key]: value } };
 }

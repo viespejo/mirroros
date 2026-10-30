@@ -11,7 +11,7 @@ exec < /dev/null
 
 usage_error() {
   printf 'MirrorOS postconditions: %s\n' "$1" >&2
-  printf '%s\n' 'Usage: install/postconditions/check --plan <file> --digest <hex> --target-root <dir> (internal).' >&2
+  printf '%s\n' 'Usage: install/postconditions/check --plan <file> --digest <hex> --target-root <dir> [--untouched-partitions-before <file>] (internal).' >&2
   exit 2
 }
 
@@ -26,6 +26,7 @@ done
 PLAN_FILE=''
 DIGEST=''
 TARGET_ROOT=''
+UNTOUCHED_PARTITIONS_BEFORE=''
 
 parse_arguments() {
   while [[ "$#" -gt 0 ]]; do
@@ -38,6 +39,11 @@ parse_arguments() {
       --digest)
         [[ "$#" -ge 2 && -z "$DIGEST" ]] || usage_error '--digest requires one value.'
         DIGEST="$2"
+        shift 2
+        ;;
+      --untouched-partitions-before)
+        [[ "$#" -ge 2 && -z "$UNTOUCHED_PARTITIONS_BEFORE" ]] || usage_error '--untouched-partitions-before requires one file.'
+        UNTOUCHED_PARTITIONS_BEFORE="$2"
         shift 2
         ;;
       --target-root)
@@ -59,10 +65,12 @@ parse_arguments() {
 
 main() {
   local status=0
+  local evidence_arguments=()
   parse_arguments "$@"
   # The plan is validated before anything is inspected: an invalid plan or a digest mismatch exits 2.
   node "${SCRIPT_DIR}/evaluate.mjs" validate --plan "$PLAN_FILE" --digest "$DIGEST" || exit $?
-  node "${SCRIPT_DIR}/evaluate.mjs" evaluate --plan "$PLAN_FILE" --digest "$DIGEST" < <(collect_observations 2> /dev/null) || status=$?
+  [[ -z "$UNTOUCHED_PARTITIONS_BEFORE" ]] || evidence_arguments+=(--untouched-partitions-before "$UNTOUCHED_PARTITIONS_BEFORE")
+  node "${SCRIPT_DIR}/evaluate.mjs" evaluate --plan "$PLAN_FILE" --digest "$DIGEST" "${evidence_arguments[@]}" < <(collect_observations 2> /dev/null) || status=$?
   exit "$status"
 }
 

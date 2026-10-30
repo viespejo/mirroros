@@ -42,7 +42,7 @@ case "$subcommand" in
       printf '%s\n' 'gum version 2.0.2 (double)'
     fi
     ;;
-  format) cat ;;
+  format | pager) cat ;;
   style) printf '%s\n' "${!#}" ;;
   spin)
     if line="$(pop spin)" && [[ "$line" == hang ]]; then

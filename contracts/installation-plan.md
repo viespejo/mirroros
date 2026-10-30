@@ -1,6 +1,6 @@
 # Installation plan (`installation-plan.json`)
 
-`format_version: 4`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
+`format_version: 5`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
 (format 2), the installation policy, an optional override of a matched profile, and an optional choices file.
 It identifies the observed machine, its profile classification, and the target disk, plus the ordered
 declarative operations, every value with its provenance and source, the secret requirements by name, and the
@@ -24,7 +24,7 @@ Each document keeps its own constant; no constant is shared between unrelated do
 
 | Document | Constant | Value |
 | --- | --- | --- |
-| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `4` |
+| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `5` |
 | Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `3` |
 | Choices file (`--choices`) | `CHOICES_FORMAT_VERSION` | `3` |
 | Target facts | `FACTS_FORMAT_VERSION` | `2`, see [`target-facts.md`](target-facts.md) |
@@ -35,9 +35,13 @@ Version `3` followed [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md)
 RAM-derived sizing, new operations, and a changed operation set must not reinterpret older documents. Version `4`
 replaces the informational `detected_capabilities` with the rule outcomes of `hardware/rules/` and adds the
 separate list of rule-selected packages, so a format `3` plan cannot be read as a format `4` plan. The policy,
-choices-file, and facts constants are unchanged: the hardware rules read facts and add no policy value.
+choices-file, and facts constants were unchanged by that version: the hardware rules read facts and add no policy value.
+Version `5` follows [ADR 0022](../docs/adr/0022-installer-coexistence-and-uefi-boot-entry.md): it adds
+`target_mode`, replacement identities, partition-scoped operations and explicit UEFI registration. Policy and
+choices formats remain `3`; `target_mode` defaults to `whole_disk`, and replacement always requires an explicit
+full root PARTUUID. The format-2 facts extension supplies candidates; absent replacement evidence never implies one.
 
-A plan of format `1`, `2`, or `3` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
+A plan of format `1`, `2`, `3`, or `4` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
 new target facts. Plans, policy snapshots, choices files, and evidence of earlier versions are never migrated or
 reinterpreted; the generator reads facts of format `2` only, and the facts format is unchanged.
 
@@ -62,8 +66,9 @@ proposal. Only a changed value is recorded with source `choice` (and, because th
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `4`. |
-| `target` | `machine`, `profile`, and `disk`. |
+| `format_version` | Always `5`. |
+| `target_mode` | `whole_disk` or `replace_installation`; must equal `choices.target_mode.value`. |
+| `target` | `machine`, `profile`, `disk`, and `installation` only for replacement. |
 | `choices` | Every resolved policy value, keyed by name. |
 | `operations` | The ordered declarative operations. |
 | `secret_requirements` | Ordered secret names, never values. |
@@ -98,16 +103,29 @@ it is not a substitute for `machine`.
 | --- | --- |
 | `path`, `by_id`, `wwn`, `serial`, `model`, `size_bytes` | Disk identity as in [`target-facts.md`](target-facts.md). Unavailable values are omitted; at least `by_id` or `path` is present. |
 | `eligible` | Must be `true`. |
-| `current_layout` | `partition_table` and `partitions` copied from the facts. It describes content that will be destroyed. |
+| `current_layout` | `partition_table` and `partitions` copied from the facts, including available geometry and partition type fields. In whole-disk mode all content is destroyed; in replacement only the selected ESP and root are formatted. |
+
+For `replace_installation`, `target.installation` is the exact discovered candidate: `disk_path`,
+`storage_option` (the existing installation's option), `esp`, and `root`. Each partition records `path`,
+`size_bytes`, `fstype`, `uuid`, `partuuid`, `type_guid`, `partition_number`, `start_sector`, and any observed
+`label`, `partition_label`, and `mountpoints`, exactly as in `current_layout`. Start sectors use 512-byte
+units, as in target facts; optional `partition_table.sector_size_bytes` records logical sector size.
+Both partitions must match unique unmounted layout identities, with the ADR's Linux root/ESP types and
+filesystem binding. `target.installation.disk_path` equals `target.disk.path`.
+With bound facts, the validator also requires exact membership in the disk's `replace_candidates` and an
+unchanged `current_layout`; labels alone cannot authorize replacement. The selected new `storage_option`
+may differ from the candidate's existing option, since both target filesystems are reformatted.
 
 ### `choices`
 
 Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are the policy keys of
-`install/plan/policy.json` plus `target_disk`:
+`install/plan/policy.json` plus `target_disk` and, only for replacement, `replace_root_partuuid`:
 
 | Key | Editable | Value |
 | --- | --- | --- |
 | `target_disk` | yes | The `by_id` of the selected disk, or its `path` when it has no `by_id`. |
+| `target_mode` | yes | `whole_disk` (default) or `replace_installation`. |
+| `replace_root_partuuid` | yes | Full root PARTUUID of the chosen candidate, required only in replacement. Never automatically selected; absent in whole-disk mode. |
 | `storage_option` | yes | `ext4-systemd-boot`, `btrfs-rescue`, or `btrfs-limine` (the default). The entry also carries `tier`, `filesystem`, `bootloader`, and `resume_offset_method` from the tier table. |
 | `hibernation` | yes | Boolean, initially `true`. Enables the hibernation swapfile and resume configuration; see [Hibernation and swapfile](#hibernation-and-swapfile). |
 | `swapfile_size` | yes | Present only when `hibernation` is `true`. Integer MiB from 512 to the RAM-derived maximum; the maximum is also the default. |
@@ -124,7 +142,8 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 
 The tier table of the policy reflects [ADR 0009](../docs/adr/0009-storage-option-promotion-and-esp-size.md):
 `btrfs-limine` is `default` and is the default `storage_option`, while `ext4-systemd-boot` and `btrfs-rescue`
-are `supported`. The ESP is 2 GiB for every option. The additional packages of `btrfs-limine` do not include
+are `supported`. The ESP is 2 GiB for every option. `efibootmgr` is a base target package for all options,
+not a Limine-only additional package, because registration and `mirroros-boot-first` apply to both bootloaders. The additional packages of `btrfs-limine` do not include
 `base-devel` or `git`: its Limine snapshot tools are prebuilt in the artifact
 ([ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md)). Selecting an option whose tier is
 `experimental` adds the warning `storage_option_experimental`; no option has that tier under the current policy.
@@ -144,8 +163,9 @@ When `hibernation` is `true`:
 - A size whose bytes (`swapfile_size * 1048576`) are less than `memory_total_bytes` is valid and adds the warning
   `swapfile_below_ram`. Equality does not warn. The default is above or equal to raw RAM and never warns.
 - `create_swapfile` is present, the Btrfs options keep `@swap`, and the resume parameters are present.
-- The layout must fit: the ESP, `root_minimum_bytes`, and `swapfile_size` must not exceed the disk
-  (`plan_size_does_not_fit`). The size is never silently reduced and hibernation is never silently disabled.
+- The layout must fit: in whole-disk mode the ESP, `root_minimum_bytes`, and `swapfile_size` must not exceed the disk
+  (`plan_size_does_not_fit`). In replacement, the existing ESP must meet the policy ESP minimum and the existing
+  root must fit `root_minimum_bytes` plus the swapfile (`replacement_target_invalid`); other partitions' space is never counted. The size is never silently reduced and hibernation is never silently disabled.
 
 When `hibernation` is `false`, the plan has no `swapfile_size` choice, no `create_swapfile`, no `resume=` or
 `resume_offset=` kernel parameters, no `resume_offset` entry in any `resolved_at_apply`, and, for both Btrfs
@@ -206,6 +226,14 @@ provenance `hardware_detection` and source `detected`. With several, the plan re
 choices file names one (provenance `personal_preference`, source `choice`). A disk without `by_id` is
 accepted by `path` with the warning `disk_without_by_id`; a disk with neither is rejected.
 
+`whole_disk` remains the default even when replacement evidence exists. Replacement requires an explicit
+`target_mode: "replace_installation"` and `replace_root_partuuid` naming the disk's sole unambiguous candidate.
+Missing, ambiguous, mounted, incomplete, changed or undersized targets are rejected. The ESP must be at least
+the policy ESP size (2 GiB), and root must meet the policy root minimum (15 GiB) plus any requested swapfile.
+No partition is resized, moved or created in replacement. A root choice in whole-disk mode is a conflict.
+The render and console summary identify the mode, both format targets and their full PARTUUIDs; replacement
+review marks every other partition `PRESERVE` instead of displaying a whole-disk erasure warning.
+
 ### `operations`
 
 Each operation is an object with:
@@ -227,7 +255,12 @@ is defined in [`installation-engine.md`](installation-engine.md).
 
 | Kind | Destructive | Description |
 | --- | --- | --- |
-| `wipe_disk_signatures` | yes | Remove existing filesystem and partition-table signatures from the target disk. |
+| `record_disk_partuuids` | no | Whole-disk only: capture and recheck the target disk's pre-wipe PARTUUID set. Parameters: `disk` (selected identifier), `partuuids` (observed layout PARTUUIDs, in layout order; absent PARTUUID fields are omitted from this list). The engine records these before wiping, never derives cleanup from the new partition table. |
+| `remove_stale_uefi_entries` | no | Whole-disk only: remove only entries referencing the captured PARTUUID set, preserving unrelated entries. Parameters: `partuuids`, exactly the capture list; this mutates firmware, not disk content. |
+| `wipe_partition_signatures` | yes | Replacement only: wipe signatures on the selected partition nodes, never the disk. Parameters: `esp` and `root`, exact copies of `target.installation` partition identities. |
+| `format_partitions` | yes | Replacement only: format the selected partition nodes without rewriting the partition table. Parameters: `esp`, `root`, `esp_filesystem` (`vfat`) and `root_filesystem` (selected option). Resolves new `partition_uuids` by `blkid`; existing PARTUUIDs remain unchanged. |
+| `register_uefi_boot_entry` | no | Both modes, last: find/create the selected loader's entry on the target ESP and move it first, preserving other entries' relative order. Parameters: `bootloader`, `label`, `loader_path`, `first` (`true`). Limine uses `Limine MirrorOS` and `\EFI\BOOT\BOOTX64.EFI`; systemd-boot uses `MirrorOS` and `\EFI\systemd\systemd-bootx64.efi`. The ESP is the selected replacement ESP or the newly created whole-disk ESP, never inferred from an unrelated entry. Duplicate matches fail closed, deleting none; the appropriate fallback remains deployed. |
+| `wipe_disk_signatures` | yes | Whole-disk only: remove existing filesystem and partition-table signatures from the target disk. |
 | `create_partition_table` | yes | Write an empty GPT. |
 | `create_partitions` | yes | Create the ESP and the root partition on the remaining space. |
 | `format_filesystems` | yes | Format the ESP as FAT32 and the root partition with the option's filesystem. Resolves `partition_uuids` (`blkid`). |
@@ -281,6 +314,15 @@ The sequence is fixed; the validator rejects a different set or a different orde
 `btrfs-limine`: the `btrfs-rescue` sequence with `install_limine_snapshot_tools` inserted after
 `install_bootloader` (before `configure_snapper`) and `sync_limine_snapshot_entries` appended after
 `create_baseline_snapshot`.
+
+For format `5` whole-disk mode, prepend `record_disk_partuuids` to the sequences above, insert
+`remove_stale_uefi_entries` immediately after `create_partitions`, and append `register_uefi_boot_entry`
+after all storage-option steps (including Limine snapshot synchronization).
+For replacement, replace the four initial disk operations (`wipe_disk_signatures` through `format_filesystems`)
+with `wipe_partition_signatures` then `format_partitions`. Omit capture and stale-entry cleanup entirely;
+retain all subsequent option-specific steps and append `register_uefi_boot_entry` last. Thus replacement
+cannot express partition-table creation or a disk-node wipe. Storage and registration parameters must agree
+exactly with the declared targets and selected option; unknown extra parameters on these operations are rejected.
 
 The resume offset method comes from the tier table: `filefrag` for ext4 and
 `btrfs inspect-internal map-swapfile -r` for Btrfs, and applies only when hibernation is enabled. The Btrfs
@@ -378,7 +420,7 @@ not a second one. The choices file is not hashed: its effect is already in `choi
 }
 ```
 
-Allowed keys: `target_disk`, `storage_option`, `hibernation`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`,
+Allowed keys: `target_disk`, `target_mode`, `replace_root_partuuid`, `storage_option`, `hibernation`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`,
 `timezone`, `hostname`, `user_name`, and `root_account`. Unknown keys, non-editable policy keys (including the
 derived `locales` and `locale_categories`), invalid values, and secret-like keys (`password`, `*_password`)
 are invalid input. A choices file of `format_version` `1` or `2` is invalid input, with regeneration guidance.
@@ -409,7 +451,7 @@ install/plan/plan validate-choice --facts <file> [--choices <file>] --key <key> 
 | Field | Description |
 | --- | --- |
 | `choices` | Every editable key with its resolved `value`, `provenance`, `source`, and `editable`, as the plan would hold it for the given choices file. Defaults come from policy, detection, and a matched-profile override. |
-| `options` | The allowed values per key: the storage options with `tier`, `filesystem`, and `bootloader`; the eligible disks with `value`, `path`, `model`, and `size_bytes`; the languages and regional formats; `hibernation` (boolean); the `swapfile_size` range with `minimum`, `maximum`, `default`, `unit`, and `memory_total_bytes`, derived from the facts' RAM, and whether it is editable (only while `hibernation` is `true`); and the `root_account` values. Free-text keys (`hostname`, `user_name`, `timezone`, `console_keymap`) carry their validation rule rather than a list. |
+| `options` | `target_mode` offers `whole_disk` and, only with a sole discovered candidate on the selected disk, `replace_installation`; `replace_root_partuuid` lists candidate objects with `value` (full root PARTUUID), `disk_path`, `root`, and `esp`. No replacement is offered with a pending disk. Other allowed values per key: the storage options with `tier`, `filesystem`, and `bootloader`; the eligible disks with `value`, `path`, `model`, and `size_bytes`; the languages and regional formats; `hibernation` (boolean); the `swapfile_size` range with `minimum`, `maximum`, `default`, `unit`, and `memory_total_bytes`, derived from the facts' RAM, and whether it is editable (only while `hibernation` is `true`); and the `root_account` values. Free-text keys (`hostname`, `user_name`, `timezone`, `console_keymap`) carry their validation rule rather than a list. |
 | `derived` | The `locales` and `locale_categories` for the previewed `lang` and `regional_format`. |
 | `warnings` | The warnings the plan would carry that do not depend on a combination failing. |
 
@@ -418,7 +460,8 @@ argument is a string: integers (`swapfile_size`) and booleans (`hibernation`, ex
 is read. On success it prints `{ "valid": true, "key", "value", "derived" }`, with `derived` present for `lang`
 and `regional_format`. Otherwise it prints `{ "valid": false, "reasons" }` with the generation reasons of the
 plan contract (for example `choices_invalid_value`, `choices_not_editable`, or `choices_unknown_key`) and exits
-`2`. The complete combination, including layout fit, is validated only when the plan is generated.
+`2`. Mode and candidate identity checks reuse selection; a replacement preview may leave the root choice pending,
+but generation requires it explicitly. The complete combination, including layout fit, is validated when the plan is generated.
 
 ## Canonicalization and digest
 
@@ -455,11 +498,13 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | Code | Condition |
 | --- | --- |
 | `plan_not_json`, `plan_invalid_type`, `plan_non_integer_number` | Malformed document. |
-| `plan_format_unsupported` | `format_version` is not `4`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
+| `plan_format_unsupported` | `format_version` is not `5`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
 | `plan_field_missing`, `plan_label_missing` | A required field, or a `provenance`, `source`, or `editable` label, is missing. |
 | `plan_unknown_field` | A field outside this contract, including `approved` and `approval`. |
 | `plan_secret_value_present` | A secret-named key outside `secret_requirements`, or an extra field in a secret entry. |
-| `operations_storage_mismatch` | The operations do not match `storage_option`. |
+| `operations_storage_mismatch` | The operations do not match `storage_option` and `target_mode`. |
+| `target_mode_mismatch` | Unknown/inconsistent mode, replacement fields in whole-disk mode, storage/UEFI parameters differing from the declared targets, or bootloader/filesystem metadata inconsistent with the selected option. |
+| `replacement_target_invalid` | Missing, non-unique, incomplete, mounted, changed or undersized replacement identities, incorrect disk/root choice, or a replacement absent from the bound facts' candidates. |
 | `operation_kind_unknown`, `operation_order_invalid` | Unknown kind, or disallowed order. |
 | `operation_id_invalid`, `operation_destructive_mismatch` | An operation id differs from its kind, or its `destructive` flag differs from the kind table. |
 | `destructive_without_target_disk` | A destructive operation exists without `target_disk`. |
@@ -484,7 +529,8 @@ Generation reasons, reported with the same shape and exit `2` unless noted:
 | `memory_unavailable` | The facts' effective view has no positive safe-integer `memory_total_bytes`. The `next_step` asks the user to repeat discovery. |
 | `facts_invalid`, `facts_format_unknown` | The facts fail `validate-facts.mjs`, have `validation.status` `invalid`, or a `format_version` other than `2` (facts of format `1` are not accepted). |
 | `choices_invalid_format`, `choices_unknown_key`, `choices_not_editable`, `choices_secret_key`, `choices_invalid_value` | The choices file is invalid, including one of `format_version` `1` or `2`, a non-boolean `hibernation`, or an out-of-range or non-integer `swapfile_size`. |
-| `choices_conflict` | The choices contradict each other: `hibernation: false` with `swapfile_size`. |
+| `choices_conflict` | The choices contradict each other: `hibernation: false` with `swapfile_size`, or a replacement root choice in whole-disk mode. |
+| `replacement_target_invalid` | Replacement selection or partition reuse constraints fail; repeat discovery and select a suitable candidate. |
 | `override_invalid_format`, `override_unknown_key`, `override_invalid_value` | The target override is invalid. |
 | `disk_selection_required` | Several disks are eligible; the reason lists the candidates. |
 | `disk_unknown`, `disk_ineligible` | The named disk is unknown or ineligible; the reason lists the candidates. |

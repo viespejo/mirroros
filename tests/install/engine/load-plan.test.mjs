@@ -14,10 +14,11 @@ test('a valid plan yields its header and the operations in plan order with flatt
   const { fields, status } = verify(planText('valid', EXT4));
   assert.equal(status, 0);
   assert.deepEqual(fields.slice(0, 7).slice(0, 4), ['ok', JSON.parse(planText('valid', EXT4)).digest.value, 'ext4-systemd-boot', 'true']);
-  assert.deepEqual(fields.slice(4, 7), ['/dev/vda', 'virtio-SYNTH-VDA-0001', '17']);
+  assert.deepEqual(fields.slice(4, 7), ['/dev/vda', 'virtio-SYNTH-VDA-0001', '20']);
   const operations = streamOperations(fields);
-  assert.equal(operations.length, 17);
-  assert.equal(operations[0].id, 'wipe_disk_signatures');
+  assert.equal(operations.length, 20);
+  assert.equal(fields[7], 'whole_disk');
+  assert.equal(operations[0].id, 'record_disk_partuuids');
   assert.equal(operations[0].parameters.disk, 'virtio-SYNTH-VDA-0001');
   const locale = operations.find(operation => operation.id === 'configure_locale_time_console');
   assert.equal(locale.parameters['locale_categories.LANG'], 'en_US.UTF-8');
@@ -56,7 +57,7 @@ test('the plans of every storage option load, Limine included, with their operat
   const limine = streamOperations(verify(planText('valid', 'btrfs-limine--locked')).fields).map(operation => operation.id);
   assert.equal(verify(planText('valid', 'btrfs-limine--locked')).fields[0], 'ok');
   assert.ok(limine.indexOf('install_limine_snapshot_tools') > limine.indexOf('install_bootloader'));
-  assert.equal(limine.at(-1), 'sync_limine_snapshot_entries');
+  assert.equal(limine.at(-1), 'register_uefi_boot_entry');
   assert.ok(limine.indexOf('sync_limine_snapshot_entries') > limine.indexOf('create_baseline_snapshot'));
   assert.equal(verify(planText('valid', 'btrfs-rescue--locked')).fields[0], 'ok');
 });

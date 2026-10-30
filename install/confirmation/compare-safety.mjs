@@ -111,6 +111,17 @@ export function diskDifferences(plan, disk, { ignoreMounts = false } = {}) {
       `The disk ${describeDisk(planned)} is no longer eligible for installation.`,
     ));
   }
+  if (plan.target_mode !== plan.choices.target_mode?.value
+    || (plan.target_mode !== 'whole_disk' && plan.target_mode !== 'replace_installation')) {
+    reasons.push(invalidation('target_identity_changed', 'The target mode differs from the reviewed choice.'));
+  }
+  if (plan.target_mode === 'replace_installation') {
+    const candidates = disk.replace_candidates ?? [];
+    if (candidates.length !== 1 || !sameValue(plan.target.installation, candidates[0])
+      || plan.choices.replace_root_partuuid?.value !== plan.target.installation?.root.partuuid) {
+      reasons.push(invalidation('target_layout_changed', 'The replacement installation no longer matches the reviewed partition identities and binding.'));
+    }
+  }
   const observedLayout = ignoreMounts ? withoutMountpoints(disk.layout) : disk.layout;
   const plannedLayout = ignoreMounts ? withoutMountpoints(planned.current_layout) : planned.current_layout;
   if (!sameValue(plannedLayout, observedLayout)) {

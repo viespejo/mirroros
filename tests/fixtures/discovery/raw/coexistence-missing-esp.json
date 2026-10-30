@@ -1,0 +1,11 @@
+{
+  "storage": {
+    "blockdevices": [{
+      "path": "/dev/vda", "type": "disk", "size": 34359738368, "rm": false, "ro": false, "pttype": "gpt", "log-sec": 512,
+      "children": [
+        {"path": "/dev/vda2", "type": "part", "size": 30064771072, "fstype": "btrfs", "label": "mirroros", "uuid": "20000000-0000-4000-8000-000000000002", "partuuid": "10000000-0000-4000-8000-000000000002", "parttype": "0fc63daf-8483-4772-8e79-3d69d8477de4", "partn": 2, "start": 4196352}
+      ]
+    }],
+    "installation_inspections": []
+  }
+}

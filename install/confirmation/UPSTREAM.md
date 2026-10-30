@@ -170,6 +170,12 @@ Synthetic providers, values, timing, navigation and font controls remain disposa
 installation, account change, disk operation or power action was involved. Earlier pending statements
 refer to their respective checkpoints.
 
+The ADR 0022 coexistence extension is original MirrorOS work with no additional external material.
+It adds the plan-preview-owned target-mode selector, formatted/preserved partition identities in review
+and confirmation, and exact full-root-PARTUUID confirmation after the disk name for replacement. It uses
+the existing Gum controls, shared accent, wrapped review rows and cancellation rules. Earlier attended
+screen approvals do not qualify this new branch, long replacement identities or its geometry.
+
 The intended differences are listed in
 [`contracts/installation-confirmation.md`](../../contracts/installation-confirmation.md#differences-from-the-reference)
 (D1 to D14). The production assistant additionally shows three short gray status lines while a read-only

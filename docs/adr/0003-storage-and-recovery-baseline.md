@@ -70,6 +70,14 @@ MirrorOS offers three storage and boot options in the final distribution, with a
 
 The prototype configurations are evidence and constrain the options only where this record says so. The selector's interaction, its place in the installation plan, and its handling by `install/engine/apply` are not defined here and belong to the later stories that implement them. The recovery scripts of the prototypes are input for later recovery work (Stories 5.5 and 6.x), not procedures.
 
+### Forward extension: installer coexistence
+
+[ADR 0022](0022-installer-coexistence-and-uefi-boot-entry.md) extends this baseline with whole-disk and
+partition-scoped replacement modes for all three storage options, explicit selected-loader UEFI
+registration, and the installed `mirroros-boot-first` command. It does not supersede this record's
+storage or recovery choices or rewrite its historical evidence. The support tiers/default and ESP size
+remain governed by ADR 0009; swap and hibernation remain governed by ADR 0007.
+
 ## Consequences and trade-offs
 
 - The test matrix, the qualification runs, and the recovery documentation grow by option. Each option has a different recovery procedure: rescue with package removal or `mkinitcpio -P`, rescue with restoration of `@`, and the Limine menu.

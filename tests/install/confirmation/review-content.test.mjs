@@ -24,7 +24,7 @@ const rows = subject => Object.fromEntries(compactReview(subject));
 test('the compact review shows the machine, disk, answers, and the plan reference', () => {
   const subject = plan({ hostname: 'laptop', swapfile_size: 2048 });
   assert.deepEqual(compactReview(subject).map(([label]) => label), [
-    'Machine', 'Graphics', 'CPU microcode', 'Battery', 'Virtualization', 'Disk', 'Storage', 'Hibernation', 'Timezone', 'Language', 'Formats', 'Locales',
+    'Machine', 'Graphics', 'CPU microcode', 'Battery', 'Virtualization', 'Disk', 'Mode', 'Storage', 'Hibernation', 'Timezone', 'Language', 'Formats', 'Locales',
     'Username', 'Root', 'Hostname', 'Keyboard', 'Plan reference',
   ]);
   const shown = rows(subject);
@@ -75,6 +75,7 @@ test('the confirmation shows the disk, its layout, and the plan reference, not t
   assert.deepEqual(lines, [
     'Disk: /dev/vda 32.0 GiB',
     'Identifier: virtio-SYNTH-VDA-0001',
+    'Mode: Whole disk',
     'Partition table: gpt, 2 partition(s)',
     '  /dev/vda1: vfat, 512.0 MiB, "SYNTH-ESP"',
     '  /dev/vda2: ext4, 30.0 GiB, "SYNTH-DATA"',

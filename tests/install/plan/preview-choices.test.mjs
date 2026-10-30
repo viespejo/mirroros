@@ -19,7 +19,7 @@ after(() => removeDirectory(root));
 
 const EDITABLE_KEYS = [
   'storage_option', 'hibernation', 'swapfile_size', 'lang', 'regional_format', 'console_keymap', 'timezone', 'hostname',
-  'user_name', 'root_account', 'target_disk',
+  'user_name', 'root_account', 'target_disk', 'target_mode',
 ];
 
 function preview({ factsDocument = facts(), choices = {}, override = referenceOverride() } = {}) {
@@ -164,6 +164,7 @@ test('previewing and validating change no input and need no plan', () => {
 
 test('each editable key accepts a valid value and reports it', () => {
   const valid = {
+    target_mode: 'whole_disk',
     storage_option: 'btrfs-rescue',
     hibernation: 'false',
     swapfile_size: '2048',

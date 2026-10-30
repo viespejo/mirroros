@@ -1,4 +1,4 @@
-MirrorOS installation plan (format 4)
+MirrorOS installation plan (format 5)
 ================================================================================
 
 1. Target
@@ -10,6 +10,7 @@ MirrorOS installation plan (format 4)
   Product name      Standard PC (Q35 + ICH9, 2009)
   Profile           matched reference-vm (recognized profile; not a
                     qualification of this machine)
+  Target mode       whole_disk
   Disk path         /dev/vda
   Disk by-id        virtio-SYNTH-VDA-0001
   Serial            SYNTH-VDA-0001
@@ -70,8 +71,8 @@ MirrorOS installation plan (format 4)
   network: manager=NetworkManager; package=networkmanager;
       predefined_connections=false
       provenance personal_preference; source policy
-  packages: base, linux, linux-firmware, zram-generator, sudo, neovim, man-db,
-      man-pages, xkeyboard-config
+  packages: base, linux, linux-firmware, zram-generator, efibootmgr, sudo,
+      neovim, man-db, man-pages, xkeyboard-config
       provenance personal_preference; source policy
   pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
       provenance personal_preference; source policy
@@ -89,6 +90,8 @@ MirrorOS installation plan (format 4)
       provenance hardware_detection; source detected [editable]
   sysrq: kernel.sysrq = 1
       provenance personal_preference; source policy
+  target_mode: whole_disk
+      provenance personal_preference; source policy [editable]
   time_sync: systemd-timesyncd
       provenance personal_preference; source policy
   timezone: Europe/Madrid
@@ -117,33 +120,42 @@ MirrorOS installation plan (format 4)
 
 4. Operations in order
 ======================
-  01. wipe_disk_signatures DESTRUCTIVE
+  01. record_disk_partuuids
+      Record the target disk partition PARTUUIDs before wiping.
+      disk: virtio-SYNTH-VDA-0001
+      partuuids: 00000000-0000-4000-8000-0000000000a1,
+        00000000-0000-4000-8000-0000000000a2
+  02. wipe_disk_signatures DESTRUCTIVE
       Remove existing signatures from the target disk.
       disk: virtio-SYNTH-VDA-0001
-  02. create_partition_table DESTRUCTIVE
+  03. create_partition_table DESTRUCTIVE
       Write an empty GPT on the target disk.
       disk: virtio-SYNTH-VDA-0001
       table: gpt
-  03. create_partitions DESTRUCTIVE
+  04. create_partitions DESTRUCTIVE
       Create the ESP and a root partition on the remaining space.
       disk: virtio-SYNTH-VDA-0001
       esp_size_bytes: 2147483648
       esp_mount_point: /boot
       root: remaining_space
-  04. format_filesystems DESTRUCTIVE
+  05. remove_stale_uefi_entries
+      Remove only UEFI entries referencing pre-wipe target PARTUUIDs.
+      partuuids: 00000000-0000-4000-8000-0000000000a1,
+        00000000-0000-4000-8000-0000000000a2
+  06. format_filesystems DESTRUCTIVE
       Format the ESP and the root partition.
       esp_filesystem: vfat
       root_filesystem: ext4
       resolved at apply: partition_uuids (blkid)
-  05. mount_target
+  07. mount_target
       Mount the root filesystem and the ESP under the target root.
       esp_mount_point: /boot
-  06. install_packages
+  08. install_packages
       Install packages.
-      packages: base, linux, linux-firmware, zram-generator, sudo, neovim,
-        man-db, man-pages, xkeyboard-config, networkmanager
+      packages: base, linux, linux-firmware, zram-generator, efibootmgr, sudo,
+        neovim, man-db, man-pages, xkeyboard-config, networkmanager
       rule_packages: amd-ucode
-  07. configure_zram
+  09. configure_zram
       Configure zram as preferred swap.
       destination: /usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf
       source_sha256:
@@ -151,7 +163,7 @@ MirrorOS installation plan (format 4)
       zram_size: ram
       compression_algorithm: zstd
       swap_priority: 100
-  08. configure_memory_reclaim
+  10. configure_memory_reclaim
       Deliver the sysctl drop-in with the memory reclaim settings.
       destination: /usr/lib/sysctl.d/60-mirroros-memory.conf
       source_sha256:
@@ -160,16 +172,16 @@ MirrorOS installation plan (format 4)
       vm.page-cluster: 0
       vm.watermark_scale_factor: 125
       vm.watermark_boost_factor: 0
-  09. generate_fstab
+  11. generate_fstab
       Generate /etc/fstab by UUID.
       identifier: uuid
-  10. create_swapfile
+  12. create_swapfile
       Create the fallback swapfile, which also holds the hibernation image.
       path: /swapfile
       size_mib: 4096
       priority: 0
       resolved at apply: resume_offset (filefrag)
-  11. configure_locale_time_console
+  13. configure_locale_time_console
       Configure locale, time, and console keymap.
       locales: en_US.UTF-8
       lang: en_US.UTF-8
@@ -180,24 +192,24 @@ MirrorOS installation plan (format 4)
       timezone: Europe/Madrid
       hardware_clock: utc
       time_sync: systemd-timesyncd
-  12. configure_hostname_network
+  14. configure_hostname_network
       Set the hostname and configure NetworkManager.
       hostname: mirroros-ref
       network_manager: NetworkManager
-  13. create_user
+  15. create_user
       Create the user account and set its password from a protected prompt.
       user_name: mirroros
       groups: wheel
       shell: bash
-  14. configure_root_account
+  16. configure_root_account
       Configure the root account as selected.
       mode: locked
-  15. configure_sudo_sysrq_pacman
+  17. configure_sudo_sysrq_pacman
       Install the sudoers drop-in, the sysrq setting, and the pacman options.
       sudoers: %wheel ALL=(ALL:ALL) ALL
       sysrq: kernel.sysrq = 1
       pacman_options: Color, ParallelDownloads = 5, VerbosePkgLists, ILoveCandy
-  16. install_bootloader
+  18. install_bootloader
       Install and configure the boot loader and the kernel command line.
       bootloader: systemd-boot
       kernel_cmdline: root=UUID=<root> rw zswap.enabled=0 resume=UUID=<root>
@@ -205,9 +217,15 @@ MirrorOS installation plan (format 4)
       options: timeout=3; editor=false; fallback_entry=true
       resolved at apply: root_uuid (blkid)
       resolved at apply: resume_offset (filefrag)
-  17. enable_services
+  19. enable_services
       Enable the network, time sync, trim, and storage option services.
       services: NetworkManager, systemd-timesyncd, fstrim.timer
+  20. register_uefi_boot_entry
+      Register the MirrorOS loader first, preserving other entries.
+      bootloader: systemd-boot
+      label: MirrorOS
+      loader_path: \EFI\systemd\systemd-bootx64.efi
+      first: true
 
 5. Secret requirements
 ======================
@@ -256,11 +274,11 @@ MirrorOS installation plan (format 4)
 
 8. Digest and bindings
 ======================
-  Digest (sha256)   e945b05fed214c02d34d237e5fdeb40d1d8e30b264ef5acdd33c46372ed9f4ff
-  Facts sha256      b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11
+  Digest (sha256)   f86327db51185fae690870791885f28a00b6320818c9ca09dd4a310891b76e51
+  Facts sha256      4a4f8330eb5c7862e077c124c41b292ae96ce7c52234bcbb762a62268c5862a5
   Facts run         20261007T120000Z-11111111-2222-4333-8444-555555555555
   Code commit       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (dirty false)
-  Policy sha256     9ac6ed0b352b7232eb336fb9a970e6bf38b2be7b5e26cfe52fcc357754bda2f2
+  Policy sha256     deb1f27b1f29096e0d9402367a7ec3b4c9c517787319461d491ba94fe803764d
   Profile sha256    07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca
   Override sha256   0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242
 

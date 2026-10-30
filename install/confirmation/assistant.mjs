@@ -3,7 +3,7 @@ import { loadFacts } from '../plan/generate-plan.mjs';
 import { EXIT_INTERNAL, EXIT_INVALID_INPUT, EXIT_VALID } from '../plan/validate-plan.mjs';
 import { standardReason } from './outcomes.mjs';
 import { applyRegionalMirrors } from './regional-mirrors.mjs';
-import { digestPrefix, hibernationLabel, machineLabel, reviewWarnings, ruleRows, swapfileWarning } from './review-content.mjs';
+import { digestPrefix, hibernationLabel, machineLabel, reviewWarnings, ruleRows, swapfileWarning, targetRows } from './review-content.mjs';
 import { detectedMemoryBytes, memoryUnavailableReason } from '../plan/generate-plan.mjs';
 
 // Read-only data helpers for the guided assistant (install/confirmation/lib). The assistant is a Bash flow
@@ -113,6 +113,11 @@ function hasWarning([path, code]) {
   return warnings.some(item => item.code === code) ? EXIT_VALID : EXIT_INVALID_INPUT;
 }
 
+function targetModes([path]) {
+  for (const mode of readJson(path).options.target_mode) process.stdout.write(`${mode}\n`);
+  return EXIT_VALID;
+}
+
 function storage([path]) {
   for (const option of readJson(path).options.storage_option) process.stdout.write(`${option.value}\t${option.tier}\n`);
   return EXIT_VALID;
@@ -145,6 +150,9 @@ function reviewValues([path]) {
   const rows = [
     ['machine', machineLabel(plan)],
     ['disk', diskLabel(disk, disk.current_layout?.partitions)],
+    ['target_mode', plan.target_mode],
+    ...targetRows(plan).map(([label, value]) => [label === 'Mode' ? 'target_mode_label' : `target_${label.toLowerCase().replaceAll(' ', '_')}`, value]),
+    ...(plan.target_mode === 'replace_installation' ? [['root_partuuid', plan.target.installation.root.partuuid]] : []),
     ['storage_option', choices.storage_option.value],
     ['storage_tier', choices.storage_option.tier],
     ['hibernation', choices.hibernation.value],
@@ -161,6 +169,7 @@ function reviewValues([path]) {
     ['hostname', choices.hostname.value],
     ['console_keymap', choices.console_keymap.value],
     ['plan_reference', digestPrefix(plan)],
+    ['plan_digest', plan.digest.value],
   ];
   for (const [key, value] of rows) process.stdout.write(`${key}\t${oneLine(value)}\n`);
   return EXIT_VALID;
@@ -239,7 +248,7 @@ function regionalMirrors([timezone, root]) {
 }
 
 const COMMANDS = {
-  get, disks, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'review-warnings': reviewWarningLines, 'reasons-text': reasonsText,
+  get, disks, 'target-modes': targetModes, 'has-warning': hasWarning, storage, memory, profile, 'review-values': reviewValues, 'review-warnings': reviewWarningLines, 'reasons-text': reasonsText,
   recoverable, reason: reasonList, 'engine-progress': engineProgress, 'engine-summary': engineSummary,
   'regional-mirrors': regionalMirrors,
 };

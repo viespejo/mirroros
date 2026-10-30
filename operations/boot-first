@@ -1,0 +1,38 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+if [[ $# == 1 && $1 == --help ]]; then
+  printf '%s\n' \
+    'Usage: sudo mirroros-boot-first' \
+    'Restore the running MirrorOS bootloader entry to first in UEFI BootOrder.' \
+    'Requires root, a verified MirrorOS ESP mounted at /boot, and efibootmgr.' \
+    'Recreates a missing entry; never deletes entries or runs automatically.' \
+    'Prints the before/after BootOrder. Firmware may reorder it again later.' \
+    'Exit: 0 success, 2 unmet precondition, 5 upstream failure, 6 invariant failure.'
+  exit 0
+fi
+if (( $# )); then
+  printf '%s\n' 'MirrorOS boot-first: unsupported arguments; use --help.' >&2
+  exit 2
+fi
+if [[ $(id -u) != 0 ]]; then
+  printf '%s\n' 'MirrorOS boot-first: run as root using sudo.' >&2
+  exit 2
+fi
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && pwd -P)"
+# shellcheck disable=SC1091 # Delivered beside this command, also resolved through its launcher symlink.
+if [[ ! -r "$SCRIPT_DIR/lib/uefi-boot-entry.sh" ]] || ! source "$SCRIPT_DIR/lib/uefi-boot-entry.sh"; then
+  printf '%s\n' 'MirrorOS boot-first: missing or damaged UEFI library.' >&2
+  exit 6
+fi
+for tool in findmnt lsblk readlink awk grep tr efibootmgr; do
+  if ! command -v "$tool" >/dev/null; then
+    printf 'MirrorOS boot-first: required tool missing: %s\n' "$tool" >&2
+    exit 2
+  fi
+done
+if ! uefi_identify_running /boot /etc/fstab; then
+  printf '%s\n' 'MirrorOS boot-first: /boot is not an unambiguously bound MirrorOS ESP; no NVRAM changes.' >&2
+  exit 2
+fi
+uefi_ensure_first "$UEFI_RUNNING_DISK" "$UEFI_RUNNING_PART" "$UEFI_RUNNING_GUID" "$UEFI_RUNNING_LOADER"

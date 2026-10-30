@@ -156,6 +156,7 @@ test('the console summary lists the decision data and ends with the review sente
   assert.deepEqual(lines, [
     'Profile: matched reference-vm',
     'Disk: virtio-SYNTH-VDA-0001 (34359738368 bytes (32.0 GiB))',
+    'Target mode: whole_disk',
     'Storage option: btrfs-rescue (supported)',
     'Hibernation: enabled (swapfile 4096 MiB)',
     'Destructive operations: 4',

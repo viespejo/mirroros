@@ -183,7 +183,7 @@ teardown() {
 @test "clean embedded capture materializes the declared subtrees with identities and modes" {
   local destination="${BUILDER_TEST_ROOT}/embedded clean"
   local embedded="${destination}/image/archiso/airootfs/usr/local/lib/mirroros"
-  local tree_identity
+  local tree_identity path
 
   mkdir -p "${BUILDER_REPOSITORY_ROOT}/tests" "${BUILDER_REPOSITORY_ROOT}/contracts"
   printf '%s\n' 'not embedded' > "${BUILDER_REPOSITORY_ROOT}/tests/not-embedded.txt"
@@ -202,6 +202,10 @@ teardown() {
   [[ "$output" != *'embedded_dirty_path='* ]]
   [ -x "${embedded}/operations/install" ]
   [ -x "${embedded}/operations/configure" ]
+  for path in operations/boot-first operations/lib/uefi-boot-entry.sh; do
+    cmp "${BUILDER_REPOSITORY_ROOT}/${path}" "${embedded}/${path}"
+    [[ "$output" == *"subtree=${path} identity=$(git -C "$BUILDER_REPOSITORY_ROOT" rev-parse "HEAD:${path}")"* ]]
+  done
   [ -f "${embedded}/capabilities/desktop/compositor/providers/hyprland/apply" ]
   [ -f "${embedded}/capabilities/lib/common.sh" ]
   [ -f "${embedded}/capabilities/configure-steps" ]
@@ -230,6 +234,8 @@ teardown() {
   local destination="${BUILDER_TEST_ROOT}/embedded dirty"
   local embedded="${destination}/image/archiso/airootfs/usr/local/lib/mirroros"
 
+  printf '%s\n' '# dirty boot-first fixture' >> "${BUILDER_REPOSITORY_ROOT}/operations/boot-first"
+  printf '%s\n' '# dirty UEFI library fixture' >> "${BUILDER_REPOSITORY_ROOT}/operations/lib/uefi-boot-entry.sh"
   printf '%s\n' '# dirty embedded fixture' >> "${BUILDER_REPOSITORY_ROOT}/hardware/discovery/normalize-hardware.mjs"
   printf '%s\n' 'untracked embedded input' > "${BUILDER_REPOSITORY_ROOT}/targets/new embedded file.txt"
   chmod 751 "${BUILDER_REPOSITORY_ROOT}/targets/new embedded file.txt"
@@ -240,6 +246,10 @@ teardown() {
   [[ "$output" == *'subtree=install identity=dirty-path-list'* ]]
   [[ "$output" == *'embedded_dirty_path=hardware/discovery/normalize-hardware.mjs'* ]]
   [[ "$output" == *'embedded_dirty_path=targets/new embedded file.txt'* ]]
+  [[ "$output" == *'embedded_dirty_path=operations/boot-first'* ]]
+  [[ "$output" == *'embedded_dirty_path=operations/lib/uefi-boot-entry.sh'* ]]
+  cmp "${BUILDER_REPOSITORY_ROOT}/operations/boot-first" "${embedded}/operations/boot-first"
+  cmp "${BUILDER_REPOSITORY_ROOT}/operations/lib/uefi-boot-entry.sh" "${embedded}/operations/lib/uefi-boot-entry.sh"
   cmp -s "${BUILDER_REPOSITORY_ROOT}/hardware/discovery/normalize-hardware.mjs" \
     "${embedded}/hardware/discovery/normalize-hardware.mjs"
   [ "$(stat -c '%a' "${embedded}/targets/new embedded file.txt")" = '751' ]

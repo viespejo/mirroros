@@ -5,7 +5,7 @@ readers also accept pre-timing run version `3` without transforming it or invent
 its outcome and evidence fields, the outcome `not_configured`, and configure-step progress. Version `2` added the
 postconditions phase, the `postconditions` field of the run record, and the outcome `not_verified`; records and
 state files of versions `1` and `2` are historical evidence that is neither read nor transformed. `install/engine/apply` applies one approved
-[installation plan](installation-plan.md) (format 4) to the confirmed disk with the native Arch commands
+[installation plan](installation-plan.md) (format 5) to the confirmed target with the native Arch commands
 selected by [ADR 0002](../docs/adr/0002-installation-engine-selection.md). It is an internal boundary: it is
 invoked only by the guided assistant after the bound confirmation, the password entry, and the final
 revalidation described in [`installation-confirmation.md`](installation-confirmation.md), and it is not a public
@@ -61,11 +61,20 @@ untouched and the password discarded.
 | --- | --- | --- |
 | 1 | Inherited or self-taken installer lock (above). | `install_already_running`, exit `2`, stderr only. |
 | 2 | Code identity. The plan is read once into memory. The engine reads its own embedded `identity.json` (the same reading as `install/discovery/discover`) and requires the plan's `facts_binding.commit` and `facts_binding.dirty` to equal it. | `engine_version_mismatch`, `blocked`, exit `2`. A missing or unreadable identity is exit `6`. |
-| 3 | Plan validation with `validate-plan.mjs` (format 4), digest recomputed and equal to `--digest`, and rejection of any unknown kind and of any operation set or order other than the plan contract's for the plan's storage option and hibernation state. | `digest_mismatch`: `invalidated`, exit `2`. Validator codes pass through: `blocked`, exit `2`. |
+| 3 | Plan validation with `validate-plan.mjs` (format 5), digest recomputed and equal to `--digest`, and rejection of any unknown kind and of any operation set or order other than the plan contract's for the plan's storage option and hibernation state. | `digest_mismatch`: `invalidated`, exit `2`. Validator codes pass through: `blocked`, exit `2`. |
 | 4 | Keyring ready, without waiting: `pacman-init.service` is `active`. The engine never waits; the wait belongs to live preparation. | `live_keyring_not_ready`, `blocked`, exit `2`. |
 | 5 | The password is read once from fd 3 and fd 3 is closed. It must be present, non-empty, a single line, and free of NUL. | `password_unavailable`, `blocked`, exit `2`. |
-| 6 | Final block, immediately before the first destructive operation: (a) re-read the disk with the read-only `install/discovery/discover-storage` collector and compare the identity (`path`, `by_id`, `wwn`, `serial`, `model`, `size_bytes`), `current_layout`, and eligibility with the plan by reusing `install/confirmation/compare-safety.mjs`; (b) check occupancy: no partition of the disk is mounted or used as swap, and neither the disk nor its partitions have holders (empty `/sys/block/<dev>/holders` and `/sys/class/block/<part>/holders`, no `lvm`, `crypt`, or `raid*` children in `lsblk`). A leftover mount of the engine's own target mount point on the disk counts as in use. | (a) `target_identity_changed` or `target_layout_changed`, `invalidated`, exit `2`, password discarded. (b) `target_disk_in_use`, `blocked`, exit `2`, with a `next_step` naming what to release manually. |
-| 7 | `wipe_disk_signatures`, the first destructive operation. | See [Failure](#failure-interruption-and-cleanup). |
+| 6 | Final block, immediately before the first destructive operation: (a) re-read the disk with the read-only `install/discovery/discover-storage` collector and compare the identity (`path`, `by_id`, `wwn`, `serial`, `model`, `size_bytes`), `current_layout`, and eligibility with the plan by reusing `install/confirmation/compare-safety.mjs`; (b) in whole-disk mode, check occupancy: no partition of the disk is mounted or used as swap, and neither the disk nor its partitions have holders (empty `/sys/block/<dev>/holders` and `/sys/class/block/<part>/holders`, no `lvm`, `crypt`, or `raid*` children in `lsblk`). A leftover mount of the engine's own target mount point on the disk counts as in use. | (a) `target_identity_changed` or `target_layout_changed`, `invalidated`, exit `2`, password discarded. (b) `target_disk_in_use`, `blocked`, exit `2`, with a `next_step` naming what to release manually. |
+| 7 | `wipe_disk_signatures` in whole-disk mode, or `wipe_partition_signatures` in replacement mode, is the first destructive operation. | See [Failure](#failure-interruption-and-cleanup). |
+
+In `replace_installation` mode, step 6 also requires the freshly rediscovered installation to equal the
+plan's `target.installation`, including its ESP/root binding, identities and sizes. Plan validation enforces
+policy minimums and the selected layout requirements. The engine reads `sfdisk --dump` and requires the GPT
+identifier, sector size, partition count, and each entry's start, size, type GUID and PARTUUID to match the
+reviewed layout before any destructive operation. It records the dump excluding only the selected ESP/root
+entries, plus the non-target partition identities. Occupancy checks cover the selected ESP/root; their mounts,
+swap use and holders are never released automatically. Unrelated holders are not treated as target holders;
+conservative discovery eligibility and candidate rules still apply to the disk.
 
 The engine never unmounts or releases anything outside its own mount point, and it does not unmount at the start
 of a direct invocation: the start-of-run cleanup of `/run/mirroros/target` and of a swapfile beneath it belongs
@@ -98,6 +107,11 @@ operation that installs it.
 
 | Kind | Behavior and engine constants | Immediate-effect check |
 | --- | --- | --- |
+| `record_disk_partuuids` | Whole-disk only: retain the pre-wipe PARTUUID set from the plan, checked against the final live disk read. Record the set as a constant before wiping. | The plan and current layout already agree. |
+| `remove_stale_uefi_entries` | Whole-disk only, after partition creation: use the shared UEFI library to delete only entries referencing the recorded pre-wipe PARTUUIDs. | Unrelated entries and their relative ordering remain unchanged. |
+| `wipe_partition_signatures` | Replacement only: `wipefs --all` on the selected ESP and root partition nodes, never the disk. No partition-table write, resize, move or partition creation. | Neither selected partition retains signatures. |
+| `format_partitions` | Replacement equivalent of `format_filesystems`, using the selected existing nodes; preserves PARTUUIDs and partition types. | Same filesystem checks; final table/identity comparison below. |
+| `register_uefi_boot_entry` | Both modes: run the shared UEFI library from the live environment, then deliver `mirroros-boot-first`. | Exactly one matching entry first, other entries preserved, selected loader and fallback files non-empty, command delivery succeeds. |
 | `wipe_disk_signatures` | `wipefs --all` over the partitions of the disk and then the disk itself. | `wipefs` finds no signature on the disk. |
 | `create_partition_table` | Write an empty GPT. | The disk reports a `gpt` partition table. |
 | `create_partitions` | `sfdisk` with one ESP of `esp_size_bytes` (type EFI System) and one root partition on the remaining space (type Linux filesystem). Then the sync steps above. | Exactly two partitions with the expected sizes and types, both nodes present. |
@@ -120,8 +134,10 @@ operation that installs it.
 | `create_baseline_snapshot` | Btrfs only. `snapper --no-dbus -c root create --type single --description "post-install baseline"`. | The snapshot is listed. |
 | `sync_limine_snapshot_entries` | `btrfs-limine` only, see [Limine](#limine-btrfs-limine). | See there. |
 
-After the last operation completes, the engine runs the [postconditions phase](#postconditions) before any
-terminal cleanup.
+Before completing the final `register_uefi_boot_entry` operation, replacement mode re-reads `sfdisk --dump` and `lsblk` without writing.
+The GPT entries must still agree with the reviewed plan, and the filtered table and non-target partition
+identities must equal the pre-run record. A mismatch fails the run; this is not a byte-level checksum of
+non-target contents. The engine then runs the [postconditions phase](#postconditions) before terminal cleanup.
 
 `engine-run.json` records every constant used, per kind, so that a run can be understood without the source at
 that commit.
@@ -142,7 +158,7 @@ when the engine ends. A password is never retried or re-read.
 ### Boot
 
 **`ext4-systemd-boot` and `btrfs-rescue` (systemd-boot).** `install_bootloader` runs `bootctl install
---esp-path=/boot` inside the chroot and writes:
+--esp-path=/boot --variables=no` inside the chroot and writes:
 
 - `/boot/loader/loader.conf` with `default mirroros.conf`, `timeout` from the plan's `bootloader_options.timeout`,
   and `editor no` when `bootloader_options.editor` is `false` (`yes` otherwise).
@@ -162,6 +178,27 @@ Check: the files exist with the expected content, no `resume=` or `resume_offset
 disabled, and `bootctl status` inside the chroot reports the loader installed. The initramfs policy is the
 distribution's default mkinitcpio hooks without UKI (`mkinitcpio-default-hooks-no-uki`).
 
+### Explicit UEFI registration and installed recovery command
+
+[ADR 0022](../docs/adr/0022-installer-coexistence-and-uefi-boot-entry.md) governs both modes.
+`register_uefi_boot_entry` runs after the loader's files have been deployed (after snapshot entry synchronization
+for Limine). The engine sources `operations/lib/uefi-boot-entry.sh` from its code root and uses the live
+`efibootmgr`, not a chroot invocation. It resolves the ESP PARTUUID with `blkid` and its partition number with
+`lsblk`; replacement additionally checks both against the approved identities. Limine uses `Limine MirrorOS`
+and `\EFI\BOOT\BOOTX64.EFI`; systemd-boot uses `MirrorOS` and
+`\EFI\systemd\systemd-bootx64.efi`. Both keep `EFI/BOOT/BOOTX64.EFI`.
+
+Lookup uses PARTUUID plus loader path. Duplicates fail without NVRAM mutation. Missing entries are created
+with `--create-only`, then explicitly placed first while the remaining BootOrder entries retain their relative
+order. No whole-NVRAM operation is allowed. Deletion is limited to the whole-disk pre-wipe PARTUUID set.
+The engine records the ESP PARTUUID, loader path, label, resulting BootOrder and delivered command path as
+`register_uefi_boot_entry` constants. See [boot-first](boot-first.md) for shared-library semantics.
+
+Before postconditions, the engine delivers `operations/boot-first` (0755) and
+`operations/lib/uefi-boot-entry.sh` (0644) under `/usr/local/lib/mirroros/operations/`, root-owned, with
+`/usr/local/bin/mirroros-boot-first` linked to the command. This independent delivery leaves the existing
+configure delivery and invocation unchanged. There is no automatic BootOrder service.
+
 ### Limine (`btrfs-limine`)
 
 The plan's order is `install_bootloader`, `install_limine_snapshot_tools`, `configure_snapper`,
@@ -169,7 +206,7 @@ The plan's order is `install_bootloader`, `install_limine_snapshot_tools`, `conf
 follows, and no operation invokes a Limine or snapshot tool before `install_limine_snapshot_tools` installs it.
 
 - **`install_bootloader`** writes only `/etc/default/limine`: `ESP_PATH="/boot"`, `SKIP_UEFI=yes` (the binary
-  goes to the fallback path and no firmware entry is created), and `KERNEL_CMDLINE` set to the plan's
+  goes to the fallback path and package hooks create no firmware entry; the engine registers it explicitly later), and `KERNEL_CMDLINE` set to the plan's
   `kernel_cmdline` (resolved as above) plus `rootflags=subvol=@`, written as the `KERNEL_CMDLINE[default]`
   array entry the tool reads. It deploys no EFI binary, runs no tool, and
   verifies only the content of that file.
@@ -225,6 +262,8 @@ files. Configure writes separate evidence inside the target (see [Configure phas
 | `engine.log` | Plain text, no ANSI sequences, no secret. Each operation or fixed phase starts with a `== <id> ==` header; configure output includes `== <k>/<total> <step> ==` markers; the native stdout and stderr of every command follow, and each logged command line is its argv. Commands that receive the password on stdin are logged by name only. |
 | `state.json` | Progress for the assistant; rewritten atomically after each change. |
 | `engine-run.json` | The run record, written atomically at the end and on every terminal path. |
+| `partition-table-before.sfdisk`, `partition-table-after.sfdisk` | Replacement only: read-only GPT dumps before and after execution. |
+| `untouched-partitions-before.json`, `untouched-partitions-after.json` | Replacement only: filtered dumps and non-target identities compared by the engine; the before record is also retained in `constants.precheck.untouched_partitions` as JSON text. `constants.format_partitions.untouched_partitions_verified` is `true` text only after a matching final comparison. |
 | `target-packages.txt` | The target's `pacman -Q` after `install_packages`. A description, not a pinning policy. |
 | `configure/configure-run.tsv`, `configure/packages.tsv`, `configure/sources.tsv` | Copies of the native configure records from this invocation, when available. Only these regular, non-symlink files are retained; no arbitrary target content or temporary files. Existing VM collection retains them recursively. Copy failures are diagnostic and never replace the configure outcome. |
 
@@ -426,7 +465,7 @@ The sequence is linear, so the first failing operation stops every later one. `e
 status, the failed operation, the child command, and the completed and not-started operations. Nothing hides or
 overwrites the original failure.
 
-When the failure happens after `wipe_disk_signatures` started, the user-facing message states that the disk was
+When the failure happens after `wipe_disk_signatures` or `wipe_partition_signatures` started, the user-facing message states that the disk was
 partially modified and that installation did not complete. A failure before that point states that the disk is
 untouched.
 

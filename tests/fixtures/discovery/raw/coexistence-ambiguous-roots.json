@@ -1,0 +1,13 @@
+{
+  "storage": {
+    "blockdevices": [{
+      "path": "/dev/vda", "type": "disk", "size": 68719476736, "rm": false, "ro": false, "pttype": "gpt", "log-sec": 512,
+      "children": [
+        {"path": "/dev/vda1", "type": "part", "size": 2147483648, "fstype": "vfat", "uuid": "ABCD-0001", "partuuid": "10000000-0000-4000-8000-000000000001", "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "partn": 1, "start": 2048},
+        {"path": "/dev/vda2", "type": "part", "size": 30064771072, "fstype": "btrfs", "label": "mirroros", "uuid": "20000000-0000-4000-8000-000000000002", "partuuid": "10000000-0000-4000-8000-000000000002", "parttype": "0fc63daf-8483-4772-8e79-3d69d8477de4", "partn": 2, "start": 4196352},
+        {"path": "/dev/vda3", "type": "part", "size": 30064771072, "fstype": "ext4", "label": "mirroros", "uuid": "20000000-0000-4000-8000-000000000003", "partuuid": "10000000-0000-4000-8000-000000000003", "parttype": "0fc63daf-8483-4772-8e79-3d69d8477de4", "partn": 3, "start": 62916608}
+      ]
+    }],
+    "installation_inspections": []
+  }
+}

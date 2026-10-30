@@ -21,7 +21,7 @@ import {
 const SECRET_LIKE_KEY = /password|passphrase|secret|token/i;
 const FREE_TEXT_KEYS = ['hostname', 'user_name', 'timezone', 'console_keymap'];
 
-function optionsFor({ facts, policy, hibernation, memoryTotalBytes }) {
+function optionsFor({ facts, policy, disk, hibernation, memoryTotalBytes }) {
   const disks = facts.layers.detected.storage.disks.filter(disk => disk.eligible).map(disk => {
     const entry = { value: diskIdentifier(disk) };
     for (const key of ['path', 'model', 'size_bytes']) {
@@ -31,6 +31,10 @@ function optionsFor({ facts, policy, hibernation, memoryTotalBytes }) {
   });
   const options = {
     target_disk: disks,
+    target_mode: ['whole_disk', ...((disk?.replace_candidates ?? []).length === 1 ? ['replace_installation'] : [])],
+    replace_root_partuuid: (disk?.replace_candidates ?? []).map(candidate => ({
+      value: candidate.root.partuuid, disk_path: candidate.disk_path, root: candidate.root, esp: candidate.esp,
+    })),
     storage_option: Object.entries(policy.storageOptions).map(([value, option]) => ({
       value,
       tier: option.tier,
@@ -65,7 +69,7 @@ export function previewChoices({ facts, policy, choices = { values: {} }, overri
     document: {
       format_version: CHOICES_FORMAT_VERSION,
       choices: editable,
-      options: optionsFor({ facts, policy, hibernation: values.hibernation, memoryTotalBytes }),
+      options: optionsFor({ facts, policy, disk, hibernation: values.hibernation, memoryTotalBytes }),
       derived: { locales: resolved.locales.value, locale_categories: resolved.locale_categories.value },
       warnings: buildWarnings({
         facts, disk, storageOption: values.storage_option, option, swapfileSize: values.swapfile_size, memoryTotalBytes,
@@ -109,6 +113,15 @@ export function validateChoice({ facts, policy, choices = { values: {} }, overri
   if (key === 'target_disk') {
     const selected = selectDisk(facts.layers.detected.storage.disks, parsed);
     if (selected.reasons.length > 0) return invalid(...selected.reasons);
+  }
+  if (key === 'target_mode' || key === 'replace_root_partuuid') {
+    const selection = resolveSelection({
+      facts, policy, override,
+      choices: { values: { ...choices.values, [key]: parsed,
+        ...(key === 'replace_root_partuuid' ? { target_mode: 'replace_installation' } : {}) } },
+      allowPendingDisk: true,
+    });
+    if (selection.reasons.length > 0) return invalid(...selection.reasons);
   }
   const result = { valid: true, key, value: parsed };
   if (key === 'lang' || key === 'regional_format') {

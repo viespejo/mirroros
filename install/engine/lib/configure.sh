@@ -1,6 +1,16 @@
 #!/usr/bin/bash
 # shellcheck disable=SC2034 # Configure fields are consumed by common.sh when writing records.
 
+copy_boot_first_code() {
+  local destination="$TARGET/usr/local/lib/mirroros/operations"
+  install -d -m 0755 -- "$destination/lib" "$TARGET/usr/local/bin" &&
+    install -m 0755 -- "$CODE_ROOT/operations/boot-first" "$destination/boot-first" &&
+    install -m 0644 -- "$CODE_ROOT/operations/lib/uefi-boot-entry.sh" "$destination/lib/uefi-boot-entry.sh" &&
+    chown 0:0 -- "$destination" "$destination/lib" "$destination/boot-first" "$destination/lib/uefi-boot-entry.sh" &&
+    ln -sfn -- /usr/local/lib/mirroros/operations/boot-first "$TARGET/usr/local/bin/mirroros-boot-first" &&
+    chown -h 0:0 -- "$TARGET/usr/local/bin/mirroros-boot-first"
+}
+
 copy_configure_code() {
   local destination="$TARGET/usr/local/lib/mirroros"
   install -d -m 0755 -- "$destination/operations/lib" "$TARGET/usr/local/bin" &&

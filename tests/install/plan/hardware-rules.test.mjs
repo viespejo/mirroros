@@ -27,7 +27,7 @@ function planFor(mutate, options = {}) {
 
 test('the reference VM plan lists the four rule outcomes, in order, instead of unevaluated capabilities', () => {
   const { plan } = generate();
-  assert.equal(plan.format_version, 4);
+  assert.equal(plan.format_version, 5);
   assert.equal(plan.hardware_selections.detected_capabilities, undefined);
   assert.deepEqual(plan.hardware_selections.rule_outcomes.map(entry => [entry.rule, entry.outcome]), [
     ['graphics', 'kernel_driver_only'],

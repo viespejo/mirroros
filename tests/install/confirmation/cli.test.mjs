@@ -156,7 +156,7 @@ test('review prints the fields the orchestrator needs', () => {
   assert.equal(compact.some(([label]) => label === 'Swapfile'), false);
   assert.deepEqual(compact.at(-1), ['Plan reference', plan.digest.value.slice(0, 12)]);
   assert.match(run('review', 'confirmation', planPath).stdout, /^Disk: \/dev\/vda 32\.0 GiB\n[\s\S]*Plan reference: [0-9a-f]{12}\n$/);
-  assert.match(run('review', 'complete', planPath).stdout, /^MirrorOS installation plan \(format 4\)\n[\s\S]*Plan reference: [0-9a-f]{12} /);
+  assert.match(run('review', 'complete', planPath).stdout, /^MirrorOS installation plan \(format 5\)\n[\s\S]*Plan reference: [0-9a-f]{12} /);
   assert.equal(run('review', 'machine', planPath).stdout, 'Recognized (reference-vm)\n');
   assert.equal(run('review', 'device-name', planPath).stdout, 'vda\n');
   assert.equal(run('review', 'digest-prefix', planPath).stdout, `${plan.digest.value.slice(0, 12)}\n`);

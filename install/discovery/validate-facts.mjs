@@ -199,6 +199,36 @@ const reasonShape = shape({
   next_step: required(string),
 });
 
+const partitionFields = {
+  path: required(string),
+  size_bytes: optional(integer),
+  fstype: optional(string),
+  label: optional(string),
+  uuid: optional(string),
+  partuuid: optional(string),
+  type_guid: optional(string),
+  partition_number: optional(integer),
+  start_sector: optional(integer),
+  partition_label: optional(string),
+  mountpoints: optional(listOf(string)),
+};
+const partitionShape = shape(partitionFields);
+const candidatePartitionShape = shape({
+  ...partitionFields,
+  size_bytes: required(integer),
+  fstype: required(string),
+  uuid: required(string),
+  partuuid: required(string),
+  type_guid: required(string),
+  partition_number: required(integer),
+  start_sector: required(integer),
+});
+export const REPLACE_REJECTION_REASONS = [
+  'ambiguous_roots', 'unsupported_root', 'disk_ineligible', 'incomplete_identity',
+  'missing_esp_binding', 'inspection_unavailable', 'ambiguous_identity',
+  'ambiguous_boot_configuration', 'boot_root_mismatch', 'ambiguous_esp_binding',
+];
+
 const diskShape = shape({
   identity: required(shape({
     path: required(string),
@@ -213,17 +243,16 @@ const diskShape = shape({
   removable: optional(boolean),
   read_only: optional(boolean),
   layout: required(shape({
-    partition_table: optional(shape({ type: optional(string), uuid: optional(string) })),
-    partitions: required(listOf(shape({
-      path: required(string),
-      size_bytes: optional(integer),
-      fstype: optional(string),
-      label: optional(string),
-      uuid: optional(string),
-      partuuid: optional(string),
-      mountpoints: optional(listOf(string)),
-    }))),
+    partition_table: optional(shape({ type: optional(string), uuid: optional(string), sector_size_bytes: optional(integer) })),
+    partitions: required(listOf(partitionShape)),
   })),
+  replace_candidates: optional(listOf(shape({
+    disk_path: required(string),
+    root: required(candidatePartitionShape),
+    esp: required(candidatePartitionShape),
+    storage_option: required(oneOf(['ext4-systemd-boot', 'btrfs-rescue', 'btrfs-limine'])),
+  }))),
+  replace_rejections: optional(listOf(shape({ root_path: required(string), reason: required(oneOf(REPLACE_REJECTION_REASONS)) }))),
   eligible: required(boolean),
   ineligible_reasons: optional(listOf(oneOf(INELIGIBLE_REASONS))),
 });
@@ -342,6 +371,30 @@ export function validateDocument(document) {
   }
   for (const [index, disk] of document.layers.detected.storage.disks.entries()) {
     const reasons = disk.ineligible_reasons ?? [];
+    const candidates = disk.replace_candidates ?? [];
+    if (candidates.length > 1 || candidates.length > 0 && (disk.replace_rejections ?? []).length > 0) {
+      errors.push(`target-facts.layers.detected.storage.disks[${index}] replacement binding must be unambiguous`);
+    }
+    for (const candidate of candidates) {
+      const root = candidate.root;
+      const esp = candidate.esp;
+      const guid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+      const samePartition = partition => disk.layout.partitions.filter(p => p.path === partition.path).length === 1
+        && Object.entries(partition).every(([key, value]) => JSON.stringify(disk.layout.partitions.find(p => p.path === partition.path)[key]) === JSON.stringify(value));
+      if (!disk.eligible || disk.layout.partition_table?.type !== 'gpt' || candidate.disk_path !== disk.identity.path
+        || !samePartition(root) || !samePartition(esp) || root.path === esp.path
+        || disk.layout.partitions.filter(p => p.label === 'mirroros').length !== 1
+        || [root, esp].some(p => ['uuid', 'partuuid'].some(key => disk.layout.partitions
+          .filter(other => other[key]?.toLowerCase() === p[key].toLowerCase()).length !== 1))
+        || root.label !== 'mirroros' || root.type_guid !== '0fc63daf-8483-4772-8e79-3d69d8477de4'
+        || esp.type_guid !== 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' || esp.fstype !== 'vfat'
+        || !guid.test(root.uuid) || !/^[0-9a-f]{4}-[0-9a-f]{4}$/i.test(esp.uuid)
+        || [root, esp].some(p => !guid.test(p.partuuid) || p.size_bytes === 0 || p.start_sector === 0
+          || p.partition_number === 0 || (p.mountpoints ?? []).length > 0)
+        || (candidate.storage_option === 'ext4-systemd-boot' ? root.fstype !== 'ext4' : root.fstype !== 'btrfs')) {
+        errors.push(`target-facts.layers.detected.storage.disks[${index}] replacement candidate must match its unmounted partition identities and storage option`);
+      }
+    }
     if (disk.eligible === (reasons.length > 0)) {
       errors.push(`target-facts.layers.detected.storage.disks[${index}] eligibility must match its reasons`);
     }

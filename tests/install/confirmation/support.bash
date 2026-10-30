@@ -13,7 +13,7 @@ source "${CONFIRM_ENGINE_SUPPORT}/support.bash"
 # The external tools of the installation engine, answered by the engine double (it also answers systemctl for the
 # keyring wait and for a chosen restart or power off, which it only records).
 CONFIRM_ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
-  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot findmnt pacman lsinitcpio lsattr)
+  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot findmnt pacman lsinitcpio lsattr lsblk efibootmgr)
 
 # Keys sent through the pty, one at a time, and extra environment words for the command under test. When
 # CONFIRM_WAIT_FOR names a file, the keys are sent only after a double or hook has created it.
@@ -40,6 +40,8 @@ confirm_setup() {
   mkdir -p "${CODE_ROOT}/operations/lib" "$FIXTURE_ROOT" "${DOUBLE_STATE}/out" "$DOUBLE_BIN" "$WORK_DIR" "$RUN_ROOT"
 
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/install" "${CODE_ROOT}/operations/install"
+  cp -p "${CONFIRM_SOURCE_ROOT}/operations/boot-first" "${CODE_ROOT}/operations/boot-first"
+  cp -p "${CONFIRM_SOURCE_ROOT}/operations/lib/uefi-boot-entry.sh" "${CODE_ROOT}/operations/lib/uefi-boot-entry.sh"
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/lib/lifecycle-discovery.sh" "${CODE_ROOT}/operations/lib/lifecycle-discovery.sh"
   cp -p "${CONFIRM_SOURCE_ROOT}/operations/lib/timing.sh" "${CODE_ROOT}/operations/lib/timing.sh"
   cp -a "${CONFIRM_SOURCE_ROOT}/install" "${CODE_ROOT}/install"
@@ -50,7 +52,7 @@ confirm_setup() {
   printf '{\n  "commit": "%s",\n  "dirty": false\n}\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' > "${CODE_ROOT}/identity.json"
   engine_make_packages
 
-  for tool_name in lsblk ip getent curl uname systemd-detect-virt bootctl; do
+  for tool_name in ip getent curl uname systemd-detect-virt bootctl; do
     ln -s "${CONFIRM_DISCOVERY_SUPPORT}/doubles/${tool_name}" "${DOUBLE_BIN}/${tool_name}"
   done
   for tool_name in sudo pkexec doas su; do
@@ -65,6 +67,8 @@ confirm_setup() {
   : > "${DOUBLE_STATE}/gum-calls.log"
   : > "${DOUBLE_STATE}/elevation.log"
   : > "${DOUBLE_STATE}/calls.log"
+  printf '%s\n' '10000000-0000-4000-8000-000000000001' > "${DOUBLE_STATE}/esp-guid"
+  printf '%s\n' '{"order":["0003","0002"],"entries":[{"id":"0003","label":"Firmware"},{"id":"0002","label":"Other disk","guid":"99999999-8888-4777-8666-555555555555","path":"\\\\EFI\\\\other.efi"}]}' > "${DOUBLE_STATE}/nvram.json"
   CONFIRM_KEYS=()
   CONFIRM_ENV=()
   CONFIRM_WAIT_FOR=''

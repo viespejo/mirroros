@@ -147,6 +147,9 @@ function review([field, planPath]) {
     case 'prompt':
       process.stdout.write(`${confirmationPrompt(plan)}\n`);
       return EXIT_VALID;
+    case 'digest':
+      process.stdout.write(`${plan.digest.value}\n`);
+      return EXIT_VALID;
     case 'digest-prefix':
       process.stdout.write(`${digestPrefix(plan)}\n`);
       return EXIT_VALID;
@@ -273,6 +276,12 @@ function record([directory, runId, timestamp, entry, gumVersion, exitStatus, out
   });
   const approval = buildApprovalRecord({
     runId, timestamp, digest: digests.at(-1), machine, profile, disk,
+    targetMode: last?.target_mode,
+    partitions: last?.target_mode === 'replace_installation'
+      ? Object.fromEntries(['esp', 'root'].map(role => [role, Object.fromEntries(
+        ['path', 'partuuid', 'uuid', 'type_guid', 'size_bytes', 'partition_number', 'start_sector']
+          .map(key => [key, last.target.installation[role][key]]),
+      )])) : undefined,
     gumVersion: optional(gumVersion), outcome, reason: shaped[0]?.code,
   });
   writeApplyRecords({ directory, run, approval });

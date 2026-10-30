@@ -31,6 +31,7 @@ FLOW_DEVICE_NAME=''
 FLOW_PROFILE_STATUS=''
 FLOW_DISCOVERED=false
 FLOW_CONFIRMED=false
+FLOW_CONFIRMED_DIGEST=''
 FLOW_PLAN_JUMPED=false
 # The single account password. A global that is never exported, logged, or recorded; it lives from the password
 # screen until the engine invocation consumes it (or the run ends).
@@ -393,9 +394,16 @@ flow_apply_choice() {
   local status=0
   local current
   local explicit
+  local validation_choices="$FLOW_CHOICES"
 
   : > "$FLOW_INVALID_TEXT"
-  flow_plan validate-choice --facts "$FLOW_FACTS_INITIAL" --choices "$FLOW_CHOICES" --key "$key" --value "$value" > "$result" 2> "$FLOW_STDERR" || status=$?
+  case "$key" in
+    target_disk|target_mode|replace_root_partuuid)
+      flow_cli edit set "$FLOW_CHOICES" "$key" "$value" "$next" > /dev/null 2> "$FLOW_STDERR" || return 5
+      validation_choices="$next"
+      ;;
+  esac
+  flow_plan validate-choice --facts "$FLOW_FACTS_INITIAL" --choices "$validation_choices" --key "$key" --value "$value" > "$result" 2> "$FLOW_STDERR" || status=$?
   case "$status" in
     0) ;;
     2)
@@ -666,6 +674,7 @@ flow_device_name() {
 }
 
 flow_confirmed() {
+  FLOW_CONFIRMED_DIGEST=${FLOW_REVIEW[plan_digest]}
   FLOW_CONFIRMED=true
   flow_log 'confirmed'
 }
@@ -731,6 +740,7 @@ flow_screens() {
       1)
         going_back=true
         FLOW_CONFIRMED=false
+        FLOW_CONFIRMED_DIGEST=''
         if ((screen == 15)); then screen=13; elif ((screen > 0)); then screen=$((screen - 1)); fi
         ;;
       130) flow_cancel "screen_${screen}" ;;
@@ -754,7 +764,10 @@ flow_revalidate() {
     flow_finish_stage "$status" invalidated discovery_final facts "${directory}/target-facts.json"
   fi
   flow_compare "$FLOW_FACTS_FINAL" "$FLOW_FACTS_INITIAL" safety_check_final
-  flow_plan_field digest-prefix digest_recheck
+  flow_plan_field digest digest_recheck
+  if [[ $FLOW_FIELD != "$FLOW_CONFIRMED_DIGEST" ]]; then
+    flow_finish_standard 2 invalidated digest_recheck digest_mismatch
+  fi
   timing_end discovery_final
 }
 

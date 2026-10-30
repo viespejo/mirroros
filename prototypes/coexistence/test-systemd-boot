@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Disposable ESP test for systemd-boot installation without firmware entry changes.
+set -euo pipefail
+
+[[ $EUID -eq 0 && -d /run/archiso && -d /sys/firmware/efi/efivars ]] || {
+  echo 'Run as root in the UEFI lab live environment.' >&2; exit 1;
+}
+work=$(mktemp -d /run/mirroros-systemd-boot-test.XXXXXX)
+loop=''
+mounted=0
+# shellcheck disable=SC2329 # Called by the EXIT trap.
+cleanup() {
+  if (( mounted )); then umount "$work/esp" || :; fi
+  if [[ -n $loop ]]; then losetup -d "$loop" || :; fi
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
+mkdir "$work/esp"
+truncate -s 128M "$work/disk.img"
+sfdisk "$work/disk.img" >/dev/null <<'LAYOUT'
+label: gpt
+size=96MiB, type=U
+LAYOUT
+loop=$(losetup --find --show --partscan "$work/disk.img")
+udevadm settle
+[[ -b ${loop}p1 ]] || { echo 'Loop ESP is missing.' >&2; exit 1; }
+mkfs.fat -F 32 "${loop}p1" >/dev/null
+mount -o umask=0077 "${loop}p1" "$work/esp"
+mounted=1
+efibootmgr -v > "$work/before.txt"
+printf 'Installing systemd-boot into the temporary ESP with firmware variables disabled.\n'
+bootctl --variables=no --esp-path="$work/esp" install
+efibootmgr -v > "$work/after.txt"
+cmp "$work/before.txt" "$work/after.txt" || { echo 'UEFI boot entries or order changed.' >&2; exit 1; }
+[[ -s $work/esp/EFI/systemd/systemd-bootx64.efi ]] || { echo 'The systemd-boot loader is missing.' >&2; exit 1; }
+[[ -s $work/esp/EFI/BOOT/BOOTX64.EFI ]] || { echo 'The fallback loader is missing.' >&2; exit 1; }
+cmp /usr/lib/systemd/boot/efi/systemd-bootx64.efi "$work/esp/EFI/systemd/systemd-bootx64.efi"
+cmp "$work/esp/EFI/systemd/systemd-bootx64.efi" "$work/esp/EFI/BOOT/BOOTX64.EFI"
+printf 'systemd-boot loader and fallback installed; efibootmgr output unchanged.\n'

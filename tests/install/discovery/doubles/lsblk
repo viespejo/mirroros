@@ -2,7 +2,27 @@
 # PATH double for lsblk: replays the fixture JSON, or fails with the status in lsblk_status.
 set -Eeuo pipefail
 : "${DOUBLE_STATE:?}"
-printf 'lsblk %s\n' "$*" >> "${DOUBLE_STATE}/calls.log"
+tool=${0##*/}
+printf '%s %s\n' "$tool" "$*" >> "${DOUBLE_STATE}/calls.log"
+if [[ "$tool" == mount ]]; then
+  [[ "$#" == 7 && "$1" == -t && "$3" == -o && "$5" == -- ]] || exit 91
+  case "$2:$4" in
+    ext4:ro,noload|btrfs:ro,nologreplay,subvol=@|btrfs:ro,nologreplay,subvolid=5|vfat:ro) ;;
+    *) exit 92 ;;
+  esac
+  [[ ! -f "${DOUBLE_STATE}/mount_fail.${6##*/}" ]] || exit 32
+  [[ ! -f "${DOUBLE_STATE}/btrfs_top_level" || "$4" != ro,nologreplay,subvol=@ ]] || exit 32
+  source_dir="${DOUBLE_STATE}/filesystems/${6##*/}"
+  [[ -d "$source_dir" ]] || exit 32
+  cp -a -- "$source_dir/." "$7/"
+  exit 0
+fi
+if [[ "$tool" == umount ]]; then
+  [[ "$#" == 2 && "$1" == -- && "$2" == /tmp/* ]] || exit 93
+  [[ ! -f "${DOUBLE_STATE}/umount_fail" ]] || exit 32
+  find "$2" -mindepth 1 -delete
+  exit 0
+fi
 if [[ -f "${DOUBLE_STATE}/lsblk_status" ]]; then
   printf '%s\n' 'lsblk: simulated failure' >&2
   exit "$(< "${DOUBLE_STATE}/lsblk_status")"

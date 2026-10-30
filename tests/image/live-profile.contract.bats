@@ -43,6 +43,21 @@ JS
   [ "$status" -eq 0 ]
 }
 
+@test "boot-first delivery modes are declared independently of checkout modes without automatic enforcement" {
+  run bash -c '
+    set -eu
+    declare -A file_permissions
+    source "$1"
+    [[ "${file_permissions[/usr/local/lib/mirroros/operations/boot-first]}" == 0:0:755 ]]
+    [[ "${file_permissions[/usr/local/lib/mirroros/operations/lib/uefi-boot-entry.sh]}" == 0:0:644 ]]
+  ' _ "${PROFILE}/profiledef.sh"
+  [ "$status" -eq 0 ]
+  [ ! -e "${PROFILE}/airootfs/usr/local/bin/mirroros-boot-first" ]
+  [ ! -L "${PROFILE}/airootfs/usr/local/bin/mirroros-boot-first" ]
+  run grep -rEl 'mirroros-boot-first|operations/boot-first' "${PROFILE}/airootfs/etc/systemd"
+  [ "$status" -eq 1 ]
+}
+
 @test "live identity is a regular override with accurate Arch lineage" {
   [ "$(<"${PROFILE}/airootfs/etc/hostname")" = mirroros ]
   [ -f "${PROFILE}/airootfs/etc/os-release" ]

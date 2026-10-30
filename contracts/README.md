@@ -6,6 +6,7 @@ reserves final schemas until that evidence exists, so no formal `*.schema.json` 
 
 | Contract | Produced by | Enforced by |
 | --- | --- | --- |
+| [`boot-first.md`](boot-first.md) | `operations/boot-first`, `operations/lib/uefi-boot-entry.sh` | `tests/operations/boot-first.contract.bats`, `tests/operations/uefi-boot-entry.contract.bats` |
 | [`target-facts.md`](target-facts.md) | `install/discovery/` | `install/discovery/validate-facts.mjs`, `tests/install/discovery/` |
 | [`installation-plan.md`](installation-plan.md) | `install/plan/` | `install/plan/validate-plan.mjs`, `tests/install/plan/` |
 | [`installation-confirmation.md`](installation-confirmation.md) | `install/confirmation/` | `install/confirmation/validate-records.mjs`, `tests/install/confirmation/` |

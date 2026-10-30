@@ -248,12 +248,16 @@ finish() {
 # A not_verified run is never retried, repaired, or converted into success or into status 5.
 run_postconditions() {
   local result status=0 verdict failed first
+  local evidence_arguments=()
+  if [[ "$TARGET_MODE" == replace_installation ]]; then
+    evidence_arguments+=(--untouched-partitions-before "${OUTPUT}/untouched-partitions-before.json")
+  fi
   CURRENT_OP=postconditions
   timing_begin postconditions
   engine_log '== postconditions =='
   write_state running postconditions
   LAST_ARGV=(install/postconditions/check)
-  result="$("${CODE_ROOT}/install/postconditions/check" --plan "$PLAN_FILE" --digest "$CONFIRMED_DIGEST" --target-root "$TARGET" \
+  result="$("${CODE_ROOT}/install/postconditions/check" --plan "$PLAN_FILE" --digest "$CONFIRMED_DIGEST" --target-root "$TARGET" "${evidence_arguments[@]}" \
     < /dev/null 2>> "$ENGINE_LOG" 3>&- 4>&-)" || status=$?
   printf '%s\n' "$result" >> "$ENGINE_LOG"
   if [[ "$status" != 0 && "$status" != 4 ]]; then

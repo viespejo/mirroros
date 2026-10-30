@@ -39,6 +39,9 @@ discovery_setup() {
   for tool_name in lsblk ip getent curl uname systemd-detect-virt bootctl; do
     ln -s "${DISCOVERY_SUPPORT_DIR}/doubles/${tool_name}" "${DOUBLE_BIN}/${tool_name}"
   done
+  for tool_name in mount umount; do
+    ln -s "${DISCOVERY_SUPPORT_DIR}/doubles/lsblk" "${DOUBLE_BIN}/${tool_name}"
+  done
   for tool_name in sudo pkexec doas su; do
     ln -s "${DISCOVERY_SUPPORT_DIR}/doubles/elevation" "${DOUBLE_BIN}/${tool_name}"
   done

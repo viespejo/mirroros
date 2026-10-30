@@ -153,16 +153,50 @@ disk_selection_form() {
   if ((${#keys[@]} == 0)); then return 6; fi
   if ((${#keys[@]} == 1)); then selected=${labels[0]}; fi
   gum style --foreground 8 --padding "$PADDING" 'Disks detected on this machine just now.' 'Only eligible disks are shown. Selection does not authorize erasure.'
-  gum style --foreground 8 --padding "$PADDING" 'The installation plan will use the entire selected disk.'
+  gum style --foreground 8 --padding "$PADDING" 'Choose the target mode after selecting a disk.'
   echo
   choice=$(ui_choose --show-help --height 5 --selected "$selected" "${labels[@]}") || return $?
   for index in "${!labels[@]}"; do
     if [[ ${labels[index]} == "$choice" ]]; then
-      screen_apply_listed target_disk "${keys[index]}" || status=$?
+      screen_apply_listed target_disk "${keys[index]}" || return $?
+      target_mode_form || status=$?
       return "$status"
     fi
   done
   return 6
+}
+
+target_mode_form() {
+  local mode choice current selected='Whole disk' root
+  local -a modes=() labels=()
+  flow_assistant target-modes "$FLOW_PREVIEW" > "${FLOW_TMP}/target-modes.txt" || return 6
+  while IFS= read -r mode; do
+    modes+=("$mode")
+    case $mode in
+      whole_disk) labels+=('Whole disk') ;;
+      replace_installation) labels+=('Replace existing MirrorOS') ;;
+      *) return 6 ;;
+    esac
+  done < "${FLOW_TMP}/target-modes.txt"
+  if ((${#modes[@]} == 1)); then
+    screen_apply_listed target_mode whole_disk
+    return $?
+  fi
+  ((${#modes[@]} == 2)) || return 6
+  current=$(flow_choice target_mode) || return 6
+  if [[ $current == replace_installation ]]; then selected='Replace existing MirrorOS'; fi
+  gum style --foreground 8 --padding "$PADDING" 'Whole disk erases every partition.' 'Replace existing MirrorOS formats only its ESP and root; other partitions and the partition table are preserved.'
+  echo
+  choice=$(ui_choose --show-help --height 2 --selected "$selected" "${labels[@]}") || return $?
+  case $choice in
+    'Whole disk') screen_apply_listed target_mode whole_disk ;;
+    'Replace existing MirrorOS')
+      root=$(flow_assistant get "$FLOW_PREVIEW" options.replace_root_partuuid.0.value) || return 6
+      [[ -n $root ]] || return 6
+      screen_apply_listed replace_root_partuuid "$root"
+      ;;
+    *) return 6 ;;
+  esac
 }
 
 storage_layout_form() {
@@ -177,7 +211,11 @@ storage_layout_form() {
     if [[ $value == "$current" ]]; then selected=$label; fi
   done < "${FLOW_TMP}/storage.tsv"
   [[ -n $selected ]] || return 6
-  gum style --foreground 8 --padding "$PADDING" 'Planned layout: GPT, 2 GiB FAT32 EFI partition, unencrypted root.' 'Selection only: no partitioning, formatting, or erasure runs here.'
+  if [[ $(flow_choice target_mode) == replace_installation ]]; then
+    gum style --foreground 8 --padding "$PADDING" 'Reuse the selected ESP and root without resizing or repartitioning.' 'Selection only: no partitioning, formatting, or erasure runs here.'
+  else
+    gum style --foreground 8 --padding "$PADDING" 'Planned layout: GPT, 2 GiB FAT32 EFI partition, unencrypted root.' 'Selection only: no partitioning, formatting, or erasure runs here.'
+  fi
   echo
   gum style --foreground 8 --padding "$PADDING" 'ext4: recovery from independent rescue media.' 'Btrfs + systemd-boot: root snapshots; restore from rescue media.' 'Btrfs + Limine: snapshot boot; persistent restore remains unvalidated.'
   echo
@@ -390,6 +428,7 @@ review_rows() {
   review_row Battery "${FLOW_REVIEW[rule_battery]}"
   review_row Virtualization "${FLOW_REVIEW[rule_virtualization]}"
   review_row Disk "${FLOW_REVIEW[disk]}"
+  review_target_rows
   review_row Storage "$(storage_label_for "${FLOW_REVIEW[storage_option]}" "${FLOW_REVIEW[storage_tier]}")"
   review_row Hibernation "${FLOW_REVIEW[hibernation_label]}"
   if [[ $REVIEW_GROUP_LOCALE == true ]]; then
@@ -412,8 +451,22 @@ review_rows() {
   review_row Plan "${FLOW_REVIEW[plan_reference]}"
 }
 
+review_target_rows() {
+  review_row Mode "${FLOW_REVIEW[target_mode_label]:-${FLOW_REVIEW[target_mode]:-Whole disk}}"
+  if [[ ${FLOW_REVIEW[target_mode]:-whole_disk} == replace_installation ]]; then
+    review_row 'Format ESP' "${FLOW_REVIEW[target_format_esp]}"
+    review_row 'Format root' "${FLOW_REVIEW[target_format_root]}"
+    review_row Preserve "${FLOW_REVIEW[target_preserve]}"
+  fi
+}
+
 review_footer() {
-  review_text 8 'Review only: this does not approve a plan or authorize disk changes.' 'Next: confirm the disk to erase, then set the password. Installation starts after that.'
+  review_text 8 'Review only: this does not approve a plan or authorize disk changes.'
+  if [[ ${FLOW_REVIEW[target_mode]:-whole_disk} == replace_installation ]]; then
+    review_text 8 'Next: confirm the disk and root PARTUUID to replace, then set the password. Installation starts after that.'
+  else
+    review_text 8 'Next: confirm the disk to erase, then set the password. Installation starts after that.'
+  fi
 }
 
 review_body() {
@@ -526,10 +579,18 @@ confirmation_form() {
   review_row 'New layout' "$(storage_label_for "${FLOW_REVIEW[storage_option]}" "${FLOW_REVIEW[storage_tier]}")"
   review_row 'Plan reference' "${FLOW_REVIEW[plan_reference]}"
   echo
-  gum style --foreground 1 --padding "$PADDING" 'This will erase all existing content on this disk.'
+  local prompt="Erase $path and apply plan ${FLOW_REVIEW[plan_reference]}?" affirmative='Yes, erase'
+  if [[ ${FLOW_REVIEW[target_mode]:-whole_disk} == replace_installation ]]; then
+    review_target_rows
+    gum style --foreground 1 --padding "$PADDING" 'This will erase only the selected MirrorOS ESP and root partitions.'
+    prompt="Replace MirrorOS on $path and apply plan ${FLOW_REVIEW[plan_reference]}?"
+    affirmative='Yes, replace'
+  else
+    gum style --foreground 1 --padding "$PADDING" 'This will erase all existing content on this disk.'
+  fi
   echo
   status=0
-  gum confirm --prompt.foreground 7 --selected.foreground 4 --selected.background 0 --default=false --affirmative 'Yes, erase' --negative 'No' "Erase $path and apply plan ${FLOW_REVIEW[plan_reference]}?" || status=$?
+  gum confirm --prompt.foreground 7 --selected.foreground 4 --selected.background 0 --default=false --affirmative "$affirmative" --negative 'No' "$prompt" || status=$?
   case $status in
     0) ;;
     1 | 130) flow_cancel confirmation ;;
@@ -546,6 +607,17 @@ confirmation_form() {
   esac
   if [[ $typed != "$name" ]]; then
     flow_mismatch
+  fi
+  if [[ ${FLOW_REVIEW[target_mode]:-whole_disk} == replace_installation ]]; then
+    echo
+    review_text 8 "Type the full root PARTUUID (${FLOW_REVIEW[root_partuuid]}) to confirm."
+    typed=$(gum input --show-help --prompt.foreground 4 --placeholder.foreground 8 --cursor.foreground 4 --prompt 'Root PARTUUID> ') || status=$?
+    case $status in
+      0) ;;
+      1 | 130) flow_cancel confirmation ;;
+      *) return "$status" ;;
+    esac
+    if [[ $typed != "${FLOW_REVIEW[root_partuuid]}" ]]; then flow_mismatch; fi
   fi
   flow_confirmed
 }

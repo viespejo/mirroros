@@ -30,8 +30,20 @@ function assetSha256(source) {
 }
 
 function parametersFor(kind, context) {
-  const { values, option, disk } = context;
+  const { values, option, disk, installation, partuuids } = context;
   switch (kind) {
+    case 'record_disk_partuuids':
+      return { disk, partuuids };
+    case 'remove_stale_uefi_entries':
+      return { partuuids };
+    case 'wipe_partition_signatures':
+      return { esp: installation.esp, root: installation.root };
+    case 'format_partitions':
+      return { esp: installation.esp, root: installation.root, esp_filesystem: values.esp.filesystem, root_filesystem: option.filesystem };
+    case 'register_uefi_boot_entry':
+      return option.bootloader === 'limine'
+        ? { bootloader: 'limine', label: 'Limine MirrorOS', loader_path: '\\EFI\\BOOT\\BOOTX64.EFI', first: true }
+        : { bootloader: 'systemd-boot', label: 'MirrorOS', loader_path: '\\EFI\\systemd\\systemd-bootx64.efi', first: true };
     case 'wipe_disk_signatures':
       return { disk };
     case 'create_partition_table':
@@ -104,7 +116,7 @@ function subvolumesOf(option, hibernation) {
 }
 
 function resolvedAtApply(kind, option, hibernation) {
-  if (kind === 'format_filesystems') return [{ name: 'partition_uuids', method: 'blkid' }];
+  if (['format_filesystems', 'format_partitions'].includes(kind)) return [{ name: 'partition_uuids', method: 'blkid' }];
   if (kind === 'create_swapfile') return [{ name: 'resume_offset', method: option.resume_offset_method }];
   if (kind === 'install_bootloader') {
     return [
@@ -120,8 +132,8 @@ function resolvedAtApply(kind, option, hibernation) {
 export const REFERENCE_MEMORY_BYTES = 4294967296;
 export const REFERENCE_SWAPFILE_MIB = 4096;
 
-export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
-  const facts = fixtureFacts();
+export function buildValidPlan(storageOption, rootAccount, hibernation = true, targetMode = 'whole_disk') {
+  const facts = targetMode === 'whole_disk' ? fixtureFacts() : discover(`coexistence-${storageOption}`);
   const policy = readPolicy();
   const option = policy.storage_options[storageOption];
   const disk = facts.layers.detected.storage.disks[0];
@@ -172,12 +184,19 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
   const identifier = disk.identity.by_id ?? disk.identity.path;
   choices.target_disk = { value: identifier, provenance: 'hardware_detection', source: 'detected', editable: true };
 
-  const context = { values, option, disk: identifier };
-  const operations = operationSequence(storageOption, hibernation).map(kind => {
+  const installation = targetMode === 'replace_installation' ? disk.replace_candidates[0] : undefined;
+  values.target_mode = targetMode;
+  choices.target_mode = { ...choices.target_mode, value: targetMode, source: targetMode === 'whole_disk' ? 'policy' : 'choice' };
+  if (installation !== undefined) {
+    choices.replace_root_partuuid = { value: installation.root.partuuid, provenance: 'personal_preference', source: 'choice', editable: true };
+  }
+  const context = { values, option, disk: identifier, installation,
+    partuuids: disk.layout.partitions.flatMap(partition => partition.partuuid === undefined ? [] : [partition.partuuid]) };
+  const operations = operationSequence(storageOption, hibernation, targetMode).map(kind => {
     const operation = {
       id: kind,
       kind,
-      destructive: ['wipe_disk_signatures', 'create_partition_table', 'create_partitions', 'format_filesystems'].includes(kind),
+      destructive: ['wipe_disk_signatures', 'create_partition_table', 'create_partitions', 'format_filesystems', 'wipe_partition_signatures', 'format_partitions'].includes(kind),
       parameters: parametersFor(kind, context),
       description: OPERATION_DESCRIPTIONS[kind],
     };
@@ -202,9 +221,17 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
     }]
     : [];
 
+  if (disk.identity.by_id === undefined) warnings.unshift({
+    code: 'disk_without_by_id',
+    message: 'The target disk has no stable by_id; it is addressed by its path, which can change between boots.',
+    next_step: 'Review the disk model and size again before approving the plan.',
+  });
+
   const plan = {
-    format_version: 4,
+    format_version: 5,
+    target_mode: targetMode,
     target: {
+      ...(installation === undefined ? {} : { installation }),
       machine: {
         architecture: 'x86_64',
         memory_total_bytes: REFERENCE_MEMORY_BYTES,
@@ -213,10 +240,8 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true) {
       },
       profile: { status: 'matched', profile_id: 'reference-vm' },
       disk: {
-        path: disk.identity.path,
-        by_id: disk.identity.by_id,
-        serial: disk.identity.serial,
-        size_bytes: disk.identity.size_bytes,
+        ...Object.fromEntries(['path', 'by_id', 'wwn', 'serial', 'model', 'size_bytes']
+          .filter(key => disk.identity[key] !== undefined).map(key => [key, disk.identity[key]])),
         eligible: disk.eligible,
         current_layout: disk.layout,
       },
@@ -303,6 +328,15 @@ export const INVALID_CASES = [
   ['plan_format_unsupported--version-1', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 1; }],
   ['plan_format_unsupported--version-2', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 2; }],
   ['plan_format_unsupported--version-3', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 3; }],
+  ['plan_format_unsupported--version-4', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 4; }],
+  ['target_mode_mismatch--mode', ['ext4-systemd-boot', 'locked'], plan => { plan.target_mode = 'free_space'; }],
+  ['target_mode_mismatch--cleanup-scope', ['ext4-systemd-boot', 'locked'], plan => { operationOf(plan, 'remove_stale_uefi_entries').parameters.partuuids.push('other-disk'); }],
+  ['target_mode_mismatch--uefi-path', ['btrfs-limine', 'locked'], plan => { operationOf(plan, 'register_uefi_boot_entry').parameters.loader_path = '\\EFI\\other.efi'; }],
+  ['target_mode_mismatch--partition-wipe', ['btrfs-limine', 'locked', false, 'replace_installation'], plan => { operationOf(plan, 'wipe_partition_signatures').parameters.root = { path: '/dev/vda' }; }],
+  ['replacement_target_invalid--identity', ['btrfs-limine', 'locked', false, 'replace_installation'], plan => { plan.target.installation.root.partuuid = 'ffffffff-ffff-ffff-ffff-ffffffffffff'; }],
+  ['operations_storage_mismatch--replace-disk-wipe', ['btrfs-limine', 'locked', false, 'replace_installation'], plan => {
+    plan.operations[0] = { id: 'wipe_disk_signatures', kind: 'wipe_disk_signatures', destructive: true, parameters: { disk: plan.choices.target_disk.value }, description: OPERATION_DESCRIPTIONS.wipe_disk_signatures };
+  }],
   ['plan_field_missing--target', ['ext4-systemd-boot', 'locked'], plan => { delete plan.target; }],
   ['plan_label_missing--source', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.hostname.source; }],
   ['plan_unknown_field--approved', ['ext4-systemd-boot', 'locked'], plan => { plan.approved = true; }],
@@ -311,13 +345,17 @@ export const INVALID_CASES = [
   ['plan_secret_value_present--choice-key', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.user_password = { value: 'x' }; }],
   ['plan_secret_value_present--secret-entry', ['ext4-systemd-boot', 'locked'], plan => { plan.secret_requirements[0].value = 'x'; }],
   ['plan_secret_value_present--parameters', ['ext4-systemd-boot', 'locked'], plan => { operationOf(plan, 'create_user').parameters.password = 'x'; }],
-  ['operations_storage_mismatch--option', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.storage_option.value = 'btrfs-rescue'; }],
+  ['operations_storage_mismatch--option', ['ext4-systemd-boot', 'locked'], plan => {
+    plan.choices.storage_option.value = 'btrfs-rescue';
+    plan.choices.storage_option.filesystem = 'btrfs';
+    operationOf(plan, 'format_filesystems').parameters.root_filesystem = 'btrfs';
+  }],
   ['operation_kind_unknown--format-disk', ['ext4-systemd-boot', 'locked'], plan => { plan.operations[3].kind = 'format_disk'; plan.operations[3].id = 'format_disk'; }],
   ['operation_order_invalid--swapped', ['ext4-systemd-boot', 'locked'], plan => {
     [plan.operations[5], plan.operations[6]] = [plan.operations[6], plan.operations[5]];
   }],
   ['operation_id_invalid--renamed', ['ext4-systemd-boot', 'locked'], plan => { plan.operations[4].id = 'mount'; }],
-  ['operation_destructive_mismatch--wipe', ['ext4-systemd-boot', 'locked'], plan => { plan.operations[0].destructive = false; }],
+  ['operation_destructive_mismatch--wipe', ['ext4-systemd-boot', 'locked'], plan => { operationOf(plan, 'wipe_disk_signatures').destructive = false; }],
   ['destructive_without_target_disk--missing', ['ext4-systemd-boot', 'locked'], plan => { delete plan.choices.target_disk; }],
   ['root_account_secret_mismatch--password-undeclared', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.root_account.value = 'password'; }],
   ['root_account_secret_mismatch--locked-declared', ['ext4-systemd-boot', 'password'], plan => { plan.choices.root_account.value = 'locked'; }],
@@ -426,8 +464,8 @@ export const INVALID_CASES = [
   ['digest_mismatch--edited-content', ['ext4-systemd-boot', 'locked'], plan => { plan.choices.hostname.value = 'edited'; }, false],
 ];
 
-export function buildInvalidPlan([, [storageOption, rootAccount, hibernation = true], mutate, resign = true]) {
-  const plan = structuredClone(buildValidPlan(storageOption, rootAccount, hibernation));
+export function buildInvalidPlan([, [storageOption, rootAccount, hibernation = true, targetMode = 'whole_disk'], mutate, resign = true]) {
+  const plan = structuredClone(buildValidPlan(storageOption, rootAccount, hibernation, targetMode));
   mutate(plan);
   return resign ? withDigest(plan) : plan;
 }
@@ -439,6 +477,7 @@ export function allFixtures() {
       files.set(`valid/${storageOption}--${rootAccount}.json`, buildValidPlan(storageOption, rootAccount));
     }
     files.set(`valid/${storageOption}--hibernation-disabled.json`, buildValidPlan(storageOption, 'locked', false));
+    files.set(`valid/${storageOption}--replace.json`, buildValidPlan(storageOption, 'locked', true, 'replace_installation'));
   }
   for (const testCase of INVALID_CASES) files.set(`invalid/${testCase[0]}.json`, buildInvalidPlan(testCase));
   return files;

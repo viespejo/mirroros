@@ -5,7 +5,10 @@ import { dirname, join } from 'node:path';
 // (MIRROROS_DISCOVERY_ROOT) and the state files read by the PATH doubles. Planted sensitive values
 // are written where a careless collector could read them.
 const [fixturePath, root, state] = process.argv.slice(2);
-const raw = JSON.parse(readFileSync(fixturePath, 'utf8'));
+const fixture = JSON.parse(readFileSync(fixturePath, 'utf8'));
+const raw = fixture.firmware === undefined
+  ? { ...JSON.parse(readFileSync(join(dirname(fixturePath), 'reference-vm-empty.json'), 'utf8')), ...fixture }
+  : fixture;
 
 function put(base, relative, content) {
   const path = join(base, relative);
@@ -58,6 +61,23 @@ putState('curl_status', network.https?.ok ? 0 : 28);
 
 const storage = raw.storage ?? {};
 writeFileSync(join(state, 'lsblk.json'), `${JSON.stringify({ blockdevices: storage.blockdevices ?? [] }, null, 2)}\n`);
+for (const inspection of storage.installation_inspections ?? []) {
+  const parts = storage.blockdevices.flatMap(disk => disk.children ?? []);
+  const rootPartition = parts.find(part => part.path === inspection.root_path);
+  const espPartition = parts.find(part => part.path === inspection.esp_path);
+  const rootBase = `filesystems/${inspection.root_path.slice('/dev/'.length)}`;
+  const espBase = `filesystems/${inspection.esp_path.slice('/dev/'.length)}`;
+  const rootUuid = rootPartition.uuid;
+  if (inspection.fstab_matches) {
+    putState(`${rootBase}/etc/fstab`, `UUID=${rootUuid} / ${rootPartition.fstype} defaults 0 0\nUUID=${espPartition.uuid} /boot vfat defaults 0 2`);
+  }
+  if (inspection.limine_present) {
+    putState(`${espBase}/limine.conf`, `cmdline: root=UUID=${inspection.limine_matches ? rootUuid : 'wrong-root'} rw`);
+  }
+  if (inspection.systemd_boot_present) {
+    putState(`${espBase}/loader/entries/mirroros.conf`, `options root=UUID=${inspection.systemd_boot_matches ? rootUuid : 'wrong-root'} rw`);
+  }
+}
 for (const link of storage.by_id ?? []) {
   putRoot(`dev${link.target.slice('/dev'.length)}`, '');
   mkdirSync(join(root, 'dev/disk/by-id'), { recursive: true });

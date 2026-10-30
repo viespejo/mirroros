@@ -37,7 +37,8 @@ export function source(requestedProfileId) {
 // identification over every profile under root.
 export function discover(rawName, { targetId = 'reference-vm', root = targetsRoot, overrideFixture, runtimeNames, mutateRaw } = {}) {
   const requested = targetId === null ? null : loadTarget(root, targetId);
-  const raw = readFixture(`raw/${rawName}.json`);
+  const fixture = readFixture(`raw/${rawName}.json`);
+  const raw = fixture.firmware === undefined ? { ...readFixture('raw/reference-vm-empty.json'), ...fixture } : fixture;
   if (mutateRaw !== undefined) mutateRaw(raw);
   return normalizeFacts({
     raw,

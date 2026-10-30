@@ -23,6 +23,11 @@ The documents around discovery version independently, and the validator uses one
 | Target definition (`targets/<id>/target.json`) | `TARGET_DEFINITION_FORMAT_VERSION` | `1`, unchanged |
 | Discovery policy (`install/discovery/policy.json`) | `DISCOVERY_POLICY_FORMAT_VERSION` | `1`, unchanged |
 
+ADR 0022 adds optional partition geometry and replacement fields to format `2`; this is an additive
+extension, not a new format. New discovery runs always emit `replace_candidates` and `replace_rejections`
+for each disk. Consumers must treat absent replacement fields in earlier format-2 facts as no replacement
+evidence, never infer a candidate from labels alone.
+
 The facts of an earlier run are never transformed. Consumers reject a facts document of another version and
 ask for a new discovery.
 
@@ -102,11 +107,43 @@ Each disk has:
 | --- | --- |
 | `identity` | `path`, `by_id` (preferring `nvme-eui.*`, then `wwn-*`), `wwn`, `serial`, `model`, and `size_bytes`. Unavailable values are omitted. |
 | `type`, `transport`, `removable`, `read_only` | Device attributes. |
-| `layout` | `partition_table` (`type`, `uuid`) and `partitions` (`path`, `size_bytes`, `fstype`, `label`, `uuid`, `partuuid`, `mountpoints`). Recorded as information only. |
+| `layout` | `partition_table` (`type`, `uuid`, optional `sector_size_bytes`) and `partitions` (`path`, `size_bytes`, `fstype`, `label`, `uuid`, `partuuid`, `mountpoints`, optional `type_guid`, `partition_number`, `start_sector`, `partition_label`). `type_guid` is lowercase; `start_sector` uses lsblk's 512-byte units, independent of logical sector size. |
+| `replace_candidates` | Optional array of unambiguously identified MirrorOS installations; each has `disk_path`, `storage_option`, `root` and `esp` (copies of their layout partition records). New runs emit an empty array when none qualifies. |
+| `replace_rejections` | Optional array of `{ root_path, reason }` for partitions labelled `mirroros` that cannot be identified safely. It does not make a whole-disk-eligible disk invalid. |
 | `eligible` | Whether the disk could be a candidate. |
 | `ineligible_reasons` | Present only when `eligible` is false: `loop`, `rom`, `zram`, `unsupported_type`, `removable`, `read_only`, `live_medium`, `mounted`, `below_minimum_size`, or `size_unknown`. |
 
 An existing layout alone never makes a disk ineligible.
+
+#### Replacement identification
+
+[ADR 0022 (a)](../docs/adr/0022-installer-coexistence-and-uefi-boot-entry.md) governs the binding:
+
+- Require an eligible GPT disk and exactly one partition labelled `mirroros`, of Linux filesystem type
+  GUID `0fc63daf-8483-4772-8e79-3d69d8477de4`, formatted as ext4 or Btrfs.
+- Require root and ESP paths, positive sizes, partition numbers, start offsets, filesystem UUIDs and
+  GPT PARTUUIDs. Filesystem UUIDs and PARTUUIDs must be unique on the disk.
+- Read `/etc/fstab` from the unmounted root through `ro,noload` for ext4 or `ro,nologreplay,subvol=@`
+  for Btrfs (falling back to `ro,nologreplay,subvolid=5` if `@` cannot be mounted). No journal or tree-log
+  replay is allowed. Never elevate or inspect a mounted disk. Unmount every successful inspection mount;
+  an unmount failure terminates discovery as an external-command failure.
+- Require exactly one `/` fstab entry bound by `UUID=` to that root and exactly one `/boot` entry bound
+  by `UUID=` to a vfat ESP on the same disk, with type GUID
+  `c12a7328-f81f-11d2-ba4b-00a0c93ec93b`. Mount that ESP read-only. Symlinked binding files or their
+  containing directories are not accepted.
+- Require exactly one bootloader configuration: `limine.conf` for Btrfs/Limine, or
+  `loader/entries/mirroros.conf` for systemd-boot. Its native `cmdline:` or `options` records must contain
+  `root=UUID=<root UUID>` and no conflicting `root=` token. Comments and titles are not evidence.
+- Record `btrfs-limine`, `btrfs-rescue` or `ext4-systemd-boot` according to the observed filesystem and
+  loader. Never select a disk or choose a candidate on the user's behalf. Identification is not an
+  authorization to format: plan generation and engine prechecks enforce current reuse-size policy.
+
+Rejection reasons are `ambiguous_roots`, `unsupported_root`, `disk_ineligible`, `incomplete_identity`,
+`missing_esp_binding`, `inspection_unavailable`, `ambiguous_identity`, `ambiguous_boot_configuration`,
+`boot_root_mismatch`, and `ambiguous_esp_binding`. An ordinary disk without a `mirroros` root has empty
+candidate and rejection arrays. Missing or unreadable inspection evidence never produces a candidate.
+The geometry is observed information, not a full partition-table preservation proof; the replacement
+engine records and compares `sfdisk --dump` separately.
 
 ### `hardware`
 
@@ -183,5 +220,11 @@ the rest.
 | --- | --- |
 | `firmware` | `boot_mode`, `fw_platform_size`, `efivars_available`, `secure_boot`, `dmi` (the seven DMI fields). |
 | `network` | `interfaces` (`name`, `kind`, `state`, `has_global_ipv4`, `has_global_ipv6`), `default_route`, `dns` (`host`, `resolved`), `https` (`url`, `ok`, `timeout_seconds`). |
-| `storage` | `blockdevices` (the `lsblk -J -b` tree with lowercase column names), `by_id` (`name`, `target`), `live_medium_device`. |
+| `storage` | `blockdevices` (the `lsblk -J -b` tree with lowercase column names, including `parttype`, `partn`, `start`, `partlabel`, `log-sec`), `by_id` (`name`, `target`), `live_medium_device`, `installation_inspections`. |
 | `hardware` | `architecture`, `cpu` (`vendor_id`, `model_name`, `cores`), `memory_total_kib`, `display_devices` (`vendor_id`, `device_id`, `driver`, `boot_vga`), `battery_present`, `virtualization`. |
+
+Each storage `installation_inspections` record contains `root_path`, `esp_path`, `status` (`inspected` or
+`unreadable`), and booleans `fstab_matches`, `limine_present`, `systemd_boot_present`, `limine_matches`,
+`systemd_boot_matches`. Only these allowlisted binding results are retained: no fstab contents, full boot
+configuration or unrelated kernel options are copied to raw evidence or normalized facts. Failure to mount
+an installation is a recorded rejection, not a successful inspection or a whole-disk discovery failure.

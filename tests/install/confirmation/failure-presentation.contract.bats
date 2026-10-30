@@ -14,6 +14,7 @@ setup() {
   : > "$CALLS"
   : > "$POWER"
   : > "$VISITS"
+  FLOW_TMP="$BATS_TEST_TMPDIR"
   FLOW_RUN_DIR="${BATS_TEST_TMPDIR}/synthetic-run"
   mkdir -p "${FLOW_RUN_DIR}/engine"
   LOG="${FLOW_RUN_DIR}/engine/engine.log"
@@ -148,7 +149,8 @@ setup() {
   [ "$status" -eq 0 ]
   grep -qxF 'gum pager --border-foreground 4' "$CALLS"
   cmp "$LOG" "$PAGER_CONTENT"
-  [ "$(grep -c 'gum style .*MirrorOS installation stopped' "$CALLS")" -eq 2 ]
+  [ "$(printf '%s\n' "$output" | grep -c 'MirrorOS installation stopped')" -eq 2 ]
+  [ "$(grep -c 'gum style .*MirrorOS installation stopped' "$CALLS")" -eq 4 ]
   [ "$(< "$VISITS")" -eq 2 ]
   [ ! -s "$POWER" ]
 }

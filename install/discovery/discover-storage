@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")" && p
 # shellcheck disable=SC1091 # The shared helper is resolved from BASH_SOURCE to support arbitrary working directories.
 source "${SCRIPT_DIR}/lib/collect.sh"
 
-readonly LSBLK_COLUMNS='PATH,KNAME,TYPE,SIZE,MODEL,SERIAL,WWN,TRAN,RM,RO,HOTPLUG,PTTYPE,PTUUID,FSTYPE,LABEL,UUID,PARTUUID,MOUNTPOINTS'
+readonly LSBLK_COLUMNS='PATH,KNAME,TYPE,SIZE,MODEL,SERIAL,WWN,TRAN,RM,RO,HOTPLUG,PTTYPE,PTUUID,FSTYPE,LABEL,UUID,PARTUUID,PARTTYPE,PARTN,START,PARTLABEL,LOG-SEC,MOUNTPOINTS'
 readonly LIVE_MEDIUM_MOUNTPOINT='/run/archiso/bootmnt'
 
 lsblk_json="$(lsblk --json --tree --bytes --output "$LSBLK_COLUMNS")" || discovery_child_fail lsblk "$?"
@@ -40,7 +40,99 @@ if [[ -r "$mounts_file" ]]; then
   done < "$mounts_file"
 fi
 
-printf '{"blockdevices":%s,"by_id":[%s]' "$devices_json" "$by_id_json"
+# Only allowlisted binding results are retained, never fstab contents or kernel options.
+inspection_json=''
+inspection_dir=''
+root_mounted=0
+esp_mounted=0
+cleanup_inspection() {
+  if [[ "$esp_mounted" == 1 ]]; then umount -- "${inspection_dir}/esp" || return 1; esp_mounted=0; fi
+  if [[ "$root_mounted" == 1 ]]; then umount -- "${inspection_dir}/root" || return 1; root_mounted=0; fi
+  if [[ -n "$inspection_dir" ]]; then rmdir -- "${inspection_dir}/root" "${inspection_dir}/esp" "$inspection_dir"; fi
+  inspection_dir=''
+}
+finish_inspection() {
+  local inspection_status=$?
+  cleanup_inspection || inspection_status=5
+  exit "$inspection_status"
+}
+trap finish_inspection EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Node handles the lsblk tree; Bash owns the bounded read-only mounts.
+pairs="$(node --input-type=module - "$lsblk_json" <<'NODE'
+const { blockdevices } = JSON.parse(process.argv[2]);
+const mounted = p => (p.mountpoints ?? []).some(Boolean) || (p.children ?? []).some(mounted);
+for (const disk of blockdevices ?? []) {
+  if (disk.type !== 'disk' || disk.pttype !== 'gpt' || disk.ro || disk.rm || mounted(disk)) continue;
+  const parts = (disk.children ?? []).filter(p => p.type === 'part');
+  for (const root of parts.filter(p => p.label === 'mirroros' && ['ext4', 'btrfs'].includes(p.fstype))) {
+    for (const esp of parts.filter(p => p.parttype?.toLowerCase() === 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' && p.fstype === 'vfat')) {
+      const fields = [root.path, root.fstype, root.uuid, esp.path, esp.uuid];
+      if (fields.every(v => typeof v === 'string' && /^[A-Za-z0-9/_.:-]+$/.test(v))) console.log(fields.join('\t'));
+    }
+  }
+}
+NODE
+)" || discovery_child_fail node "$?"
+
+config_matches() {
+  local file=$1 kind=$2 uuid=$3
+  [[ -f "$file" && ! -L "$file" ]] || return 1
+  awk -v kind="$kind" -v wanted="root=UUID=$uuid" '
+    (kind == "limine" && $1 == "cmdline:") || (kind == "systemd-boot" && $1 == "options") {
+      for (i = 2; i <= NF; i++) {
+        if ($i ~ /^#/) break
+        if ($i ~ /^root=/) { found++; if ($i != wanted) bad = 1 }
+      }
+    }
+    END { exit !(found && !bad) }
+  ' "$file"
+}
+
+while IFS=$'\t' read -r root_path root_fs root_uuid esp_path esp_uuid; do
+  [[ -n "$root_path" ]] || continue
+  if [[ -z "$inspection_dir" ]]; then
+    inspection_dir="$(mktemp -d)"
+    mkdir -- "${inspection_dir}/root" "${inspection_dir}/esp"
+  fi
+  status=unreadable
+  fstab_matches=false
+  limine_matches=false
+  systemd_boot_matches=false
+  limine_present=false
+  systemd_boot_present=false
+  options=ro,noload
+  [[ "$root_fs" != btrfs ]] || options=ro,nologreplay,subvol=@
+  if mount -t "$root_fs" -o "$options" -- "$root_path" "${inspection_dir}/root"; then
+    root_mounted=1
+  elif [[ "$root_fs" == btrfs ]] && mount -t btrfs -o ro,nologreplay,subvolid=5 -- "$root_path" "${inspection_dir}/root"; then
+    root_mounted=1
+  fi
+  if [[ "$root_mounted" == 1 ]] && mount -t vfat -o ro -- "$esp_path" "${inspection_dir}/esp"; then
+    esp_mounted=1
+    status=inspected
+    fstab="${inspection_dir}/root/etc/fstab"
+    if [[ ! -L "${inspection_dir}/root/etc" && ! -L "$fstab" && -f "$fstab" ]] && awk -v root="UUID=$root_uuid" -v esp="UUID=$esp_uuid" '
+      $1 !~ /^#/ && $2 == "/" { r++; if ($1 != root) bad = 1 }
+      $1 !~ /^#/ && $2 == "/boot" { e++; if ($1 != esp || $3 != "vfat") bad = 1 }
+      END { exit !(r == 1 && e == 1 && !bad) }
+    ' "$fstab"; then fstab_matches=true; fi
+    boot="${inspection_dir}/esp"
+    [[ ! -e "$boot/limine.conf" && ! -L "$boot/limine.conf" ]] || limine_present=true
+    [[ ! -e "$boot/loader/entries/mirroros.conf" && ! -L "$boot/loader/entries/mirroros.conf" ]] || systemd_boot_present=true
+    if config_matches "$boot/limine.conf" limine "$root_uuid"; then limine_matches=true; fi
+    if [[ ! -L "$boot/loader" && ! -L "$boot/loader/entries" ]] && config_matches "$boot/loader/entries/mirroros.conf" systemd-boot "$root_uuid"; then systemd_boot_matches=true; fi
+  fi
+  inspection_json+="${inspection_json:+,}{\"root_path\":$(discovery_json_string "$root_path"),\"esp_path\":$(discovery_json_string "$esp_path"),\"status\":\"$status\",\"fstab_matches\":$fstab_matches,\"limine_present\":$limine_present,\"systemd_boot_present\":$systemd_boot_present,\"limine_matches\":$limine_matches,\"systemd_boot_matches\":$systemd_boot_matches}"
+  # Do not continue or remove the temporary directories if either unmount fails.
+  if [[ "$esp_mounted" == 1 ]]; then umount -- "${inspection_dir}/esp" || discovery_child_fail umount "$?"; esp_mounted=0; fi
+  if [[ "$root_mounted" == 1 ]]; then umount -- "${inspection_dir}/root" || discovery_child_fail umount "$?"; root_mounted=0; fi
+done <<< "$pairs"
+cleanup_inspection || discovery_child_fail umount "$?"
+
+printf '{"blockdevices":%s,"by_id":[%s],"installation_inspections":[%s]' "$devices_json" "$by_id_json" "$inspection_json"
 if [[ -n "$live_medium" ]]; then
   printf ',"live_medium_device":%s' "$(discovery_json_string "$live_medium")"
 fi

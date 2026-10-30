@@ -21,6 +21,46 @@ sync_partitions() {
   run udevadm settle
 }
 
+PRE_WIPE_PARTUUIDS=()
+
+op_record_disk_partuuids() {
+  param_lines partuuids PRE_WIPE_PARTUUIDS
+  record_constant record_disk_partuuids.partuuids "$(join_by_comma "${PRE_WIPE_PARTUUIDS[@]}")"
+}
+
+op_remove_stale_uefi_entries() {
+  [[ "$TARGET_MODE" == whole_disk ]] || check_fail 'NVRAM cleanup requires whole-disk mode'
+  run_uefi uefi_remove_partuuids "${PRE_WIPE_PARTUUIDS[@]}"
+}
+
+op_wipe_partition_signatures() {
+  [[ "$TARGET_MODE" == replace_installation && "$ESP_PART" != "$DISK_NODE" && "$ROOT_PART" != "$DISK_NODE" ]] \
+    || check_fail 'partition wipe requires a replacement target'
+  run wipefs --all "$ESP_PART" "$ROOT_PART"
+  local node remaining
+  for node in "$ESP_PART" "$ROOT_PART"; do
+    capture remaining wipefs --noheadings "$node"
+    [[ -z "$remaining" ]] || check_fail 'a target partition still has signatures'
+  done
+}
+
+verify_untouched_partitions() {
+  [[ "$TARGET_MODE" == replace_installation ]] || return 0
+  local dump="${OUTPUT}/partition-table-after.sfdisk" storage="${OUTPUT}/.storage-after.json" record
+  capture record sfdisk --dump "$DISK_NODE"
+  printf '%s\n' "$record" > "$dump"
+  capture record lsblk --json --tree --bytes --output PATH,KNAME,TYPE,SIZE,PTTYPE,PTUUID,FSTYPE,LABEL,UUID,PARTUUID,PARTTYPE,PARTN,START,PARTLABEL,LOG-SEC,MOUNTPOINTS
+  printf '%s\n' "$record" > "$storage"
+  if ! record="$(node_helper load-plan.mjs partition-record --dump "$dump" --storage "$storage" 2>> "$ENGINE_LOG")"; then
+    check_fail 'the partition table differs after replacement'
+  fi
+  rm -f -- "$storage"
+  printf '%s\n' "$record" > "${OUTPUT}/untouched-partitions-after.json"
+  cmp -s -- "${OUTPUT}/untouched-partitions-before.json" "${OUTPUT}/untouched-partitions-after.json" \
+    || check_fail 'non-target partition entries or identities changed'
+  record_constant format_partitions.untouched_partitions_verified true
+}
+
 op_wipe_disk_signatures() {
   local nodes=() name remaining
   while IFS= read -r name; do

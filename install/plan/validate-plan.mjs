@@ -11,7 +11,7 @@ import {
   requiredDiskBytes,
 } from './swap-policy.mjs';
 
-export const PLAN_FORMAT_VERSION = 4;
+export const PLAN_FORMAT_VERSION = 5;
 export const PLAN_POLICY_FORMAT_VERSION = 3;
 export const CHOICES_FORMAT_VERSION = 3;
 export const EXIT_VALID = 0;
@@ -73,7 +73,14 @@ export function machineProjection(facts) {
   });
 }
 
+export const TARGET_MODES = ['whole_disk', 'replace_installation'];
+
 export const KINDS = {
+  record_disk_partuuids: false,
+  remove_stale_uefi_entries: false,
+  wipe_partition_signatures: true,
+  format_partitions: true,
+  register_uefi_boot_entry: false,
   wipe_disk_signatures: true,
   create_partition_table: true,
   create_partitions: true,
@@ -146,13 +153,20 @@ const SEQUENCES = {
 
 // The fixed operation order of a storage option. create_swapfile exists only when hibernation is enabled;
 // omitting it does not change the relative order of the other operations.
-export function operationSequence(storageOption, hibernation = true) {
-  const sequence = SEQUENCES[storageOption];
-  if (sequence === undefined) return undefined;
-  return sequence.filter(kind => hibernation || kind !== 'create_swapfile');
+export function operationSequence(storageOption, hibernation = true, targetMode = 'whole_disk') {
+  let sequence = SEQUENCES[storageOption];
+  if (sequence === undefined || !TARGET_MODES.includes(targetMode)) return undefined;
+  if (targetMode === 'replace_installation') {
+    sequence = ['wipe_partition_signatures', 'format_partitions', ...sequence.slice(4)];
+  } else {
+    sequence = ['record_disk_partuuids', ...insertAfter(sequence, 'create_partitions', 'remove_stale_uefi_entries')];
+  }
+  return [...sequence.filter(kind => hibernation || kind !== 'create_swapfile'), 'register_uefi_boot_entry'];
 }
 
 const NEXT_STEPS = {
+  replacement_target_invalid: 'Repeat discovery and select an unmounted replacement candidate that meets the storage policy.',
+  target_mode_mismatch: 'Regenerate the plan with consistent target mode, partition identities, and operations.',
   plan_not_json: 'Provide a plan produced by operations/install plan.',
   plan_invalid_type: 'Regenerate the plan with operations/install plan; do not edit it by hand.',
   plan_non_integer_number: 'Regenerate the plan; the format allows integers only.',
@@ -219,6 +233,8 @@ const choice = (editable, check, description) => ({ editable, check, description
 const fixed = description => choice(false, () => true, description);
 
 export const CHOICE_SPECS = {
+  target_mode: choice(true, value => TARGET_MODES.includes(value), `one of ${TARGET_MODES.join(', ')}`),
+  replace_root_partuuid: choice(true, value => typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value), 'a full root PARTUUID'),
   target_disk: choice(true, isString, 'a disk identifier string'),
   storage_option: choice(true, value => STORAGE_OPTIONS.includes(value), `one of ${STORAGE_OPTIONS.join(', ')}`),
   hibernation: choice(true, isBoolean, 'a boolean'),
@@ -267,7 +283,7 @@ export const CHOICE_SPECS = {
 const STORAGE_OPTION_EXTRAS = ['tier', 'filesystem', 'bootloader', 'resume_offset_method'];
 const DISK_IDENTITY_KEYS = ['path', 'by_id', 'wwn', 'serial', 'model', 'size_bytes'];
 const TOP_LEVEL = [
-  'format_version', 'target', 'choices', 'operations', 'secret_requirements', 'hardware_selections',
+  'format_version', 'target_mode', 'target', 'choices', 'operations', 'secret_requirements', 'hardware_selections',
   'warnings', 'facts_binding', 'policy_binding', 'digest',
 ];
 
@@ -340,7 +356,8 @@ function checkReasonList(list, path, reasons) {
 function checkLayout(layout, path, reasons) {
   if (!checkRecord(layout, path, ['partitions'], ['partition_table'], reasons)) return;
   if (layout.partition_table !== undefined
-    && checkRecord(layout.partition_table, `${path}.partition_table`, [], ['type', 'uuid'], reasons)) {
+    && checkRecord(layout.partition_table, `${path}.partition_table`, [], ['type', 'uuid', 'sector_size_bytes'], reasons)) {
+    if (layout.partition_table.sector_size_bytes !== undefined) expect(isInteger(layout.partition_table.sector_size_bytes) && layout.partition_table.sector_size_bytes > 0, `${path}.partition_table.sector_size_bytes`, 'a positive integer', reasons);
     for (const key of ['type', 'uuid']) {
       if (layout.partition_table[key] !== undefined) {
         expect(isString(layout.partition_table[key]), `${path}.partition_table.${key}`, 'a non-empty string', reasons);
@@ -350,8 +367,11 @@ function checkLayout(layout, path, reasons) {
   if (!expect(Array.isArray(layout.partitions), `${path}.partitions`, 'a list', reasons)) return;
   layout.partitions.forEach((partition, index) => {
     const partitionPath = `${path}.partitions[${index}]`;
-    if (!checkRecord(partition, partitionPath, ['path'], ['size_bytes', 'fstype', 'label', 'uuid', 'partuuid', 'mountpoints'], reasons)) return;
-    for (const key of ['path', 'fstype', 'label', 'uuid', 'partuuid']) {
+    if (!checkRecord(partition, partitionPath, ['path'], ['size_bytes', 'fstype', 'label', 'uuid', 'partuuid', 'mountpoints', 'type_guid', 'partition_number', 'start_sector', 'partition_label'], reasons)) return;
+    for (const key of ['partition_number', 'start_sector']) {
+      if (partition[key] !== undefined) expect(isInteger(partition[key]) && partition[key] > 0, `${partitionPath}.${key}`, 'a positive integer', reasons);
+    }
+    for (const key of ['path', 'fstype', 'label', 'uuid', 'partuuid', 'type_guid', 'partition_label']) {
       if (partition[key] !== undefined) expect(isString(partition[key]), `${partitionPath}.${key}`, 'a non-empty string', reasons);
     }
     if (partition.size_bytes !== undefined) {
@@ -388,7 +408,7 @@ function checkProfile(profile, reasons) {
 }
 
 function checkTarget(target, reasons) {
-  if (!checkRecord(target, 'plan.target', ['machine', 'profile', 'disk'], [], reasons)) return;
+  if (!checkRecord(target, 'plan.target', ['machine', 'profile', 'disk'], ['installation'], reasons)) return;
   if (target.machine !== undefined) checkMachine(target.machine, reasons);
   if (target.profile !== undefined) checkProfile(target.profile, reasons);
   const path = 'plan.target.disk';
@@ -414,7 +434,7 @@ function checkChoices(choices, reasons) {
   }
   // swapfile_size exists only while hibernation is enabled; checkHibernation owns its presence rules.
   for (const key of Object.keys(CHOICE_SPECS)) {
-    if (key !== 'target_disk' && key !== 'swapfile_size' && choices[key] === undefined) {
+    if (!['target_disk', 'swapfile_size', 'replace_root_partuuid'].includes(key) && choices[key] === undefined) {
       add(reasons, 'plan_field_missing', `plan.choices.${key} is required.`);
     }
   }
@@ -617,7 +637,7 @@ function checkOperationSet(plan, reasons) {
   }
   const option = plan.choices?.storage_option?.value;
   const hibernation = plan.choices?.hibernation?.value;
-  const full = operationSequence(option);
+  const full = operationSequence(option, true, plan.target_mode);
   if (!kindsKnown || full === undefined) return;
   const allKinds = operations.map(operation => operation.kind);
   // With a boolean hibernation choice, the presence of create_swapfile is a hibernation consistency rule
@@ -719,7 +739,102 @@ function checkDisk(plan, reasons) {
   }
 }
 
+export function replacementProblems(installation, layout, { espBytes, rootMinimumBytes, swapfileMib }) {
+  if (!isRecord(installation) || !isRecord(layout) || !Array.isArray(layout.partitions)
+    || !layout.partitions.every(isRecord)) return ['Missing replacement identities.'];
+  const { root, esp } = installation;
+  if (![root, esp].every(isRecord)) return ['Missing root or ESP identity.'];
+  const problems = [];
+  const guid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+  if (layout.partition_table?.type !== 'gpt' || !STORAGE_OPTIONS.includes(installation.storage_option)
+    || root.path === esp.path || root.partuuid === esp.partuuid || root.partition_number === esp.partition_number
+    || root.label !== 'mirroros' || root.type_guid !== '0fc63daf-8483-4772-8e79-3d69d8477de4'
+    || esp.type_guid !== 'c12a7328-f81f-11d2-ba4b-00a0c93ec93b' || esp.fstype !== 'vfat'
+    || (installation.storage_option === 'ext4-systemd-boot' ? root.fstype !== 'ext4' : root.fstype !== 'btrfs')
+    || !guid.test(root.uuid) || !/^[0-9a-f]{4}-[0-9a-f]{4}$/i.test(esp.uuid)
+    || layout.partitions.filter(partition => partition.label === 'mirroros').length !== 1) problems.push('Invalid replacement binding.');
+  for (const partition of [esp, root]) {
+    if (!isString(partition.path) || !guid.test(partition.partuuid) || !isInteger(partition.size_bytes) || partition.size_bytes <= 0
+      || !isInteger(partition.partition_number) || partition.partition_number <= 0
+      || !isInteger(partition.start_sector) || partition.start_sector <= 0
+      || !sameDocument(layout.partitions.find(item => item.path === partition.path), partition)
+      || ['path', 'partuuid', 'uuid', 'partition_number'].some(key => layout.partitions.filter(item =>
+        String(item[key]).toLowerCase() === String(partition[key]).toLowerCase()).length !== 1)
+      || (partition.mountpoints !== undefined && (!isStringList(partition.mountpoints) || partition.mountpoints.length > 0))) {
+      problems.push('Replacement partitions must match unique, complete, unmounted layout identities.');
+    }
+  }
+  const requiredRoot = requiredDiskBytes({ espBytes: 0, rootMinimumBytes, swapfileMib });
+  if (!isInteger(espBytes) || esp.size_bytes < espBytes || requiredRoot === undefined || root.size_bytes < requiredRoot) {
+    problems.push('Replacement ESP or root is below the policy minimum including the requested swapfile.');
+  }
+  return problems;
+}
+
+export function bootEntryParameters(bootloader) {
+  return bootloader === 'limine'
+    ? { bootloader, label: 'Limine MirrorOS', loader_path: '\\EFI\\BOOT\\BOOTX64.EFI', first: true }
+    : { bootloader, label: 'MirrorOS', loader_path: '\\EFI\\systemd\\systemd-bootx64.efi', first: true };
+}
+
+function checkTargetMode(plan, reasons) {
+  const mode = plan.target_mode;
+  if (!TARGET_MODES.includes(mode) || plan.choices?.target_mode?.value !== mode) {
+    add(reasons, 'target_mode_mismatch', 'The target mode must be known and agree with its choice.');
+    return;
+  }
+  const installation = plan.target?.installation;
+  const rootChoice = plan.choices?.replace_root_partuuid?.value;
+  const disk = plan.target?.disk;
+  const layout = disk?.current_layout;
+  if (mode === 'replace_installation') {
+    if (checkRecord(installation, 'plan.target.installation', ['disk_path', 'storage_option', 'esp', 'root'], [], reasons)) {
+      checkLayout({ partitions: [installation.esp, installation.root].filter(isRecord) }, 'plan.target.installation', reasons);
+    }
+    const problems = replacementProblems(installation, layout, {
+      espBytes: plan.choices?.esp?.value?.size_bytes,
+      rootMinimumBytes: plan.choices?.root_minimum_bytes?.value,
+      swapfileMib: plan.choices?.hibernation?.value === true ? plan.choices?.swapfile_size?.value : undefined,
+    });
+    if (installation?.disk_path !== disk?.path || rootChoice === undefined || rootChoice !== installation?.root?.partuuid) {
+      problems.push('The replacement choice and disk must match the recorded installation.');
+    }
+    for (const problem of problems) add(reasons, 'replacement_target_invalid', problem);
+  } else if (installation !== undefined || rootChoice !== undefined) {
+    add(reasons, 'target_mode_mismatch', 'Whole-disk mode cannot carry a replacement installation or root choice.');
+  }
+  const identifier = disk?.by_id ?? disk?.path;
+  const recorded = Array.isArray(layout?.partitions) ? layout.partitions.flatMap(partition => !isRecord(partition) || partition.partuuid === undefined ? [] : [partition.partuuid]) : [];
+  const expectations = mode === 'whole_disk' ? {
+    record_disk_partuuids: { disk: identifier, partuuids: recorded },
+    wipe_disk_signatures: { disk: identifier },
+    create_partition_table: { disk: identifier, table: plan.choices?.partition_table?.value },
+    create_partitions: { disk: identifier, esp_size_bytes: plan.choices?.esp?.value?.size_bytes, esp_mount_point: plan.choices?.esp?.value?.mount_point, root: 'remaining_space' },
+    remove_stale_uefi_entries: { partuuids: recorded },
+    format_filesystems: { esp_filesystem: plan.choices?.esp?.value?.filesystem, root_filesystem: plan.choices?.storage_option?.filesystem },
+  } : {
+    wipe_partition_signatures: { esp: installation?.esp, root: installation?.root },
+    format_partitions: { esp: installation?.esp, root: installation?.root, esp_filesystem: plan.choices?.esp?.value?.filesystem, root_filesystem: plan.choices?.storage_option?.filesystem },
+  };
+  expectations.register_uefi_boot_entry = bootEntryParameters(plan.choices?.storage_option?.bootloader);
+  for (const operation of operationKinds(plan)) {
+    if (operation.kind in expectations && !sameDocument(operation.parameters, expectations[operation.kind])) {
+      add(reasons, 'target_mode_mismatch', `The ${operation.kind} parameters differ from the declared target.`);
+    }
+    if (operation.kind === 'format_partitions' && !sameDocument(operation.resolved_at_apply, [{ name: 'partition_uuids', method: 'blkid' }])) {
+      add(reasons, 'target_mode_mismatch', 'Replacement formatting must resolve the new filesystem UUIDs.');
+    }
+  }
+  const option = plan.choices?.storage_option;
+  const expectedBootloader = option?.value === 'btrfs-limine' ? 'limine' : 'systemd-boot';
+  const expectedFilesystem = option?.value === 'ext4-systemd-boot' ? 'ext4' : 'btrfs';
+  if (option?.bootloader !== expectedBootloader || option?.filesystem !== expectedFilesystem) {
+    add(reasons, 'target_mode_mismatch', 'The bootloader and filesystem must match the selected storage option.');
+  }
+}
+
 function checkSizes(plan, reasons) {
+  if (plan.target_mode === 'replace_installation') return;
   const disk = plan.target?.disk;
   const esp = plan.choices?.esp?.value?.size_bytes;
   const root = plan.choices?.root_minimum_bytes?.value;
@@ -874,6 +989,11 @@ function checkFacts(plan, facts, reasons) {
     return;
   }
   if (found.eligible !== true) add(reasons, 'disk_not_eligible', 'The target disk is not eligible in the bound facts.');
+  if (!sameDocument(found.layout, disk.current_layout)) add(reasons, 'disk_identity_mismatch', 'The current layout differs from the bound facts.');
+  if (plan.target_mode === 'replace_installation'
+    && !(found.replace_candidates ?? []).some(candidate => sameDocument(candidate, target.installation))) {
+    add(reasons, 'replacement_target_invalid', 'The replacement installation is not a candidate in the bound facts.');
+  }
 }
 
 // `facts` binds the plan to its discovery; `assets` (the result of loadConfigurationAssets) binds the
@@ -898,6 +1018,7 @@ export function validatePlan(plan, { facts, assets } = {}) {
   checkReasonList(plan.warnings, 'plan.warnings', reasons);
   checkBindings(plan, reasons);
   checkOperationSet(plan, reasons);
+  checkTargetMode(plan, reasons);
   checkSecretConsistency(plan, reasons);
   checkDisk(plan, reasons);
   checkSizes(plan, reasons);

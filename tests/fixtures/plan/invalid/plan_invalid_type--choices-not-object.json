@@ -1,5 +1,6 @@
 {
-  "format_version": 4,
+  "format_version": 5,
+  "target_mode": "whole_disk",
   "target": {
     "machine": {
       "architecture": "x86_64",
@@ -49,6 +50,19 @@
   "choices": [],
   "operations": [
     {
+      "id": "record_disk_partuuids",
+      "kind": "record_disk_partuuids",
+      "destructive": false,
+      "parameters": {
+        "disk": "virtio-SYNTH-VDA-0001",
+        "partuuids": [
+          "00000000-0000-4000-8000-0000000000a1",
+          "00000000-0000-4000-8000-0000000000a2"
+        ]
+      },
+      "description": "Record the target disk partition PARTUUIDs before wiping."
+    },
+    {
       "id": "wipe_disk_signatures",
       "kind": "wipe_disk_signatures",
       "destructive": true,
@@ -78,6 +92,18 @@
         "root": "remaining_space"
       },
       "description": "Create the ESP and a root partition on the remaining space."
+    },
+    {
+      "id": "remove_stale_uefi_entries",
+      "kind": "remove_stale_uefi_entries",
+      "destructive": false,
+      "parameters": {
+        "partuuids": [
+          "00000000-0000-4000-8000-0000000000a1",
+          "00000000-0000-4000-8000-0000000000a2"
+        ]
+      },
+      "description": "Remove only UEFI entries referencing pre-wipe target PARTUUIDs."
     },
     {
       "id": "format_filesystems",
@@ -114,6 +140,7 @@
           "linux",
           "linux-firmware",
           "zram-generator",
+          "efibootmgr",
           "sudo",
           "neovim",
           "man-db",
@@ -288,6 +315,18 @@
         ]
       },
       "description": "Enable the network, time sync, trim, and storage option services."
+    },
+    {
+      "id": "register_uefi_boot_entry",
+      "kind": "register_uefi_boot_entry",
+      "destructive": false,
+      "parameters": {
+        "bootloader": "systemd-boot",
+        "label": "MirrorOS",
+        "loader_path": "\\EFI\\systemd\\systemd-bootx64.efi",
+        "first": true
+      },
+      "description": "Register the MirrorOS loader first, preserving other entries."
     }
   ],
   "secret_requirements": [
@@ -362,18 +401,18 @@
   },
   "warnings": [],
   "facts_binding": {
-    "facts_sha256": "b0bbf020a35494197a8fe12568dae30eab734674c0f762a6dce0b90a0322ad11",
+    "facts_sha256": "4a4f8330eb5c7862e077c124c41b292ae96ce7c52234bcbb762a62268c5862a5",
     "run_id": "20261007T120000Z-11111111-2222-4333-8444-555555555555",
     "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "9ac6ed0b352b7232eb336fb9a970e6bf38b2be7b5e26cfe52fcc357754bda2f2",
+    "policy_sha256": "deb1f27b1f29096e0d9402367a7ec3b4c9c517787319461d491ba94fe803764d",
     "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "f7d089b1176bf8f3f81588df7451b0644b0c4d2ef7c310b858d6465c990afed1"
+    "value": "1ae5ba200badc3fbbe1cdc57cc26f42734dffaaa4ec013974ecb3fc01c68e40b"
   }
 }

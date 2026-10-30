@@ -18,6 +18,10 @@ configure phase and follows engine run/state format `3`. Version `7` adds guided
 format `4` (state remains `3`). Readers also accept pre-timing version `6`, unchanged: they do not add historical
 measurements. Earlier versions retain their unsupported historical status.
 
+The ADR 0022 coexistence extension follows installation-plan format `5`. Version `7` approval evidence
+additionally permits `target_mode` and replacement `partitions`; historical records without these fields remain
+readable and never authorize a run. New writers include the mode whenever a plan exists.
+
 In this version a valid approval is followed by the protected password entry, a final revalidation, and one
 invocation of the installation engine (`install/engine/apply`, defined in
 [`installation-engine.md`](installation-engine.md)), which installs the base system and configures the graphical
@@ -114,12 +118,18 @@ The screens and their order are the reference's, with the integration difference
 4. **Automatic discovery** into `discovery/initial/`: `install/discovery/discover` without `--target`, as a
    process. The result shows the machine as recognized or unqualified (see
    [Machine check](#machine-check)).
-5. **Configuration screens**, in order: installation disk, storage layout, hibernation (with swapfile size when
+5. **Configuration screens**, in order: installation disk with target-mode selection, storage layout, hibernation (with swapfile size when
    enabled), timezone, system language, regional formats, installed keyboard, hostname, username, root policy.
    - Defaults and per-value validation come from the plan component's published helpers
      ([`installation-plan.md`](installation-plan.md#choice-helpers)) as processes; the assistant owns no policy.
    - The disk screen always lists the real eligible disks, including when there is only one. Labels and stable
      identifiers are kept separate.
+   - After disk selection, the plan preview offers `whole_disk` and, only for a valid unambiguous discovered
+     candidate, `replace_installation`. With no candidate, whole-disk remains the only mode and no extra selector
+     is shown. The selector uses the current choice, the shared Gum style, and Back/Esc/Ctrl+C semantics.
+     Choosing replacement records the candidate's full root PARTUUID; choosing whole-disk drops that identity.
+     Changing disks clears the previous mode and replacement identity. The storage screen describes reuse
+     without resizing or repartitioning in replacement mode; policy and constraints remain owned by the plan.
    - The hibernation stage first offers Enabled or Disabled, initially Enabled, and shows the sizing screen only
      when enabled (see D15). Disabling removes any explicit size; re-enabling proposes the RAM-derived default
      again. A revisit shows the current choice. The stage is reachable from the edit menu like any other.
@@ -150,13 +160,18 @@ The screens and their order are the reference's, with the integration difference
      combination shows its reason's `message` and `next_step`, keeps the last valid plan, and grants nothing.
      `choices.json` accumulates every edit of the run. With `--plan`, the starting choices are the plan entries whose
      source is `choice`.
-7. **Confirmation.** The disk to erase and the plan reference are shown. `gum confirm` focuses on No. Then the
+7. **Confirmation.** The selected disk, destructive scope and plan reference are shown. `gum confirm` focuses on No. Then the
    user types the kernel device name (the basename of the disk path, for example `vda` or `nvme0n1`) with
-   `gum input`. The digest is never typed.
+   `gum input`. In replacement mode, both review and confirmation show the selected ESP and root paths and
+   PARTUUIDs and the non-target partitions to preserve. The warning states that only the selected ESP and root
+   are erased, and the No-focused control says "Yes, replace". After the disk name, the user must also type the
+   full root PARTUUID exactly at `Root PARTUUID> `. A mismatch, No, Esc, or Ctrl+C cancels without retry or
+   engine invocation. The digest is never typed.
 8. **Password.** The single `account_password`, asked twice with a protected prompt (see
    [Password hand-over](#password-hand-over)).
 9. **Final revalidation into `discovery/final/`.** Rediscovery, then the safety comparison and a digest re-check
-   of the plan file on disk. A failed revalidation is `invalidated` and discards the password.
+   of the plan file on disk. The complete digest must also equal the one held ephemerally from the displayed
+   confirmation; even a plan changed with a recomputed valid digest cannot reuse approval. A failed revalidation is `invalidated` and discards the password.
 10. **Engine.** The live mirrorlist first receives the regional selection of
     [ADR 0013](../docs/adr/0013-regional-live-mirror-selection.md) from the plan's time zone, logged in
     `install.log`; it is recorded, not confirmed, and any doubt leaves it unchanged without stopping the run.
@@ -202,7 +217,8 @@ fresh facts and this projection:
 | `firmware.secure_boot` | Not recorded in the plan: the Secure Boot state of the fresh facts is compared with the state in `discovery/initial/`. |
 | Disk identity | `path`, `by_id`, `wwn`, `serial`, `model`, `size_bytes` of the selected disk. |
 | `eligible` | Must remain `true`. |
-| `current_layout` | `partition_table` and, for each partition, `uuid`, `partuuid`, size, `fstype`, `label`, and `mountpoints`. |
+| `current_layout` | `partition_table` and every partition field, including path, UUID, PARTUUID, size, filesystem, label, mountpoints, type GUID, partition number and start sector when available. |
+| Target mode and replacement binding | `target_mode` must agree with its plan choice. In replacement mode the selected root choice and the complete `target.installation` must still match the one unambiguous fresh `replace_candidates` entry, including both partition identities, sizes and binding evidence. Lost, changed or ambiguous candidates invalidate approval. |
 | `policy_binding` | `policy_sha256` and `override_sha256`, recomputed from `install/plan/policy.json` and the matched profile's override. |
 | Configuration assets | The `destination` and `source_sha256` of `configure_zram` and `configure_memory_reclaim` against the SHA-256 recomputed from the current allowlisted source assets under `install/plan/assets/`. A changed, missing, or damaged asset invalidates approval. |
 
@@ -225,10 +241,10 @@ Invalidation reasons carry the `next_step` "Regenerate and review the installati
 | `machine_identity_changed` | The machine projection, including detected memory, differs from the plan, including a field that appeared or disappeared. |
 | `profile_binding_changed` | The profile classification, or the matched profile's definition hash, differs from the plan. |
 | `target_identity_changed` | The firmware mode, the Secure Boot state, or the disk identity differs from the plan, including in the engine's final block. |
-| `target_layout_changed` | The disk is no longer eligible, or its `current_layout` differs from the plan, including in the engine's final block. |
+| `target_layout_changed` | The disk is no longer eligible, its `current_layout` differs, or the replacement candidate is missing, ambiguous or differs from the reviewed identities and binding. |
 | `policy_changed` | The recomputed policy or override hash differs from `policy_binding`. |
 | `configuration_assets_changed` | A configuration asset's hash or destination differs from the reviewed plan, or an asset is missing or damaged. |
-| `digest_mismatch` | The plan file fails its digest, before review or in the re-check after confirmation. |
+| `digest_mismatch` | The plan file fails its digest, or its complete digest differs from the one displayed at confirmation, even when the changed file carries a recomputed valid digest. |
 | Validator codes | A plan given with `--plan` fails `validate-plan.mjs`; its code passes through (see [`installation-plan.md`](installation-plan.md#validation)). A plan of an earlier format is `plan_format_unsupported`, with the instruction to regenerate it. |
 | Discovery codes | Fresh facts are invalid or discovery fails; the code passes through (see [`target-facts.md`](target-facts.md#validation)), for example `profile_ambiguous`. |
 
@@ -236,7 +252,7 @@ Other reasons:
 
 | Code | Condition |
 | --- | --- |
-| `confirmation_mismatch` | The typed device name differs from the expected kernel name. There is no second attempt. |
+| `confirmation_mismatch` | The typed device name or, in replacement mode, full root PARTUUID differs from the expected identity. There is no second attempt. |
 | `install_already_running` | Another run holds the installer lock. Reported on stderr only; no run directory or records. |
 | `engine_version_mismatch` | The plan was generated by a different code identity (commit or dirty state) than the running artifact. The `next_step` asks to generate a new plan with this artifact. The run is `blocked` before review, so no confirmation or password is requested. |
 | Engine codes | The engine's reasons pass through unchanged (see [`installation-engine.md`](installation-engine.md#reasons)): `target_disk_in_use`, `password_unavailable`, `engine_asset_mismatch`, `engine_interrupted`, `postcondition_failed` (one per failed check), and `stage_failed` with the failing operation. |
@@ -284,7 +300,7 @@ Esc differs by prompt. In configuration steps and the review it goes back withou
 answer; leaving the pager returns to the review. In the first password field it returns to the review, discards any
 entered value, and clears the approval. In the repetition field it discards both values and restarts at the first
 password field within the same stage, retaining the bound approval; final revalidation remains mandatory. At the authorization prompts (the final
-No and the device-name input) Esc cancels, as do a No answer and a name mismatch.
+No, device-name input and replacement root-PARTUUID input) Esc cancels, as do a No answer and an identity mismatch.
 
 ## Password hand-over
 
@@ -414,6 +430,8 @@ confirmation.
 | `machine` | As in `install-run.json`; omitted when none was reached. |
 | `profile` | As in `install-run.json`; omitted when none was reached. |
 | `disk` | Identity of the selected disk: `path`, `by_id`, `wwn`, `serial`, `model`, and `size_bytes`, as available. |
+| `target_mode` | `whole_disk` or `replace_installation`, emitted when a plan exists; omitted in historical evidence. |
+| `partitions` | Required when `target_mode` is `replace_installation`, forbidden otherwise. Contains `esp` and `root`, each with `path`, full `partuuid`, filesystem `uuid`, `type_guid`, `size_bytes`, `partition_number`, and `start_sector` from the reviewed plan. The two PARTUUIDs must differ. |
 | `gum_version` | As in `install-run.json`. |
 | `outcome` | As in `install-run.json`. |
 | `reason` | The primary reason's `code`; omitted when none applies. |
@@ -455,6 +473,16 @@ first. The wording shown is the proposed production text; every item awaits appr
 | D21 | Review rows end with "Internet"; the hardware appears only in the full plan as `not_evaluated`. | Review rows "Graphics", "CPU microcode", "Battery", and "Virtualization" are added after the "Machine" row, each showing the rule outcome in one line (for example "Kernel driver, nothing additional", "Installs amd-ucode", "Battery detected", or "Virtual machine"). Every warning of the plan, including the hardware warnings of the plan contract, appears as a persistent yellow line under the rows, like the swapfile warning of D15. The complete plan (D8) shows each outcome with its fact, detected value, and explanation, and the rule packages with their provenance. Nothing here is editable or blocks continuing. | FR18, FR33–FR35 of Story 2.6: hardware-derived choices are explained before approval. |
 | D22 | None. | For `not_configured`/`4`: two top blank lines, a space-conditional symbol and adaptive diagnostic inspection as described below, the red line "Base system installed and verified; environment configuration failed at step <step>." (unknown when no step is available), the next action "Boot the installed system, log in at the console, and run sudo mirroros-configure.", and "Run directory: <path>". The menu is "View configure log" / "Restart" / "Return to shell" / "Power off", with "Return to shell" selected. The shared accent-only selector retains native help. The slot-4-border pager shows only the configure portion of `engine.log`. Blank lines separate the failure, recovery action, run directory, and menu. Lines wrap at word boundaries like D20. No retry from the live medium and no automatic action; leaving for the shell returns `4`. | Story 4.2 DEC-027, DEC-028, DEC-032. |
 | D23 | No configure announcement under the review rows. | Adds the fixed dimmed line "After the base system is verified, the graphical environment is configured." under the review rows in both review presentations, before confirmation. It fits 80 columns and does not add an editable choice or a plan operation. | Story 4.2 DEC-031. |
+
+### ADR 0022 coexistence extension
+
+[ADR 0022](../docs/adr/0022-installer-coexistence-and-uefi-boot-entry.md) extends D2, D6, D7 and D9:
+replace the entire-disk notice with "Choose the target mode after selecting a disk."; conditionally offer
+"Whole disk" / "Replace existing MirrorOS"; show Mode in review and the exact formatted/preserved partition
+identities for replacement; and require the additional full-root-PARTUUID input. Review's replacement footer
+refers to confirming the disk and root PARTUUID rather than erasing the disk. The unqualified-machine warning
+is unchanged, including on the experimental T14s. These are original MirrorOS changes using existing Gum
+widgets; earlier attended presentation approvals do not qualify the new replacement branch or its fit.
 
 ### ADR 0018 presentation amendment
 

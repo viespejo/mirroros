@@ -147,7 +147,7 @@ export function validateRunRecord(document) {
 export function validateApprovalRecord(document) {
   const problems = [];
   const required = ['format_version', 'run_id', 'timestamp', 'outcome'];
-  const optional = ['digest', 'machine', 'profile', 'disk', 'gum_version', 'reason'];
+  const optional = ['digest', 'machine', 'profile', 'disk', 'target_mode', 'partitions', 'gum_version', 'reason'];
   if (!checkFields(document, 'approval', required, optional, problems)) return problems;
   secretKeys(document, 'approval', problems);
   checkCommon(document, 'approval', problems);
@@ -161,6 +161,26 @@ export function validateApprovalRecord(document) {
     }
     if ('size_bytes' in disk && !Number.isSafeInteger(disk.size_bytes)) problems.push('approval.disk.size_bytes must be an integer');
   }
+  if ('target_mode' in document && !['whole_disk', 'replace_installation'].includes(document.target_mode)) {
+    problems.push('approval.target_mode must be whole_disk or replace_installation');
+  }
+  if (document.target_mode === 'replace_installation') {
+    if (checkFields(document.partitions, 'approval.partitions', ['esp', 'root'], [], problems)) {
+      const textKeys = ['path', 'partuuid', 'uuid', 'type_guid'];
+      const numberKeys = ['size_bytes', 'partition_number', 'start_sector'];
+      for (const role of ['esp', 'root']) {
+        const partition = document.partitions[role];
+        const path = `approval.partitions.${role}`;
+        if (!checkFields(partition, path, [...textKeys, ...numberKeys], [], problems)) continue;
+        for (const key of textKeys) if (!isText(partition[key])) problems.push(`${path}.${key} must be a non-empty string`);
+        for (const key of numberKeys) {
+          if (!Number.isSafeInteger(partition[key]) || partition[key] <= 0) problems.push(`${path}.${key} must be a positive integer`);
+        }
+        if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(partition.partuuid)) problems.push(`${path}.partuuid must be a full PARTUUID`);
+      }
+      if (document.partitions.esp?.partuuid === document.partitions.root?.partuuid) problems.push('approval partitions must be distinct');
+    }
+  } else if ('partitions' in document) problems.push('approval.partitions requires replace_installation mode');
   return problems;
 }
 

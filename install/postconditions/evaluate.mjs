@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
+
+import { normalizeStorage } from '../discovery/normalize-facts.mjs';
 
 import { parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
 
 // Structured side of the read-only postconditions checker (contracts/installation-postconditions.md). The Bash
 // side only observes the mounted target and streams the observations; every comparison with the plan, and the
-// result document, is produced here. Nothing in this file touches the filesystem except the plan and stdin.
+// result document, is produced here. Filesystem access only reads the plan, the pre-run partition record and stdin.
 
 export const POSTCONDITIONS_FORMAT_VERSION = 1;
 export const EXIT_PASSED = 0;
@@ -19,6 +22,9 @@ export const CHECK_IDS = [
   'fstab_by_uuid',
   'bootloader_systemd_boot',
   'bootloader_limine',
+  'uefi_boot_entry',
+  'boot_first_delivered',
+  'untouched_partitions',
   'boot_root_uuid',
   'boot_zswap_disabled',
   'boot_resume_parameters',
@@ -361,6 +367,72 @@ function bootloaderLimine(context) {
   return problems;
 }
 
+function uefiBootEntry(context) {
+  const { observations } = context;
+  const listing = observations.get('uefi_entries');
+  const guid = observations.get('partuuid:/boot');
+  if (listing === undefined) return ['the UEFI entries cannot be read'];
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(guid ?? '')) {
+    return ['the ESP PARTUUID cannot be read'];
+  }
+  if (context.plan.target_mode === 'replace_installation' && guid.toLowerCase() !== context.plan.target.installation.esp.partuuid) {
+    return ['the mounted ESP PARTUUID differs from the replacement target'];
+  }
+  const path = operation(context.plan, 'register_uefi_boot_entry').parameters.loader_path.toLowerCase();
+  const entries = new Map();
+  const matches = [];
+  const orders = [];
+  for (const line of listing.split('\n')) {
+    if (line.startsWith('BootOrder:')) orders.push(line.slice('BootOrder:'.length).trim().toUpperCase());
+    const entry = /^Boot([0-9a-f]{4})(?:\*|\s)/i.exec(line);
+    if (entry === null) continue;
+    const id = entry[1].toUpperCase();
+    if (entries.has(id)) return ['the UEFI listing contains duplicate boot numbers'];
+    entries.set(id, true);
+    const device = line.includes('\t') ? line.slice(line.indexOf('\t') + 1) : '';
+    const hd = /HD\([0-9]+,GPT,([0-9a-f-]+),[^)]*\)/i.exec(device);
+    const loader = /File\(([^)]*)\)/i.exec(device);
+    if (hd?.[1].toLowerCase() === guid.toLowerCase() && loader?.[1].replaceAll('/', '\\').toLowerCase() === path) matches.push(id);
+  }
+  if (orders.length !== 1 || !/^[0-9A-F]{4}(,[0-9A-F]{4})*$/.test(orders[0])) return ['BootOrder is missing or invalid'];
+  const order = orders[0].split(',');
+  if (new Set(order).size !== order.length || order.some(id => !entries.has(id))) return ['BootOrder references duplicate or missing entries'];
+  if (matches.length !== 1) return [`the ESP PARTUUID and selected loader path match ${matches.length} UEFI entries, expected exactly one`];
+  return order[0] === matches[0] ? [] : [`MirrorOS entry Boot${matches[0]} is not first in BootOrder`];
+}
+
+function bootFirstDelivered(context) {
+  const { observations } = context;
+  const command = '/usr/local/lib/mirroros/operations/boot-first';
+  const library = '/usr/local/lib/mirroros/operations/lib/uefi-boot-entry.sh';
+  const problems = [...fileProblems(observations, command), ...fileProblems(observations, library)];
+  if (observations.get('link:/usr/local/bin/mirroros-boot-first') !== command) problems.push('mirroros-boot-first does not link to the delivered command');
+  if (statOf(observations, command)?.mode !== '755') problems.push('the delivered boot-first command does not have mode 0755');
+  if (statOf(observations, library)?.mode !== '644') problems.push('the delivered UEFI library does not have mode 0644');
+  return problems;
+}
+
+function untouchedPartitions(context) {
+  const { plan, observations } = context;
+  try {
+    const before = JSON.parse(observations.get('untouched_partitions_before'));
+    if (!Array.isArray(before.table) || !Array.isArray(before.partitions)) return ['the pre-run partition record is invalid'];
+    const dump = observations.get('partition_table');
+    const raw = JSON.parse(observations.get('storage'));
+    const { facts } = normalizeStorage(raw, 0);
+    const disk = facts.disks.find(item => item.identity.path === plan.target.disk.path);
+    if (dump === undefined || disk === undefined) return ['the current partition table or disk identities cannot be read'];
+    const targets = [plan.target.installation.esp.path, plan.target.installation.root.path];
+    const after = {
+      table: dump.trim().split('\n').filter(line => !targets.includes(line.split(':')[0].trim())),
+      partitions: disk.layout.partitions.filter(part => !targets.includes(part.path)),
+    };
+    return isDeepStrictEqual(before, after) ? [] : ['non-target partition table entries or identities differ from the pre-run record'];
+  } catch {
+    return ['the pre-run partition record or current storage identities are missing or invalid'];
+  }
+}
+
 function bootEntryChecks(context, inspect) {
   const { problems, entries } = normalEntries(context);
   const found = [...problems];
@@ -526,6 +598,9 @@ const CHECKS = {
   fstab_by_uuid: fstabByUuid,
   bootloader_systemd_boot: bootloaderSystemdBoot,
   bootloader_limine: bootloaderLimine,
+  uefi_boot_entry: uefiBootEntry,
+  boot_first_delivered: bootFirstDelivered,
+  untouched_partitions: untouchedPartitions,
   boot_root_uuid: bootRootUuid,
   boot_zswap_disabled: bootZswapDisabled,
   boot_resume_parameters: bootResumeParameters,
@@ -545,6 +620,7 @@ export function applicableChecks(plan) {
   return CHECK_IDS.filter(id => {
     if (id === 'bootloader_systemd_boot') return systemdBoot;
     if (id === 'bootloader_limine') return !systemdBoot;
+    if (id === 'untouched_partitions') return plan.target_mode === 'replace_installation';
     if (id === 'swapfile') return hibernation;
     if (id === 'swap_absent') return !hibernation;
     return true;
@@ -673,7 +749,16 @@ function main(args) {
     process.stderr.write('Usage: evaluate.mjs validate|evaluate --plan <file> --digest <hex>\n');
     return EXIT_INVALID_INPUT;
   }
-  const result = evaluateChecks(loaded.plan, parseObservations(readFileSync(0, 'utf8')));
+  const observations = parseObservations(readFileSync(0, 'utf8'));
+  const baseline = readOption(args, '--untouched-partitions-before');
+  if (loaded.plan.target_mode === 'replace_installation' && baseline !== undefined) {
+    try {
+      observations.set('untouched_partitions_before', readFileSync(baseline, 'utf8'));
+    } catch {
+      // An unreadable baseline fails its check; the other applicable checks still run.
+    }
+  }
+  const result = evaluateChecks(loaded.plan, observations);
   const errors = validateResult(result, loaded.plan);
   if (errors.length > 0) throw new Error(`the result failed its own validation: ${errors.join('; ')}`);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

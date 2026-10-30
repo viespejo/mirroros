@@ -185,7 +185,7 @@ test('unknown fields are rejected in every section', () => {
     plan => { plan.hardware_selections.selections[0].extra = 1; },
     plan => { plan.facts_binding.extra = 1; },
     plan => { plan.policy_binding.extra = 1; },
-    plan => { plan.operations[3].resolved_at_apply[0].extra = 1; },
+    plan => { plan.operations.find(operation => operation.kind === 'format_filesystems').resolved_at_apply[0].extra = 1; },
   ];
   for (const [index, mutation] of mutations.entries()) {
     assert.ok(codes(validatePlan(resigned(mutation))).includes('plan_unknown_field'), `mutation ${index}`);
@@ -330,18 +330,19 @@ test('exactly one account_password requirement names its consumers from the root
 });
 
 test('operation sequences match the contract for each storage option', () => {
-  assert.equal(operationSequence('ext4-systemd-boot').length, 17);
-  assert.equal(operationSequence('ext4-systemd-boot', false).length, 16);
-  assert.deepEqual(operationSequence('ext4-systemd-boot').slice(5, 10), [
+  assert.equal(operationSequence('ext4-systemd-boot').length, 20);
+  assert.equal(operationSequence('ext4-systemd-boot', false).length, 19);
+  assert.deepEqual(operationSequence('ext4-systemd-boot').slice(7, 12), [
     'install_packages', 'configure_zram', 'configure_memory_reclaim', 'generate_fstab', 'create_swapfile',
   ]);
   for (const option of STORAGE_OPTION_NAMES) {
     const enabled = operationSequence(option);
     assert.deepEqual(operationSequence(option, false), enabled.filter(kind => kind !== 'create_swapfile'));
   }
-  assert.deepEqual(operationSequence('btrfs-rescue').slice(3, 6), ['format_filesystems', 'create_btrfs_subvolumes', 'mount_target']);
+  assert.deepEqual(operationSequence('btrfs-rescue').slice(5, 8), ['format_filesystems', 'create_btrfs_subvolumes', 'mount_target']);
   const limine = operationSequence('btrfs-limine');
-  assert.equal(limine.at(-1), 'sync_limine_snapshot_entries');
+  assert.equal(limine.at(-2), 'sync_limine_snapshot_entries');
+  assert.equal(limine.at(-1), 'register_uefi_boot_entry');
   assert.ok(limine.indexOf('install_limine_snapshot_tools') < limine.indexOf('configure_snapper'));
   assert.equal(operationSequence('zfs'), undefined);
   for (const option of STORAGE_OPTION_NAMES) {
@@ -381,6 +382,9 @@ test('a disk addressed by path is valid when it has no by_id', () => {
   const plan = resigned(candidate => {
     delete candidate.target.disk.by_id;
     candidate.choices.target_disk.value = '/dev/vda';
+    for (const operation of candidate.operations) {
+      if ('disk' in operation.parameters) operation.parameters.disk = '/dev/vda';
+    }
     candidate.facts_binding.facts_sha256 = sha256Canonical(noById);
   });
   assert.deepEqual(validatePlan(plan, { facts: noById }), []);

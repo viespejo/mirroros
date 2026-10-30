@@ -33,7 +33,7 @@ export function verify(text, { digest, commit = IDENTITY_COMMIT, dirty = 'false'
 // The operations of a successful stream: id, description, and a parameter map each.
 export function streamOperations(fields) {
   const operations = [];
-  let index = 7;
+  let index = 8;
   while (index < fields.length) {
     const [marker, id, description, count] = fields.slice(index, index + 4);
     if (marker !== 'op') throw new Error(`unexpected field ${marker}`);

@@ -152,7 +152,7 @@ approve_plan_script() {
   grep -aqE 'Battery +No battery detected' "$STDOUT_PATH"
   grep -aqE 'Virtualization +Virtual machine' "$STDOUT_PATH"
   confirm_assert_gum_not_called 'NVIDIA graphics device|CPU vendor is not'
-  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.format_version === 4 && d.hardware_selections.rule_outcomes.length === 4 && d.warnings.length === 0"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.format_version === 5 && d.hardware_selections.rule_outcomes.length === 4 && d.warnings.length === 0"
 }
 
 @test "an NVIDIA GPU and an unknown CPU vendor are warned about in the review and never block the installation" {
@@ -285,7 +285,7 @@ SH
 @test "a real Ctrl+C during the review exits 3 with the records written" {
   queue_to_review
   confirm_queue choose 'hang'
-  confirm_hook_call choose 10 "touch '${TEST_ROOT}/waiting'"
+  confirm_hook_call choose 11 "touch '${TEST_ROOT}/waiting'"
   CONFIRM_WAIT_FOR="${TEST_ROOT}/waiting"
   CONFIRM_KEYS=('\003')
   confirm_run_pty --output "$RUN_DIR"
@@ -951,7 +951,7 @@ swap_scenario_hook() {
   confirm_assert_run 4 not_configured
   confirm_json_assert "${RUN_DIR}/engine/engine-run.json" "d.format_version === 4 && d.configure_outcome === 5 && d.configure_failed_step === 'desktop/compositor/providers/hyprland'"
   confirm_assert_gum_called 'Base system installed and verified; environment configuration failed at step'
-  confirm_assert_gum_called 'sudo mirroros-configure'
+  grep -zqE 'sudo[[:space:]]+mirroros-configure' "${DOUBLE_STATE}/gum-calls.log"
   confirm_assert_gum_called 'View configure log Restart Return to shell Power off'
   confirm_assert_gum_called 'pager'
   confirm_assert_gum_not_called 'Installed MirrorOS'

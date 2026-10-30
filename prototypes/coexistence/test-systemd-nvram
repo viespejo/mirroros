@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Lab-only synthetic systemd-boot entry ordering and stale-entry cleanup.
+set -euo pipefail
+
+readonly DISK=/dev/vda
+readonly DISK_ID=8D882759-509C-4D72-8942-493CFACA76FF
+readonly LOADER='\EFI\systemd\systemd-bootx64.efi'
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+[[ $EUID -eq 0 && -d /run/archiso && -d /sys/firmware/efi/efivars ]] || fail 'Run as root in the UEFI lab live environment.'
+[[ $(sfdisk --disk-id "$DISK") == "$DISK_ID" ]] || fail 'Unexpected disk GUID.'
+[[ $(blkid -s PARTUUID -o value /dev/vda4) == ff10c509-c1f5-4b27-b035-53670f7545d9 ]] || fail 'Unexpected stand-in partition.'
+[[ ! -e /dev/vda5 && $(lsblk -lnpo TYPE "$DISK" | grep -c '^part$') == 4 ]] || fail 'Expected exactly four existing partitions.'
+[[ -z $(lsblk -nrpo MOUNTPOINTS "$DISK" | tr -d '[:space:]') ]] || fail 'A lab partition is mounted.'
+
+results=$(mktemp -d /run/mirroros-systemd-nvram.XXXXXX)
+printf 'Evidence directory: %s (live tmpfs; copy before reboot)\n' "$results"
+sfdisk --dump "$DISK" > "$results/table-before.txt"
+efibootmgr -v > "$results/before.txt"
+original=$(awk -F ': ' '/^BootOrder:/ {print toupper($2); exit}' "$results/before.txt")
+[[ $original =~ ^[0-9A-F]{4}(,[0-9A-F]{4})*$ ]] || fail 'The original BootOrder is invalid.'
+printf 'Creating temporary partition 5 in the approved free sectors.\n'
+printf 'start=67106816, size=512, type=U\n' | sfdisk --append --no-reread "$DISK"
+partprobe "$DISK"
+udevadm settle
+[[ -b /dev/vda5 ]] || fail 'Partition 5 is missing; inspect the lab before retrying.'
+partuuid=$(blkid -s PARTUUID -o value /dev/vda5)
+[[ $partuuid =~ ^[0-9a-fA-F-]{36}$ ]] || fail 'Could not identify the temporary PARTUUID.'
+printf '%s\n' "$partuuid" > "$results/partuuid.txt"
+printf 'Creating a systemd-boot test entry without changing BootOrder.\n'
+efibootmgr --create-only --disk "$DISK" --part 5 --label 'MirrorOS Systemd Test' --loader "$LOADER"
+efibootmgr -v > "$results/after-create.txt"
+mapfile -t matches < <(grep -Fi -- "$partuuid" "$results/after-create.txt" | grep -Fi -- "$LOADER" | awk '/^Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {print toupper(substr($1,5,4))}' || :)
+(( ${#matches[@]} == 1 )) || fail 'The systemd-boot entry is missing or ambiguous.'
+entry=${matches[0]}
+[[ ,$original, != *",$entry,"* ]] || fail 'The new entry is unexpectedly in the original order.'
+printf 'Moving systemd-boot test entry %s first while preserving the original relative order.\n' "$entry"
+efibootmgr --bootorder "$entry,$original"
+efibootmgr -v > "$results/first.txt"
+first=$(awk -F ': ' '/^BootOrder:/ {print toupper($2); exit}' "$results/first.txt")
+[[ $first == "$entry,$original" ]] || fail 'The systemd-boot test order differs.'
+printf 'Restoring the original BootOrder.\n'
+efibootmgr --bootorder "$original"
+printf 'Deleting only temporary partition 5; its test entry then becomes stale.\n'
+sfdisk --delete "$DISK" 5
+partprobe "$DISK"
+udevadm settle
+[[ ! -e /dev/vda5 ]] || fail 'Partition 5 still exists; do not remove its entry.'
+sfdisk --dump "$DISK" > "$results/table-after.txt"
+cmp "$results/table-before.txt" "$results/table-after.txt" || fail 'The GPT differs after the test.'
+printf 'Deleting only test entry %s for removed PARTUUID %s.\n' "$entry" "$partuuid"
+efibootmgr --bootnum "$entry" --delete-bootnum
+efibootmgr -v > "$results/after.txt"
+cmp "$results/before.txt" "$results/after.txt" || fail 'UEFI boot entries or order differ after the test.'
+printf 'systemd-boot entry creation and ordering passed; prior GPT and UEFI entries restored. Evidence: %s\n' "$results"

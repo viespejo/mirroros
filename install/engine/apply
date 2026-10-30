@@ -30,8 +30,19 @@ for library in common precheck storage btrfs system accounts boot limine configu
   }
 done
 
+# shellcheck disable=SC1091 # Shared live and installed UEFI implementation, governed by ADR 0022.
+source "$CODE_ROOT/operations/lib/uefi-boot-entry.sh" 2> /dev/null || {
+  printf '%s\n' 'MirrorOS engine: the embedded UEFI library could not be loaded.' >&2
+  exit 6
+}
+
 # The kind -> function dispatch table. A kind absent here is rejected in the pre-check, never skipped.
 declare -A DISPATCH=(
+  [record_disk_partuuids]=op_record_disk_partuuids
+  [remove_stale_uefi_entries]=op_remove_stale_uefi_entries
+  [wipe_partition_signatures]=op_wipe_partition_signatures
+  [format_partitions]=op_format_filesystems
+  [register_uefi_boot_entry]=op_register_uefi_boot_entry
   [wipe_disk_signatures]=op_wipe_disk_signatures
   [create_partition_table]=op_create_partition_table
   [create_partitions]=op_create_partitions

@@ -1,0 +1,747 @@
+{
+  "format_version": 5,
+  "target_mode": "whole_disk",
+  "target": {
+    "machine": {
+      "architecture": "x86_64",
+      "memory_total_bytes": 4294967296,
+      "virtualization": "kvm",
+      "dmi": {
+        "sys_vendor": "QEMU",
+        "product_name": "Standard PC (Q35 + ICH9, 2009)"
+      }
+    },
+    "profile": {
+      "status": "matched",
+      "profile_id": "reference-vm"
+    },
+    "disk": {
+      "path": "/dev/vda",
+      "by_id": "virtio-SYNTH-VDA-0001",
+      "serial": "SYNTH-VDA-0001",
+      "size_bytes": 34359738368,
+      "eligible": true,
+      "current_layout": {
+        "partition_table": {
+          "type": "gpt",
+          "uuid": "00000000-0000-4000-8000-000000000001"
+        },
+        "partitions": [
+          {
+            "path": "/dev/vda1",
+            "size_bytes": 536870912,
+            "fstype": "vfat",
+            "label": "SYNTH-ESP",
+            "uuid": "ABCD-0001",
+            "partuuid": "00000000-0000-4000-8000-0000000000a1"
+          },
+          {
+            "path": "/dev/vda2",
+            "size_bytes": 32212254720,
+            "fstype": "ext4",
+            "label": "SYNTH-DATA",
+            "uuid": "00000000-0000-4000-8000-0000000000b2",
+            "partuuid": "00000000-0000-4000-8000-0000000000a2"
+          }
+        ]
+      }
+    }
+  },
+  "choices": {
+    "target_mode": {
+      "value": "whole_disk",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "firmware_mode": {
+      "value": "uefi",
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "partition_table": {
+      "value": "gpt",
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "esp": {
+      "value": {
+        "size_bytes": 2147483648,
+        "filesystem": "vfat",
+        "mount_point": "/boot"
+      },
+      "provenance": "arch_guidance",
+      "source": "policy",
+      "editable": false
+    },
+    "root_minimum_bytes": {
+      "value": 16106127360,
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "storage_option": {
+      "value": "btrfs-limine",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true,
+      "tier": "default",
+      "filesystem": "btrfs",
+      "bootloader": "limine",
+      "resume_offset_method": "btrfs inspect-internal map-swapfile -r"
+    },
+    "kernel": {
+      "value": "linux",
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "initramfs": {
+      "value": "mkinitcpio-default-hooks-no-uki",
+      "provenance": "arch_guidance",
+      "source": "policy",
+      "editable": false
+    },
+    "kernel_cmdline": {
+      "value": "root=UUID=<root> rw zswap.enabled=0 resume=UUID=<root> resume_offset=<resume_offset>",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "bootloader_options": {
+      "value": {
+        "timeout": 3,
+        "editor": false,
+        "fallback_entry": true
+      },
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "hibernation": {
+      "value": true,
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "zram": {
+      "value": {
+        "package": "zram-generator",
+        "package_source": "arch_official_repository",
+        "destination": "/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf",
+        "zram_size": "ram",
+        "compression_algorithm": "zstd",
+        "swap_priority": 100
+      },
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "memory_reclaim": {
+      "value": {
+        "destination": "/usr/lib/sysctl.d/60-mirroros-memory.conf",
+        "settings": {
+          "vm.swappiness": 180,
+          "vm.page-cluster": 0,
+          "vm.watermark_scale_factor": 125,
+          "vm.watermark_boost_factor": 0
+        }
+      },
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "packages": {
+      "value": [
+        "base",
+        "linux",
+        "linux-firmware",
+        "zram-generator",
+        "efibootmgr",
+        "sudo",
+        "neovim",
+        "man-db",
+        "man-pages",
+        "xkeyboard-config"
+      ],
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "mirrorlist": {
+      "value": "inherited_from_live_environment_and_recorded",
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "lang": {
+      "value": "en_US.UTF-8",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "regional_format": {
+      "value": "follow_language",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "console_keymap": {
+      "value": "us",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "timezone": {
+      "value": "Europe/Madrid",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "hardware_clock": {
+      "value": "utc",
+      "provenance": "arch_guidance",
+      "source": "policy",
+      "editable": false
+    },
+    "time_sync": {
+      "value": "systemd-timesyncd",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "hostname": {
+      "value": "mirroros-ref",
+      "provenance": "personal_preference",
+      "source": "override",
+      "editable": true
+    },
+    "network": {
+      "value": {
+        "manager": "NetworkManager",
+        "package": "networkmanager",
+        "predefined_connections": false
+      },
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "user_name": {
+      "value": "mirroros",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "user_groups": {
+      "value": [
+        "wheel"
+      ],
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "user_shell": {
+      "value": "bash",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "root_account": {
+      "value": "locked",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": true
+    },
+    "sudoers": {
+      "value": "%wheel ALL=(ALL:ALL) ALL",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "sysrq": {
+      "value": "kernel.sysrq = 1",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "pacman_options": {
+      "value": [
+        "Color",
+        "ParallelDownloads = 5",
+        "VerbosePkgLists",
+        "ILoveCandy"
+      ],
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "fstrim": {
+      "value": "fstrim.timer",
+      "provenance": "personal_preference",
+      "source": "policy",
+      "editable": false
+    },
+    "swapfile_size": {
+      "value": 4096,
+      "provenance": "hardware_detection",
+      "source": "detected",
+      "editable": true
+    },
+    "locales": {
+      "value": [
+        "en_US.UTF-8"
+      ],
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "locale_categories": {
+      "value": {
+        "LANG": "en_US.UTF-8",
+        "LC_TIME": "en_US.UTF-8",
+        "LC_NUMERIC": "en_US.UTF-8",
+        "LC_MONETARY": "en_US.UTF-8",
+        "LC_MEASUREMENT": "en_US.UTF-8"
+      },
+      "provenance": "technical_necessity",
+      "source": "policy",
+      "editable": false
+    },
+    "target_disk": {
+      "value": "virtio-SYNTH-VDA-0001",
+      "provenance": "hardware_detection",
+      "source": "detected",
+      "editable": true
+    }
+  },
+  "operations": [
+    {
+      "id": "record_disk_partuuids",
+      "kind": "record_disk_partuuids",
+      "destructive": false,
+      "parameters": {
+        "disk": "virtio-SYNTH-VDA-0001",
+        "partuuids": [
+          "00000000-0000-4000-8000-0000000000a1",
+          "00000000-0000-4000-8000-0000000000a2"
+        ]
+      },
+      "description": "Record the target disk partition PARTUUIDs before wiping."
+    },
+    {
+      "id": "wipe_disk_signatures",
+      "kind": "wipe_disk_signatures",
+      "destructive": true,
+      "parameters": {
+        "disk": "virtio-SYNTH-VDA-0001"
+      },
+      "description": "Remove existing signatures from the target disk."
+    },
+    {
+      "id": "create_partition_table",
+      "kind": "create_partition_table",
+      "destructive": true,
+      "parameters": {
+        "disk": "virtio-SYNTH-VDA-0001",
+        "table": "gpt"
+      },
+      "description": "Write an empty GPT on the target disk."
+    },
+    {
+      "id": "create_partitions",
+      "kind": "create_partitions",
+      "destructive": true,
+      "parameters": {
+        "disk": "virtio-SYNTH-VDA-0001",
+        "esp_size_bytes": 2147483648,
+        "esp_mount_point": "/boot",
+        "root": "remaining_space"
+      },
+      "description": "Create the ESP and a root partition on the remaining space."
+    },
+    {
+      "id": "remove_stale_uefi_entries",
+      "kind": "remove_stale_uefi_entries",
+      "destructive": false,
+      "parameters": {
+        "partuuids": [
+          "00000000-0000-4000-8000-0000000000a1",
+          "00000000-0000-4000-8000-0000000000a2"
+        ]
+      },
+      "description": "Remove only UEFI entries referencing pre-wipe target PARTUUIDs."
+    },
+    {
+      "id": "format_filesystems",
+      "kind": "format_filesystems",
+      "destructive": true,
+      "parameters": {
+        "esp_filesystem": "vfat",
+        "root_filesystem": "btrfs"
+      },
+      "description": "Format the ESP and the root partition.",
+      "resolved_at_apply": [
+        {
+          "name": "partition_uuids",
+          "method": "blkid"
+        }
+      ]
+    },
+    {
+      "id": "create_btrfs_subvolumes",
+      "kind": "create_btrfs_subvolumes",
+      "destructive": false,
+      "parameters": {
+        "subvolumes": [
+          "@",
+          "@home",
+          "@log",
+          "@pkg",
+          "@snapshots",
+          "@swap"
+        ],
+        "mount_options": "compress=zstd:1,relatime"
+      },
+      "description": "Create the flat Btrfs subvolumes on the new filesystem."
+    },
+    {
+      "id": "mount_target",
+      "kind": "mount_target",
+      "destructive": false,
+      "parameters": {
+        "esp_mount_point": "/boot",
+        "subvolumes": [
+          "@",
+          "@home",
+          "@log",
+          "@pkg",
+          "@snapshots",
+          "@swap"
+        ]
+      },
+      "description": "Mount the root filesystem and the ESP under the target root."
+    },
+    {
+      "id": "install_packages",
+      "kind": "install_packages",
+      "destructive": false,
+      "parameters": {
+        "packages": [
+          "base",
+          "linux",
+          "linux-firmware",
+          "zram-generator",
+          "efibootmgr",
+          "sudo",
+          "neovim",
+          "man-db",
+          "man-pages",
+          "xkeyboard-config",
+          "networkmanager",
+          "btrfs-progs",
+          "snapper",
+          "snap-pac",
+          "compsize",
+          "limine",
+          "libnotify",
+          "gettext",
+          "inotify-tools"
+        ],
+        "rule_packages": [
+          "amd-ucode"
+        ]
+      },
+      "description": "Install packages."
+    },
+    {
+      "id": "configure_zram",
+      "kind": "configure_zram",
+      "destructive": false,
+      "parameters": {
+        "destination": "/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf",
+        "source_sha256": "b6aa35ad3b4ee26a9296a50a45f215fd7e008fff05ad2fdbde67ba2a7f55f9cd",
+        "zram_size": "ram",
+        "compression_algorithm": "zstd",
+        "swap_priority": 100
+      },
+      "description": "Configure zram as preferred swap."
+    },
+    {
+      "id": "configure_memory_reclaim",
+      "kind": "configure_memory_reclaim",
+      "destructive": false,
+      "parameters": {
+        "destination": "/usr/lib/sysctl.d/60-mirroros-memory.conf",
+        "source_sha256": "efa0ad6cc81d44518d21a8c9eca61635ca7dbacc55463d01ae74cded970ac678",
+        "vm.swappiness": 180,
+        "vm.page-cluster": 0,
+        "vm.watermark_scale_factor": 125,
+        "vm.watermark_boost_factor": 0
+      },
+      "description": "Deliver the sysctl drop-in with the memory reclaim settings."
+    },
+    {
+      "id": "generate_fstab",
+      "kind": "generate_fstab",
+      "destructive": false,
+      "parameters": {
+        "identifier": "uuid"
+      },
+      "description": "Generate /etc/fstab by UUID."
+    },
+    {
+      "id": "create_swapfile",
+      "kind": "create_swapfile",
+      "destructive": false,
+      "parameters": {
+        "path": "/swapfile",
+        "size_mib": 4096,
+        "priority": 0
+      },
+      "description": "Create the fallback swapfile, which also holds the hibernation image.",
+      "resolved_at_apply": [
+        {
+          "name": "resume_offset",
+          "method": "btrfs inspect-internal map-swapfile -r"
+        }
+      ]
+    },
+    {
+      "id": "configure_locale_time_console",
+      "kind": "configure_locale_time_console",
+      "destructive": false,
+      "parameters": {
+        "locales": [
+          "en_US.UTF-8"
+        ],
+        "lang": "en_US.UTF-8",
+        "locale_categories": {
+          "LANG": "en_US.UTF-8",
+          "LC_TIME": "en_US.UTF-8",
+          "LC_NUMERIC": "en_US.UTF-8",
+          "LC_MONETARY": "en_US.UTF-8",
+          "LC_MEASUREMENT": "en_US.UTF-8"
+        },
+        "console_keymap": "us",
+        "timezone": "Europe/Madrid",
+        "hardware_clock": "utc",
+        "time_sync": "systemd-timesyncd"
+      },
+      "description": "Configure locale, time, and console keymap."
+    },
+    {
+      "id": "configure_hostname_network",
+      "kind": "configure_hostname_network",
+      "destructive": false,
+      "parameters": {
+        "hostname": "mirroros-ref",
+        "network_manager": "NetworkManager"
+      },
+      "description": "Set the hostname and configure NetworkManager."
+    },
+    {
+      "id": "create_user",
+      "kind": "create_user",
+      "destructive": false,
+      "parameters": {
+        "user_name": "mirroros",
+        "groups": [
+          "wheel"
+        ],
+        "shell": "bash"
+      },
+      "description": "Create the user account and set its password from a protected prompt."
+    },
+    {
+      "id": "configure_root_account",
+      "kind": "configure_root_account",
+      "destructive": false,
+      "parameters": {
+        "mode": "locked"
+      },
+      "description": "Configure the root account as selected."
+    },
+    {
+      "id": "configure_sudo_sysrq_pacman",
+      "kind": "configure_sudo_sysrq_pacman",
+      "destructive": false,
+      "parameters": {
+        "sudoers": "%wheel ALL=(ALL:ALL) ALL",
+        "sysrq": "kernel.sysrq = 1",
+        "pacman_options": [
+          "Color",
+          "ParallelDownloads = 5",
+          "VerbosePkgLists",
+          "ILoveCandy"
+        ]
+      },
+      "description": "Install the sudoers drop-in, the sysrq setting, and the pacman options."
+    },
+    {
+      "id": "install_bootloader",
+      "kind": "install_bootloader",
+      "destructive": false,
+      "parameters": {
+        "bootloader": "limine",
+        "kernel_cmdline": "root=UUID=<root> rw zswap.enabled=0 resume=UUID=<root> resume_offset=<resume_offset>",
+        "options": {
+          "timeout": 3,
+          "editor": false,
+          "fallback_entry": true
+        }
+      },
+      "description": "Install and configure the boot loader and the kernel command line.",
+      "resolved_at_apply": [
+        {
+          "name": "root_uuid",
+          "method": "blkid"
+        },
+        {
+          "name": "resume_offset",
+          "method": "btrfs inspect-internal map-swapfile -r"
+        }
+      ]
+    },
+    {
+      "id": "install_limine_snapshot_tools",
+      "kind": "install_limine_snapshot_tools",
+      "destructive": false,
+      "parameters": {},
+      "description": "Build and install the pinned Limine snapshot tools."
+    },
+    {
+      "id": "configure_snapper",
+      "kind": "configure_snapper",
+      "destructive": false,
+      "parameters": {},
+      "description": "Create the Snapper root configuration for the root subvolume only."
+    },
+    {
+      "id": "enable_services",
+      "kind": "enable_services",
+      "destructive": false,
+      "parameters": {
+        "services": [
+          "NetworkManager",
+          "systemd-timesyncd",
+          "fstrim.timer"
+        ]
+      },
+      "description": "Enable the network, time sync, trim, and storage option services."
+    },
+    {
+      "id": "create_baseline_snapshot",
+      "kind": "create_baseline_snapshot",
+      "destructive": false,
+      "parameters": {},
+      "description": "Take the post-install baseline snapshot."
+    },
+    {
+      "id": "sync_limine_snapshot_entries",
+      "kind": "sync_limine_snapshot_entries",
+      "destructive": false,
+      "parameters": {},
+      "description": "Write the Limine snapshot boot entries."
+    },
+    {
+      "id": "register_uefi_boot_entry",
+      "kind": "register_uefi_boot_entry",
+      "destructive": false,
+      "parameters": {
+        "bootloader": "limine",
+        "label": "Limine MirrorOS",
+        "loader_path": "\\EFI\\other.efi",
+        "first": true
+      },
+      "description": "Register the MirrorOS loader first, preserving other entries."
+    }
+  ],
+  "secret_requirements": [
+    {
+      "name": "account_password",
+      "purpose": "Password of the created user account, shared with the root account when root password access is enabled.",
+      "required_by": [
+        "create_user"
+      ],
+      "channel": "protected_prompt",
+      "provenance": "technical_necessity"
+    }
+  ],
+  "hardware_selections": {
+    "selections": [
+      {
+        "id": "target_disk",
+        "fact": "storage.disks",
+        "value": "virtio-SYNTH-VDA-0001",
+        "provenance": "hardware_detection",
+        "rule": "single_eligible_disk"
+      },
+      {
+        "id": "boot_mode",
+        "fact": "firmware.boot_mode",
+        "value": "uefi",
+        "provenance": "hardware_detection",
+        "rule": "uefi_boot_mode_check"
+      }
+    ],
+    "rule_outcomes": [
+      {
+        "rule": "graphics",
+        "fact": "hardware.graphics",
+        "value": [
+          "qemu_virtual"
+        ],
+        "outcome": "kernel_driver_only",
+        "explanation": "Graphics vendors: qemu_virtual. The kernel driver and linux-firmware already installed are enough; nothing additional is selected."
+      },
+      {
+        "rule": "cpu-microcode",
+        "fact": "hardware.cpu.vendor",
+        "value": "AuthenticAMD",
+        "outcome": "amd_microcode",
+        "explanation": "CPU vendor AuthenticAMD. The amd-ucode package is installed so the matching microcode is loaded at boot."
+      },
+      {
+        "rule": "battery",
+        "fact": "hardware.battery_present",
+        "value": false,
+        "outcome": "battery_absent",
+        "explanation": "No battery was detected. Nothing is selected."
+      },
+      {
+        "rule": "virtualization",
+        "fact": "hardware.virtualization",
+        "value": "kvm",
+        "outcome": "virtual_machine",
+        "explanation": "Virtualization kvm was detected. Nothing is selected for it in this version."
+      }
+    ],
+    "rule_packages": [
+      {
+        "name": "amd-ucode",
+        "rule": "cpu-microcode",
+        "provenance": "hardware_detection",
+        "source": "detected",
+        "editable": false
+      }
+    ]
+  },
+  "warnings": [],
+  "facts_binding": {
+    "facts_sha256": "4a4f8330eb5c7862e077c124c41b292ae96ce7c52234bcbb762a62268c5862a5",
+    "run_id": "20261007T120000Z-11111111-2222-4333-8444-555555555555",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "dirty": false
+  },
+  "policy_binding": {
+    "policy_sha256": "deb1f27b1f29096e0d9402367a7ec3b4c9c517787319461d491ba94fe803764d",
+    "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
+    "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
+  },
+  "digest": {
+    "algorithm": "sha256",
+    "value": "1ef48ef3da099dac58e687b35f3a4518159326e6ef6f717d3db84b7107db1e75"
+  }
+}

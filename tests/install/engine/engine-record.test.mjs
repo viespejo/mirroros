@@ -31,12 +31,12 @@ const FAILED = {
 test('the state lists every operation with its status and the position of the current one', () => {
   const operations = operationsOf(text);
   const state = buildState({
-    operations, status: 'running', current: 'create_partitions', completed: ['wipe_disk_signatures', 'create_partition_table'], now: NOW,
+    operations, status: 'running', current: 'create_partitions', completed: ['record_disk_partuuids', 'wipe_disk_signatures', 'create_partition_table'], now: NOW,
   });
   assert.deepEqual(validateState(state), []);
-  assert.equal(state.index, 3);
+  assert.equal(state.index, 4);
   assert.equal(state.total, operations.length + 1);
-  assert.deepEqual(state.operations.slice(0, 4).map(item => item.status), ['completed', 'completed', 'running', 'pending']);
+  assert.deepEqual(state.operations.slice(0, 5).map(item => item.status), ['completed', 'completed', 'completed', 'running', 'pending']);
   const final = buildState({ operations, status: 'installed', completed: operations.map(item => item.id), now: NOW });
   assert.equal(final.index, operations.length + 1);
   assert.equal(final.current, undefined);
@@ -123,7 +123,7 @@ test('a failed run keeps the original status, the child command, and the complet
   assert.deepEqual(run.failed_operation, { id: 'create_partitions', command: ['sfdisk', '/dev/vda'], child_exit_status: 7 });
   assert.equal(run.reasons[0].child_exit_status, 7);
   assert.equal(run.completed.length, 2);
-  assert.equal(run.not_started.length, 17 - 3);
+  assert.equal(run.not_started.length, 20 - 3);
   assert.equal(run.not_started.includes('create_partitions'), false);
   assert.equal(run.storage_option, 'ext4-systemd-boot');
 });

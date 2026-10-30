@@ -44,7 +44,7 @@ export function buildRunRecord({ runId, timestamp, entry, machine, profile, gumV
   ]);
 }
 
-export function buildApprovalRecord({ runId, timestamp, digest, machine, profile, disk, gumVersion, outcome, reason }) {
+export function buildApprovalRecord({ runId, timestamp, digest, machine, profile, disk, targetMode, partitions, gumVersion, outcome, reason }) {
   return present([
     ['format_version', RECORD_FORMAT_VERSION],
     ['run_id', runId],
@@ -53,6 +53,8 @@ export function buildApprovalRecord({ runId, timestamp, digest, machine, profile
     ['machine', machine],
     ['profile', profile],
     ['disk', disk],
+    ['target_mode', targetMode],
+    ['partitions', partitions],
     ['gum_version', gumVersion],
     ['outcome', outcome],
     ['reason', reason],

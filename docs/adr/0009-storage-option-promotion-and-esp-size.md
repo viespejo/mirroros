@@ -109,6 +109,16 @@ RAM-sized swapfile; on a small disk with much memory the existing layout-fit val
 Counted qualification must cover `btrfs-limine` as the default path, with and without hibernation, plus
 `ext4-systemd-boot` and `btrfs-rescue`, as defined by plan 02-09.
 
+### Forward extension: installer coexistence
+
+[ADR 0022](0022-installer-coexistence-and-uefi-boot-entry.md) extends installation targeting and UEFI
+entry management without superseding the storage tiers, default, ESP policy or unrelated decisions here.
+Whole-disk installation still creates a 2 GiB FAT32 ESP. Replacement reuses a same-disk MirrorOS ESP of
+at least that policy size and a root satisfying the 15 GiB minimum plus any planned swapfile; neither
+partition is resized. It uses installation-plan format 5 and explicit selected-loader registration with
+the fallback retained. The format-3/no-generator-change statements above describe the historical scope
+of this decision, not a restriction on that later extension.
+
 ## Consequences and trade-offs
 
 - The architecture's normative ext4 and systemd-boot baseline statement changes: the default is Btrfs with

@@ -3,7 +3,7 @@
 `POSTCONDITIONS_FORMAT_VERSION: 1`. `install/postconditions/check` verifies, read-only, that the target
 configuration written by the [installation engine](installation-engine.md) is complete and internally
 consistent. It is invoked by the engine after the last operation of the approved
-[installation plan](installation-plan.md) (format 4) and before the engine's terminal cleanup, while the target
+[installation plan](installation-plan.md) (format 5) and before the engine's terminal cleanup, while the target
 is still mounted at `/run/mirroros/target`. It is an internal boundary like the engine: it is not a public
 command and `operations/install` exposes no subcommand for it
 ([ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md)).
@@ -25,19 +25,24 @@ secret, or length hint appears in any output of the checker.
 ## Invocation
 
 ```text
-install/postconditions/check --plan <file> --digest <hex> --target-root <dir>
+install/postconditions/check --plan <file> --digest <hex> --target-root <dir> [--untouched-partitions-before <file>]
 ```
 
 | Input | Description |
 | --- | --- |
-| `--plan <file>` | The approved `installation-plan.json` the engine applied. The checker validates it (format 4, digest recomputed and equal to `--digest`) before reading the target. |
+| `--plan <file>` | The approved `installation-plan.json` the engine applied. The checker validates it (format 5, digest recomputed and equal to `--digest`) before reading the target. |
 | `--digest <hex>` | The confirmed digest. Integrity binding, not authorization. |
 | `--target-root <dir>` | The mounted target root. The engine passes `/run/mirroros/target`. |
+| `--untouched-partitions-before <file>` | Required evidence in replacement mode: the engine's `untouched-partitions-before.json`, captured before destruction. Missing, unreadable or invalid evidence fails `untouched_partitions`; whole-disk mode does not consume it. |
 
 Standard input is `/dev/null`. An unknown option, a missing option, or an unreadable plan exits `2` on stderr. The
-checker takes no password, no file descriptor other than the standard ones, and no apply-time value from the
-engine: the root UUID, the partition devices, and the swapfile `resume_offset` are derived again from the target
-itself, so that the check compares independently obtained values and does not echo the engine's own records.
+checker takes no password and no file descriptor other than the standard ones. The root UUID, partition devices,
+ESP PARTUUID, UEFI entries and swapfile `resume_offset` are derived again from the target and live environment.
+Replacement preservation compares fresh `sfdisk --dump` and `lsblk` observations against the engine's pre-run
+record, not against the engine's after-record or its verification flag. The baseline contains the dump with
+the two target partition lines excluded and normalized non-target partition identities (including geometry,
+partition types, filesystem UUIDs and labels when available). This proves table/identity preservation, not
+byte-for-byte preservation of partition contents.
 
 The checker prints exactly one JSON document, the [result](#result), on stdout and writes nothing else. The engine
 stores that document in `engine-run.json`; the checker writes no file.
@@ -55,7 +60,9 @@ The checker never modifies the target or the live system. In particular it does 
 Allowed native queries are read-only by construction: file reads and `stat`; `findmnt`; `blkid -p` on a block
 device; `pacman --root <target> -Q`; `systemctl --root=<target> is-enabled`; listing the early archive of an
 initramfs with `lsinitcpio` (decompressing into a pipe, never to disk); `filefrag` and
-`btrfs inspect-internal map-swapfile -r` on the swapfile; `lsattr`. When the target's own tool must run, it runs
+`btrfs inspect-internal map-swapfile -r` on the swapfile; `lsattr`; `efibootmgr -v`;
+`sfdisk --dump`; `lsblk --json --tree --bytes` with explicit columns; and `readlink` of the installed launcher.
+No UEFI mutation or partition-table write is allowed. When the target's own tool must run, it runs
 under `arch-chroot` only for such a query and only when no `--root` form exists. A test with read-only doubles
 asserts that no mutating command is ever invoked and that the target tree is byte-identical before and after.
 
@@ -73,6 +80,9 @@ the result rather than reported as passed, except where the table states that it
 | `fstab_by_uuid` | all | `/etc/fstab` lists the root, the ESP, and every planned mount by `UUID=`; the UUIDs equal the ones read from the devices; no `subvolid=` appears; with hibernation exactly one swap line exists, for the swapfile with `pri=0`; without hibernation no swap line exists. |
 | `bootloader_systemd_boot` | `ext4-systemd-boot`, `btrfs-rescue` | `/boot/loader/loader.conf` holds `default mirroros.conf`, the planned `timeout`, and `editor no` when `editor` is `false`; `/boot/loader/entries/mirroros.conf` holds `title MirrorOS`, `linux /vmlinuz-linux`, `initrd /initramfs-linux.img`, and an `options` line equal to the plan's resolved `kernel_cmdline` (plus `rootflags=subvol=@` for `btrfs-rescue`); the fallback entry exists with the fallback initramfs exactly when `fallback_entry` is `true`; `/boot/EFI/systemd/systemd-bootx64.efi` and `/boot/EFI/BOOT/BOOTX64.EFI` exist and are not empty. |
 | `bootloader_limine` | `btrfs-limine` | `/etc/default/limine` holds `ESP_PATH="/boot"`, `SKIP_UEFI=yes`, and the resolved `KERNEL_CMDLINE[default]`; `/boot/EFI/BOOT/BOOTX64.EFI` exists and is not empty; `/boot/limine.conf` has a global `timeout:` equal to the planned `timeout` and a normal entry above `//Snapshots` whose `cmdline:` equals the plan's resolved command line plus `rootflags=subvol=@`; the kernel and initramfs files that entry references exist on the ESP; no unified kernel image exists on the ESP; at least one snapshot entry exists below `//Snapshots`. |
+| `uefi_boot_entry` | all | Exactly one UEFI entry matches the independently observed ESP PARTUUID and the selected loader path from `register_uefi_boot_entry`; its boot number is first in a valid `BootOrder`. Matching is case-insensitive and restricted to the device path, not the description. Missing or unreadable entries, duplicate matches, malformed ordering and a replacement ESP PARTUUID differing from the approved target fail the check. |
+| `boot_first_delivered` | all | `/usr/local/bin/mirroros-boot-first` is the exact symbolic link to `/usr/local/lib/mirroros/operations/boot-first`; that command and `operations/lib/uefi-boot-entry.sh` beneath the same MirrorOS library directory are regular, nonempty, non-symlink files with modes `0755` and `0644`, respectively. Absolute launcher links are inspected without resolving them in the live root. |
+| `untouched_partitions` | replacement only | Fresh filtered partition-table lines and normalized non-target partition identities equal the engine's pre-run record. Missing, unreadable or invalid evidence fails; the check is absent in whole-disk mode. |
 | `boot_root_uuid` | all | The `root=UUID=` value of every normal boot entry (`systemd-boot` entries, or the Limine normal entry) equals the UUID that `blkid -p` reads from the device mounted at the target root. |
 | `boot_zswap_disabled` | all | `zswap.enabled=0` is present in the command line of every normal boot entry. |
 | `boot_resume_parameters` | all | With hibernation: every normal boot entry carries `resume=UUID=<root UUID>` and `resume_offset=<n>`, and `<n>` equals the offset computed again from the swapfile (`filefrag` for ext4, `btrfs inspect-internal map-swapfile -r` for Btrfs). Without hibernation: no boot entry, snapshot entry, or `/etc/default/limine` carries `resume=` or `resume_offset=`. |

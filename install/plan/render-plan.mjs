@@ -65,14 +65,24 @@ function renderTarget(plan) {
   if (machine.dmi?.sys_vendor !== undefined) lines.push(...field('System vendor', machine.dmi.sys_vendor));
   if (machine.dmi?.product_name !== undefined) lines.push(...field('Product name', machine.dmi.product_name));
   lines.push(...field('Profile', profileText(profile)));
+  lines.push(...field('Target mode', plan.target_mode));
   for (const [label, key] of [['Disk path', 'path'], ['Disk by-id', 'by_id'], ['WWN', 'wwn'], ['Serial', 'serial'], ['Model', 'model']]) {
     if (disk[key] !== undefined) lines.push(...field(label, disk[key]));
   }
   if (disk.size_bytes !== undefined) lines.push(...field('Size', size(disk.size_bytes)));
   lines.push('');
-  lines.push(...wrap('DESTRUCTIVE: every partition and all data on this disk will be erased.', '  ', '  '));
+  const replacing = plan.target_mode === 'replace_installation';
+  lines.push(...wrap(replacing
+    ? 'DESTRUCTIVE: only the selected ESP and root will be formatted; all other partitions and the partition table are preserved.'
+    : 'DESTRUCTIVE: every partition and all data on this disk will be erased.', '  ', '  '));
+  if (replacing) {
+    for (const role of ['esp', 'root']) {
+      const partition = plan.target.installation[role];
+      lines.push(...field(`Format ${role}`, `${partition.path} PARTUUID=${partition.partuuid}`));
+    }
+  }
   const layout = disk.current_layout;
-  lines.push('', '  Current layout (this content will be destroyed):');
+  lines.push('', replacing ? '  Current layout (FORMAT targets; PRESERVE all others):' : '  Current layout (this content will be destroyed):');
   if (layout.partition_table !== undefined) {
     lines.push(...field('Partition table', `${layout.partition_table.type ?? 'unknown'}${layout.partition_table.uuid === undefined ? '' : ` ${layout.partition_table.uuid}`}`, 4));
   } else {
@@ -83,6 +93,11 @@ function renderTarget(plan) {
     const details = [size(partition.size_bytes)];
     if (partition.fstype !== undefined) details.push(partition.fstype);
     if (partition.label !== undefined) details.push(`label ${partition.label}`);
+    if (replacing) {
+      const selected = ['esp', 'root'].some(role => plan.target.installation[role].path === partition.path);
+      details.unshift(selected ? 'FORMAT' : 'PRESERVE');
+      if (partition.partuuid !== undefined) details.push(`PARTUUID=${partition.partuuid}`);
+    }
     if (partition.mountpoints !== undefined && partition.mountpoints.length > 0) details.push(`mounted at ${partition.mountpoints.join(', ')}`);
     lines.push(...wrap(details.join('; '), `    ${partition.path}  `, '      '));
   }
@@ -230,6 +245,11 @@ export function renderSummary(plan, planPath) {
   return [
     `Profile: ${plan.target.profile.status}${plan.target.profile.profile_id === undefined ? '' : ` ${plan.target.profile.profile_id}`}`,
     `Disk: ${disk.by_id ?? disk.path} (${size(disk.size_bytes)})`,
+    `Target mode: ${plan.target_mode}`,
+    ...(plan.target_mode === 'replace_installation' ? ['esp', 'root'].map(role => {
+      const partition = plan.target.installation[role];
+      return `Format ${role}: ${partition.path} PARTUUID=${partition.partuuid}`;
+    }) : []),
     `Storage option: ${option.value} (${option.tier})`,
     `Hibernation: ${hibernation}`,
     `Destructive operations: ${destructive}`,

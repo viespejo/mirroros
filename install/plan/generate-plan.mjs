@@ -18,6 +18,8 @@ import {
   PLAN_FORMAT_VERSION,
   SECRET_CHANNEL,
   accountPasswordConsumers,
+  bootEntryParameters,
+  replacementProblems,
   machineProjection,
   operationSequence,
   validatePlan,
@@ -29,6 +31,11 @@ const GIBIBYTE = 1024 ** 3;
 const INPUT_CAUSED_CODES = ['lang_not_in_locales', 'plan_size_does_not_fit'];
 
 export const OPERATION_DESCRIPTIONS = {
+  record_disk_partuuids: 'Record the target disk partition PARTUUIDs before wiping.',
+  remove_stale_uefi_entries: 'Remove only UEFI entries referencing pre-wipe target PARTUUIDs.',
+  wipe_partition_signatures: 'Remove signatures only from the selected ESP and root partitions.',
+  format_partitions: 'Format only the selected ESP and root, preserving the partition table.',
+  register_uefi_boot_entry: 'Register the MirrorOS loader first, preserving other entries.',
   wipe_disk_signatures: 'Remove existing signatures from the target disk.',
   create_partition_table: 'Write an empty GPT on the target disk.',
   create_partitions: 'Create the ESP and a root partition on the remaining space.',
@@ -156,8 +163,18 @@ export function selectDisk(disks, requested) {
   )] };
 }
 
-function parametersFor(kind, { values, option, disk, assets, rulePackages }) {
+function parametersFor(kind, { values, option, disk, assets, rulePackages, installation, partuuids }) {
   switch (kind) {
+    case 'record_disk_partuuids':
+      return { disk, partuuids };
+    case 'remove_stale_uefi_entries':
+      return { partuuids };
+    case 'wipe_partition_signatures':
+      return { esp: installation.esp, root: installation.root };
+    case 'format_partitions':
+      return { esp: installation.esp, root: installation.root, esp_filesystem: values.esp.filesystem, root_filesystem: option.filesystem };
+    case 'register_uefi_boot_entry':
+      return bootEntryParameters(option.bootloader);
     case 'wipe_disk_signatures':
       return { disk };
     case 'create_partition_table':
@@ -228,7 +245,7 @@ function subvolumesFor(option, hibernation) {
 }
 
 function resolvedAtApply(kind, option, hibernation) {
-  if (kind === 'format_filesystems') return [{ name: 'partition_uuids', method: 'blkid' }];
+  if (['format_filesystems', 'format_partitions'].includes(kind)) return [{ name: 'partition_uuids', method: 'blkid' }];
   if (kind === 'create_swapfile') return [{ name: 'resume_offset', method: option.resume_offset_method }];
   if (kind === 'install_bootloader') {
     return [
@@ -240,7 +257,7 @@ function resolvedAtApply(kind, option, hibernation) {
 }
 
 function buildOperations(storageOption, context) {
-  return operationSequence(storageOption, context.values.hibernation).map(kind => {
+  return operationSequence(storageOption, context.values.hibernation, context.values.target_mode).map(kind => {
     const operation = {
       id: kind,
       kind,
@@ -375,6 +392,21 @@ export function resolveSelection({ facts, policy, choices, override, allowPendin
   resolved.kernel_cmdline.value = kernelCommandLine(resolved.kernel_cmdline.value, resolved.hibernation.value);
   const values = Object.fromEntries(Object.entries(resolved).map(([key, entry]) => [key, entry.value]));
   const option = policy.storageOptions[values.storage_option];
+  let installation;
+  if (values.target_mode === 'replace_installation') {
+    const candidates = disk?.replace_candidates ?? [];
+    installation = candidates.find(candidate => candidate.root.partuuid === values.replace_root_partuuid)
+      ?? (allowPendingDisk && values.replace_root_partuuid === undefined ? candidates[0] : undefined);
+    const problems = replacementProblems(installation, disk?.layout, {
+      espBytes: values.esp.size_bytes,
+      rootMinimumBytes: values.root_minimum_bytes,
+      swapfileMib: values.hibernation ? values.swapfile_size : undefined,
+    });
+    if (candidates.length !== 1 || installation?.disk_path !== disk?.identity.path) problems.push('Select an unambiguous discovered candidate by its full root PARTUUID.');
+    if (problems.length > 0) return { reasons: problems.map(message => reason('replacement_target_invalid', message, 'Repeat discovery and select a replacement candidate that meets the storage policy.')) };
+  } else if (values.replace_root_partuuid !== undefined) {
+    return { reasons: [reason('choices_conflict', 'A replacement root identity requires replace_installation mode.', 'Remove replace_root_partuuid or select replace_installation.')] };
+  }
   resolved.storage_option = {
     ...resolved.storage_option,
     tier: option.tier,
@@ -382,7 +414,7 @@ export function resolveSelection({ facts, policy, choices, override, allowPendin
     bootloader: option.bootloader,
     resume_offset_method: option.resume_offset_method,
   };
-  return { reasons: [], matched, appliedOverride, disk, preselected, identifier, resolved, values, option, memoryTotalBytes };
+  return { reasons: [], matched, appliedOverride, disk, preselected, identifier, resolved, values, option, memoryTotalBytes, installation };
 }
 
 // facts: a valid target-facts document. policy: the result of loadPlanPolicy. choices and override:
@@ -395,7 +427,7 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
   if (assets === undefined) throw new PlanContractError('the configuration assets were not provided to plan generation');
   const selection = resolveSelection({ facts, policy, choices, override });
   if (selection.reasons.length > 0) return { plan: undefined, reasons: selection.reasons };
-  const { matched, appliedOverride, disk, preselected, identifier, resolved, values, option, memoryTotalBytes } = selection;
+  const { matched, appliedOverride, disk, preselected, identifier, resolved, values, option, memoryTotalBytes, installation } = selection;
 
   const warnings = buildWarnings({
     facts, disk, storageOption: values.storage_option, option, swapfileSize: values.swapfile_size, memoryTotalBytes,
@@ -418,9 +450,12 @@ export function generatePlan({ facts, policy, choices = { values: {} }, override
   }
   const plan = withDigest({
     format_version: PLAN_FORMAT_VERSION,
-    target: { machine: machineProjection(facts), profile: structuredClone(facts.profile), disk: targetDisk },
+    target_mode: values.target_mode,
+    target: { machine: machineProjection(facts), profile: structuredClone(facts.profile), disk: targetDisk,
+      ...(installation === undefined ? {} : { installation: structuredClone(installation) }) },
     choices: resolved,
-    operations: buildOperations(values.storage_option, { values, option, disk: identifier, assets, rulePackages: rules.rule_packages }),
+    operations: buildOperations(values.storage_option, { values, option, disk: identifier, assets, rulePackages: rules.rule_packages, installation,
+      partuuids: disk.layout.partitions.flatMap(partition => partition.partuuid === undefined ? [] : [partition.partuuid]) }),
     secret_requirements: buildSecrets(values.root_account),
     hardware_selections: buildHardwareSelections(facts, identifier, preselected, rules),
     warnings,

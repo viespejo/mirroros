@@ -28,7 +28,20 @@ export function diskLabel(plan) {
   return parts.join(' ');
 }
 
+export function targetRows(plan) {
+  const rows = [['Mode', plan.target_mode === 'replace_installation' ? 'Replace existing MirrorOS' : 'Whole disk']];
+  if (plan.target_mode === 'replace_installation') {
+    const { esp, root } = plan.target.installation;
+    rows.push(['Format ESP', `${esp.path} (PARTUUID=${esp.partuuid})`]);
+    rows.push(['Format root', `${root.path} (PARTUUID=${root.partuuid})`]);
+    const preserved = plan.target.disk.current_layout.partitions.filter(partition => ![esp.partuuid, root.partuuid].includes(partition.partuuid));
+    rows.push(['Preserve', preserved.map(partition => `${partition.path} (PARTUUID=${partition.partuuid ?? 'not reported'})`).join(', ') || 'No other partitions']);
+  }
+  return rows;
+}
+
 export function confirmationPrompt(plan) {
+  if (plan.target_mode === 'replace_installation') return `Replace MirrorOS on ${plan.target.installation.root.path} and apply plan ${digestPrefix(plan)}?`;
   return `Erase ${diskLabel(plan)} and apply plan ${digestPrefix(plan)}?`;
 }
 
@@ -110,6 +123,7 @@ export function compactReview(plan) {
     ['Machine', machineLabel(plan)],
     ...ruleRows(plan),
     ['Disk', diskLabel(plan)],
+    ...targetRows(plan),
     ['Storage', `${storage.value} (${storage.tier})`],
     ['Hibernation', hibernationLabel(plan)],
     ['Timezone', choices.timezone.value],
@@ -131,6 +145,7 @@ export function confirmationLines(plan) {
   const disk = plan.target.disk;
   const lines = [`Disk: ${diskLabel(plan)}`];
   if (disk.by_id !== undefined) lines.push(`Identifier: ${disk.by_id}`);
+  lines.push(...targetRows(plan).map(([label, value]) => `${label}: ${value}`));
   lines.push(...layoutLines(disk.current_layout));
   lines.push(`Plan reference: ${digestPrefix(plan)}`);
   return lines.map(oneLine);

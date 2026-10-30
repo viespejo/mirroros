@@ -77,7 +77,7 @@ setup() {
   [ "$REVIEW_GROUP_ACCOUNTS" = false ]
   [ "$REVIEW_GROUP_LOCALE" = false ]
   [ "$REVIEW_PAGED" = false ]
-  [ "$REVIEW_REQUIRED_ROWS" -eq 41 ]
+  [ "$REVIEW_REQUIRED_ROWS" -eq 42 ]
   ROWS=$REVIEW_REQUIRED_ROWS
   # The disposable demo's force variable has no effect in production.
   REVIEW_PREVIEW_FORCE_OVERFLOW=2

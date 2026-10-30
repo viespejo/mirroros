@@ -50,6 +50,32 @@ export function goodObservations(plan) {
   set('mounts', mounts.join('\n'));
   set('uuid:/', ROOT_UUID);
   set('uuid:/boot', ESP_UUID);
+  const espPartuuid = plan.target.installation?.esp.partuuid ?? '10000000-0000-4000-8000-000000000001';
+  const registration = operation(plan, 'register_uefi_boot_entry').parameters;
+  set('partuuid:/boot', espPartuuid);
+  set('uefi_entries', `BootOrder: 0001,0002\nBoot0001* ${registration.label}\tHD(1,GPT,${espPartuuid},0x800,0x400000)/File(${registration.loader_path})\nBoot0002* Firmware\tVenHw(example)`);
+  set('link:/usr/local/bin/mirroros-boot-first', '/usr/local/lib/mirroros/operations/boot-first');
+  set('stat:/usr/local/lib/mirroros/operations/boot-first', file(1024, '755'));
+  set('stat:/usr/local/lib/mirroros/operations/lib/uefi-boot-entry.sh', file());
+  if (plan.target_mode === 'replace_installation') {
+    const layout = plan.target.disk.current_layout;
+    const table = ['label: gpt', `label-id: ${layout.partition_table.uuid}`, `device: ${plan.target.disk.path}`, 'unit: sectors',
+      `sector-size: ${layout.partition_table.sector_size_bytes}`, ''];
+    for (const p of layout.partitions) table.push(`${p.path} : start=${p.start_sector}, size=${p.size_bytes / layout.partition_table.sector_size_bytes}, type=${p.type_guid}, uuid=${p.partuuid}`);
+    set('partition_table', table.join('\n'));
+    const raw = { blockdevices: [{ path: plan.target.disk.path, type: 'disk', size: plan.target.disk.size_bytes,
+      pttype: 'gpt', ptuuid: layout.partition_table.uuid, 'log-sec': layout.partition_table.sector_size_bytes,
+      children: layout.partitions.map(p => ({ path: p.path, type: 'part', size: p.size_bytes, fstype: p.fstype,
+        label: p.label, uuid: p.uuid, partuuid: p.partuuid, parttype: p.type_guid, partn: p.partition_number,
+        start: p.start_sector, partlabel: p.partition_label })),
+    }] };
+    set('storage', JSON.stringify(raw));
+    const targets = [plan.target.installation.esp.path, plan.target.installation.root.path];
+    set('untouched_partitions_before', JSON.stringify({
+      table: table.filter(line => !targets.includes(line.split(':')[0].trim())),
+      partitions: layout.partitions.filter(p => !targets.includes(p.path)),
+    }));
+  }
 
   const rulePackages = plan.hardware_selections.rule_packages.map(entry => `${entry.name} 1-1`);
   set('packages', ['base 1-1', 'linux 6.1-1', 'zram-generator 1-1', 'networkmanager 1-1', ...rulePackages].join('\n'));

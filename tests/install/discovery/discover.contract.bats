@@ -375,6 +375,118 @@ EOF
   [ "$DISCOVERY_STATUS" -eq 2 ]
 }
 
+@test "discover identifies all supported replacements through read-only mounts" {
+  local option
+  for option in ext4-systemd-boot btrfs-rescue btrfs-limine; do
+    discovery_scenario "coexistence-${option}"
+    discovery_run --output "$OUTPUT_DIR"
+    [ "$DISCOVERY_STATUS" -eq 0 ]
+    discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_candidates[0].storage_option === '$option'"
+    grep -Fq 'mount -t vfat -o ro --' "${DOUBLE_STATE}/calls.log"
+    if [[ "$option" == ext4-systemd-boot ]]; then
+      grep -Fq 'mount -t ext4 -o ro,noload --' "${DOUBLE_STATE}/calls.log"
+    else
+      grep -Fq 'mount -t btrfs -o ro,nologreplay,subvol=@ --' "${DOUBLE_STATE}/calls.log"
+    fi
+    grep -Fq 'umount --' "${DOUBLE_STATE}/calls.log"
+    ! grep -Eq 'wipefs|sfdisk|mkfs|efibootmgr' "${DOUBLE_STATE}/calls.log"
+    # Each run requires an absent or empty evidence directory.
+    rm -rf -- "$OUTPUT_DIR"
+  done
+}
+
+@test "discover rejects ambiguous and missing-ESP layouts without choosing a target" {
+  local scenario
+  for scenario in ambiguous-roots missing-esp; do
+    discovery_scenario "coexistence-${scenario}"
+    discovery_run --output "$OUTPUT_DIR"
+    [ "$DISCOVERY_STATUS" -eq 0 ]
+    discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_candidates.length === 0 && d.layers.detected.storage.disks[0].replace_rejections.length > 0"
+    rm -rf -- "$OUTPUT_DIR"
+  done
+}
+
+@test "discover rejects a conflicting bootloader configuration" {
+  discovery_scenario coexistence-btrfs-rescue
+  printf '%s\n' 'cmdline: root=UUID=20000000-0000-4000-8000-000000000002 rw' > "${DOUBLE_STATE}/filesystems/vda1/limine.conf"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_rejections[0].reason === 'ambiguous_boot_configuration'"
+}
+
+@test "discover does not accept a root UUID appearing only in a boot comment" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  printf '%s\n' '# options root=UUID=20000000-0000-4000-8000-000000000002' 'options root=UUID=wrong-root rw' > "${DOUBLE_STATE}/filesystems/vda1/loader/entries/mirroros.conf"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_rejections[0].reason === 'boot_root_mismatch'"
+}
+
+@test "discover rejects an fstab that points at a different ESP" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  printf '%s\n' 'UUID=20000000-0000-4000-8000-000000000002 / ext4 defaults 0 0' 'UUID=ABCD-FFFF /boot vfat defaults 0 2' > "${DOUBLE_STATE}/filesystems/vda2/etc/fstab"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_rejections[0].reason === 'missing_esp_binding'"
+}
+
+@test "discover rejects symlinked binding files" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  mv "${DOUBLE_STATE}/filesystems/vda2/etc/fstab" "${DOUBLE_STATE}/filesystems/vda2/etc/real-fstab"
+  ln -s real-fstab "${DOUBLE_STATE}/filesystems/vda2/etc/fstab"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_candidates.length === 0"
+}
+
+@test "discover reports unreadable installations and unmounts the inspected root" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  touch "${DOUBLE_STATE}/mount_fail.vda1"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_rejections[0].reason === 'inspection_unavailable'"
+  grep -Fq 'umount --' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "discover rejects an unreadable root without attempting an ESP mount" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  touch "${DOUBLE_STATE}/mount_fail.vda2"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_rejections[0].reason === 'inspection_unavailable'"
+  ! grep -Fq 'mount -t vfat' "${DOUBLE_STATE}/calls.log"
+  ! grep -Fq 'umount --' "${DOUBLE_STATE}/calls.log"
+}
+
+@test "discover stops with the child status when inspection unmount fails" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  # Keep simulated mounted files inside the test directory for teardown after the deliberate failure.
+  export TMPDIR="$TEST_ROOT"
+  touch "${DOUBLE_STATE}/umount_fail"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 5 ]
+  [ ! -e "$(discovery_facts_path)" ]
+  discovery_json_assert "${OUTPUT_DIR}/error.json" "d.operation === 'umount' && d.child_exit_status === 32"
+}
+
+@test "discover retains binding booleans but not private fstab content" {
+  discovery_scenario coexistence-ext4-systemd-boot
+  printf '%s\n' '# SYNTH-PRIVATE-FSTAB-CONTENT' >> "${DOUBLE_STATE}/filesystems/vda2/etc/fstab"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_candidates.length === 1"
+  ! grep -rFq 'SYNTH-PRIVATE-FSTAB-CONTENT' "$OUTPUT_DIR" "$STDOUT_PATH" "$STDERR_PATH"
+}
+
+@test "discover can inspect a Btrfs top-level root without replaying its log" {
+  discovery_scenario coexistence-btrfs-rescue
+  touch "${DOUBLE_STATE}/btrfs_top_level"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.layers.detected.storage.disks[0].replace_candidates.length === 1"
+  grep -Fq 'mount -t btrfs -o ro,nologreplay,subvolid=5 --' "${DOUBLE_STATE}/calls.log"
+}
+
 @test "discover --help prints help and exits 0 without touching the system" {
   discovery_run --help
   [ "$DISCOVERY_STATUS" -eq 0 ]

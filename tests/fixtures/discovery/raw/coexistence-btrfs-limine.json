@@ -1,0 +1,18 @@
+{
+  "storage": {
+    "blockdevices": [{
+      "path": "/dev/nvme0n1", "type": "disk", "size": 255550554112, "serial": "SYNTH-COEXISTENCE", "rm": false, "ro": false,
+      "pttype": "gpt", "ptuuid": "10000000-0000-4000-8000-000000000000", "log-sec": 512,
+      "children": [
+        {"path": "/dev/nvme0n1p1", "type": "part", "size": 2147483648, "fstype": "vfat", "uuid": "ABCD-0001", "partuuid": "10000000-0000-4000-8000-000000000001", "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "partn": 1, "start": 2048},
+        {"path": "/dev/nvme0n1p2", "type": "part", "size": 107374182400, "fstype": "btrfs", "label": "mirroros", "uuid": "20000000-0000-4000-8000-000000000002", "partuuid": "10000000-0000-4000-8000-000000000002", "parttype": "0fc63daf-8483-4772-8e79-3d69d8477de4", "partn": 2, "start": 4196352},
+        {"path": "/dev/nvme0n1p3", "type": "part", "size": 2147483648, "fstype": "vfat", "label": "OTHER_EFI", "uuid": "ABCD-0003", "partuuid": "10000000-0000-4000-8000-000000000003", "parttype": "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", "partn": 3, "start": 213911552},
+        {"path": "/dev/nvme0n1p4", "type": "part", "size": 107374182400, "fstype": "crypto_LUKS", "uuid": "20000000-0000-4000-8000-000000000004", "partuuid": "10000000-0000-4000-8000-000000000004", "parttype": "ca7d7ccb-63ed-4c53-861c-1742536059cc", "partn": 4, "start": 218105856}
+      ]
+    }],
+    "installation_inspections": [
+      {"root_path": "/dev/nvme0n1p2", "esp_path": "/dev/nvme0n1p1", "status": "inspected", "fstab_matches": true, "limine_present": true, "limine_matches": true, "systemd_boot_present": false, "systemd_boot_matches": false},
+      {"root_path": "/dev/nvme0n1p2", "esp_path": "/dev/nvme0n1p3", "status": "inspected", "fstab_matches": false, "limine_present": true, "limine_matches": false, "systemd_boot_present": false, "systemd_boot_matches": false}
+    ]
+  }
+}

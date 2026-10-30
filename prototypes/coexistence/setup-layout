@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Destructive lab-only setup. This script must be reviewed before use.
+set -euo pipefail
+
+readonly DISK=/dev/vda
+readonly EXPECTED_DISK_ID=8D882759-509C-4D72-8942-493CFACA76FF
+readonly EXPECTED_ROOT_PARTUUID=91739a9a-ee37-4d33-926c-ee4e7d5a5478
+readonly EXPECTED_ESP_PARTUUID=025c3948-1fbd-486c-a328-13881802c184
+readonly ROOT=/dev/vda2
+readonly ESP=/dev/vda1
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+announce() { printf '\n>>> %s\n' "$*"; }
+[[ $EUID -eq 0 && -d /run/archiso && -d /sys/firmware/efi/efivars ]] || fail 'Run as root in the UEFI lab live environment.'
+virt=$(systemd-detect-virt)
+[[ $virt == qemu || $virt == kvm ]] || fail 'The guest must be QEMU/KVM.'
+[[ -b $DISK && -b $ROOT && -b $ESP ]] || fail 'The expected lab devices are missing.'
+[[ $(blockdev --getsize64 "$DISK") == 34359738368 ]] || fail 'Unexpected disk size.'
+[[ $(sfdisk --disk-id "$DISK") == "$EXPECTED_DISK_ID" ]] || fail 'Unexpected disk GUID.'
+[[ $(blkid -s PARTUUID -o value "$ROOT") == "$EXPECTED_ROOT_PARTUUID" ]] || fail 'Unexpected root PARTUUID.'
+[[ $(blkid -s PARTUUID -o value "$ESP") == "$EXPECTED_ESP_PARTUUID" ]] || fail 'Unexpected ESP PARTUUID.'
+[[ $(blkid -s TYPE -o value "$ROOT") == btrfs && $(blkid -s LABEL -o value "$ROOT") == mirroros ]] || fail 'Unexpected root filesystem.'
+[[ $(lsblk -lnpo TYPE "$DISK" | grep -c '^part$') == 2 ]] || fail 'Expected exactly two partitions before setup.'
+[[ -z $(findmnt -rn -S "$ROOT") && -z $(findmnt -rn -S "$ESP") ]] || fail 'The existing partitions must be unmounted.'
+[[ -z $(lsblk -nrpo MOUNTPOINTS "$DISK" | tr -d '[:space:]') ]] || fail 'A device on the lab disk is mounted.'
+active_swaps=$(swapon --show=NAME --noheadings --raw) || fail 'Cannot inspect active swap.'
+while read -r node; do
+  [[ -z $(ls -A "/sys/class/block/${node##*/}/holders") ]] || fail "A device holds $node."
+  if grep -Fxq -- "$node" <<< "$active_swaps"; then fail "$node is active swap."; fi
+done < <(lsblk -lnpo NAME "$DISK")
+[[ ! -e /dev/mapper/mirroros-coexistence ]] || fail 'The lab mapper name is already in use.'
+for cmd in btrfs sfdisk partprobe udevadm cryptsetup mkfs.fat mkfs.ext4 efibootmgr; do command -v "$cmd" >/dev/null || fail "Missing tool: $cmd"; done
+
+work=$(mktemp -d /run/mirroros-coexistence.XXXXXX)
+root_mounted=0
+esp_mounted=0
+other_esp_mounted=0
+other_root_mounted=0
+mapper_open=0
+# shellcheck disable=SC2329 # Called by the EXIT trap.
+cleanup() {
+  if (( other_root_mounted )); then umount "$work/other-root" || :; fi
+  if (( mapper_open )); then cryptsetup close mirroros-coexistence || :; fi
+  if (( other_esp_mounted )); then umount "$work/other-esp" || :; fi
+  if (( root_mounted )); then umount "$work/root" || :; fi
+  if (( esp_mounted )); then umount "$work/esp" || :; fi
+  rm -rf -- "$work"
+}
+trap cleanup EXIT
+mkdir "$work/root" "$work/esp" "$work/other-esp" "$work/other-root"
+
+announce 'Mount the existing ESP read-only and copy the Limine EFI loader into live tmpfs.'
+mount -o ro "$ESP" "$work/esp"
+esp_mounted=1
+[[ -s $work/esp/EFI/BOOT/BOOTX64.EFI ]] || fail 'The existing fallback EFI binary is missing.'
+cp "$work/esp/EFI/BOOT/BOOTX64.EFI" "$work/limine_x64.efi"
+umount "$work/esp"
+esp_mounted=0
+
+announce 'Mount the Btrfs top level and shrink the filesystem to 20 GiB. Failure stops before partition changes.'
+mount -o subvolid=5 "$ROOT" "$work/root"
+root_mounted=1
+btrfs filesystem resize 20G "$work/root"
+sync
+umount "$work/root"
+root_mounted=0
+
+announce 'Shrink only partition 2 to 20 GiB, preserving its start and PARTUUID.'
+printf ',20GiB\n' | sfdisk --no-reread -N 2 "$DISK"
+partprobe "$DISK"
+udevadm settle
+[[ $(blkid -s PARTUUID -o value "$ROOT") == "$EXPECTED_ROOT_PARTUUID" ]] || fail 'Root PARTUUID changed after resize.'
+
+announce 'Append a 1 GiB stand-in ESP and a Linux partition in the remaining free space.'
+printf 'size=1GiB, type=U\ntype=L\n' | sfdisk --append --no-reread "$DISK"
+partprobe "$DISK"
+udevadm settle
+[[ -b /dev/vda3 && -b /dev/vda4 ]] || fail 'The stand-in partition nodes are missing.'
+
+announce 'Format the stand-in ESP and install the copied Limine binary and minimal configuration.'
+mkfs.fat -F 32 -n OTHER_EFI /dev/vda3
+mount /dev/vda3 "$work/other-esp"
+other_esp_mounted=1
+mkdir -p "$work/other-esp/EFI/limine"
+cp "$work/limine_x64.efi" "$work/other-esp/EFI/limine/limine_x64.efi"
+printf 'timeout: 3\n' > "$work/other-esp/limine.conf"
+sync
+umount "$work/other-esp"
+other_esp_mounted=0
+
+announce 'Create a LUKS stand-in partition with disposable key material in live tmpfs and write test data.'
+umask 077
+head -c 64 /dev/urandom > "$work/luks-key"
+cryptsetup luksFormat --batch-mode --key-file "$work/luks-key" /dev/vda4
+cryptsetup open --key-file "$work/luks-key" /dev/vda4 mirroros-coexistence
+mapper_open=1
+mkfs.ext4 -F /dev/mapper/mirroros-coexistence
+mount /dev/mapper/mirroros-coexistence "$work/other-root"
+other_root_mounted=1
+printf 'MirrorOS coexistence prototype stand-in data\n' > "$work/other-root/stand-in.txt"
+sync
+umount "$work/other-root"
+other_root_mounted=0
+cryptsetup close mirroros-coexistence
+mapper_open=0
+
+announce 'Create the Limine Other UEFI entry without implicit BootOrder changes.'
+efibootmgr --create-only --disk "$DISK" --part 3 --label 'Limine Other' --loader '\EFI\limine\limine_x64.efi'
+printf '\nLab layout created. The disposable LUKS key is removed on exit; the partition is for preservation checks only.\n'

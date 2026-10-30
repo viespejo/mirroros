@@ -6,7 +6,7 @@ ENGINE_PLAN_FIXTURES="${ENGINE_SOURCE_ROOT}/tests/fixtures/plan"
 ENGINE_CANARY='PLANTED-ENGINE-SECRET-0001'
 ENGINE_COMMIT='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 ENGINE_TOOLS=(wipefs sfdisk blockdev partprobe udevadm mkfs.fat mkfs.ext4 mkfs.btrfs btrfs blkid mount umount mountpoint
-  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep findmnt pacman lsinitcpio lsattr chown)
+  swapoff genfstab mkswap filefrag systemctl pacstrap arch-chroot sleep findmnt pacman lsinitcpio lsattr chown lsblk efibootmgr)
 
 ENGINE_STATUS=0
 ENGINE_PASSWORD="$ENGINE_CANARY"
@@ -33,7 +33,6 @@ engine_setup() {
   for tool in "${ENGINE_TOOLS[@]}"; do
     ln -s "${ENGINE_SUPPORT_DIR}/doubles/engine-double" "${DOUBLE_BIN}/${tool}"
   done
-  ln -s "${ENGINE_DISCOVERY_SUPPORT}/doubles/lsblk" "${DOUBLE_BIN}/lsblk"
   : > "${DOUBLE_STATE}/calls.log"
   engine_make_packages
   node "${ENGINE_DISCOVERY_SUPPORT}/build-root.mjs" "${ENGINE_SOURCE_ROOT}/tests/fixtures/discovery/raw/reference-vm-layout.json" \
@@ -41,7 +40,34 @@ engine_setup() {
   mkdir -p "${FIXTURE_ROOT}/etc/pacman.d"
   # shellcheck disable=SC2016 # Pacman expands these literal mirrorlist placeholders, not Bash.
   printf 'Server = https://mirror.example.invalid/$repo/os/$arch\n' > "${FIXTURE_ROOT}/etc/pacman.d/mirrorlist"
+  printf '%s\n' '10000000-0000-4000-8000-000000000001' > "$DOUBLE_STATE/esp-guid"
+  printf '%s\n' '{"order":["0003","0002"],"entries":[{"id":"0003","label":"Firmware"},{"id":"0002","label":"Other disk","guid":"99999999-8888-4777-8666-555555555555","path":"\\\\EFI\\\\other.efi"}]}' > "$DOUBLE_STATE/nvram.json"
   engine_use_plan ext4-systemd-boot--password
+}
+
+engine_replacement_layout() {
+  local option="$1" original_root="$FIXTURE_ROOT"
+  FIXTURE_ROOT="$TEST_ROOT/replacement fixture root"
+  mkdir -p "$FIXTURE_ROOT"
+  node "$ENGINE_DISCOVERY_SUPPORT/build-root.mjs" "$ENGINE_SOURCE_ROOT/tests/fixtures/discovery/raw/coexistence-${option}.json" \
+    "$FIXTURE_ROOT" "$DOUBLE_STATE"
+  mkdir -p "$FIXTURE_ROOT/etc/pacman.d"
+  cp "$original_root/etc/pacman.d/mirrorlist" "$FIXTURE_ROOT/etc/pacman.d/mirrorlist"
+  engine_use_plan "${option}--replace"
+  node --input-type=module - "$PLAN" "$DOUBLE_STATE" "$FIXTURE_ROOT" <<'JS'
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+const [planFile, state, root] = process.argv.slice(2);
+const plan = JSON.parse(readFileSync(planFile));
+const layout = plan.target.disk.current_layout;
+const lines = ['label: gpt', `label-id: ${layout.partition_table.uuid}`, `device: ${plan.target.disk.path}`, 'unit: sectors',
+  `sector-size: ${layout.partition_table.sector_size_bytes}`, ''];
+for (const p of layout.partitions) {
+  lines.push(`${p.path} : start=${p.start_sector}, size=${p.size_bytes / layout.partition_table.sector_size_bytes}, type=${p.type_guid}, uuid=${p.partuuid}`);
+  mkdirSync(`${root}/dev`, { recursive: true });
+  writeFileSync(`${root}${p.path}`, '');
+}
+writeFileSync(`${state}/out/sfdisk`, `${lines.join('\n')}\n`);
+JS
 }
 
 # The prebuilt Limine packages and their manifest, as the artifact embeds them next to the engine code.

@@ -110,7 +110,7 @@ teardown() {
   [ "$(engine_json outcome)" = installed ]
   [ "$(engine_json exit_status)" = 0 ]
   [ "$(engine_json not_started)" = '[]' ]
-  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 17 ]
+  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 20 ]
   [ "$(engine_json status state.json)" = installed ]
   [ "$(engine_json resolved.resume_offset)" = 34816 ]
   run node --input-type=module - "$OUTPUT/engine-run.json" <<'JS'
@@ -493,8 +493,8 @@ SCRIPT
   [ "$(grep -c '^wipefs --all' "${DOUBLE_STATE}/calls.log")" -eq 1 ]
   engine_called umount
   [ "$(engine_json cleanup.umount)" = ok ]
-  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 5 ]
-  [ "$(engine_json operations.5.status state.json)" = failed ]
+  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 7 ]
+  [ "$(engine_json operations.7.status state.json)" = failed ]
   grep -q 'pacstrap: simulated failure' "${OUTPUT}/engine.log"
   grep -qi 'status 7' "${TEST_ROOT}/stderr.log"
 }
@@ -505,7 +505,7 @@ SCRIPT
   [ "$ENGINE_STATUS" -eq 5 ]
   [ "$(engine_json failed_operation.id)" = install_bootloader ]
   [ ! -d "${DOUBLE_STATE}/enabled" ]
-  [ "$(engine_json operations.16.status state.json)" = pending ]
+  [ "$(engine_json operations.18.status state.json)" = pending ]
 }
 
 @test "a configuration asset whose hash differs from the plan fails with exit 6 without being written" {
@@ -674,7 +674,7 @@ SCRIPT
   engine_run
   [ "$ENGINE_STATUS" -eq 0 ]
   [ "$(engine_json outcome)" = installed ]
-  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 20 ]
+  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 23 ]
   [ "$(engine_json resolved.resume_offset)" = 1998848 ]
   for subvolume in @ @home @log @pkg @snapshots @swap; do
     grep -q "^btrfs subvolume create .*/target/${subvolume}\$" "${DOUBLE_STATE}/calls.log"
@@ -717,7 +717,7 @@ SCRIPT
   engine_use_plan btrfs-rescue--hibernation-disabled
   engine_run
   [ "$ENGINE_STATUS" -eq 0 ]
-  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 19 ]
+  [ "$(engine_json completed | node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(0, "utf8")).length))')" = 22 ]
   ! grep -q '@swap' "${DOUBLE_STATE}/calls.log"
   ! grep -q 'mkswapfile' "${DOUBLE_STATE}/calls.log"
   ! grep -q '/swap' "${RUN_ROOT}/target/etc/fstab"

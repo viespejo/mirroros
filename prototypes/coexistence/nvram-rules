@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Lab-only UEFI ordering and explicitly scoped stale-entry experiments.
+set -euo pipefail
+
+readonly DISK=/dev/vda
+readonly ESP=/dev/vda1
+readonly EXPECTED_DISK_ID=8D882759-509C-4D72-8942-493CFACA76FF
+readonly ESP_ID=025c3948-1fbd-486c-a328-13881802c184
+readonly OTHER_ID=1900b133-391a-44a7-8827-1f30abfffe9c
+readonly LOADER='\EFI\BOOT\BOOTX64.EFI'
+readonly OTHER_LOADER='\EFI\limine\limine_x64.efi'
+
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+[[ $EUID -eq 0 && -d /run/archiso && -d /sys/firmware/efi/efivars ]] || fail 'Run as root in the UEFI lab live environment.'
+[[ $(sfdisk --disk-id "$DISK") == "$EXPECTED_DISK_ID" ]] || fail 'Unexpected disk GUID.'
+[[ $(blkid -s PARTUUID -o value "$ESP") == "$ESP_ID" ]] || fail 'Unexpected target ESP PARTUUID.'
+[[ $(blkid -s PARTUUID -o value /dev/vda3) == "$OTHER_ID" ]] || fail 'Unexpected stand-in ESP PARTUUID.'
+
+results=$(mktemp -d /run/mirroros-coexistence-nvram.XXXXXX)
+printf 'Evidence directory: %s (live tmpfs; copy before reboot)\n' "$results"
+efibootmgr -v > "$results/before.txt"
+entry_ids() {
+  local file=$1 partuuid=$2 loader=$3
+  grep -Fi -- "$partuuid" "$file" | grep -Fi -- "$loader" | \
+    awk '/^Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {print toupper(substr($1,5,4))}' || :
+}
+if [[ ${1:-} == --stale ]]; then
+  [[ $# == 1 ]] || fail 'The stale-entry test accepts no other arguments.'
+  [[ ! -e /dev/vda5 ]] || fail 'Partition 5 already exists.'
+  [[ $(lsblk -lnpo TYPE "$DISK" | grep -c '^part$') == 4 ]] || fail 'Expected exactly four existing partitions.'
+  [[ $(blkid -s PARTUUID -o value /dev/vda4) == ff10c509-c1f5-4b27-b035-53670f7545d9 ]] || fail 'Unexpected stand-in LUKS PARTUUID.'
+  [[ -z $(lsblk -nrpo MOUNTPOINTS "$DISK" | tr -d '[:space:]') ]] || fail 'A lab partition is mounted.'
+  sfdisk --dump "$DISK" > "$results/table-before.txt"
+  printf 'Creating temporary partition 5 only in the approved free sectors.\n'
+  printf 'start=67106816, size=512, type=U\n' | sfdisk --append --no-reread "$DISK"
+  partprobe "$DISK"
+  udevadm settle
+  [[ -b /dev/vda5 ]] || fail 'Partition 5 was not created; inspect the lab before retrying.'
+  stale_partuuid=$(blkid -s PARTUUID -o value /dev/vda5)
+  [[ $stale_partuuid =~ ^[0-9a-fA-F-]{36}$ ]] || fail 'Could not identify temporary PARTUUID.'
+  printf '%s\n' "$stale_partuuid" > "$results/stale-partuuid.txt"
+  printf 'Creating a synthetic UEFI entry for partition 5 without changing BootOrder.\n'
+  efibootmgr --create-only --disk "$DISK" --part 5 --label 'MirrorOS Stale Test' --loader '\EFI\stale\test.efi'
+  efibootmgr -v > "$results/with-synthetic.txt"
+  mapfile -t stale_entries < <(entry_ids "$results/with-synthetic.txt" "$stale_partuuid" '\EFI\stale\test.efi')
+  (( ${#stale_entries[@]} == 1 )) || fail 'Synthetic entry is missing or ambiguous; inspect before retrying.'
+  stale=${stale_entries[0]}
+  grep -F "Boot${stale}* MirrorOS Stale Test" "$results/with-synthetic.txt" >/dev/null || fail 'Synthetic entry label differs.'
+  printf 'Deleting only temporary partition 5, leaving its UEFI entry stale.\n'
+  sfdisk --delete "$DISK" 5
+  partprobe "$DISK"
+  udevadm settle
+  [[ ! -e /dev/vda5 ]] || fail 'Partition 5 still exists; do not remove its entry.'
+  sfdisk --dump "$DISK" > "$results/table-after.txt"
+  cmp "$results/table-before.txt" "$results/table-after.txt" || fail 'The GPT differs after removing partition 5.'
+  printf 'Deleting only synthetic boot entry %s referencing removed PARTUUID %s.\n' "$stale" "$stale_partuuid"
+  efibootmgr --bootnum "$stale" --delete-bootnum
+  efibootmgr -v > "$results/after-stale-removal.txt"
+  awk '/^Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {print toupper(substr($1,5,4))}' "$results/before.txt" | sort -u > "$results/entry-ids-before.txt"
+  awk '/^Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {print toupper(substr($1,5,4))}' "$results/after-stale-removal.txt" | sort -u > "$results/entry-ids-after.txt"
+  cmp "$results/entry-ids-before.txt" "$results/entry-ids-after.txt" || fail 'The pre-existing entry set changed.'
+  before_order=$(awk -F ': ' '/^BootOrder:/ {print toupper($2); exit}' "$results/before.txt")
+  after_order=$(awk -F ': ' '/^BootOrder:/ {print toupper($2); exit}' "$results/after-stale-removal.txt")
+  [[ $before_order == "$after_order" ]] || fail 'BootOrder changed during the stale-entry test.'
+  printf 'Only the synthetic stale entry was removed; GPT, existing entries and BootOrder match. Evidence: %s\n' "$results"
+  exit 0
+fi
+[[ $# == 0 ]] || fail 'Unknown argument.'
+mapfile -t other_entries < <(entry_ids "$results/before.txt" "$OTHER_ID" "$OTHER_LOADER")
+(( ${#other_entries[@]} == 1 )) || fail 'The stand-in entry is missing or ambiguous.'
+other=${other_entries[0]}
+mapfile -t mirror_entries < <(entry_ids "$results/before.txt" "$ESP_ID" "$LOADER")
+(( ${#mirror_entries[@]} <= 1 )) || fail 'Multiple MirrorOS loader matches; no entries will be deleted.'
+if (( ${#mirror_entries[@]} == 0 )); then
+  printf 'Creating Limine MirrorOS without changing BootOrder.\n'
+  efibootmgr --create-only --disk "$DISK" --part 1 --label 'Limine MirrorOS' --loader "$LOADER"
+fi
+efibootmgr -v > "$results/after-create.txt"
+mapfile -t mirror_entries < <(entry_ids "$results/after-create.txt" "$ESP_ID" "$LOADER")
+(( ${#mirror_entries[@]} == 1 )) || fail 'Could not identify exactly one MirrorOS loader entry.'
+mirror=${mirror_entries[0]}
+order=$(awk -F ': ' '/^BootOrder:/ {print toupper($2); exit}' "$results/before.txt")
+[[ -n $order ]] || fail 'The original BootOrder is missing.'
+IFS=, read -r -a original <<< "$order"
+rest=()
+has_other=0
+for id in "${original[@]}"; do
+  [[ $id =~ ^[0-9A-F]{4}$ ]] || fail 'Invalid BootOrder entry.'
+  [[ $id != "$mirror" ]] || continue
+  rest+=("$id")
+  [[ $id != "$other" ]] || has_other=1
+done
+# create-only does not add the stand-in to BootOrder; include it for firmware-menu testing.
+if (( ! has_other )); then rest+=("$other"); fi
+new_order=$mirror
+for id in "${rest[@]}"; do new_order+=",$id"; done
+printf 'Writing BootOrder %s; existing non-MirrorOS entries keep their relative order.\n' "$new_order"
+efibootmgr --bootorder "$new_order"
+efibootmgr -v > "$results/after-order.txt"
+actual=$(awk -F ': ' '/^BootOrder:/ {print toupper($2); exit}' "$results/after-order.txt")
+[[ $actual == "$new_order" ]] || fail 'The resulting BootOrder differs from the requested order.'
+# Compare all pre-existing entry IDs with the post-operation set; none may disappear.
+awk '/^Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {print toupper(substr($1,5,4))}' "$results/before.txt" | sort -u > "$results/entry-ids-before.txt"
+awk '/^Boot[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][* ]/ {print toupper(substr($1,5,4))}' "$results/after-order.txt" | sort -u > "$results/entry-ids-after.txt"
+if [[ -n $(comm -23 "$results/entry-ids-before.txt" "$results/entry-ids-after.txt") ]]; then fail 'A pre-existing entry disappeared.'; fi
+printf 'Entry first and pre-existing entries preserved. No stale-entry deletion was exercised. Evidence: %s\n' "$results"

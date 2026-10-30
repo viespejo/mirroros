@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 # Native, read-only observations of the mounted target. Every function only reads: file reads, stat, findmnt,
-# blkid -p, pacman -Q, systemctl is-enabled, lsinitcpio listings, filefrag, btrfs map-swapfile, and lsattr. The
+# blkid -p, pacman -Q, systemctl is-enabled, lsinitcpio listings, filefrag, btrfs map-swapfile, lsattr,
+# efibootmgr -v, sfdisk --dump, lsblk listings, and readlink. The
 # comparison with the plan belongs to evaluate.mjs. Paths are relative to the target root and start with "/".
 
 readonly MAX_TEXT_BYTES=262144
@@ -73,7 +74,12 @@ observe_mounts() {
   obs mounts "$raw"
   ROOT_FILESYSTEM_TYPE="$(mount_fstype "$raw" "$TARGET_ROOT")"
   observe_filesystem_uuid / "$(mount_source "$raw" "$TARGET_ROOT")"
-  observe_filesystem_uuid /boot "$(mount_source "$raw" "${TARGET_ROOT}/boot")"
+  local esp partuuid
+  esp="$(mount_source "$raw" "${TARGET_ROOT}/boot")"
+  observe_filesystem_uuid /boot "$esp"
+  if [[ -n "$esp" ]] && partuuid="$(blkid -p -o value -s PARTUUID -- "$esp" 2> /dev/null)"; then
+    obs 'partuuid:/boot' "$partuuid"
+  fi
 }
 
 observe_packages() {
@@ -128,9 +134,28 @@ observe_limine_references() {
 readonly ZRAM_DESTINATION=/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf
 readonly SYSCTL_DESTINATION=/usr/lib/sysctl.d/60-mirroros-memory.conf
 
+observe_coexistence() {
+  local listing disk dump storage link path
+  if listing="$(efibootmgr -v 2> /dev/null)"; then obs uefi_entries "$listing"; fi
+  if [[ -L "${TARGET_ROOT}/usr/local/bin/mirroros-boot-first" ]] \
+    && link="$(readlink -- "${TARGET_ROOT}/usr/local/bin/mirroros-boot-first" 2> /dev/null)"; then
+    obs 'link:/usr/local/bin/mirroros-boot-first' "$link"
+  fi
+  for path in /usr/local/lib/mirroros/operations/boot-first /usr/local/lib/mirroros/operations/lib/uefi-boot-entry.sh; do
+    if target_file "$path"; then observe_stat "$path"; fi
+  done
+  disk="$(node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1])); if(p.target_mode==="replace_installation") process.stdout.write(p.target.disk.path)' "$PLAN_FILE")" || return 0
+  [[ -n "$disk" ]] || return 0
+  if dump="$(sfdisk --dump "$disk" 2> /dev/null)"; then obs partition_table "$dump"; fi
+  if storage="$(lsblk --json --tree --bytes --output PATH,KNAME,TYPE,SIZE,PTTYPE,PTUUID,FSTYPE,LABEL,UUID,PARTUUID,PARTTYPE,PARTN,START,PARTLABEL,LOG-SEC,MOUNTPOINTS 2> /dev/null)"; then
+    obs storage "$storage"
+  fi
+}
+
 collect_observations() {
   local path
   observe_mounts
+  observe_coexistence
   observe_packages
   for path in /boot/vmlinuz-linux /boot/initramfs-linux.img /boot/initramfs-linux-fallback.img \
     /boot/EFI/systemd/systemd-bootx64.efi /boot/EFI/BOOT/BOOTX64.EFI /swapfile /swap/swapfile; do

@@ -73,7 +73,9 @@ load_plan() {
   DISK_PATH="${stream[4]}"
   DISK_BY_ID="${stream[5]}"
   total="${stream[6]}"
-  index=7
+  TARGET_MODE="${stream[7]}"
+  record_constant precheck.target_mode "$TARGET_MODE"
+  index=8
   count=0
   while (( index < ${#stream[@]} )); do
     id="${stream[index + 1]}"
@@ -152,6 +154,23 @@ check_occupancy() {
   mounts="$(sys_path /proc/self/mounts)"
   swaps="$(sys_path /proc/swaps)"
   sysfs_disk="$(sys_path "/sys/block/${name}")"
+  if [[ "$TARGET_MODE" == replace_installation ]]; then
+    local part
+    for part in "$ESP_PART" "$ROOT_PART"; do
+      name="${part##*/}"
+      if { [[ -r "$mounts" ]] && awk -v device="/dev/$name" '$1 == device {found=1} END {exit !found}' "$mounts"; } \
+        || { [[ -r "$swaps" ]] && awk -v device="/dev/$name" '$1 == device {found=1} END {exit !found}' "$swaps"; }; then
+        finish blocked 2 target_disk_in_use precheck "The selected partition /dev/${name} is mounted or used as swap." \
+          'Release it manually and run mirroros-install again; the disk was not touched.' ''
+      fi
+      holders="$(sys_path "/sys/class/block/$name/holders")"
+      if [[ -d "$holders" && -n "$(ls -A -- "$holders")" ]]; then
+        finish blocked 2 target_disk_in_use precheck "The selected partition /dev/${name} has holders." \
+          'Release it manually and run mirroros-install again; the disk was not touched.' ''
+      fi
+    done
+    return
+  fi
   # Mounts and swap are matched by device name (the disk or one of its partitions), not by sysfs enumeration.
   if [[ -r "$mounts" ]] && awk -v pattern="^/dev/${name}(p?[0-9]+)?\$" '$1 ~ pattern {found=1} END {exit !found}' "$mounts"; then
     busy="a partition of /dev/${name} is mounted"
@@ -181,13 +200,28 @@ final_block() {
       'Run mirroros-install again; the disk was not touched.' ''
   fi
   mapfile -d '' -t result < <(printf '%s' "$PLAN_TEXT" | node "${SCRIPT_DIR}/load-plan.mjs" check-disk --storage "$storage_file" 4>&- || true)
-  rm -f -- "$storage_file"
   if [[ "${#result[@]}" -eq 0 ]]; then
+    rm -f -- "$storage_file"
     finish failed 6 engine_asset_mismatch precheck 'The disk comparison produced no answer.' \
       'Rebuild or re-clone the installation medium and run mirroros-install again; the disk was not touched.' ''
   fi
   if [[ "${result[0]}" == fail ]]; then
+    rm -f -- "$storage_file"
     finish "${result[1]}" 2 "${result[2]}" precheck "${result[3]}" "${result[4]}" ''
   fi
+  if [[ "$TARGET_MODE" == replace_installation ]]; then
+    ESP_PART="$(sys_path "${PARAM[wipe_partition_signatures.esp.path]}")"
+    ROOT_PART="$(sys_path "${PARAM[wipe_partition_signatures.root.path]}")"
+    local dump_file="${OUTPUT}/partition-table-before.sfdisk" record
+    if ! sfdisk --dump "$DISK_NODE" > "$dump_file" 2>> "$ENGINE_LOG" < /dev/null 3>&- 4>&- \
+      || ! record="$(node_helper load-plan.mjs partition-record --dump "$dump_file" --storage "$storage_file" 2>> "$ENGINE_LOG")"; then
+      rm -f -- "$storage_file"
+      finish invalidated 2 target_layout_changed precheck 'The partition table no longer matches the reviewed replacement target.' \
+        'Repeat discovery and confirmation; the disk was not touched.' ''
+    fi
+    printf '%s\n' "$record" > "${OUTPUT}/untouched-partitions-before.json"
+    record_constant precheck.untouched_partitions "$record"
+  fi
+  rm -f -- "$storage_file"
   check_occupancy
 }

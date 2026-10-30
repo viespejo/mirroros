@@ -312,7 +312,7 @@ MirrorOS exposes no remote product API and introduces no application-specific au
 
 - Read-only discovery precedes plan generation.
 - Plans identify the selected device using its path, model, size, and available stable identifiers.
-- Confirmation is bound to the concrete plan and target.
+- Confirmation is bound to the concrete plan and target mode (`whole_disk` or `replace_installation`). Replacement additionally requires the full root PARTUUID after the disk identity, with both format targets and preserved partitions shown ([ADR 0022](adr/0022-installer-coexistence-and-uefi-boot-entry.md)).
 - Changed target state or regenerated plans invalidate prior approval.
 - Retries require renewed confirmation.
 - Cancellation performs none of the rejected destructive operations.
@@ -1236,6 +1236,7 @@ It does not own the complete installed desktop or personal environment. Adding a
 - `configure` applies capability modules.
 - `verify` invokes the verification system.
 - `clean` removes generated local outputs without deleting accepted external recovery artifacts.
+- `boot-first`, installed as `mirroros-boot-first`, explicitly restores the running MirrorOS installation's UEFI entry to first in `BootOrder`. It requires root, verifies the `/boot` ESP binding to the running root, recreates a missing entry, and deletes nothing. No service enforces ordering automatically ([boot-first contract](../contracts/boot-first.md)).
 
 Shared lifecycle behavior enters `operations/lib/` only after multiple commands need the same stable contract.
 
@@ -1248,6 +1249,28 @@ Shared lifecycle behavior enters `operations/lib/` only after multiple commands 
 - Plan validation and digest.
 - Target-bound confirmation.
 - Selected installation-engine adapter.
+
+Under [ADR 0022](adr/0022-installer-coexistence-and-uefi-boot-entry.md), installation plans use format 5 and declare one of two destructive boundaries:
+
+- `whole_disk` wipes the confirmed disk and creates a new GPT and layout. Before wiping, record its partition PARTUUIDs; delete only UEFI entries whose device paths reference that pre-wipe set.
+- `replace_installation` reuses and formats only the identified MirrorOS ESP and root partition. Never wipe the disk node, create a partition table, resize or move partitions. Identification binds the `mirroros`-labelled Linux root to a same-disk ESP through UUID-based fstab and boot configuration read without filesystem modification; ambiguous or incomplete layouts are rejected. All three storage options are supported. The ESP must meet the policy minimum (2 GiB), and root must fit the policy root minimum (15 GiB) plus the swapfile when enabled. Prechecks revalidate identities, geometry and occupancy before destruction. Compare filtered `sfdisk --dump` data and non-target identities before and after; production postconditions do not hash non-target partition contents.
+
+Both modes explicitly register the selected bootloader from the live environment through the shared
+`operations/lib/uefi-boot-entry.sh` library: `Limine MirrorOS` at `\EFI\BOOT\BOOTX64.EFI`, or `MirrorOS`
+at `\EFI\systemd\systemd-bootx64.efi`, matched by ESP PARTUUID and loader path. Keep Limine's
+`SKIP_UEFI=yes` and use `bootctl --variables=no` for systemd-boot to suppress implicit firmware changes.
+Create missing entries without implicit ordering, then place the unique match first while preserving the
+remaining entries' relative order. Duplicate matches fail closed without deleting duplicates. Keep the
+selected bootloader's `EFI/BOOT/BOOTX64.EFI` fallback. No whole-NVRAM operation is allowed.
+
+The engine delivers the root-owned boot-first command and library under
+`/usr/local/lib/mirroros/operations/` with `/usr/local/bin/mirroros-boot-first` linked to the command,
+without changing `mirroros-configure` delivery. Read-only base postconditions verify the UEFI entry and
+ordering, command delivery and, in replacement mode, preservation against the pre-run non-target record.
+Firmware or another OS may later reorder entries (RISK-001); explicit boot-first invocation is the
+mitigation, not a guarantee of persistent ordering. The ThinkPad T14s remains experimental and
+unqualified under [ADR 0005](adr/0005-physical-target-change.md); coexistence does not add a target profile.
+Lab and attended hardware validation remain separate evidence gates.
 
 `install/engine/apply` is a stable production boundary, not a place to mix competing engines. Its implementation is populated only after the installation ADR. Production never imports from `prototypes/`.
 

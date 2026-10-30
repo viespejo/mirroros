@@ -37,13 +37,14 @@ make_facts() {
     import { pathToFileURL } from "node:url";
     const helpers = await import(pathToFileURL(process.argv[1]).href);
     let document = helpers.facts();
+    if (process.argv[2].startsWith("coexistence-")) document = helpers.facts(process.argv[2]);
     if (process.argv[2] === "unqualified") document = helpers.unqualifiedFacts();
     if (process.argv[2] === "two-disks") document = helpers.secondEligibleDisk(document);
     if (process.argv[2] === "status-invalid") document.validation.status = "invalid";
     if (process.argv[2] === "format-1") document.format_version = 1;
     if (process.argv[2] === "no-memory") document = helpers.withMemory(document, undefined);
     if (process.argv[2] === "memory-80g") document = helpers.withMemory(document, 80 * 1073741824);
-    writeFileSync(process.argv[3], `${JSON.stringify(document)}\n`);
+    writeFileSync(process.argv[3], JSON.stringify(document) + "\n");
   ' "${PLAN_TESTS_DIR}/helpers.mjs" "$1" "$2"
 }
 
@@ -251,7 +252,8 @@ assert_private_permissions() {
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements.length === 1 && d.secret_requirements[0].name === 'account_password'"
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.secret_requirements[0].required_by.join() === 'create_user,configure_root_account'"
   grep -Fq 'Secrets required: account_password' "$STDOUT_PATH"
-  ! grep -Eq 'root_password|user_password' "${WORK_DIR}/out/installation-plan.json"
+  run grep -Eq 'root_password|user_password' "${WORK_DIR}/out/installation-plan.json"
+  [ "$status" -eq 1 ]
 }
 
 @test "a locked root account names only the user operation as consumer" {
@@ -544,6 +546,44 @@ EOF
     [ "$PLAN_STATUS" -eq 5 ]
     assert_stderr_contains 'unexpected failure'
   fi
+}
+
+@test "replacement CLI writes format 5 partition-scoped plans for all storage options" {
+  for option in ext4-systemd-boot btrfs-rescue btrfs-limine; do
+    make_facts "coexistence-${option}" "$FACTS"
+    write_choices "{\"format_version\":3,\"target_mode\":\"replace_installation\",\"replace_root_partuuid\":\"10000000-0000-4000-8000-000000000002\",\"storage_option\":\"${option}\"}"
+    run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/${option}"
+    [ "$PLAN_STATUS" -eq 0 ]
+    json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.format_version === 5 && d.target_mode === "replace_installation"'
+    json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.operations.filter(o => o.destructive).map(o => o.kind).join() === "wipe_partition_signatures,format_partitions"'
+    json_assert "${WORK_DIR}/${option}/installation-plan.json" '!d.operations.some(o => ["wipe_disk_signatures", "create_partition_table", "create_partitions", "remove_stale_uefi_entries"].includes(o.kind))'
+    json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.operations.at(-1).kind === "register_uefi_boot_entry"'
+    grep -q 'Target mode: replace_installation' "$STDOUT_PATH"
+    grep -q 'PRESERVE' "${WORK_DIR}/${option}/installation-plan.txt"
+  done
+}
+
+@test "replacement CLI refuses missing and shortened root identities without writing a plan" {
+  make_facts coexistence-btrfs-limine "$FACTS"
+  write_choices '{"format_version":3,"target_mode":"replace_installation"}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/missing"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -e "${WORK_DIR}/missing/installation-plan.json" ]
+  json_assert "${WORK_DIR}/missing/plan-run.json" 'd.reasons.some(r => r.code === "replacement_target_invalid")'
+  write_choices '{"format_version":3,"target_mode":"replace_installation","replace_root_partuuid":"00000002"}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/short"
+  [ "$PLAN_STATUS" -eq 2 ]
+  [ ! -e "${WORK_DIR}/short/installation-plan.json" ]
+}
+
+@test "whole-disk CLI records only target PARTUUIDs for cleanup and registers the loader last" {
+  make_facts coexistence-btrfs-limine "$FACTS"
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/out/installation-plan.json" 'd.target_mode === "whole_disk" && !d.target.installation'
+  json_assert "${WORK_DIR}/out/installation-plan.json" 'd.operations[0].kind === "record_disk_partuuids" && d.operations[0].parameters.partuuids.length === 4'
+  json_assert "${WORK_DIR}/out/installation-plan.json" 'JSON.stringify(d.operations.find(o => o.kind === "remove_stale_uefi_entries").parameters.partuuids) === JSON.stringify(d.target.disk.current_layout.partitions.map(p => p.partuuid))'
+  json_assert "${WORK_DIR}/out/installation-plan.json" 'd.operations.at(-1).kind === "register_uefi_boot_entry"'
 }
 
 @test "plan works when invoked through a symlink as on the live medium" {

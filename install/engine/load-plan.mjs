@@ -81,6 +81,7 @@ export function verifyPlan(text, { digest, commit, dirty }) {
     disk.path ?? '',
     disk.by_id ?? '',
     plan.operations.length,
+    plan.target_mode,
   ];
   for (const operation of plan.operations) {
     const pairs = [];
@@ -112,7 +113,10 @@ export function checkDisk(text, rawStorage) {
   const differences = diskDifferences(parsed.plan, disk, { ignoreMounts: true });
   if (differences.length > 0) return failure('invalidated', differences[0]);
   const raw = (Array.isArray(rawStorage?.blockdevices) ? rawStorage.blockdevices : []).find(device => device.path === disk.identity.path);
-  if (raw !== undefined && hasHolderDescendant(raw)) {
+  const held = parsed.plan.target_mode === 'replace_installation'
+    ? (raw?.children ?? []).filter(part => [parsed.plan.target.installation.esp.path, parsed.plan.target.installation.root.path].includes(part.path)).some(hasHolderDescendant)
+    : raw !== undefined && hasHolderDescendant(raw);
+  if (held) {
     return failure('blocked', reason(
       'target_disk_in_use',
       'The confirmed disk has an LVM, dm-crypt, or RAID device on top of it.',
@@ -120,6 +124,42 @@ export function checkDisk(text, rawStorage) {
     ));
   }
   return stream(['ok']);
+}
+
+// A read-only partition-table/identity record. The dump must agree with the reviewed GPT entries
+// before replacement and must retain those entries afterwards; filesystem UUIDs of the targets may change.
+export function partitionRecord(plan, dump, rawStorage) {
+  const installation = plan.target.installation;
+  const targets = [installation.esp, installation.root];
+  const lines = dump.trim().split('\n');
+  const entries = new Map();
+  for (const line of lines) {
+    const match = line.match(/^(\/dev\/\S+)\s*:\s*(.*)$/);
+    if (match === null) continue;
+    const fields = Object.fromEntries(match[2].split(',').map(field => field.trim().split(/\s*=\s*/)));
+    entries.set(match[1], fields);
+  }
+  const layout = plan.target.disk.current_layout;
+  if (!lines.includes('label: gpt') || !lines.some(line => line.toLowerCase() === `label-id: ${layout.partition_table.uuid}`.toLowerCase())
+    || !lines.includes(`sector-size: ${layout.partition_table.sector_size_bytes}`)
+    || entries.size !== layout.partitions.length) throw new Error('The GPT header or partition count differs from the reviewed plan.');
+  for (const partition of layout.partitions) {
+    const entry = entries.get(partition.path);
+    if (entry === undefined || Number(entry.start) !== partition.start_sector
+      || Number(entry.size) * layout.partition_table.sector_size_bytes !== partition.size_bytes
+      || entry.type?.toLowerCase() !== partition.type_guid || entry.uuid?.toLowerCase() !== partition.partuuid) {
+      throw new Error(`The GPT entry for ${partition.path} differs from the reviewed plan.`);
+    }
+  }
+  const { facts } = normalizeStorage(rawStorage, 0);
+  // The final lsblk observation has no by-id links; path identity was already revalidated before wiping.
+  const disk = facts.disks.find(item => item.identity.path === plan.target.disk.path);
+  if (disk === undefined) throw new Error('The target disk is missing.');
+  const targetPaths = targets.map(part => part.path);
+  return JSON.stringify({
+    table: lines.filter(line => !targetPaths.includes(line.split(':')[0].trim())),
+    partitions: disk.layout.partitions.filter(part => !targetPaths.includes(part.path)),
+  });
 }
 
 const PACKAGE_NAME = /^[a-z0-9@._+-]+$/;
@@ -169,6 +209,11 @@ function main(args) {
     return;
   }
   const text = readFileSync(0, 'utf8');
+  if (mode === 'partition-record') {
+    process.stdout.write(partitionRecord(JSON.parse(text), readFileSync(readOption(args, '--dump'), 'utf8'),
+      JSON.parse(readFileSync(readOption(args, '--storage'), 'utf8'))));
+    return;
+  }
   if (mode === 'verify') {
     process.stdout.write(verifyPlan(text, {
       digest: readOption(args, '--digest'),
