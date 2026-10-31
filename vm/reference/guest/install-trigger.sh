@@ -97,8 +97,8 @@ const rules = [
   { expect: ['Password>'], keys: () => (name === 'cancel-password' ? '\u0003' : `${canary}\r`) },
   { expect: ['Device name>'], keys: plain => `${/Type the device name \(([^)\s]+)\)/.exec(plain)?.[1] ?? 'vda'}\r` },
   { expect: ['Yes, erase'], keys: () => 'y' },
-  { expect: ['Review navigation'], keys: () => '\r' },
-  { expect: ['Change installation keyboard layout'], keys: () => '\r' },
+  { expect: ['Review your choices', 'Continue to confirmation'], keys: () => '\r' },
+  { expect: ['Welcome to MirrorOS', 'Change keyboard layout'], keys: () => '\r' },
   { expect: ['Recognized machine', 'Cancel'], keys: () => '\r' },
 ];
 const advance = () => {

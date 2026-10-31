@@ -130,7 +130,7 @@ case "${REFERENCE_QEMU_MODE:-pass}" in
       const timing = { total: { status: "available", duration_ms: 1000 }, intervals: [] };
       const vendor = /^vendor_id\s*:\s*(\S+)/m.exec(require("node:fs").readFileSync("/proc/cpuinfo", "utf8"))?.[1];
       const microcode = vendor === "AuthenticAMD" ? ["amd-ucode", "AuthenticAMD.bin"] : ["intel-ucode", "GenuineIntel.bin"];
-      const plan = { format_version: 4, choices: { storage_option: { value: name === "ext4" ? "ext4-systemd-boot" : "btrfs-limine" }, hibernation: { value: name === "default" || name === "ext4" } },
+      const plan = { format_version: 6, choices: { storage_option: { value: name === "ext4" ? "ext4-systemd-boot" : "btrfs-limine" }, hibernation: { value: name === "default" || name === "ext4" } },
         hardware_selections: { rule_packages: [{ name: microcode[0] }] }, operations: [
           { kind: "configure_zram", parameters: { swap_priority: 100 } },
           { kind: "configure_memory_reclaim", parameters: { "vm.swappiness": 180, "vm.page-cluster": 0, "vm.watermark_scale_factor": 125, "vm.watermark_boost_factor": 0 } },
@@ -490,6 +490,35 @@ install_result_field() {
   reference_invoke_install --case failure "$REFERENCE_BUNDLE_DIR"
   [ "$REFERENCE_COMMAND_STATUS" -eq 0 ]
   [ "$(install_result_field counted)" == 'false' ]
+}
+
+@test "the guest driver advances through the current welcome and review screens" {
+  run node --input-type=module - "$REFERENCE_TEST_SOURCE_ROOT" <<'JS'
+import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import assert from 'node:assert/strict';
+const root = process.argv[2];
+const source = readFileSync(`${root}/vm/reference/guest/install-trigger.sh`, 'utf8');
+const screens = readFileSync(`${root}/install/confirmation/lib/screens.sh`, 'utf8');
+const rules = runInNewContext(source.match(/const rules = (\[[\s\S]*?\n\]);/)[1], {
+  down: '\u001b[B', canary: 'test-only', name: 'default',
+});
+const welcome = screens.slice(screens.indexOf('welcome_form()'), screens.indexOf('machine_check_form()'));
+const welcomeTitle = welcome.match(/step '(Welcome to [^']+)'/)[1];
+const welcomeChoices = welcome.match(/action=\$\(ui_choose[^\n]+/)[0];
+const review = screens.slice(screens.indexOf('review_form()'));
+const reviewTitle = review.match(/step '([^']+)'/)[1];
+const reviewContinue = review.match(/options=\('([^']+)'\)/)[1];
+for (const screen of [
+  [welcomeTitle, ...Array.from(welcomeChoices.matchAll(/'([^']+)'/g), match => match[1])].join('\n'),
+  [reviewTitle, reviewContinue].join('\n'),
+]) {
+  const rule = rules.find(candidate => candidate.expect.every(text => screen.includes(text)));
+  assert.ok(rule, `no guest driver rule matches the current screen: ${screen}`);
+  assert.equal(rule.keys(screen), '\r');
+}
+JS
+  [ "$status" -eq 0 ]
 }
 
 @test "the guest driver returns to shell on a wrapped configure failure screen" {
