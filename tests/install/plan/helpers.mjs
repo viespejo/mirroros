@@ -16,6 +16,10 @@ export function facts(name = 'reference-vm-layout') {
   return discover(name);
 }
 
+export function t14sFacts() {
+  return discover('thinkpad-t14s-gen1-amd', { targetId: null });
+}
+
 // The reference VM facts with a vendor that no defined profile declares: valid, but an unqualified machine.
 export function unqualifiedFacts() {
   return discover('reference-vm-layout', {

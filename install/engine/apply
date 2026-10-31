@@ -53,6 +53,7 @@ declare -A DISPATCH=(
   [configure_memory_reclaim]=op_configure_memory_reclaim
   [generate_fstab]=op_generate_fstab
   [create_swapfile]=op_create_swapfile
+  [configure_hibernate_mode]=op_configure_hibernate_mode
   [create_btrfs_subvolumes]=op_create_btrfs_subvolumes
   [configure_snapper]=op_configure_snapper
   [create_baseline_snapshot]=op_create_baseline_snapshot

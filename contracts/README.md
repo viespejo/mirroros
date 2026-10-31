@@ -13,9 +13,12 @@ reserves final schemas until that evidence exists, so no formal `*.schema.json` 
 | [`installation-engine.md`](installation-engine.md) | `install/engine/` | `install/engine/load-plan.mjs`, `install/engine/engine-record.mjs`, `tests/install/engine/` |
 | [`installation-postconditions.md`](installation-postconditions.md) | `install/postconditions/` | `install/postconditions/evaluate.mjs`, `tests/install/postconditions/` |
 
-Target facts are `format_version` `2`; installation plans are `format_version` `4`; installation-confirmation
-records are `format_version` `5`; the engine's run record and state file are `format_version` `2`; the
-postconditions result is `format_version` `1`; an earlier version is rejected, never migrated. Each document keeps its own version constant. See
+Target facts are `format_version` `2`; installation plans are `format_version` `6`, installation policy is
+format `4`, and choices files remain format `3`. Installation-confirmation writers produce format `7`
+(readers also accept pre-timing `6`); engine run writers produce format `4` (readers also accept pre-timing
+`3`), and engine state remains format `3`. The postconditions result remains format `1`. Earlier plans
+(`1`–`5`) are rejected with regeneration guidance, never migrated. Supported historical evidence records
+remain unchanged and never authorize a run. Each document keeps its own version constant. See
 [ADR 0006](../docs/adr/0006-guided-live-installation-boundaries.md),
 [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md),
 [ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md), and

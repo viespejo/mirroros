@@ -3,7 +3,7 @@
 `POSTCONDITIONS_FORMAT_VERSION: 1`. `install/postconditions/check` verifies, read-only, that the target
 configuration written by the [installation engine](installation-engine.md) is complete and internally
 consistent. It is invoked by the engine after the last operation of the approved
-[installation plan](installation-plan.md) (format 5) and before the engine's terminal cleanup, while the target
+[installation plan](installation-plan.md) (format 6) and before the engine's terminal cleanup, while the target
 is still mounted at `/run/mirroros/target`. It is an internal boundary like the engine: it is not a public
 command and `operations/install` exposes no subcommand for it
 ([ADR 0008](../docs/adr/0008-installation-engine-execution-boundary.md)).
@@ -30,7 +30,7 @@ install/postconditions/check --plan <file> --digest <hex> --target-root <dir> [-
 
 | Input | Description |
 | --- | --- |
-| `--plan <file>` | The approved `installation-plan.json` the engine applied. The checker validates it (format 5, digest recomputed and equal to `--digest`) before reading the target. |
+| `--plan <file>` | The approved `installation-plan.json` the engine applied. The checker validates it (format 6, digest recomputed and equal to `--digest`) before reading the target. |
 | `--digest <hex>` | The confirmed digest. Integrity binding, not authorization. |
 | `--target-root <dir>` | The mounted target root. The engine passes `/run/mirroros/target`. |
 | `--untouched-partitions-before <file>` | Required evidence in replacement mode: the engine's `untouched-partitions-before.json`, captured before destruction. Missing, unreadable or invalid evidence fails `untouched_partitions`; whole-disk mode does not consume it. |
@@ -89,6 +89,8 @@ the result rather than reported as passed, except where the table states that it
 | `boot_resume_parameters` | all | With hibernation: every normal boot entry carries `resume=UUID=<root UUID>` and `resume_offset=<n>`, and `<n>` equals the offset computed again from the swapfile (`filefrag` for ext4, `btrfs inspect-internal map-swapfile -r` for Btrfs). Without hibernation: no boot entry, snapshot entry, or `/etc/default/limine` carries `resume=` or `resume_offset=`. |
 | `swapfile` | hibernation enabled | The swapfile exists (`/swapfile` for ext4; `/swap/swapfile` in `@swap` for Btrfs), is a regular file with mode `0600` and size `swapfile_size` MiB, and, for Btrfs, carries the NOCOW attribute and lies on the `@swap` subvolume; `resume_offset` is a positive integer. |
 | `swap_absent` | hibernation disabled | No swapfile exists beneath the target root, no `@swap` subvolume is mounted, and no swap entry is present in `/etc/fstab`. |
+| `hibernate_mode_configuration` | `configure_hibernate_mode` present | The planned destination beneath the target root is a regular, nonempty file, its SHA-256 equals `source_sha256`, and it contains `HibernateMode=shutdown`. This inspects installed content, not systemd's effective runtime mode. |
+| `hibernate_mode_absent` | `configure_hibernate_mode` absent | Nothing exists at `/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf` beneath the target root; a stray file, directory or dangling symlink fails. Applies also to a T14s with hibernation disabled. |
 | `zram_configuration` | all | `zram-generator` is installed in the target database; the plan's zram `destination` exists and its SHA-256 equals `source_sha256`; the file contains the planned `zram-size`, `compression-algorithm`, and `swap-priority`. |
 | `memory_sysctl_configuration` | all | The plan's memory-reclaim `destination` exists, its SHA-256 equals `source_sha256`, and it contains the four planned `vm.*` values. |
 | `network_manager_enabled` | all | `networkmanager` is installed in the target database and `systemctl --root=<target> is-enabled NetworkManager.service` reports enabled; `/etc/NetworkManager/system-connections` holds no predefined connection; `/etc/hostname` holds the planned hostname. |

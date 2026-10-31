@@ -16,6 +16,7 @@ import {
 import {
   ESP_UUID, OFFSET, ROOT_UUID, VALID_PLANS, changed, evaluatePath, goodObservations, planFixture,
 } from './helpers.mjs';
+import { hibernateModePlan } from '../engine/helpers.mjs';
 
 const failedIds = (plan, observations) => evaluateChecks(plan, observations).failed_checks;
 const detailOf = (plan, observations, id) => evaluateChecks(plan, observations).checks.find(check => check.id === id).detail;
@@ -55,7 +56,9 @@ test('every check runs even after a failure, and none is skipped', () => {
   const result = evaluateChecks(plan, new Map());
   assert.equal(result.status, 'failed');
   assert.deepEqual(result.checks.map(check => check.id), applicableChecks(plan));
-  assert.ok(result.checks.every(check => check.status === 'failed' && check.detail.length > 0));
+  assert.equal(result.checks.find(check => check.id === 'hibernate_mode_absent').status, 'passed');
+  assert.ok(result.checks.filter(check => check.id !== 'hibernate_mode_absent')
+    .every(check => check.status === 'failed' && check.detail.length > 0));
 });
 
 test('a missing kernel fails kernel_installed alone and names the file', () => {
@@ -277,6 +280,59 @@ test('zram and memory settings compare the asset hash and every planned setting'
   assert.deepEqual(failedIds(plan, changed(good, { [`sha256:${memory}`]: 'f'.repeat(64) })), ['memory_sysctl_configuration']);
   assert.deepEqual(failedIds(plan, changed(good, { [`text:${memory}`]: good.get(`text:${memory}`).replace('vm.swappiness = 180', 'vm.swappiness = 60') })), ['memory_sysctl_configuration']);
   assert.match(detailOf(plan, changed(good, { [`text:${memory}`]: '' }), 'memory_sysctl_configuration'), /vm\.page-cluster = 0/);
+});
+
+test('hibernate mode checks are mutually exclusive and follow the swap checks', () => {
+  const configured = hibernateModePlan();
+  const disabled = hibernateModePlan(false);
+  const reference = planFixture('ext4-systemd-boot--password');
+  for (const [plan, expected, excluded] of [
+    [configured, 'hibernate_mode_configuration', 'hibernate_mode_absent'],
+    [disabled, 'hibernate_mode_absent', 'hibernate_mode_configuration'],
+    [reference, 'hibernate_mode_absent', 'hibernate_mode_configuration'],
+  ]) {
+    assert.equal(plan.format_version, 6);
+    const ids = applicableChecks(plan);
+    assert.equal(ids.includes(excluded), false);
+    const swap = plan.choices.hibernation.value ? 'swapfile' : 'swap_absent';
+    assert.equal(ids[ids.indexOf(swap) + 1], expected);
+    const result = evaluateChecks(plan, goodObservations(plan));
+    assert.equal(result.status, 'passed');
+    assert.deepEqual(validateResult(result, plan), []);
+  }
+});
+
+test('hibernate mode configuration requires a regular file, the approved hash, and the shutdown setting', () => {
+  const plan = hibernateModePlan();
+  const good = goodObservations(plan);
+  const path = operationOf(plan, 'configure_hibernate_mode').parameters.destination;
+  const mutations = [
+    { [`sha256:${path}`]: 'f'.repeat(64) },
+    { [`sha256:${path}`]: undefined },
+    { [`text:${path}`]: '[Sleep]\nHibernateMode=platform' },
+    { [`text:${path}`]: '[Sleep]\n# HibernateMode=shutdown' },
+    { [`text:${path}`]: undefined, [`stat:${path}`]: undefined },
+    { [`stat:${path}`]: 'directory|755|4096' },
+    { [`stat:${path}`]: 'symbolic link|777|64' },
+  ];
+  for (const mutation of mutations) {
+    const result = evaluateChecks(plan, changed(good, mutation));
+    assert.deepEqual(result.failed_checks, ['hibernate_mode_configuration']);
+    assert.deepEqual(validateResult(result, plan), []);
+    assert.ok(result.checks.find(check => check.id === 'hibernate_mode_configuration').detail.length <= MAX_DETAIL_LENGTH);
+  }
+  assert.match(detailOf(plan, changed(good, { [`text:${path}`]: '[Sleep]' }), 'hibernate_mode_configuration'), /HibernateMode=shutdown/);
+});
+
+test('hibernate mode absence passes without an entry and rejects residual files, directories, or links', () => {
+  const path = '/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf';
+  for (const plan of [hibernateModePlan(false), planFixture('ext4-systemd-boot--password')]) {
+    const good = goodObservations(plan);
+    assert.deepEqual(failedIds(plan, good), []);
+    for (const stat of ['regular file|644|32', 'directory|755|4096', 'symbolic link|777|64']) {
+      assert.deepEqual(failedIds(plan, changed(good, { [`stat:${path}`]: stat })), ['hibernate_mode_absent']);
+    }
+  }
 });
 
 function operationOf(plan, kind) {

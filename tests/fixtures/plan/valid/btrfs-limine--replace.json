@@ -1,5 +1,5 @@
 {
-  "format_version": 5,
+  "format_version": 6,
   "target_mode": "replace_installation",
   "target": {
     "installation": {
@@ -176,6 +176,12 @@
       "provenance": "personal_preference",
       "source": "policy",
       "editable": true
+    },
+    "hibernate_mode": {
+      "value": "platform",
+      "provenance": "arch_guidance",
+      "source": "policy",
+      "editable": false
     },
     "zram": {
       "value": {
@@ -793,12 +799,12 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "deb1f27b1f29096e0d9402367a7ec3b4c9c517787319461d491ba94fe803764d",
+    "policy_sha256": "42afdb7c55e7c39d712954a66f57138a69e1efe768ff491e2f0139c119e7ff2b",
     "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "c889ee77eada335b73dbd75e1dd3c6fee987acc372000d1e7125d83e6ce13a0c"
+    "value": "1417f2dec47982b27a47b66b3651126309a29e0aea911a0480e555ad36b203ae"
   }
 }

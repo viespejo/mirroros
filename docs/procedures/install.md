@@ -35,7 +35,7 @@ that the current size policy fits.
 
 ### Inputs
 
-- `--target <id>` is optional and only asserts an expected profile: `reference-vm` or `framework-13-pro-amd`. An unknown or malformed id exits `2` with a `target_unknown` reason, and an assertion that the observed identity contradicts, or whose capture is pending, exits `2` with a specific reason.
+- `--target <id>` is optional and only asserts an expected profile: `reference-vm`, `framework-13-pro-amd`, or `thinkpad-t14s-gen1-amd`. An unknown or malformed id exits `2` with a `target_unknown` reason, and an assertion that the observed identity contradicts, or whose capture is pending, exits `2` with a specific reason.
 - `--output <dir>` names an absent or empty directory; otherwise the command returns `2` without writing. The default is `evidence/install/<run-id>/`, relative to the working directory.
 - Prerequisites on the target: a 64-bit UEFI boot of the live medium with Secure Boot disabled, a ready network (default route, DNS for the probe host, and a bounded HTTPS probe, all configured beforehand because discovery never configures the network), and at least one eligible disk.
 
@@ -72,6 +72,14 @@ The directory is local, ignored, and never committed. Stdout carries a plain-tex
 
 The DMI identity of the Framework Laptop 13 Pro is not recorded yet, so asserting `--target framework-13-pro-amd` returns `2` with a `target_identity_pending_capture` reason until `targets/framework-13-pro-amd/target.json` is completed from a real capture.
 
+### Recognized unqualified T14s profile
+
+`thinkpad-t14s-gen1-amd` matches only physical (`virtualization: none`) DMI `sys_vendor: LENOVO` and
+`product_name: 20UJ001RMX`. It is recognized but unqualified, with no support promise or additional NFR27
+qualification gate ([ADR 0023](../adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md)).
+`product_version` is not used because the Intel T14s shares it. An asserted `--target` still requires the
+observed identity to match. The Framework remains the sole qualified laptop target.
+
 ### Recovery
 
 Discovery changes nothing, so recovery is to fix the reported cause and rerun it into a new output directory. For example, boot the medium in UEFI mode and disable CSM or legacy boot, disable Secure Boot, connect a cable or configure Wi-Fi with `iwctl`, or restore a damaged embedded tree by rebuilding the medium.
@@ -83,7 +91,7 @@ operations/install plan --facts <file> [--choices <file>] [--output <dir>]
 operations/install plan --help
 ```
 
-`plan` turns a valid `target-facts.json` (version 2) and the installation policy into a validated installation plan (version 5; plans of earlier versions are rejected with regeneration guidance and never migrated) bound to its inputs by a SHA-256 digest. Hibernation is enabled by default and can be disabled; a disabled plan has no swapfile, `@swap`, or resume configuration. Planning requires detected memory and binds it, together with the SHA-256 of the zram and sysctl source assets, into the plan ([ADR 0007](../adr/0007-zram-and-hibernation-policy.md)); these operations are planned only and nothing is applied or activated. The plan identifies the target disk, the ordered declarative operations with their `destructive` flags, every default with its provenance and source, the secret requirements by name, and the hardware selections. The format, the operation vocabulary, the validation codes, and the digest rules are documented in [`contracts/installation-plan.md`](../../contracts/installation-plan.md). Planning is non-interactive: it prompts for nothing, uses no Gum, executes no operation, and never approves the plan.
+`plan` turns a valid `target-facts.json` (version 2) and the installation policy into a validated installation plan (version 6; whole-disk and replacement semantics are preserved; plans of earlier versions are rejected with regeneration guidance and never migrated) bound to its inputs by a SHA-256 digest. Hibernation is enabled by default and can be disabled; a disabled plan has no swapfile, `@swap`, or resume configuration. Planning requires detected memory and binds it, together with the SHA-256 of the zram and sysctl source assets, into the plan ([ADR 0007](../adr/0007-zram-and-hibernation-policy.md)); these operations are planned only and nothing is applied or activated. The plan identifies the target disk, the ordered declarative operations with their `destructive` flags, every default with its provenance and source, the secret requirements by name, and the hardware selections. The format, the operation vocabulary, the validation codes, and the digest rules are documented in [`contracts/installation-plan.md`](../../contracts/installation-plan.md). Planning is non-interactive: it prompts for nothing, uses no Gum, executes no operation, and never approves the plan.
 
 ### Inputs
 
@@ -113,13 +121,25 @@ other system and is not a preservation workaround.
 Keep external backups and independent rescue media. Preservation checks compare filtered partition-table
 lines and non-target identities with the engine's pre-run record; they are not byte-for-byte hashes of
 other partitions. Real lab and attended hardware coexistence validation remain separate gates.
-The ThinkPad T14s is experimental and unqualified under [ADR 0005](../adr/0005-physical-target-change.md),
-not a supported target or a new hardware profile. Its local sshd and hibernate adjustments remain manual,
-non-product configuration.
+The ThinkPad T14s remains experimental and unqualified under [ADR 0005](../adr/0005-physical-target-change.md).
+[ADR 0023](../adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md) adds its recognized
+unqualified profile, not a support commitment. Its hibernate-mode adjustment is now planned through that
+profile; local sshd adjustments remain manual, non-product configuration.
 
 ### Overrides and precedence
 
-Values resolve as policy, then detected, then target override, then choice, and each plan value records its source. The pure rules in `hardware/rules/` evaluate graphics, CPU vendor, battery, and virtualization with a detected value, outcome, and explanation. AMD and Intel CPUs select `amd-ucode` or `intel-ucode` in a separate rule-package list with `hardware_detection` provenance; it is not editable. AMD, Intel, and QEMU graphics use the kernel driver with nothing additional. NVIDIA, unknown graphics, and unknown or missing CPU vendors produce non-blocking review warnings with a next step; no package is guessed, and `nouveau` is neither configured nor blacklisted. Battery and virtualization are informational only. Rules never change policy or overrides, and target overrides never change rule outcomes. A target may set only `hostname` in `targets/<id>/overrides/plan.json`; for `reference-vm` it is `mirroros-ref`. An override applies only after an unambiguous verified profile match.
+Values resolve as policy, then detected, then target override, then choice, and each plan value records its source. The pure rules in `hardware/rules/` evaluate graphics, CPU vendor, battery, and virtualization with a detected value, outcome, and explanation. AMD and Intel CPUs select `amd-ucode` or `intel-ucode` in a separate rule-package list with `hardware_detection` provenance; it is not editable. AMD, Intel, and QEMU graphics use the kernel driver with nothing additional. NVIDIA, unknown graphics, and unknown or missing CPU vendors produce non-blocking review warnings with a next step; no package is guessed, and `nouveau` is neither configured nor blacklisted. Battery and virtualization are informational only. Rules never change policy or overrides, and target overrides never change rule outcomes. A target may set only `hostname` and `hibernate_mode` (`platform` or `shutdown`) in `targets/<id>/overrides/plan.json`; for `reference-vm` the hostname is `mirroros-ref`. An override applies only after an unambiguous verified profile match.
+
+Policy format 4 fixes `hibernate_mode` to `platform` with provenance `arch_guidance` and `editable: false`;
+choices files cannot set it (`choices_not_editable`). The T14s profile overrides it to `shutdown` with source
+`override`, including when hibernation is disabled. Only enabled hibernation with `shutdown` emits
+`configure_hibernate_mode`, immediately after `create_swapfile`. Its digest-bound asset is delivered beneath
+the target root at `/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf`, mode `0644`, setting
+`HibernateMode=shutdown`. Administrators override it under `/etc/systemd/sleep.conf.d/`. Review then shows
+`Enabled (swapfile N MiB, hibernate mode shutdown by target profile)`; all other labels are unchanged.
+The installed-tree checker verifies its hash/content (`hibernate_mode_configuration`) or its absence
+(`hibernate_mode_absent`) when not planned. Effective systemd mode and actual resume require separate
+attended checks; recognizing the profile is not qualification.
 
 ### Outputs
 

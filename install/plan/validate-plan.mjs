@@ -1,6 +1,7 @@
 import { RULES, evaluateValues } from '../../hardware/rules/evaluate-rules.mjs';
 import { isRecord, reason } from '../discovery/validate-facts.mjs';
 import { canonicalize } from './canonical-json.mjs';
+import { CONFIGURATION_ASSETS } from './configuration-assets.mjs';
 import { sha256Canonical, verifyDigest } from './digest-plan.mjs';
 import {
   SWAPFILE_MINIMUM_MIB,
@@ -11,8 +12,8 @@ import {
   requiredDiskBytes,
 } from './swap-policy.mjs';
 
-export const PLAN_FORMAT_VERSION = 5;
-export const PLAN_POLICY_FORMAT_VERSION = 3;
+export const PLAN_FORMAT_VERSION = 6;
+export const PLAN_POLICY_FORMAT_VERSION = 4;
 export const CHOICES_FORMAT_VERSION = 3;
 export const EXIT_VALID = 0;
 export const EXIT_INVALID_INPUT = 2;
@@ -92,6 +93,7 @@ export const KINDS = {
   configure_zram: false,
   configure_memory_reclaim: false,
   create_swapfile: false,
+  configure_hibernate_mode: false,
   configure_locale_time_console: false,
   configure_hostname_network: false,
   create_user: false,
@@ -116,6 +118,7 @@ const EXT4_SEQUENCE = [
   'configure_memory_reclaim',
   'generate_fstab',
   'create_swapfile',
+  'configure_hibernate_mode',
   'configure_locale_time_console',
   'configure_hostname_network',
   'create_user',
@@ -151,9 +154,9 @@ const SEQUENCES = {
   'btrfs-limine': LIMINE_SEQUENCE,
 };
 
-// The fixed operation order of a storage option. create_swapfile exists only when hibernation is enabled;
-// omitting it does not change the relative order of the other operations.
-export function operationSequence(storageOption, hibernation = true, targetMode = 'whole_disk') {
+// The fixed operation order of a storage option. Hibernation operations exist only when enabled;
+// the mode drop-in also requires shutdown. Omissions preserve the relative order of the other operations.
+export function operationSequence(storageOption, hibernation = true, targetMode = 'whole_disk', hibernateMode = 'platform') {
   let sequence = SEQUENCES[storageOption];
   if (sequence === undefined || !TARGET_MODES.includes(targetMode)) return undefined;
   if (targetMode === 'replace_installation') {
@@ -161,7 +164,8 @@ export function operationSequence(storageOption, hibernation = true, targetMode 
   } else {
     sequence = ['record_disk_partuuids', ...insertAfter(sequence, 'create_partitions', 'remove_stale_uefi_entries')];
   }
-  return [...sequence.filter(kind => hibernation || kind !== 'create_swapfile'), 'register_uefi_boot_entry'];
+  return [...sequence.filter(kind => (hibernation || kind !== 'create_swapfile')
+    && (kind !== 'configure_hibernate_mode' || (hibernation && hibernateMode === 'shutdown'))), 'register_uefi_boot_entry'];
 }
 
 const NEXT_STEPS = {
@@ -190,9 +194,10 @@ const NEXT_STEPS = {
   disk_identity_mismatch: 'Regenerate the plan from the current target-facts.json.',
   disk_not_eligible: 'Choose an eligible disk and regenerate the plan.',
   plan_size_does_not_fit: 'Choose a smaller swapfile_size, disable hibernation, or use a larger disk, and regenerate the plan.',
-  hibernation_plan_mismatch: 'Regenerate the plan; the swapfile, @swap, and resume settings follow the hibernation choice and the detected memory.',
+  hibernation_plan_mismatch: 'Regenerate the plan; the swapfile, @swap, resume settings, and hibernate mode drop-in follow the hibernation choice and the detected memory.',
+  hibernate_mode_plan_mismatch: 'Regenerate the plan; configure_hibernate_mode is required only with hibernation enabled and hibernate_mode shutdown.',
   hardware_rules_mismatch: 'Regenerate the plan from the current target-facts.json; rule outcomes, rule packages, and rule warnings are derived by the hardware rules and cannot be edited.',
-  configuration_asset_mismatch: 'Regenerate the plan from this MirrorOS checkout; the zram, memory reclaim, package, and zswap settings must agree with the policy and its assets.',
+  configuration_asset_mismatch: 'Regenerate the plan from this MirrorOS checkout; the zram, memory reclaim, hibernate mode, package, and zswap settings must agree with the policy and its assets.',
   facts_binding_mismatch: 'Regenerate the plan from the current target-facts.json.',
   digest_mismatch: 'Regenerate the plan; its content changed after the digest was computed.',
 };
@@ -238,6 +243,7 @@ export const CHOICE_SPECS = {
   target_disk: choice(true, isString, 'a disk identifier string'),
   storage_option: choice(true, value => STORAGE_OPTIONS.includes(value), `one of ${STORAGE_OPTIONS.join(', ')}`),
   hibernation: choice(true, isBoolean, 'a boolean'),
+  hibernate_mode: choice(false, value => ['platform', 'shutdown'].includes(value), 'one of platform, shutdown'),
   // The upper bound depends on the detected memory; see swap-policy.mjs. Present only when hibernation is true.
   swapfile_size: choice(
     true,
@@ -637,18 +643,22 @@ function checkOperationSet(plan, reasons) {
   }
   const option = plan.choices?.storage_option?.value;
   const hibernation = plan.choices?.hibernation?.value;
-  const full = operationSequence(option, true, plan.target_mode);
+  const full = operationSequence(option, true, plan.target_mode, 'shutdown');
   if (!kindsKnown || full === undefined) return;
   const allKinds = operations.map(operation => operation.kind);
-  // With a boolean hibernation choice, the presence of create_swapfile is a hibernation consistency rule
-  // (checkHibernation); here only its position is checked and the other operations keep their fixed order.
+  // Presence of hibernation operations is checked by checkHibernation and checkHibernateMode;
+  // here only their positions are checked and the other operations keep their fixed order.
   const swapfileRule = typeof hibernation === 'boolean';
-  const kinds = swapfileRule ? allKinds.filter(kind => kind !== 'create_swapfile') : allKinds;
-  const expected = swapfileRule ? full.filter(kind => kind !== 'create_swapfile') : full;
+  const optional = ['create_swapfile', 'configure_hibernate_mode'];
+  const kinds = swapfileRule ? allKinds.filter(kind => !optional.includes(kind)) : allKinds;
+  const expected = swapfileRule ? full.filter(kind => !optional.includes(kind)) : full;
   if (kinds.length === expected.length && kinds.every((kind, index) => kind === expected[index])) {
     const swapfiles = allKinds.filter(kind => kind === 'create_swapfile').length;
     const positioned = swapfiles === 0 || (swapfiles === 1 && allKinds[allKinds.indexOf('generate_fstab') + 1] === 'create_swapfile');
-    if (!swapfileRule || positioned) return;
+    const modes = allKinds.filter(kind => kind === 'configure_hibernate_mode').length;
+    const modePositioned = modes === 0 || (modes === 1 && swapfiles === 1
+      && allKinds[allKinds.indexOf('create_swapfile') + 1] === 'configure_hibernate_mode');
+    if (!swapfileRule || (positioned && modePositioned)) return;
     add(reasons, 'operation_order_invalid', `The operations are not in the order required by ${option}.`);
     return;
   }
@@ -899,6 +909,9 @@ function checkHibernation(plan, reasons) {
   } else {
     if (plan.choices.swapfile_size !== undefined) problems.push('hibernation is disabled but swapfile_size is present');
     if (swapfile !== undefined) problems.push('hibernation is disabled but create_swapfile is present');
+    if (operations.some(operation => operation.kind === 'configure_hibernate_mode')) {
+      problems.push('hibernation is disabled but configure_hibernate_mode is present');
+    }
     if (hasResume || hasOffset) problems.push('hibernation is disabled but the kernel command line has resume parameters');
     if (resolvesOffset) problems.push('hibernation is disabled but a resume_offset resolution is present');
     for (const [kind, list] of swapLists) {
@@ -908,9 +921,21 @@ function checkHibernation(plan, reasons) {
   for (const problem of problems) add(reasons, 'hibernation_plan_mismatch', `${problem[0].toUpperCase()}${problem.slice(1)}.`);
 }
 
+// Re-derive the mode operation from the recorded resolved values, not its presence in the plan.
+function checkHibernateMode(plan, reasons) {
+  const hibernation = plan.choices?.hibernation?.value;
+  const mode = plan.choices?.hibernate_mode?.value;
+  if (typeof hibernation !== 'boolean' || !['platform', 'shutdown'].includes(mode)) return;
+  const count = operationKinds(plan).filter(operation => operation.kind === 'configure_hibernate_mode').length;
+  const expected = hibernation && mode === 'shutdown' ? 1 : 0;
+  if (count !== expected) {
+    add(reasons, 'hibernate_mode_plan_mismatch', `The resolved hibernation and hibernate_mode values require ${expected} configure_hibernate_mode operation; the plan has ${count}.`);
+  }
+}
+
 const SOURCE_HASH_KEY = 'source_sha256';
 
-// The zram package, zswap policy, and both configuration operations must agree with the declared policy values
+// The zram package, zswap policy, and planned configuration operations must agree with the declared values
 // of the plan; with the allowlisted source assets they must also agree with their destination and hash.
 function checkConfiguration(plan, reasons, assets) {
   const zram = plan.choices?.zram?.value;
@@ -933,6 +958,12 @@ function checkConfiguration(plan, reasons, assets) {
     },
     configure_memory_reclaim: { destination: reclaim.destination, ...reclaim.settings },
   };
+  if (operations.some(operation => operation.kind === 'configure_hibernate_mode')) {
+    expectations.configure_hibernate_mode = {
+      destination: CONFIGURATION_ASSETS.configure_hibernate_mode.destination,
+      hibernate_mode: 'shutdown',
+    };
+  }
   for (const [kind, expected] of Object.entries(expectations)) {
     const operation = operations.find(item => item.kind === kind);
     if (operation === undefined) {
@@ -1023,6 +1054,7 @@ export function validatePlan(plan, { facts, assets } = {}) {
   checkDisk(plan, reasons);
   checkSizes(plan, reasons);
   checkHibernation(plan, reasons);
+  checkHibernateMode(plan, reasons);
   checkHardwareRules(plan, reasons);
   checkConfiguration(plan, reasons, assets);
   checkLocalization(plan, reasons);

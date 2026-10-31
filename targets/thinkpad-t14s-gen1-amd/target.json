@@ -1,0 +1,12 @@
+{
+  "format_version": 1,
+  "target_id": "thinkpad-t14s-gen1-amd",
+  "identity": {
+    "status": "defined",
+    "virtualization": "none",
+    "dmi": {
+      "sys_vendor": "LENOVO",
+      "product_name": "20UJ001RMX"
+    }
+  }
+}

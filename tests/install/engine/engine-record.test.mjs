@@ -16,7 +16,7 @@ import {
   writeAtomic,
 } from '../../../install/engine/engine-record.mjs';
 import { applicableChecks } from '../../../install/postconditions/evaluate.mjs';
-import { engineRecordPath, planText, runNode } from './helpers.mjs';
+import { engineRecordPath, hibernateModePlan, planText, runNode } from './helpers.mjs';
 
 const NOW = '2026-10-12T10:00:00Z';
 const text = planText('valid', 'ext4-systemd-boot--password');
@@ -251,6 +251,20 @@ test('verifyPostconditions accepts only a result that is valid for the plan and 
   assert.equal(verifyPostconditions({ planText: text, result: JSON.stringify({ ...passed, checks: checks.slice(1) }), exit: '0' }), 'invalid');
   assert.equal(verifyPostconditions({ planText: text, result: 'not json', exit: '0' }), 'invalid');
   assert.equal(verifyPostconditions({ planText: text, result: undefined, exit: '0' }), 'invalid');
+});
+
+test('engine records require the applicable hibernate mode postcondition in format 6 plans', () => {
+  for (const enabled of [true, false]) {
+    const plan = hibernateModePlan(enabled);
+    const modeCheck = enabled ? 'hibernate_mode_configuration' : 'hibernate_mode_absent';
+    const checks = applicableChecks(plan).map(id => ({ id, status: 'passed' }));
+    assert.ok(checks.some(check => check.id === modeCheck));
+    const passed = { format_version: 1, status: 'passed', checks, failed_checks: [] };
+    const planText = JSON.stringify(plan);
+    assert.equal(verifyPostconditions({ planText, result: JSON.stringify(passed), exit: '0' }), 'valid:');
+    const incomplete = { ...passed, checks: checks.filter(check => check.id !== modeCheck) };
+    assert.equal(verifyPostconditions({ planText, result: JSON.stringify(incomplete), exit: '0' }), 'invalid');
+  }
 });
 
 test('the command line verifies a postconditions result without an output directory', () => {

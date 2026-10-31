@@ -22,7 +22,7 @@ export class PlanUpstreamError extends Error {
   }
 }
 
-export const OVERRIDE_ALLOWED_KEYS = ['hostname'];
+export const OVERRIDE_ALLOWED_KEYS = ['hostname', 'hibernate_mode'];
 // Editable choices that are not policy keys: the disk, and the swapfile size, which exists only while
 // hibernation is enabled and whose default is derived from the detected memory.
 export const CHOICE_ONLY_KEYS = ['target_disk', 'replace_root_partuuid', 'swapfile_size'];

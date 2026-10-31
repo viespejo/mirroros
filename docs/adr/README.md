@@ -24,6 +24,14 @@ modes, explicit selected-loader UEFI registration and `mirroros-boot-first`. Nar
 records preserve their historical decisions; neither record is superseded by ADR 0022. Storage choices,
 ESP policy and unrelated decisions remain in force.
 
+## Recognized unqualified targets extension
+
+[ADR 0023: Recognized Unqualified Targets and Target Hibernate Mode](0023-recognized-unqualified-targets-and-target-hibernate-mode.md)
+is Accepted. It adds the exact-DMI `thinkpad-t14s-gen1-amd` recognized unqualified profile and a typed,
+non-editable hibernate-mode override with conditional installed-tree delivery. The Framework remains the sole
+qualified laptop target; recognition adds no qualification or support commitment. ADRs 0005, 0006 and 0007
+remain related and unchanged; none is superseded.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

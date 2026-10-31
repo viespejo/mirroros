@@ -346,7 +346,7 @@ if (errors.length === 0) {
     records_format_supported: [6, 7].includes(run?.format_version) && approval?.format_version === run?.format_version,
     timing_records_valid: (run?.format_version !== 7 || validateTiming(run.timing).length === 0)
       && (engine?.format_version !== 4 || validateTiming(engine.timing).length === 0),
-    plan_format_4: plan?.format_version === 4,
+    plan_format_6: plan?.format_version === 6,
     records_agree: run?.run_id === approval?.run_id && run?.final_digest === approval?.digest,
     evidence_complete: required.every(name => typeof files[name] === 'string'),
     engine_record_as_expected: engineExpected

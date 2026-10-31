@@ -21,6 +21,9 @@ measurements. Earlier versions retain their unsupported historical status.
 The ADR 0022 coexistence extension follows installation-plan format `5`. Version `7` approval evidence
 additionally permits `target_mode` and replacement `partitions`; historical records without these fields remain
 readable and never authorize a run. New writers include the mode whenever a plan exists.
+[ADR 0023](../docs/adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md) advances the
+installation plan to format `6` and extends only the hibernation review label (D24); confirmation record
+formats remain unchanged.
 
 In this version a valid approval is followed by the protected password entry, a final revalidation, and one
 invocation of the installation engine (`install/engine/apply`, defined in
@@ -144,7 +147,8 @@ The screens and their order are the reference's, with the integration difference
    the plan, including the hardware warnings for an NVIDIA or unrecognized graphics device and for an
    unrecognized CPU vendor. None of them blocks continuing. The review shows the hibernation state: enabled with the swapfile size and, when the size is below
    detected memory, the persistent warning; or disabled, stating that no swapfile will be created. No additional
-   confirmation dialog is added.
+   confirmation dialog is added. With `configure_hibernate_mode`, the label is
+   `Enabled (swapfile N MiB, hibernate mode shutdown by target profile)` (D24); all other labels are unchanged.
    - At every review redraw, the assistant measures terminal rows and columns and the fully rendered
      review, including wrapped rows, explanations, and warnings. It reserves the two-line top margin,
      title, native menu/help, and a cursor line. If the separate rows fit, they remain unchanged. Otherwise,
@@ -451,7 +455,7 @@ The reference is the frozen copy at
 navigation, and content remain the reference, with the visual baseline and welcome explicitly replaced
 under [ADR 0018](../docs/adr/0018-native-live-display-and-installer-presentation.md). Only the differences
 below and the ADR 0018 presentation amendment are intended. Any other visual, wording, workflow, or widget difference needs the maintainer's approval
-first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4, except D15, which was approved at plan 02-08, Task 1, with the acceptance of [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). The rewording of D7 and D10 to D14 and the new items D16 to D19 are proposed by plan 02-09 and await approval at its Task 2; their fidelity is confirmed at its attended review. The rewording of D18 and D19 and the new items D20 and D21 are proposed by plan 02-11 and await approval at its Task 2; their fidelity is confirmed at its attended review. Plan 02-16 updates D17/D18, extends D19 wrapping, and adds D22/D23 for installer-integrated configure; its graphical and console observations remain subject to the blocking human checkpoint.
+first. The wording shown is the proposed production text; every item awaits approval at plan 02-07, Task 4, except D15, which was approved at plan 02-08, Task 1, with the acceptance of [ADR 0007](../docs/adr/0007-zram-and-hibernation-policy.md). The rewording of D7 and D10 to D14 and the new items D16 to D19 are proposed by plan 02-09 and await approval at its Task 2; their fidelity is confirmed at its attended review. The rewording of D18 and D19 and the new items D20 and D21 are proposed by plan 02-11 and await approval at its Task 2; their fidelity is confirmed at its attended review. Plan 02-16 updates D17/D18, extends D19 wrapping, and adds D22/D23 for installer-integrated configure; its graphical and console observations remain subject to the blocking human checkpoint. Plan 02-24 adds D24 under accepted [ADR 0023](../docs/adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md); automated label tests do not substitute for the remaining attended T14s check.
 
 | # | Reference | Production | Why |
 | --- | --- | --- | --- |
@@ -478,6 +482,7 @@ first. The wording shown is the proposed production text; every item awaits appr
 | D21 | Review rows end with "Internet"; the hardware appears only in the full plan as `not_evaluated`. | Review rows "Graphics", "CPU microcode", "Battery", and "Virtualization" are added after the "Machine" row, each showing the rule outcome in one line (for example "Kernel driver, nothing additional", "Installs amd-ucode", "Battery detected", or "Virtual machine"). Every warning of the plan, including the hardware warnings of the plan contract, appears as a persistent yellow line under the rows, like the swapfile warning of D15. The complete plan (D8) shows each outcome with its fact, detected value, and explanation, and the rule packages with their provenance. Nothing here is editable or blocks continuing. | FR18, FR33–FR35 of Story 2.6: hardware-derived choices are explained before approval. |
 | D22 | None. | For `not_configured`/`4`: two top blank lines, a space-conditional symbol and adaptive diagnostic inspection as described below, the red line "Base system installed and verified; environment configuration failed at step <step>." (unknown when no step is available), the next action "Boot the installed system, log in at the console, and run sudo mirroros-configure.", and "Run directory: <path>". The menu is "View configure log" / "Restart" / "Return to shell" / "Power off", with "Return to shell" selected. The shared accent-only selector retains native help. The slot-4-border pager shows only the configure portion of `engine.log`. Blank lines separate the failure, recovery action, run directory, and menu. Lines wrap at word boundaries like D20. No retry from the live medium and no automatic action; leaving for the shell returns `4`. | Story 4.2 DEC-027, DEC-028, DEC-032. |
 | D23 | No configure announcement under the review rows. | Adds the fixed dimmed line "After the base system is verified, the graphical environment is configured." under the review rows in both review presentations, before confirmation. It fits 80 columns and does not add an editable choice or a plan operation. | Story 4.2 DEC-031. |
+| D24 | D15 hibernation row: "Enabled (swapfile N MiB)" or "Disabled (no swapfile)". | Only when the plan contains `configure_hibernate_mode`, show "Enabled (swapfile N MiB, hibernate mode shutdown by target profile)". All other labels remain byte-identical, including the disabled T14s and the reference VM. No assistant stage or editable mode is added; the frozen prototype is unchanged. | [ADR 0023](../docs/adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md), plan 02-24 DEC-010: expose the target adjustment before confirmation. |
 
 ### ADR 0022 coexistence extension
 
@@ -487,7 +492,8 @@ replace the entire-disk notice with "Choose the target mode after selecting a di
 identities for replacement; and require the additional root-PARTUUID input (unique eight-character prefix,
 otherwise the full identity). Review's replacement footer
 refers to confirming the disk and root PARTUUID rather than erasing the disk. The unqualified-machine warning
-is unchanged, including on the experimental T14s. These are original MirrorOS changes using existing Gum
+is unchanged for unmatched machines. Under ADR 0023, the experimental T14s is recognized as
+`thinkpad-t14s-gen1-amd` without becoming qualified. These are original MirrorOS changes using existing Gum
 widgets; earlier attended presentation approvals do not qualify the new replacement branch or its fit.
 
 ### ADR 0018 presentation amendment

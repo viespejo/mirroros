@@ -8,6 +8,7 @@ import {
   ASSET_ROOT,
   CONFIGURATION_ASSETS,
   loadConfigurationAssets,
+  parseHibernateModeAsset,
   parseSysctlAsset,
   parseZramAsset,
 } from '../../../install/plan/configuration-assets.mjs';
@@ -19,6 +20,7 @@ after(() => removeDirectory(scratch));
 const sha256 = path => createHash('sha256').update(readFileSync(path)).digest('hex');
 const ZRAM = CONFIGURATION_ASSETS.configure_zram;
 const SYSCTL = CONFIGURATION_ASSETS.configure_memory_reclaim;
+const HIBERNATE_MODE = CONFIGURATION_ASSETS.configure_hibernate_mode;
 
 // A copy of the embedded asset tree that a test may damage; the checkout is never touched.
 function copyRoot(name) {
@@ -36,7 +38,8 @@ function rewrite(root, asset, change) {
 test('the allowlist mirrors the installed destinations under install/plan/assets', () => {
   assert.equal(ZRAM.destination, `/${ZRAM.source}`);
   assert.equal(SYSCTL.destination, `/${SYSCTL.source}`);
-  assert.deepEqual(Object.keys(CONFIGURATION_ASSETS), ['configure_zram', 'configure_memory_reclaim']);
+  assert.equal(HIBERNATE_MODE.destination, `/${HIBERNATE_MODE.source}`);
+  assert.deepEqual(Object.keys(CONFIGURATION_ASSETS), ['configure_zram', 'configure_memory_reclaim', 'configure_hibernate_mode']);
   assert.equal(ASSET_ROOT, 'install/plan/assets');
 });
 
@@ -61,11 +64,20 @@ test('the shipped assets hold exactly the accepted settings', () => {
 
 test('assets are hashed over their raw bytes and carry their destination', () => {
   const assets = loadConfigurationAssets(repository, policy);
-  assert.deepEqual(Object.keys(assets), ['configure_zram', 'configure_memory_reclaim']);
+  assert.deepEqual(Object.keys(assets), ['configure_zram', 'configure_memory_reclaim', 'configure_hibernate_mode']);
+  assert.equal(assets.configure_hibernate_mode.sha256, sha256(join(repository, ASSET_ROOT, HIBERNATE_MODE.source)));
+  assert.equal(assets.configure_hibernate_mode.destination, HIBERNATE_MODE.destination);
   assert.equal(assets.configure_zram.sha256, sha256(join(repository, ASSET_ROOT, ZRAM.source)));
   assert.equal(assets.configure_memory_reclaim.sha256, sha256(join(repository, ASSET_ROOT, SYSCTL.source)));
   assert.equal(assets.configure_zram.destination, ZRAM.destination);
   assert.equal(assets.configure_memory_reclaim.destination, SYSCTL.destination);
+});
+
+test('the sleep asset declares only shutdown and documents administrator ownership', () => {
+  const text = readFileSync(join(repository, ASSET_ROOT, HIBERNATE_MODE.source), 'utf8');
+  assert.deepEqual(parseHibernateModeAsset(text), { HibernateMode: 'shutdown' });
+  assert.match(text, /#.*docs\/adr\/0023-recognized-unqualified-targets-and-target-hibernate-mode\.md/);
+  assert.match(text, /#.*\/etc\/systemd\/sleep\.conf\.d\//);
 });
 
 test('a changed byte changes the hash, even when the settings still agree', () => {
@@ -81,7 +93,7 @@ test('a changed byte changes the hash, even when the settings still agree', () =
 });
 
 test('a missing asset is a contract failure', () => {
-  for (const asset of [ZRAM, SYSCTL]) {
+  for (const asset of [ZRAM, SYSCTL, HIBERNATE_MODE]) {
     const root = copyRoot(`missing-${asset.source.replaceAll('/', '-')}`);
     rmSync(join(root, ASSET_ROOT, asset.source));
     assert.throws(() => loadConfigurationAssets(root, policy), PlanContractError);
@@ -93,6 +105,7 @@ test('a missing asset is a contract failure', () => {
 
 test('an asset that diverges from the policy declarations is a contract failure', () => {
   const divergences = [
+    [HIBERNATE_MODE, text => text.replace('HibernateMode=shutdown', 'HibernateMode=platform')],
     [ZRAM, text => text.replace('swap-priority = 100', 'swap-priority = 10')],
     [ZRAM, text => text.replace('zstd', 'lz4')],
     [ZRAM, text => text.replace('zram-size = ram', 'zram-size = ram / 2')],
@@ -110,6 +123,12 @@ test('an asset that diverges from the policy declarations is a contract failure'
 
 test('damaged assets are rejected: extra, missing, duplicated, or malformed settings', () => {
   const damaged = [
+    [HIBERNATE_MODE, text => text.replace('[Sleep]', '[Other]')],
+    [HIBERNATE_MODE, text => `${text}[Sleep]\nHibernateMode=shutdown\n`],
+    [HIBERNATE_MODE, text => `${text}HibernateMode=shutdown\n`],
+    [HIBERNATE_MODE, text => `${text}SuspendState=mem\n`],
+    [HIBERNATE_MODE, text => text.replace('HibernateMode=shutdown\n', '')],
+    [HIBERNATE_MODE, () => ''],
     [ZRAM, text => text.replace('[zram0]', '[zram1]')],
     [ZRAM, text => `${text}[zram1]\nzram-size = ram\n`],
     [ZRAM, text => `${text}host-memory-limit = 1024\n`],

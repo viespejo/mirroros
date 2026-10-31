@@ -47,6 +47,7 @@ export const OPERATION_DESCRIPTIONS = {
   configure_memory_reclaim: 'Deliver the sysctl drop-in with the memory reclaim settings.',
   generate_fstab: 'Generate /etc/fstab by UUID.',
   create_swapfile: 'Create the fallback swapfile, which also holds the hibernation image.',
+  configure_hibernate_mode: 'Deliver the target profile hibernate mode drop-in.',
   configure_locale_time_console: 'Configure locale, time, and console keymap.',
   configure_hostname_network: 'Set the hostname and configure NetworkManager.',
   create_user: 'Create the user account and set its password from a protected prompt.',
@@ -212,6 +213,12 @@ function parametersFor(kind, { values, option, disk, assets, rulePackages, insta
       };
     case 'create_swapfile':
       return { path: '/swapfile', size_mib: values.swapfile_size, priority: SWAPFILE_PRIORITY };
+    case 'configure_hibernate_mode':
+      return {
+        destination: assets.configure_hibernate_mode.destination,
+        source_sha256: assets.configure_hibernate_mode.sha256,
+        hibernate_mode: values.hibernate_mode,
+      };
     case 'configure_locale_time_console':
       return {
         locales: values.locales,
@@ -257,7 +264,7 @@ function resolvedAtApply(kind, option, hibernation) {
 }
 
 function buildOperations(storageOption, context) {
-  return operationSequence(storageOption, context.values.hibernation, context.values.target_mode).map(kind => {
+  return operationSequence(storageOption, context.values.hibernation, context.values.target_mode, context.values.hibernate_mode).map(kind => {
     const operation = {
       id: kind,
       kind,

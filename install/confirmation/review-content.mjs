@@ -83,6 +83,9 @@ const oneLine = text => String(text).replace(/[\u0000-\u001f\u007f]/g, ' ');
 // The hibernation state the review shows: enabled with its swapfile size, or disabled with no swapfile.
 export function hibernationLabel(plan) {
   const { choices } = plan;
+  if (plan.operations.some(item => item.kind === 'configure_hibernate_mode')) {
+    return `Enabled (swapfile ${choices.swapfile_size.value} MiB, hibernate mode shutdown by target profile)`;
+  }
   return choices.hibernation.value ? `Enabled (swapfile ${choices.swapfile_size.value} MiB)` : 'Disabled (no swapfile)';
 }
 

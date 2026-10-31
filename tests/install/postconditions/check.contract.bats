@@ -131,6 +131,51 @@ JS
   cmp "${TEST_ROOT}/before" "${TEST_ROOT}/after"
 }
 
+@test "the checker verifies the delivered hibernate mode file and rejects changed content read-only" {
+  engine_use_hibernate_mode_plan
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  printf '%s\t/dev/vda2\t\n%s\t/dev/vda1\tumask=0077\n' "$TARGET_ROOT" "${TARGET_ROOT}/boot" > "${DOUBLE_STATE}/mounts.log"
+  target_snapshot > "${TEST_ROOT}/before"
+  checker_run --plan "$PLAN" --digest "$DIGEST" --target-root "$TARGET_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"id": "hibernate_mode_configuration"'* ]]
+  target_snapshot > "${TEST_ROOT}/after"
+  cmp "${TEST_ROOT}/before" "${TEST_ROOT}/after"
+  printf '[Sleep]\nHibernateMode=platform\n' > "${TARGET_ROOT}/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf"
+  target_snapshot > "${TEST_ROOT}/before"
+  checker_run --plan "$PLAN" --digest "$DIGEST" --target-root "$TARGET_ROOT"
+  [ "$status" -eq 4 ]
+  node -e 'const d = JSON.parse(process.argv[1]); if (d.failed_checks.join() !== "hibernate_mode_configuration") process.exit(1);' "$output"
+  [[ "$output" == *SHA-256* && "$output" == *HibernateMode=shutdown* ]]
+  target_snapshot > "${TEST_ROOT}/after"
+  cmp "${TEST_ROOT}/before" "${TEST_ROOT}/after"
+}
+
+@test "the checker rejects a stray hibernate mode file or dangling link when no operation is planned" {
+  engine_use_hibernate_mode_plan false
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  printf '%s\t/dev/vda2\t\n%s\t/dev/vda1\tumask=0077\n' "$TARGET_ROOT" "${TARGET_ROOT}/boot" > "${DOUBLE_STATE}/mounts.log"
+  checker_run --plan "$PLAN" --digest "$DIGEST" --target-root "$TARGET_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"id": "hibernate_mode_absent"'* ]]
+  local path="${TARGET_ROOT}/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf"
+  mkdir -p "$(dirname -- "$path")"
+  printf '[Sleep]\nHibernateMode=shutdown\n' > "$path"
+  target_snapshot > "${TEST_ROOT}/before"
+  checker_run --plan "$PLAN" --digest "$DIGEST" --target-root "$TARGET_ROOT"
+  [ "$status" -eq 4 ]
+  node -e 'const d = JSON.parse(process.argv[1]); if (d.failed_checks.join() !== "hibernate_mode_absent") process.exit(1);' "$output"
+  target_snapshot > "${TEST_ROOT}/after"
+  cmp "${TEST_ROOT}/before" "${TEST_ROOT}/after"
+  rm -- "$path"
+  ln -s /nonexistent-mirroros-test-drop-in "$path"
+  checker_run --plan "$PLAN" --digest "$DIGEST" --target-root "$TARGET_ROOT"
+  [ "$status" -eq 4 ]
+  node -e 'const d = JSON.parse(process.argv[1]); if (d.failed_checks.join() !== "hibernate_mode_absent") process.exit(1);' "$output"
+}
+
 @test "invalid arguments exit 2 without observing the target" {
   mkdir -p "$TARGET_ROOT"
   checker_run

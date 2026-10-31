@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import { withDigest } from '../../../install/plan/digest-plan.mjs';
-import { IDENTITY_COMMIT, loadPlanPath, planText, rawStorage, runNode, streamOperations, verify } from './helpers.mjs';
+import { IDENTITY_COMMIT, hibernateModePlan, loadPlanPath, planText, rawStorage, runNode, streamOperations, verify } from './helpers.mjs';
 
 const EXT4 = 'ext4-systemd-boot--password';
 
@@ -25,6 +25,18 @@ test('a valid plan yields its header and the operations in plan order with flatt
   const packages = operations.find(operation => operation.id === 'install_packages').parameters.packages.split('\n');
   assert.equal(packages[0], 'base');
   assert.equal(operations.find(operation => operation.id === 'install_bootloader').parameters['options.editor'], 'false');
+});
+
+test('a format 6 T14s plan preserves the mode operation and its parameters in the engine stream', () => {
+  const plan = hibernateModePlan();
+  assert.equal(plan.format_version, 6);
+  const result = verify(JSON.stringify(plan));
+  assert.equal(result.fields[0], 'ok');
+  const operations = streamOperations(result.fields);
+  const index = operations.findIndex(operation => operation.id === 'create_swapfile');
+  assert.equal(operations[index + 1].id, 'configure_hibernate_mode');
+  assert.deepEqual(operations[index + 1].parameters,
+    plan.operations.find(operation => operation.kind === 'configure_hibernate_mode').parameters);
 });
 
 test('an unknown kind, a different order, and an edited plan are rejected before anything is emitted', () => {

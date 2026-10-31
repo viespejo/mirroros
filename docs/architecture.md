@@ -69,7 +69,7 @@ MirrorOS has a narrow product and organizational scope but significant systems-e
 - Archiso is the expected image-construction baseline, but final integration details remain subject to research.
 - Native Arch installation commands are the installation engine, selected by [ADR 0002](adr/0002-installation-engine-selection.md); Archinstall is not selected.
 - QEMU/KVM or an equivalent disposable virtualization environment is required for pre-hardware validation.
-- The MVP support boundary is one reference VM and one target laptop; broader hardware compatibility is explicitly excluded. Experimental admission of other machines is not qualification or a support commitment.
+- The MVP support boundary is one reference VM and one target laptop; broader hardware compatibility is explicitly excluded. Experimental admission of other machines is not qualification or a support commitment. A recognized profile is not qualification and adds no MVP or `target-laptop-eligible` gate ([ADR 0023](adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md)).
 - The installation medium must remain minimal, while personal environment configuration evolves independently.
 - Build, test, install, configure, and verify must remain independently invocable even if no unified executable is created.
 - Existing tools and supported configuration mechanisms take precedence over custom applications, services, formats, or control planes.
@@ -1250,7 +1250,7 @@ Shared lifecycle behavior enters `operations/lib/` only after multiple commands 
 - Target-bound confirmation.
 - Selected installation-engine adapter.
 
-Under [ADR 0022](adr/0022-installer-coexistence-and-uefi-boot-entry.md), installation plans use format 5 and declare one of two destructive boundaries:
+Installation plans use format 6 under [ADR 0023](adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md), preserving the two destructive boundaries introduced by [ADR 0022](adr/0022-installer-coexistence-and-uefi-boot-entry.md):
 
 - `whole_disk` wipes the confirmed disk and creates a new GPT and layout. Before wiping, record its partition PARTUUIDs; delete only UEFI entries whose device paths reference that pre-wipe set.
 - `replace_installation` reuses and formats only the identified MirrorOS ESP and root partition. Never wipe the disk node, create a partition table, resize or move partitions. Identification binds the `mirroros`-labelled Linux root to a same-disk ESP through UUID-based fstab and boot configuration read without filesystem modification; ambiguous or incomplete layouts are rejected. All three storage options are supported. The ESP must meet the policy minimum (2 GiB), and root must fit the policy root minimum (15 GiB) plus the swapfile when enabled. Prechecks revalidate identities, geometry and occupancy before destruction. Compare filtered `sfdisk --dump` data and non-target identities before and after; production postconditions do not hash non-target partition contents.
@@ -1294,6 +1294,7 @@ Hyprland ([ADR 0011](adr/0011-hyprland-compositor-provider.md)) is placed below 
 - `hardware/discovery/` normalizes observed capabilities.
 - `hardware/rules/` maps capabilities to applicable selections.
 - `targets/reference-vm/` and `targets/framework-13-pro-amd/` contain explicit target overrides.
+- `targets/thinkpad-t14s-gen1-amd/` is a recognized unqualified profile with an exact DMI identity and a typed hibernate-mode override, not an additional qualified laptop or support commitment ([ADR 0023](adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md)).
 - Hardware rules do not modify portable capability definitions.
 - Target overrides have higher precedence than detected selections and remain reviewable.
 

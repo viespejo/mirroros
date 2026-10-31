@@ -81,6 +81,8 @@ test('single-rule fixtures raise only their rule', () => {
     'machine_identity_mismatch--memory': ['machine_identity_mismatch'],
     'plan_format_unsupported--version-2': ['plan_format_unsupported'],
     'plan_format_unsupported--version-3': ['plan_format_unsupported'],
+    'plan_format_unsupported--version-4': ['plan_format_unsupported'],
+    'plan_format_unsupported--version-5': ['plan_format_unsupported'],
     'hardware_rules_mismatch--outcome': ['hardware_rules_mismatch'],
     'hardware_rules_mismatch--package-added': ['hardware_rules_mismatch'],
     'hardware_rules_mismatch--package-editable': ['hardware_rules_mismatch'],
@@ -149,6 +151,10 @@ test('non-objects, bad JSON, and unsupported versions are rejected', () => {
   assert.deepEqual(codes(validatePlan({ format_version: 1 })), ['plan_format_unsupported']);
   assert.deepEqual(codes(validatePlan({ format_version: 2 })), ['plan_format_unsupported']);
   assert.deepEqual(codes(validatePlan({ format_version: 3 })), ['plan_format_unsupported']);
+  assert.deepEqual(codes(validatePlan({ format_version: 4 })), ['plan_format_unsupported']);
+  const legacy = validatePlan({ format_version: 5 });
+  assert.deepEqual(codes(legacy), ['plan_format_unsupported']);
+  assert.match(legacy[0].next_step, /regenerate/);
   assert.deepEqual(codes(validatePlan({})), ['plan_format_unsupported']);
 });
 

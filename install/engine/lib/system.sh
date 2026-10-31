@@ -7,6 +7,7 @@
 declare -A ASSET_SOURCE=(
   [configure_zram]='usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf'
   [configure_memory_reclaim]='usr/lib/sysctl.d/60-mirroros-memory.conf'
+  [configure_hibernate_mode]='usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf'
 )
 
 copy_asset() {
@@ -30,6 +31,10 @@ op_configure_zram() {
 }
 
 op_configure_memory_reclaim() {
+  copy_asset
+}
+
+op_configure_hibernate_mode() {
   copy_asset
 }
 

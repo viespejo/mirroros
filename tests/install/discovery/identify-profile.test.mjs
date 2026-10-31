@@ -34,6 +34,57 @@ test('the reference VM is recognized without --target and the facts stay valid',
   assert.deepEqual(validateDocument(document), []);
 });
 
+test('the T14s exact DMI identity is recognized without --target', () => {
+  const document = discover('thinkpad-t14s-gen1-amd', { targetId: null });
+  assert.deepEqual(document.profile, { status: 'matched', profile_id: 'thinkpad-t14s-gen1-amd' });
+  assert.equal(document.source.requested_profile_id, undefined);
+  assert.equal(document.validation.status, 'valid');
+  assert.deepEqual(validateDocument(document), []);
+});
+
+test('the T14s profile excludes other product names, vendors, virtualization, and product version alone', () => {
+  const mutations = [
+    raw => { raw.firmware.dmi.product_name = '20UH0000XX'; },
+    raw => { raw.firmware.dmi.sys_vendor = 'Other Vendor'; },
+    raw => { raw.hardware.virtualization = 'kvm'; },
+    raw => {
+      delete raw.firmware.dmi.product_name;
+      raw.firmware.dmi.product_version = 'ThinkPad T14s Gen 1';
+    },
+  ];
+  for (const mutateRaw of mutations) {
+    const document = discover('thinkpad-t14s-gen1-amd', { targetId: null, mutateRaw });
+    assert.deepEqual(document.profile, { status: 'unqualified' });
+    assert.equal(document.validation.status, 'valid');
+    assert.deepEqual(document.layers.target_override.policy, {});
+    assert.deepEqual(validateDocument(document), []);
+  }
+});
+
+test('an explicit T14s assertion is accepted only on a verified identity match', () => {
+  const matched = discover('thinkpad-t14s-gen1-amd', { targetId: 'thinkpad-t14s-gen1-amd' });
+  assert.deepEqual(matched.profile, { status: 'matched', profile_id: 'thinkpad-t14s-gen1-amd' });
+  assert.equal(matched.source.requested_profile_id, 'thinkpad-t14s-gen1-amd');
+  assert.equal(matched.validation.status, 'valid');
+  const contradicted = discover('thinkpad-t14s-gen1-amd', {
+    targetId: 'thinkpad-t14s-gen1-amd',
+    mutateRaw: raw => { raw.firmware.dmi.product_name = '20UH0000XX'; },
+  });
+  assert.deepEqual(codes(contradicted.validation.reasons), ['target_identity_mismatch']);
+  assert.deepEqual(contradicted.profile, { status: 'unqualified' });
+  assert.equal(contradicted.source.requested_profile_id, 'thinkpad-t14s-gen1-amd');
+  assert.equal(exitStatusFor(contradicted), 2);
+  assert.deepEqual(contradicted.layers.target_override.policy, {});
+});
+
+test('QEMU matches only the reference VM among all shipped profiles', () => {
+  const document = discover('reference-vm-empty', { targetId: null });
+  const matches = loadAllTargets(targetsRoot)
+    .filter(target => matchesIdentity(document.layers.detected, target))
+    .map(target => target.target_id);
+  assert.deepEqual(matches, ['reference-vm']);
+});
+
 test('a machine that matches no profile is unqualified, valid, and gets no generic profile', () => {
   const document = discover('synthetic-laptop', { targetId: null });
   assert.deepEqual(document.profile, { status: 'unqualified' });
@@ -171,5 +222,5 @@ test('automatic identification keeps sensitive values out of the document', () =
 });
 
 test('the shipped repository profiles load for automatic identification', () => {
-  assert.deepEqual(loadAllTargets(join(repository, 'targets')).map(target => target.target_id), ['framework-13-pro-amd', 'reference-vm']);
+  assert.deepEqual(loadAllTargets(join(repository, 'targets')).map(target => target.target_id), ['framework-13-pro-amd', 'reference-vm', 'thinkpad-t14s-gen1-amd']);
 });

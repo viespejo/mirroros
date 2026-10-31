@@ -35,6 +35,42 @@ teardown() {
   discovery_assert_private_permissions
 }
 
+@test "discover recognizes the T14s automatically and accepts its verified target assertion" {
+  discovery_scenario thinkpad-t14s-gen1-amd
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.validation.status === 'valid' && d.profile.status === 'matched' && d.profile.profile_id === 'thinkpad-t14s-gen1-amd'"
+  discovery_json_assert "$(discovery_facts_path)" "d.source.requested_profile_id === undefined"
+  grep -Fq 'Profile: matched thinkpad-t14s-gen1-amd' "$STDOUT_PATH"
+  discovery_assert_private_permissions
+  rm -rf -- "$OUTPUT_DIR"
+  discovery_run --target thinkpad-t14s-gen1-amd --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.validation.status === 'valid' && d.profile.status === 'matched' && d.profile.profile_id === 'thinkpad-t14s-gen1-amd' && d.source.requested_profile_id === 'thinkpad-t14s-gen1-amd'"
+}
+
+@test "discover rejects a T14s assertion for a different product name and does not match automatically" {
+  discovery_scenario thinkpad-t14s-gen1-amd
+  printf '%s\n' '20UH0000XX' > "${FIXTURE_ROOT}/sys/class/dmi/id/product_name"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.validation.status === 'valid' && d.profile.status === 'unqualified' && d.profile.profile_id === undefined"
+  rm -rf -- "$OUTPUT_DIR"
+  discovery_run --target thinkpad-t14s-gen1-amd --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 2 ]
+  discovery_reason_codes_include target_identity_mismatch
+  discovery_json_assert "$(discovery_facts_path)" "d.profile.status === 'unqualified' && d.source.requested_profile_id === 'thinkpad-t14s-gen1-amd' && Object.keys(d.layers.target_override.policy).length === 0"
+}
+
+@test "discover does not recognize the T14s from the Intel-shared product version alone" {
+  discovery_scenario thinkpad-t14s-gen1-amd
+  rm -f -- "${FIXTURE_ROOT}/sys/class/dmi/id/product_name"
+  printf '%s\n' 'ThinkPad T14s Gen 1' > "${FIXTURE_ROOT}/sys/class/dmi/id/product_version"
+  discovery_run --output "$OUTPUT_DIR"
+  [ "$DISCOVERY_STATUS" -eq 0 ]
+  discovery_json_assert "$(discovery_facts_path)" "d.validation.status === 'valid' && d.profile.status === 'unqualified' && d.profile.profile_id === undefined"
+}
+
 @test "discover records an unmatched machine as unqualified without a generic profile" {
   discovery_scenario synthetic-laptop
   discovery_run --output "$OUTPUT_DIR"
@@ -492,6 +528,7 @@ EOF
   [ "$DISCOVERY_STATUS" -eq 0 ]
   grep -Fq 'Usage: install discover [--target <id>] [--output <dir>]' "$STDOUT_PATH"
   grep -Fq 'Normalized exit outcomes:' "$STDOUT_PATH"
+  grep -Fq 'reference-vm, framework-13-pro-amd, or thinkpad-t14s-gen1-amd' "$STDOUT_PATH"
   [ ! -s "$STDERR_PATH" ]
   [ ! -s "${DOUBLE_STATE}/calls.log" ]
 }

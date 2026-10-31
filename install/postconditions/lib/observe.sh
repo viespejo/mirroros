@@ -130,9 +130,10 @@ observe_limine_references() {
   done < "${TARGET_ROOT}/boot/limine.conf"
 }
 
-# The fixed allowlisted destinations of the two configuration drop-ins (install/plan/configuration-assets.mjs).
+# The fixed allowlisted destinations of the configuration drop-ins (install/plan/configuration-assets.mjs).
 readonly ZRAM_DESTINATION=/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf
 readonly SYSCTL_DESTINATION=/usr/lib/sysctl.d/60-mirroros-memory.conf
+readonly HIBERNATE_MODE_DESTINATION=/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf
 
 observe_coexistence() {
   local listing disk dump storage link path
@@ -157,16 +158,18 @@ collect_observations() {
   observe_mounts
   observe_coexistence
   observe_packages
+  observe_stat "$HIBERNATE_MODE_DESTINATION"
   for path in /boot/vmlinuz-linux /boot/initramfs-linux.img /boot/initramfs-linux-fallback.img \
     /boot/EFI/systemd/systemd-bootx64.efi /boot/EFI/BOOT/BOOTX64.EFI /swapfile /swap/swapfile; do
     observe_stat "$path"
   done
   for path in /etc/fstab /etc/hostname /boot/loader/loader.conf /boot/loader/entries/mirroros.conf \
-    /boot/loader/entries/mirroros-fallback.conf /etc/default/limine /boot/limine.conf "$ZRAM_DESTINATION" "$SYSCTL_DESTINATION"; do
+    /boot/loader/entries/mirroros-fallback.conf /etc/default/limine /boot/limine.conf "$ZRAM_DESTINATION" "$SYSCTL_DESTINATION" "$HIBERNATE_MODE_DESTINATION"; do
     observe_text "$path"
   done
   observe_sha256 "$ZRAM_DESTINATION"
   observe_sha256 "$SYSCTL_DESTINATION"
+  observe_sha256 "$HIBERNATE_MODE_DESTINATION"
   observe_list /etc/NetworkManager/system-connections
   observe_list /boot/EFI/Linux
   observe_limine_references

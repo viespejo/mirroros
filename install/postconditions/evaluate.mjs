@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { normalizeStorage } from '../discovery/normalize-facts.mjs';
 
 import { parsePlanText, validatePlan } from '../plan/validate-plan.mjs';
+import { CONFIGURATION_ASSETS } from '../plan/configuration-assets.mjs';
 
 // Structured side of the read-only postconditions checker (contracts/installation-postconditions.md). The Bash
 // side only observes the mounted target and streams the observations; every comparison with the plan, and the
@@ -30,6 +31,8 @@ export const CHECK_IDS = [
   'boot_resume_parameters',
   'swapfile',
   'swap_absent',
+  'hibernate_mode_configuration',
+  'hibernate_mode_absent',
   'zram_configuration',
   'memory_sysctl_configuration',
   'network_manager_enabled',
@@ -532,6 +535,21 @@ function assetProblems(context, operationKind, label, wantedLines) {
   return problems;
 }
 
+function hibernateModeConfiguration(context) {
+  const path = operation(context.plan, 'configure_hibernate_mode').parameters.destination;
+  return [
+    ...fileProblems(context.observations, path),
+    ...assetProblems(context, 'configure_hibernate_mode', 'the hibernate mode drop-in', () => ['HibernateMode=shutdown']),
+  ];
+}
+
+function hibernateModeAbsent(context) {
+  const path = CONFIGURATION_ASSETS.configure_hibernate_mode.destination;
+  return statOf(context.observations, path) === undefined
+    ? []
+    : [`${path} exists although configure_hibernate_mode is not planned`];
+}
+
 function zramConfiguration(context) {
   const problems = [];
   if (context.packages === undefined) problems.push('the package database of the target cannot be read');
@@ -607,6 +625,8 @@ const CHECKS = {
   boot_resume_parameters: bootResumeParameters,
   swapfile,
   swap_absent: swapAbsent,
+  hibernate_mode_configuration: hibernateModeConfiguration,
+  hibernate_mode_absent: hibernateModeAbsent,
   zram_configuration: zramConfiguration,
   memory_sysctl_configuration: memorySysctlConfiguration,
   network_manager_enabled: networkManagerEnabled,
@@ -618,12 +638,15 @@ export function applicableChecks(plan) {
   const option = plan.choices.storage_option.value;
   const hibernation = plan.choices.hibernation.value;
   const systemdBoot = SYSTEMD_BOOT_OPTIONS.includes(option);
+  const hibernateMode = operation(plan, 'configure_hibernate_mode') !== undefined;
   return CHECK_IDS.filter(id => {
     if (id === 'bootloader_systemd_boot') return systemdBoot;
     if (id === 'bootloader_limine') return !systemdBoot;
     if (id === 'untouched_partitions') return plan.target_mode === 'replace_installation';
     if (id === 'swapfile') return hibernation;
     if (id === 'swap_absent') return !hibernation;
+    if (id === 'hibernate_mode_configuration') return hibernateMode;
+    if (id === 'hibernate_mode_absent') return !hibernateMode;
     return true;
   });
 }

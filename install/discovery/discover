@@ -31,7 +31,7 @@ Usage: install discover [--target <id>] [--output <dir>]
        install discover --help
 Purpose: Inspect the machine from the live environment without modifying it, record firmware, network, storage, and hardware facts, identify a known machine profile when its identity is verifiable (otherwise record the machine as unqualified), and normalize them into target-facts.json.
 Prerequisites: UEFI boot of the live medium, a ready network, and at least one eligible disk. Run on the target; no elevation is used or needed beyond the live session.
-Inputs: --target optionally asserts a profile id (reference-vm or framework-13-pro-amd); the assertion is rejected if the observed identity contradicts it or its identity is not captured. --output names an absent or empty directory; the default is evidence/install/<run-id>/.
+Inputs: --target optionally asserts a profile id (reference-vm, framework-13-pro-amd, or thinkpad-t14s-gen1-amd); the assertion is rejected if the observed identity contradicts it or its identity is not captured. --output names an absent or empty directory; the default is evidence/install/<run-id>/.
 Consequential effects: None on the target; no device is written and no elevation is invoked. The network probe creates outbound HTTPS traffic only. Evidence is written with 0700 directories and 0600 files.
 Evidence: target-facts.json, raw collector output under raw/, and error.json when discovery fails with status 5 or 6.
 Normalized exit outcomes:

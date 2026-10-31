@@ -1,5 +1,5 @@
 {
-  "format_version": 3,
+  "format_version": 4,
   "policy": {
     "target_mode": {
       "value": "whole_disk",
@@ -63,6 +63,11 @@
       "value": true,
       "provenance": "personal_preference",
       "editable": true
+    },
+    "hibernate_mode": {
+      "value": "platform",
+      "provenance": "arch_guidance",
+      "editable": false
     },
     "zram": {
       "value": {

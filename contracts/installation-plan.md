@@ -1,6 +1,6 @@
 # Installation plan (`installation-plan.json`)
 
-`format_version: 5`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
+`format_version: 6`. Produced by `operations/install plan` from a valid [`target-facts.json`](target-facts.md)
 (format 2), the installation policy, an optional override of a matched profile, and an optional choices file.
 It identifies the observed machine, its profile classification, and the target disk, plus the ordered
 declarative operations, every value with its provenance and source, the secret requirements by name, and the
@@ -24,8 +24,8 @@ Each document keeps its own constant; no constant is shared between unrelated do
 
 | Document | Constant | Value |
 | --- | --- | --- |
-| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `5` |
-| Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `3` |
+| Installation plan (this contract) | `PLAN_FORMAT_VERSION` | `6` |
+| Installation policy (`install/plan/policy.json`) | `PLAN_POLICY_FORMAT_VERSION` | `4` |
 | Choices file (`--choices`) | `CHOICES_FORMAT_VERSION` | `3` |
 | Target facts | `FACTS_FORMAT_VERSION` | `2`, see [`target-facts.md`](target-facts.md) |
 | Plan override (`targets/<id>/overrides/plan.json`) | none: a flat object, unchanged | |
@@ -41,7 +41,11 @@ Version `5` follows [ADR 0022](../docs/adr/0022-installer-coexistence-and-uefi-b
 choices formats remain `3`; `target_mode` defaults to `whole_disk`, and replacement always requires an explicit
 full root PARTUUID. The format-2 facts extension supplies candidates; absent replacement evidence never implies one.
 
-A plan of format `1`, `2`, `3`, or `4` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
+Version `6` follows [ADR 0023](../docs/adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md):
+it adds the non-editable `hibernate_mode` value and conditional `configure_hibernate_mode` operation while
+preserving format `5` coexistence semantics. Policy advances to `4`; choices remain `3`.
+
+A plan of format `1`, `2`, `3`, `4`, or `5` is rejected with `plan_format_unsupported` and the instruction to regenerate it from
 new target facts. Plans, policy snapshots, choices files, and evidence of earlier versions are never migrated or
 reinterpreted; the generator reads facts of format `2` only, and the facts format is unchanged.
 
@@ -66,7 +70,7 @@ proposal. Only a changed value is recorded with source `choice` (and, because th
 
 | Field | Description |
 | --- | --- |
-| `format_version` | Always `5`. |
+| `format_version` | Always `6`. |
 | `target_mode` | `whole_disk` or `replace_installation`; must equal `choices.target_mode.value`. |
 | `target` | `machine`, `profile`, `disk`, and `installation` only for replacement. |
 | `choices` | Every resolved policy value, keyed by name. |
@@ -128,6 +132,7 @@ Each entry is `{ "value", "provenance", "source", "editable" }`. The keys are th
 | `replace_root_partuuid` | yes | Full root PARTUUID of the chosen candidate, required only in replacement. Never automatically selected; absent in whole-disk mode. |
 | `storage_option` | yes | `ext4-systemd-boot`, `btrfs-rescue`, or `btrfs-limine` (the default). The entry also carries `tier`, `filesystem`, `bootloader`, and `resume_offset_method` from the tier table. |
 | `hibernation` | yes | Boolean, initially `true`. Enables the hibernation swapfile and resume configuration; see [Hibernation and swapfile](#hibernation-and-swapfile). |
+| `hibernate_mode` | no | `platform` from policy (`arch_guidance`, `editable: false`), or `platform`/`shutdown` from a matched-profile override. Never accepted in choices. |
 | `swapfile_size` | yes | Present only when `hibernation` is `true`. Integer MiB from 512 to the RAM-derived maximum; the maximum is also the default. |
 | `lang` | yes | The system language: `en_US.UTF-8` (English, US) or `es_ES.UTF-8` (Spanish, Spain). |
 | `regional_format` | yes | The regional formats: `follow_language` (the default, which tracks `lang`), `en_US.UTF-8`, or `es_ES.UTF-8`. |
@@ -176,6 +181,19 @@ planned. A disabled plan never implies swapfile creation.
 No custom hibernation image-size setting exists. The warning and the sizing screen state that success depends on
 used memory and free swapfile space and never claim that the default guarantees a successful resume.
 
+### Target hibernate mode
+
+[ADR 0023](../docs/adr/0023-recognized-unqualified-targets-and-target-hibernate-mode.md) defines the
+non-editable policy baseline `hibernate_mode: platform`. The recognized unqualified
+`thinkpad-t14s-gen1-amd` profile overrides it to `shutdown`, with source `override` and provenance
+`arch_guidance`. The resolved mode remains `shutdown` even when hibernation is disabled.
+
+Emit `configure_hibernate_mode` immediately after `create_swapfile` if and only if hibernation is enabled
+and the resolved mode is `shutdown`. With `platform` or disabled hibernation, emit no mode operation and
+install no sleep drop-in. The reference VM, Framework, and unmatched machines retain the policy baseline.
+The validator re-derives this operation from the recorded resolved values, not from an implicit default.
+The drop-in sets `HibernateMode=shutdown`; administrators may override it under `/etc/systemd/sleep.conf.d/`.
+
 ### Memory prerequisite
 
 Planning requires `memory_total_bytes` in the facts' effective view, as a positive safe integer, even when
@@ -203,8 +221,9 @@ plan; they are verified by later qualification.
 
 ### Configuration assets
 
-The two drop-ins are owned under `install/plan/assets/`, mirroring their destinations:
-`usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf` and `usr/lib/sysctl.d/60-mirroros-memory.conf`. The
+The three drop-ins are owned under `install/plan/assets/`, mirroring their destinations:
+`usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf`, `usr/lib/sysctl.d/60-mirroros-memory.conf`, and
+`usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf` (delivered only by `configure_hibernate_mode`). The
 generator reads only these fixed allowlisted source paths, computes the SHA-256 of the raw bytes of each, and
 refuses a missing or damaged asset (exit `6`). The settings declared in the policy and in the operation
 parameters must agree with the source content; a mismatch is a contract failure. Source assets are embedded with
@@ -271,6 +290,7 @@ is defined in [`installation-engine.md`](installation-engine.md).
 | `configure_zram` | no | Deliver the zram-generator drop-in. Parameters: `destination`, `source_sha256`, `zram_size` (`ram`), `compression_algorithm` (`zstd`), and `swap_priority` (`100`). |
 | `configure_memory_reclaim` | no | Deliver the sysctl drop-in. Parameters: `destination`, `source_sha256`, and the four `vm.*` values. |
 | `create_swapfile` | no | Only when `hibernation` is `true`: create `/swapfile` of `swapfile_size` MiB with swap priority `0` (`priority`) and list it in fstab. Resolves `resume_offset`. |
+| `configure_hibernate_mode` | no | Only with hibernation enabled and mode `shutdown`, immediately after `create_swapfile`: deliver the sleep drop-in. Parameters: `destination` (`/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf`), `source_sha256`, and `hibernate_mode` (`shutdown`), all covered by the plan digest. |
 | `configure_locale_time_console` | no | Locales, `lang`, the regional category values, keymap, time zone, UTC hardware clock, and time sync. |
 | `configure_hostname_network` | no | Hostname and NetworkManager without predefined connections. |
 | `create_user` | no | Create `user_name` in `user_groups` with `user_shell`. Consumes `account_password`. |
@@ -287,6 +307,8 @@ is defined in [`installation-engine.md`](installation-engine.md).
 
 The sequence is fixed; the validator rejects a different set or a different order. Operation 10 exists only when
 `hibernation` is `true`; omitting it does not change the relative order of the others.
+When hibernation is enabled and `hibernate_mode` is `shutdown`, insert `configure_hibernate_mode`
+immediately after `create_swapfile` in every sequence below; all other relative ordering is unchanged.
 
 `ext4-systemd-boot`:
 
@@ -315,7 +337,7 @@ The sequence is fixed; the validator rejects a different set or a different orde
 `install_bootloader` (before `configure_snapper`) and `sync_limine_snapshot_entries` appended after
 `create_baseline_snapshot`.
 
-For format `5` whole-disk mode, prepend `record_disk_partuuids` to the sequences above, insert
+For whole-disk mode, prepend `record_disk_partuuids` to the sequences above, insert
 `remove_stale_uefi_entries` immediately after `create_partitions`, and append `register_uefi_boot_entry`
 after all storage-option steps (including Limine snapshot synchronization).
 For replacement, replace the four initial disk operations (`wipe_disk_signatures` through `format_filesystems`)
@@ -422,7 +444,7 @@ not a second one. The choices file is not hashed: its effect is already in `choi
 
 Allowed keys: `target_disk`, `target_mode`, `replace_root_partuuid`, `storage_option`, `hibernation`, `swapfile_size`, `lang`, `regional_format`, `console_keymap`,
 `timezone`, `hostname`, `user_name`, and `root_account`. Unknown keys, non-editable policy keys (including the
-derived `locales` and `locale_categories`), invalid values, and secret-like keys (`password`, `*_password`)
+derived `locales` and `locale_categories`, and `hibernate_mode`, rejected with `choices_not_editable`), invalid values, and secret-like keys (`password`, `*_password`)
 are invalid input. A choices file of `format_version` `1` or `2` is invalid input, with regeneration guidance.
 `hibernation` must be a JSON boolean. `hibernation: false` together with `swapfile_size` is contradictory and is
 rejected (`choices_conflict`) rather than ignoring the size; `swapfile_size` is otherwise validated against the
@@ -430,9 +452,12 @@ RAM-derived range.
 
 ## Overrides
 
-`targets/<id>/overrides/plan.json` is a flat JSON object. Only `hostname` is allowed in this format
-version. Its value follows the same rules as the choices file and resolves with source `override`. It is read
-only when the facts classify the machine as `matched`; an unqualified machine applies none.
+`targets/<id>/overrides/plan.json` is a flat JSON object allowing only `hostname` and `hibernate_mode`.
+`hostname` follows the choices-file rules; `hibernate_mode` accepts only `platform` or `shutdown`.
+Unknown keys fail with `override_unknown_key`, and invalid values with `override_invalid_value`.
+Values resolve with source `override`. The file is read only when the facts classify the machine as
+`matched`; an unmatched unqualified machine applies none. The T14s override contains only
+`{"hibernate_mode": "shutdown"}`; recognition does not qualify that profile.
 
 ## Choice helpers
 
@@ -498,7 +523,7 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | Code | Condition |
 | --- | --- |
 | `plan_not_json`, `plan_invalid_type`, `plan_non_integer_number` | Malformed document. |
-| `plan_format_unsupported` | `format_version` is not `5`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
+| `plan_format_unsupported` | `format_version` is not `6`, including legacy formats `1`–`5`. The `next_step` states that installation plans of earlier versions are not migrated and must be regenerated from new target facts with `operations/install plan`. |
 | `plan_field_missing`, `plan_label_missing` | A required field, or a `provenance`, `source`, or `editable` label, is missing. |
 | `plan_unknown_field` | A field outside this contract, including `approved` and `approval`. |
 | `plan_secret_value_present` | A secret-named key outside `secret_requirements`, or an extra field in a secret entry. |
@@ -516,7 +541,8 @@ disk identity and eligibility against the bound facts. Each reason and warning h
 | `profile_binding_mismatch` | `target.profile` is inconsistent with its bindings: `matched` without `profile_definition_sha256` or `profile_id`, `unqualified` with a profile id, a profile hash, or an override hash, or, given the facts, a classification that differs from the facts. |
 | `disk_identity_mismatch`, `disk_not_eligible` | The disk does not match the `target_disk` choice or the bound facts, or is not eligible. |
 | `facts_binding_mismatch` | `facts_binding` contradicts `target`, or does not match the supplied facts document. |
-| `hibernation_plan_mismatch` | The hibernation choice and the plan contradict each other: a `swapfile_size`, `create_swapfile`, `@swap` subvolume or mount, `resume` kernel parameter, or `resume_offset` resolution with hibernation disabled, or any of them missing or inconsistent with hibernation enabled, or a swapfile size outside the RAM-derived range. |
+| `hibernation_plan_mismatch` | The hibernation choice and the plan contradict each other: a `swapfile_size`, `create_swapfile`, `@swap` subvolume or mount, `resume` kernel parameter, or `resume_offset` resolution with hibernation disabled, or any of them missing or inconsistent with hibernation enabled, or a swapfile size outside the RAM-derived range. Also rejects `configure_hibernate_mode` with hibernation disabled; enabled hibernation requires that operation only for mode `shutdown`, as checked below. |
+| `hibernate_mode_plan_mismatch` | `configure_hibernate_mode` exists with mode `platform`, or is absent with hibernation enabled and mode `shutdown`. The validator re-derives the expected operation from the recorded values; `next_step` requires regeneration and review. |
 | `hardware_rules_mismatch` | `rule_outcomes` do not list the four rules in order, an outcome is not valid for its `value`, `rule_packages` is not exactly the set the outcomes name, a rule package lacks its labels or is `editable`, the `install_packages` `rule_packages` parameter differs from `hardware_selections.rule_packages`, or a rule warning is missing from or added to `warnings` against the outcomes. The validator re-derives these from the plan's own `value` fields with the shared rule module and reads no facts. |
 | `configuration_asset_mismatch` | A configuration operation's destination, `source_sha256`, or declared settings differ from the policy or the allowlisted source asset, or the zram package or `zswap.enabled=0` is missing. |
 | `plan_size_does_not_fit` | ESP, `root_minimum_bytes`, and `swapfile_size` (when present) exceed the disk size. |

@@ -39,6 +39,7 @@ make_facts() {
     let document = helpers.facts();
     if (process.argv[2].startsWith("coexistence-")) document = helpers.facts(process.argv[2]);
     if (process.argv[2] === "unqualified") document = helpers.unqualifiedFacts();
+    if (process.argv[2] === "t14s") document = helpers.t14sFacts();
     if (process.argv[2] === "two-disks") document = helpers.secondEligibleDisk(document);
     if (process.argv[2] === "status-invalid") document.validation.status = "invalid";
     if (process.argv[2] === "format-1") document.format_version = 1;
@@ -138,11 +139,35 @@ assert_private_permissions() {
     [ -f "${WORK_DIR}/out/${name}" ]
   done
   assert_private_permissions "${WORK_DIR}/out"
+  json_assert "${WORK_DIR}/out/installation-plan.json" "d.format_version === 6 && d.choices.hibernate_mode.value === 'platform' && !d.operations.some(op => op.kind === 'configure_hibernate_mode')"
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.target.disk.by_id === 'virtio-SYNTH-VDA-0001'"
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.hostname.value === 'mirroros-ref' && d.choices.hostname.source === 'override'"
   json_assert "${WORK_DIR}/out/installation-plan.json" "d.choices.target_disk.provenance === 'hardware_detection'"
   json_assert "${WORK_DIR}/out/plan-run.json" "d.exit_status === 0 && d.digest.value === '$(plan_digest "${WORK_DIR}/out/installation-plan.json")'"
   [ ! -s "$STDERR_PATH" ]
+}
+
+@test "the matched T14s plan emits the profile hibernate mode operation only with hibernation" {
+  make_facts t14s "$FACTS"
+  run_plan --facts "$FACTS" --output "${WORK_DIR}/enabled"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/enabled/installation-plan.json" "d.format_version === 6 && d.target.profile.profile_id === 'thinkpad-t14s-gen1-amd' && d.choices.hibernate_mode.value === 'shutdown' && d.choices.hibernate_mode.source === 'override' && d.choices.hibernate_mode.editable === false"
+  json_assert "${WORK_DIR}/enabled/installation-plan.json" "d.operations[d.operations.findIndex(op => op.kind === 'create_swapfile') + 1].kind === 'configure_hibernate_mode'"
+  json_assert "${WORK_DIR}/enabled/installation-plan.json" "d.operations.some(op => op.kind === 'configure_hibernate_mode' && op.parameters.hibernate_mode === 'shutdown' && /^[0-9a-f]{64}$/.test(op.parameters.source_sha256) && op.parameters.destination === '/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf')"
+  grep -Fq 'hibernate_mode: shutdown' "${WORK_DIR}/enabled/installation-plan.txt"
+  write_choices '{"format_version":3,"hibernation":false}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/disabled"
+  [ "$PLAN_STATUS" -eq 0 ]
+  json_assert "${WORK_DIR}/disabled/installation-plan.json" "d.choices.hibernate_mode.value === 'shutdown' && d.choices.hibernate_mode.source === 'override' && !d.operations.some(op => op.kind === 'configure_hibernate_mode')"
+}
+
+@test "hibernate mode cannot be supplied through choices" {
+  write_choices '{"format_version":3,"hibernate_mode":"shutdown"}'
+  run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/out"
+  [ "$PLAN_STATUS" -eq 2 ]
+  json_assert "${WORK_DIR}/out/plan-run.json" "d.reasons.some(reason => reason.code === 'choices_not_editable' && reason.next_step)"
+  assert_stderr_contains 'hibernate_mode is fixed by the installation policy'
+  [ ! -e "${WORK_DIR}/out/installation-plan.json" ]
 }
 
 @test "plan prints the summary and ends with the review notice" {
@@ -548,13 +573,13 @@ EOF
   fi
 }
 
-@test "replacement CLI writes format 5 partition-scoped plans for all storage options" {
+@test "replacement CLI writes format 6 partition-scoped plans for all storage options" {
   for option in ext4-systemd-boot btrfs-rescue btrfs-limine; do
     make_facts "coexistence-${option}" "$FACTS"
     write_choices "{\"format_version\":3,\"target_mode\":\"replace_installation\",\"replace_root_partuuid\":\"10000000-0000-4000-8000-000000000002\",\"storage_option\":\"${option}\"}"
     run_plan --facts "$FACTS" --choices "${WORK_DIR}/choices.json" --output "${WORK_DIR}/${option}"
     [ "$PLAN_STATUS" -eq 0 ]
-    json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.format_version === 5 && d.target_mode === "replace_installation"'
+    json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.format_version === 6 && d.target_mode === "replace_installation"'
     json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.operations.filter(o => o.destructive).map(o => o.kind).join() === "wipe_partition_signatures,format_partitions"'
     json_assert "${WORK_DIR}/${option}/installation-plan.json" '!d.operations.some(o => ["wipe_disk_signatures", "create_partition_table", "create_partitions", "remove_stale_uefi_entries"].includes(o.kind))'
     json_assert "${WORK_DIR}/${option}/installation-plan.json" 'd.operations.at(-1).kind === "register_uefi_boot_entry"'

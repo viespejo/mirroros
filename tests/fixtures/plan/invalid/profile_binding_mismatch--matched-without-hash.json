@@ -1,5 +1,5 @@
 {
-  "format_version": 5,
+  "format_version": 6,
   "target_mode": "whole_disk",
   "target": {
     "machine": {
@@ -125,6 +125,12 @@
       "provenance": "personal_preference",
       "source": "policy",
       "editable": true
+    },
+    "hibernate_mode": {
+      "value": "platform",
+      "provenance": "arch_guidance",
+      "source": "policy",
+      "editable": false
     },
     "zram": {
       "value": {
@@ -675,11 +681,11 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "deb1f27b1f29096e0d9402367a7ec3b4c9c517787319461d491ba94fe803764d",
+    "policy_sha256": "42afdb7c55e7c39d712954a66f57138a69e1efe768ff491e2f0139c119e7ff2b",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "56ecaf38639b4d848b53cc86383453eb19685e83f76f2c86093eb4d7bb0310fa"
+    "value": "392c50aed7abf50af52855b5b2389f3b0db8f55c2d7daa175b90688b391856c8"
   }
 }

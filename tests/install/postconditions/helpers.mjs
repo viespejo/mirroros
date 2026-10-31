@@ -130,6 +130,12 @@ export function goodObservations(plan) {
   const memory = operation(plan, 'configure_memory_reclaim').parameters;
   set(`text:${memory.destination}`, Object.entries(memory).filter(([key]) => key.startsWith('vm.')).map(([key, value]) => `${key} = ${value}`).join('\n'));
   set(`sha256:${memory.destination}`, memory.source_sha256);
+  const hibernateMode = operation(plan, 'configure_hibernate_mode')?.parameters;
+  if (hibernateMode !== undefined) {
+    set(`stat:${hibernateMode.destination}`, file());
+    set(`text:${hibernateMode.destination}`, '[Sleep]\nHibernateMode=shutdown');
+    set(`sha256:${hibernateMode.destination}`, hibernateMode.source_sha256);
+  }
 
   set('enabled:NetworkManager.service', 'enabled');
   set('text:/etc/hostname', operation(plan, 'configure_hostname_network').parameters.hostname);

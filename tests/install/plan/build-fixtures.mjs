@@ -228,7 +228,7 @@ export function buildValidPlan(storageOption, rootAccount, hibernation = true, t
   });
 
   const plan = {
-    format_version: 5,
+    format_version: 6,
     target_mode: targetMode,
     target: {
       ...(installation === undefined ? {} : { installation }),
@@ -329,6 +329,7 @@ export const INVALID_CASES = [
   ['plan_format_unsupported--version-2', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 2; }],
   ['plan_format_unsupported--version-3', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 3; }],
   ['plan_format_unsupported--version-4', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 4; }],
+  ['plan_format_unsupported--version-5', ['ext4-systemd-boot', 'locked'], plan => { plan.format_version = 5; }],
   ['target_mode_mismatch--mode', ['ext4-systemd-boot', 'locked'], plan => { plan.target_mode = 'free_space'; }],
   ['target_mode_mismatch--cleanup-scope', ['ext4-systemd-boot', 'locked'], plan => { operationOf(plan, 'remove_stale_uefi_entries').parameters.partuuids.push('other-disk'); }],
   ['target_mode_mismatch--uefi-path', ['btrfs-limine', 'locked'], plan => { operationOf(plan, 'register_uefi_boot_entry').parameters.loader_path = '\\EFI\\other.efi'; }],

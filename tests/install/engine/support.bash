@@ -107,6 +107,18 @@ engine_use_plan() {
   DIGEST="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).digest.value)' "$PLAN")"
 }
 
+# Generates a matched T14s plan against the reference disk simulated by the doubles.
+engine_use_hibernate_mode_plan() {
+  PLAN="${TEST_ROOT}/hibernate-mode-plan.json"
+  node --input-type=module -e '
+    import { writeFileSync } from "node:fs";
+    import { pathToFileURL } from "node:url";
+    const { hibernateModePlan } = await import(pathToFileURL(process.argv[1]).href);
+    writeFileSync(process.argv[2], JSON.stringify(hibernateModePlan(process.argv[3] !== "false")));
+  ' "${ENGINE_SUPPORT_DIR}/helpers.mjs" "$PLAN" "${1:-true}"
+  DIGEST="$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).digest.value)' "$PLAN")"
+}
+
 # Selects an invalid plan fixture; its digest is its own (the loader rejects it for the fixture's own reason).
 engine_use_invalid_plan() {
   PLAN="${ENGINE_PLAN_FIXTURES}/invalid/${1}.json"

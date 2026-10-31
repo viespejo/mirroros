@@ -517,6 +517,52 @@ SCRIPT
   ! engine_called mkswap
 }
 
+@test "the T14s hibernate mode asset is delivered with the zram semantics and verified" {
+  engine_use_hibernate_mode_plan
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  local relative=usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf
+  local delivered="${RUN_ROOT}/target/${relative}"
+  cmp "${CODE_ROOT}/install/plan/assets/${relative}" "$delivered"
+  [ "$(stat -c %a "$delivered")" = 644 ]
+  [ "$(stat -c %u:%g "$delivered")" = "$(stat -c %u:%g "${RUN_ROOT}/target/usr/lib/systemd/zram-generator.conf.d/60-mirroros.conf")" ]
+  grep -qx 'HibernateMode=shutdown' "$delivered"
+  [ "$(engine_json postconditions.status)" = passed ]
+  [[ "$(engine_json postconditions.checks)" == *'"id":"hibernate_mode_configuration","status":"passed"'* ]]
+  [[ "$(engine_json completed)" == *'"configure_hibernate_mode"'* ]]
+  if grep -q '^systemctl .*hibernate' "${DOUBLE_STATE}/calls.log"; then return 1; fi
+}
+
+@test "disabled T14s hibernation delivers no mode drop-in and verifies its absence" {
+  engine_use_hibernate_mode_plan false
+  engine_run
+  [ "$ENGINE_STATUS" -eq 0 ]
+  [ ! -e "${RUN_ROOT}/target/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf" ]
+  [[ "$(engine_json postconditions.checks)" == *'"id":"hibernate_mode_absent","status":"passed"'* ]]
+  [[ "$(engine_json completed)" != *'"configure_hibernate_mode"'* ]]
+}
+
+@test "a changed hibernate mode asset fails with exit 6 before delivery or later configuration" {
+  engine_use_hibernate_mode_plan
+  printf '# changed\n' >> "${CODE_ROOT}/install/plan/assets/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 6 ]
+  [ "$(engine_json reasons.0.code)" = engine_asset_mismatch ]
+  [ "$(engine_json failed_operation.id)" = configure_hibernate_mode ]
+  [ ! -e "${RUN_ROOT}/target/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf" ]
+  if grep -q '^arch-chroot .* locale-gen' "${DOUBLE_STATE}/calls.log"; then return 1; fi
+}
+
+@test "a missing hibernate mode asset fails with exit 6 before delivery" {
+  engine_use_hibernate_mode_plan
+  rm -- "${CODE_ROOT}/install/plan/assets/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf"
+  engine_run
+  [ "$ENGINE_STATUS" -eq 6 ]
+  [ "$(engine_json reasons.0.code)" = engine_asset_mismatch ]
+  [ "$(engine_json failed_operation.id)" = configure_hibernate_mode ]
+  [ ! -e "${RUN_ROOT}/target/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf" ]
+}
+
 @test "a signal during the engine ends it as interrupted with 128+n and non-destructive cleanup" {
   : > "${DOUBLE_STATE}/pacstrap-hang"
   (

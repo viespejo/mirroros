@@ -126,6 +126,12 @@
       "source": "policy",
       "editable": true
     },
+    "hibernate_mode": {
+      "value": "platform",
+      "provenance": "arch_guidance",
+      "source": "policy",
+      "editable": false
+    },
     "zram": {
       "value": {
         "package": "zram-generator",
@@ -675,12 +681,12 @@
     "dirty": false
   },
   "policy_binding": {
-    "policy_sha256": "deb1f27b1f29096e0d9402367a7ec3b4c9c517787319461d491ba94fe803764d",
+    "policy_sha256": "42afdb7c55e7c39d712954a66f57138a69e1efe768ff491e2f0139c119e7ff2b",
     "profile_definition_sha256": "07146c68c57845690c4fbac875703eabe28bc6550564a1f87ff76dd5c826d1ca",
     "override_sha256": "0fe14dd05a11152640081f186cb5ce4fbf6147b604165f07e0b3ae1141dcc242"
   },
   "digest": {
     "algorithm": "sha256",
-    "value": "b944a1214d496b209041cca23949078022bc02a28002270e9f1cf4d65330d65b"
+    "value": "daf5b5f79abbdb5b6a19def8222083fba21d8a0b521dad698ab8dc6587a32ccc"
   }
 }

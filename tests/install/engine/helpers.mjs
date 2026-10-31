@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { loadPlanOverride, loadProfileDefinition } from '../../../install/plan/resolve-choices.mjs';
+import { discover } from '../discovery/helpers.mjs';
+import { generate, targetsRoot } from '../plan/helpers.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const sourceRoot = resolve(here, '../../..');
@@ -46,6 +49,24 @@ export function streamOperations(fields) {
     operations.push({ id, description, parameters });
   }
   return operations;
+}
+
+// A matched T14s with the reference disk layout used by the engine's native-command doubles.
+export function hibernateModePlan(hibernation = true) {
+  const targetId = 'thinkpad-t14s-gen1-amd';
+  const factsDocument = discover('reference-vm-layout', {
+    targetId: null,
+    mutateRaw: raw => {
+      raw.firmware.dmi = { sys_vendor: 'LENOVO', product_name: '20UJ001RMX' };
+      raw.hardware.virtualization = 'none';
+    },
+  });
+  return generate({
+    factsDocument,
+    choices: { storage_option: 'ext4-systemd-boot', hibernation },
+    override: loadPlanOverride(targetsRoot, targetId),
+    profileDefinition: loadProfileDefinition(targetsRoot, targetId),
+  }).plan;
 }
 
 export function rawStorage(name = 'reference-vm-layout') {

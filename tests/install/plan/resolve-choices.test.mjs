@@ -38,7 +38,8 @@ const choose = (document, options = {}) => loadChoices(
 const codes = result => result.reasons.map(item => item.code);
 
 test('the shipped policy loads with its tier table and a stable hash', () => {
-  assert.equal(policy.document.format_version, 3);
+  assert.equal(policy.document.format_version, 4);
+  assert.deepEqual(policy.policy.hibernate_mode, { value: 'platform', provenance: 'arch_guidance', editable: false });
   assert.equal(policy.policy.storage_option.value, 'btrfs-limine');
   assert.equal(policy.policy.regional_format.value, 'follow_language');
   assert.equal('locales' in policy.policy, false);
@@ -96,12 +97,31 @@ test('a damaged policy is a contract error', () => {
   assert.throws(() => loadPlanPolicy(join(scratch, 'absent.json')), PlanContractError);
 });
 
+test('the hibernate mode policy accepts only the two closed values and is not editable', () => {
+  for (const value of ['platform', 'shutdown']) {
+    const document = structuredClone(policy.document);
+    document.policy.hibernate_mode.value = value;
+    assert.equal(loadPlanPolicy(writeJson(scratch, `policy-mode-${value}.json`, document)).policy.hibernate_mode.value, value);
+    assert.deepEqual(codes(choose({ format_version: 3, hibernate_mode: value })), ['choices_not_editable']);
+  }
+  for (const [index, value] of ['reboot', '', null, true, ['shutdown']].entries()) {
+    const document = structuredClone(policy.document);
+    document.policy.hibernate_mode.value = value;
+    assert.throws(() => loadPlanPolicy(writeJson(scratch, `policy-mode-invalid-${index}.json`, document)), PlanContractError);
+  }
+  const editable = structuredClone(policy.document);
+  editable.policy.hibernate_mode.editable = true;
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-mode-editable.json', editable)), PlanContractError);
+});
+
 test('a policy of an earlier format or with a derived key is a contract error', () => {
   const earlier = structuredClone(policy.document);
   earlier.format_version = 1;
   assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-v1.json', earlier)), PlanContractError);
   earlier.format_version = 2;
   assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-v2.json', earlier)), PlanContractError);
+  earlier.format_version = 3;
+  assert.throws(() => loadPlanPolicy(writeJson(scratch, 'policy-v3.json', earlier)), PlanContractError);
   for (const key of ['locales', 'locale_categories']) {
     const derived = structuredClone(policy.document);
     derived.policy[key] = { value: ['en_US.UTF-8'], provenance: 'personal_preference', editable: true };
@@ -266,6 +286,13 @@ test('the reference-vm override sets the hostname and hashes its content', () =>
   assert.match(override.sha256, /^[0-9a-f]{64}$/);
 });
 
+test('the T14s override declares only shutdown with a canonical binding', () => {
+  const override = loadPlanOverride(targetsRoot, 'thinkpad-t14s-gen1-amd');
+  assert.deepEqual(override.values, { hibernate_mode: 'shutdown' });
+  assert.deepEqual(override.reasons, []);
+  assert.match(override.sha256, /^[0-9a-f]{64}$/);
+});
+
 test('targets without a plan override resolve to nothing', () => {
   assert.deepEqual(loadPlanOverride(targetsRoot, 'framework-13-pro-amd'), { values: {}, reasons: [] });
   assert.deepEqual(loadPlanOverride(targetsRoot, 'no-such-target'), { values: {}, reasons: [] });
@@ -284,6 +311,13 @@ test('an invalid override is rejected', () => {
     assert.deepEqual(codes(load('{not json')), ['override_invalid_format']);
     assert.deepEqual(codes(load([])), ['override_invalid_format']);
     assert.deepEqual(load({ hostname: 'ok' }).values, { hostname: 'ok' });
+    for (const hibernate_mode of ['platform', 'shutdown']) {
+      assert.deepEqual(load({ hostname: 'ok', hibernate_mode }).values, { hostname: 'ok', hibernate_mode });
+    }
+    for (const value of ['reboot', '', null, true, ['shutdown']]) {
+      assert.deepEqual(codes(load({ hibernate_mode: value })), ['override_invalid_value']);
+    }
+    assert.deepEqual(codes(load({ hibernation: true })), ['override_unknown_key']);
   } finally {
     removeDirectory(targets);
   }

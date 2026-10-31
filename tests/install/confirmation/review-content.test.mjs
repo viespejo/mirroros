@@ -17,6 +17,8 @@ import {
 } from '../../../install/confirmation/review-content.mjs';
 import { renderPlan } from '../../../install/plan/render-plan.mjs';
 import { clone, facts, generate, unqualifiedFacts, withoutById } from './helpers.mjs';
+import { loadPlanOverride, loadProfileDefinition } from '../../../install/plan/resolve-choices.mjs';
+import { t14sFacts, targetsRoot } from '../plan/helpers.mjs';
 
 const plan = (choices = {}, factsDocument = facts()) => generate({ choices, factsDocument }).plan;
 const rows = subject => Object.fromEntries(compactReview(subject));
@@ -174,6 +176,40 @@ test('the hibernation row shows the swapfile size when enabled and no swapfile w
     assert.equal(Object.keys(rows(subject)).includes('Swapfile'), false);
     assert.doesNotMatch(JSON.stringify(compactReview(subject)), /guarantee/i);
   }
+});
+
+test('the T14s hibernation row names the shutdown mode and target profile', () => {
+  const subject = generate({
+    factsDocument: t14sFacts(),
+    override: loadPlanOverride(targetsRoot, 'thinkpad-t14s-gen1-amd'),
+    profileDefinition: loadProfileDefinition(targetsRoot, 'thinkpad-t14s-gen1-amd'),
+    choices: { swapfile_size: 2048 },
+  }).plan;
+  assert.ok(subject.operations.some(item => item.kind === 'configure_hibernate_mode'));
+  const expected = 'Enabled (swapfile 2048 MiB, hibernate mode shutdown by target profile)';
+  assert.equal(hibernationLabel(subject), expected);
+  assert.equal(rows(subject).Hibernation, expected);
+});
+
+test('disabled T14s hibernation retains the unchanged label despite the shutdown override', () => {
+  const subject = generate({
+    factsDocument: t14sFacts(),
+    override: loadPlanOverride(targetsRoot, 'thinkpad-t14s-gen1-amd'),
+    profileDefinition: loadProfileDefinition(targetsRoot, 'thinkpad-t14s-gen1-amd'),
+    choices: { hibernation: false },
+  }).plan;
+  assert.equal(subject.choices.hibernate_mode.value, 'shutdown');
+  assert.ok(!subject.operations.some(item => item.kind === 'configure_hibernate_mode'));
+  assert.equal(hibernationLabel(subject), 'Disabled (no swapfile)');
+  assert.equal(rows(subject).Hibernation, 'Disabled (no swapfile)');
+});
+
+test('the reference VM retains the unchanged enabled hibernation label', () => {
+  const subject = plan();
+  assert.equal(subject.choices.hibernate_mode.value, 'platform');
+  assert.ok(!subject.operations.some(item => item.kind === 'configure_hibernate_mode'));
+  assert.equal(hibernationLabel(subject), 'Enabled (swapfile 4096 MiB)');
+  assert.equal(rows(subject).Hibernation, 'Enabled (swapfile 4096 MiB)');
 });
 
 test('the below-memory warning persists in the review content only for a reduced size', () => {

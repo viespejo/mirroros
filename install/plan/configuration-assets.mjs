@@ -15,6 +15,10 @@ export const CONFIGURATION_ASSETS = {
     source: 'usr/lib/sysctl.d/60-mirroros-memory.conf',
     destination: '/usr/lib/sysctl.d/60-mirroros-memory.conf',
   },
+  configure_hibernate_mode: {
+    source: 'usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf',
+    destination: '/usr/lib/systemd/sleep.conf.d/60-mirroros-hibernate-mode.conf',
+  },
 };
 export const ASSET_ROOT = 'install/plan/assets';
 
@@ -63,6 +67,16 @@ export function parseSysctlAsset(text) {
   return collect(contentLines(text), SYSCTL_KEYS, 'the sysctl asset');
 }
 
+// The sleep drop-in: exactly one [Sleep] section with the declared HibernateMode key.
+export function parseHibernateModeAsset(text) {
+  const label = 'the hibernate mode asset';
+  const [section, ...rest] = contentLines(text);
+  if (section !== '[Sleep]' || rest.some(line => line.startsWith('['))) {
+    throw new PlanContractError(`${label} must contain exactly one [Sleep] section`);
+  }
+  return collect(rest, ['HibernateMode'], label);
+}
+
 function readAsset(codeRoot, kind) {
   const path = join(codeRoot, ASSET_ROOT, CONFIGURATION_ASSETS[kind].source);
   try {
@@ -87,7 +101,11 @@ export function loadConfigurationAssets(codeRoot, policy) {
   const assets = {};
   const zram = policy.policy.zram.value;
   const reclaim = policy.policy.memory_reclaim.value;
-  const declared = { configure_zram: zram.destination, configure_memory_reclaim: reclaim.destination };
+  const declared = {
+    configure_zram: zram.destination,
+    configure_memory_reclaim: reclaim.destination,
+    configure_hibernate_mode: CONFIGURATION_ASSETS.configure_hibernate_mode.destination,
+  };
   for (const kind of Object.keys(CONFIGURATION_ASSETS)) {
     const bytes = readAsset(codeRoot, kind);
     if (declared[kind] !== CONFIGURATION_ASSETS[kind].destination) {
@@ -104,8 +122,10 @@ export function loadConfigurationAssets(codeRoot, policy) {
         'compression-algorithm': zram.compression_algorithm,
         'swap-priority': zram.swap_priority,
       }, 'the zram-generator asset', errors);
-    } else {
+    } else if (kind === 'configure_memory_reclaim') {
       agree(parseSysctlAsset(text), reclaim.settings, 'the sysctl asset', errors);
+    } else {
+      agree(parseHibernateModeAsset(text), { HibernateMode: 'shutdown' }, 'the hibernate mode asset', errors);
     }
   }
   if (errors.length > 0) throw new PlanContractError(errors);

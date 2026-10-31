@@ -152,7 +152,7 @@ approve_plan_script() {
   grep -aqE 'Battery +No battery detected' "$STDOUT_PATH"
   grep -aqE 'Virtualization +Virtual machine' "$STDOUT_PATH"
   confirm_assert_gum_not_called 'NVIDIA graphics device|CPU vendor is not'
-  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.format_version === 5 && d.hardware_selections.rule_outcomes.length === 4 && d.warnings.length === 0"
+  confirm_json_assert "${RUN_DIR}/plans/01/installation-plan.json" "d.format_version === 6 && d.hardware_selections.rule_outcomes.length === 4 && d.warnings.length === 0"
 }
 
 @test "an NVIDIA GPU and an unknown CPU vendor are warned about in the review and never block the installation" {
