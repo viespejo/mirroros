@@ -275,6 +275,31 @@ test('session and greeter reload shared monitor rules and session sets GDK scale
   ]);
 });
 
+test('session defaults disable only update news on every configuration load', { skip: !lua && 'no Lua interpreter' }, () => {
+  const result = execFileSync(lua, ['-e', `
+    local original_dofile = dofile
+    package.preload['/usr/share/mirroros/hypr/layouts.lua'] = function() return 'us,es' end
+    dofile = function() return function() return nil end end
+    local deliveries = 0
+    hl = {
+      env = function() end,
+      config = function(config)
+        if config.ecosystem then
+          assert(config.ecosystem.no_update_news == true)
+          local count = 0
+          for _ in pairs(config.ecosystem) do count = count + 1 end
+          assert(count == 1)
+          assert(config.misc.no_update_news == nil)
+          deliveries = deliveries + 1
+        end
+      end,
+    }
+    for reload = 1, 2 do original_dofile(arg[1]) end
+    assert(deliveries == 2)
+  `, '-', path.join(provider, 'defaults.lua')], { input: '', encoding: 'utf8' });
+  assert.equal(result, '');
+});
+
 test('the session and greeter layout list starts with the resolved layout without duplicates', { skip: !lua && 'no Lua interpreter' }, () => {
   const order = resolved => execFileSync(lua, ['-e', `package.preload['/usr/share/mirroros/hypr/keyboard.lua'] = function() return '${resolved}' end
     package.path = ''

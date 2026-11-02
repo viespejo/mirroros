@@ -211,7 +211,9 @@ Managed destinations are:
 - `~/.config/hypr/hyprland.lua`: the managed entry point loads `/usr/share/mirroros/hypr/defaults.lua`, then optional
   personal layers. Product defaults include layouts from `layouts.lua` (the resolved layout first, then `us,es`
   without duplicates), Right Alt Compose, repeat defaults, `dwindle.preserve_split`, the reviewed border theme and
-  the approved bindings. Independently of the theme, window borders are 2 px, active and inactive opacity are
+  the approved bindings. `ecosystem.no_update_news = true` suppresses Hyprland's own update-news popup on
+  session startup; donation prompts, permission controls, configuration errors and the greeter are unchanged.
+  Personal layers can override this default. Independently of the theme, window borders are 2 px, active and inactive opacity are
   0.985 and 0.96, and blur is disabled; no application-specific exceptions are supplied. Configure migrates only exact known earlier entry points and preserves modified files,
   links and existing `hyprland.conf`. The earlier `SUPER+SHIFT+Q` and `SUPER+SHIFT+E` bindings are removed (close:
   `SUPER+W` or `SUPER+Q`; logout: System menu); `SUPER+Return` still launches `uwsm app -- foot`.

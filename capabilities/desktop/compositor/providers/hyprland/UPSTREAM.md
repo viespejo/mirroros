@@ -47,6 +47,17 @@ plain compositor background. The package's Git revision is unverified. These add
 reference VM; the chord and valid-background behavior received bounded attended checks. Missing/corrupt startup
 presentation and real multi-output lifecycle are not visually qualified by those checks.
 
+## Update news
+
+`defaults.lua` sets `ecosystem.no_update_news = true` to suppress Hyprland's own update-news popup in the
+managed user session, including subsequent logins. This is original MirrorOS configuration using the native
+option defined in [Hyprland v0.57.0 ConfigValues.cpp](https://github.com/hyprwm/Hyprland/blob/v0.57.0/src/config/values/ConfigValues.cpp)
+and documented in the [Hyprland configuration options](https://wiki.hypr.land/configuring/core/config-options/).
+No upstream code is copied. Donation prompts, permission controls, configuration errors and the greeter's
+configuration are unchanged; no private version-tracking state is written by MirrorOS. Personal layers can
+override this default. The regression test executes the defaults twice with a stubbed Lua API; attended
+logout/login validation remains pending.
+
 ## Monitor defaults
 
 `monitors.lua` is original MirrorOS configuration, using `HL.MonitorSpec` and `hl.monitor` from the installed

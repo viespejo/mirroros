@@ -13,6 +13,7 @@ else
 end
 hl.config({
     input = { kb_layout = require("/usr/share/mirroros/hypr/layouts.lua"), kb_options = "compose:ralt", repeat_delay = 230, repeat_rate = 62 },
+    ecosystem = { no_update_news = true },
     dwindle = { preserve_split = true },
     general = { border_size = 2, col = borders },
     decoration = { active_opacity = 0.985, inactive_opacity = 0.96, blur = { enabled = false } },
