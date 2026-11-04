@@ -58,6 +58,16 @@ JS
   [ "$status" -eq 1 ]
 }
 
+@test "wallpaper thumbnail payload declares executable permissions independently of checkout modes" {
+  run bash -c '
+    set -eu
+    declare -A file_permissions
+    source "$1"
+    [[ "${file_permissions[/usr/local/lib/mirroros/capabilities/desktop/shell/services/wallpaper-thumbnails]}" == 0:0:755 ]]
+  ' _ "${PROFILE}/profiledef.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "live identity is a regular override with accurate Arch lineage" {
   [ "$(<"${PROFILE}/airootfs/etc/hostname")" = mirroros ]
   [ -f "${PROFILE}/airootfs/etc/os-release" ]
