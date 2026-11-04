@@ -4,7 +4,7 @@
 REPOSITORY_ROOT="$(cd -- "${BATS_TEST_DIRNAME}/../.." && pwd -P)"
 PROFILE="${REPOSITORY_ROOT}/image/archiso"
 AUDIT="${REPOSITORY_ROOT}/docs/procedures/iso-size-and-live-branding.md"
-VENDOR_BASELINE='bc4cd22b0e4294914f38f4ba800b88474ab3a50a'
+VENDOR_BASELINE='824022d16d7ffd2646d7226b7b13e8b43592b020'
 
 @test "the x86_64 declarations match the approved Keep rows plus ADR 0019 Plymouth" {
   run node --input-type=module - "$AUDIT" "${PROFILE}/packages.x86_64" <<'JS'
@@ -86,8 +86,15 @@ JS
   done
   grep -Fxq 'default 01-archiso-linux.conf' "${PROFILE}/efiboot/loader/loader.conf"
   ! grep -q '^beep ' "${PROFILE}/efiboot/loader/loader.conf"
-  [ -f "${PROFILE}/efiboot/loader/entries/03-archiso-memtest86+x64.conf" ]
-  grep -Fq 'memtest.efi' "${PROFILE}/grub/loopback.cfg"
+  for menu in x64 IA32 AA64 LOONGARCH64; do
+    git -C "$REPOSITORY_ROOT" show "${VENDOR_BASELINE}:image/archiso/efiboot/loader/entries/03-archiso-memtest86+${menu}.conf" | \
+      cmp - "${PROFILE}/efiboot/loader/entries/03-archiso-memtest86+${menu}.conf"
+  done
+  for menu in grub/grub.cfg grub/loopback.cfg; do
+    grep -Fq 'if [ "${grub_platform}" == '\''efi'\'' -a -f "/boot/memtest86+/memtest86${uefi_machine_type_lower}.efi" ]; then' "${PROFILE}/${menu}"
+    grep -Fq 'linux /boot/memtest86+/memtest86${uefi_machine_type_lower}.efi' "${PROFILE}/${menu}"
+    ! grep -Fq '/boot/memtest86+/memtest.efi' "${PROFILE}/${menu}"
+  done
   ! grep -Eq '^[[:space:]]*linux /boot/memtest86\+/memtest$' "${PROFILE}/grub/loopback.cfg" "${PROFILE}/grub/grub.cfg"
   grep -Fq 'img_loop="${iso_path}"' "${PROFILE}/grub/loopback.cfg"
   grep -Fq 'archisosearchuuid=%ARCHISO_UUID%' "${PROFILE}/grub/grub.cfg"
@@ -145,13 +152,13 @@ JS
   git -C "$REPOSITORY_ROOT" diff --exit-code "$VENDOR_BASELINE" -- image/archiso/airootfs/etc/systemd/network
 }
 
-@test "UEFI-only initramfs omits memdisk and adds Plymouth after udev without other changes" {
+@test "UEFI-only initramfs follows Archiso 92 without kms, omits memdisk and adds Plymouth after udev" {
   ! grep -Fxq syslinux "${PROFILE}/packages.x86_64"
   run bash -c '
     set -e
     baseline=$(git -C "$1" show "$2:image/archiso/airootfs/etc/mkinitcpio.conf.d/archiso.conf")
-    [[ "$baseline" == *" kms memdisk archiso "* ]]
-    expected="${baseline/ kms memdisk archiso / kms archiso }"
+    [[ "$baseline" != *" kms "* && "$baseline" == *" modconf memdisk archiso "* ]]
+    expected="${baseline/ modconf memdisk archiso / modconf archiso }"
     expected="${expected/base udev /base udev plymouth }"
     [[ "$(<"$3")" == "$expected" ]]
   ' _ "$REPOSITORY_ROOT" "$VENDOR_BASELINE" "${PROFILE}/airootfs/etc/mkinitcpio.conf.d/archiso.conf"

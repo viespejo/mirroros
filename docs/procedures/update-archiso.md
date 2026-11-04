@@ -55,7 +55,7 @@ Use native Git commands to record the exact revisions that were actually used; d
 
 `vendor/archiso-releng` is created once from the baseline commit. It is a continuing vendor-history branch, not an orphan branch. A **pure** vendor commit contains only the unmodified upstream transition for the imported profile. Pure does not mean that the branch has no ancestry; it means that local MirrorOS changes are not mixed into that vendor commit.
 
-`UPSTREAM.md`, the attribution entry, and every MirrorOS local delta live only on `main`. Every vendor integration is brought to `main` with an explicit `--no-ff` merge so that the import boundary remains visible. Merge conflicts are useful: they surface local deltas for maintainer review instead of silently overlaying them.
+`image/archiso/UPSTREAM.md`, the attribution entry, and every MirrorOS local delta live only on `main`. Every vendor integration is brought to `main` with an explicit `--no-ff` merge so that the import boundary remains visible. Merge conflicts are useful: they surface local deltas for maintainer review instead of silently overlaying them.
 
 The vendor work is performed in `build/worktrees/archiso-vendor/`. The primary checkout stays on `main` while the vendor worktree is being prepared.
 
@@ -114,7 +114,7 @@ cosign verify \
   "$IMAGE"
 ```
 
-A failed or ambiguous signature verification is an unmet prerequisite. Stop without creating a container. Record the digest used for this import in `UPSTREAM.md`; the digest is evidence of this execution, not a pin for future executions, which must resolve and verify the current tag again.
+A failed or ambiguous signature verification is an unmet prerequisite. Stop without creating a container. Record the digest used for this import in `image/archiso/UPSTREAM.md`; the digest is evidence of this execution, not a pin for future executions, which must resolve and verify the current tag again.
 
 ## 6. Acquisition container
 
@@ -326,7 +326,7 @@ test -z "$(git status --porcelain)"
 git merge --no-ff --no-commit vendor/archiso-releng
 ```
 
-Resolve conflicts deliberately. A conflict is a review of local MirrorOS deltas, not permission to overwrite them. On the first import, update the root `UPSTREAM.md` contract and add the corresponding attribution entry to `docs/attribution.md`. On later imports, update the existing provenance record and attribution only as required by the change; keep both files on `main`.
+Resolve conflicts deliberately. A conflict is a review of local MirrorOS deltas, not permission to overwrite them. On the first import, create `image/archiso/UPSTREAM.md` using the contract below and add the corresponding attribution entry to `docs/attribution.md`. On later imports, update the existing provenance record and attribution only as required by the change; keep both files on `main`.
 
 Run the delta, provenance, profile-integrity, and secret-scan checks before committing. If the review cannot establish the accepted provenance or integrity, abort without committing:
 
@@ -344,7 +344,7 @@ The merge must remain an explicit `--no-ff` merge. Do not fast-forward, squash a
 
 ## 11. `UPSTREAM.md` contract
 
-The root `UPSTREAM.md` is a main-only provenance and qualification record. It must record all of the following for each import:
+`image/archiso/UPSTREAM.md` is a main-only provenance and qualification record. It must record all of the following for each import:
 
 - the upstream project and canonical URL;
 - the upstream tag and commit;
@@ -356,8 +356,8 @@ The root `UPSTREAM.md` is a main-only provenance and qualification record. It mu
 - the acquisition and import method;
 - the source path `/usr/share/archiso/configs/releng/`;
 - the vendor commit;
-- a local-delta block containing the baseline commit, a functional summary, add/modify/delete statistics, and a reproducible diff command excluding `UPSTREAM.md`;
-- boot scope: UEFI/OVMF only, with BIOS/Syslinux assets retained but unsupported;
+- a local-delta block containing the vendor baseline commit, a functional summary, add/modify/delete statistics, and a reproducible profile diff command excluding `image/archiso/UPSTREAM.md`;
+- boot scope: x86_64 UEFI/OVMF only; preserve reviewed local BIOS/Syslinux removals, and do not imply support from retained upstream assets for other architectures;
 - separate states for import integrity, secret scan, build qualification, and boot qualification;
 - the aggregate signature-validation result;
 - an acceptance summary; and
@@ -371,9 +371,9 @@ The local-delta block must make the comparison reproducible. For example, after 
 BASELINE_COMMIT='<baseline commit>'
 MERGE_COMMIT='<merge commit>'
 git diff --no-ext-diff --binary "$BASELINE_COMMIT" "$MERGE_COMMIT" \
-  -- . ':(exclude)UPSTREAM.md'
+  -- image/archiso ':(exclude)image/archiso/UPSTREAM.md'
 git diff --stat "$BASELINE_COMMIT" "$MERGE_COMMIT" \
-  -- . ':(exclude)UPSTREAM.md'
+  -- image/archiso ':(exclude)image/archiso/UPSTREAM.md'
 ```
 
 ## 12. Checks and evidence
@@ -463,7 +463,9 @@ A failed clean-clone gate blocks acceptance. Do not leave the temporary clone in
 
 ## 14. Requalification
 
-Once Stories 1.3 and 1.4 exist, every accepted update reruns both the build gate and the UEFI/OVMF boot gate. Until those stories exist, the corresponding `UPSTREAM.md` states remain `not yet performed`; an import is not represented as build- or boot-qualified merely because it passed provenance and secret checks.
+Once Stories 1.3 and 1.4 exist, every accepted update reruns both the build gate and the UEFI/OVMF boot gate. Until those stories exist, the corresponding `image/archiso/UPSTREAM.md` states remain `not yet performed`; an import is not represented as build- or boot-qualified merely because it passed provenance and secret checks.
+
+Import integration may be committed separately when the maintainer explicitly defers build and boot execution. Record both gates as pending in `image/archiso/UPSTREAM.md`, including relevant compatibility risks. This is not a build- or boot-qualified accepted update; later qualification must use the integrated source state. Never run a build or VM merely to complete the import without its required authorization.
 
 UEFI/OVMF is the only supported boot scope. BIOS/Syslinux assets may remain in the upstream profile for provenance, but their presence implies no BIOS or Syslinux support and must not be reported as qualification.
 

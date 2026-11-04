@@ -115,7 +115,7 @@ if [[ "${1:-}" == 'exec' ]]; then
     if [[ "${BUILDER_DOCKER_SCENARIO:-}" == 'version-mismatch' ]]; then
       printf '%s\n' 'archiso 999-1'
     else
-      printf '%s\n' 'archiso 91-1'
+      printf '%s\n' 'archiso 92-1'
     fi
     exit 0
   fi
@@ -135,7 +135,7 @@ if [[ "${1:-}" == 'cp' ]]; then
   if [[ "$source_path" == *'.iso' ]]; then
     printf '%s\n' 'synthetic ISO fixture' > "$destination_path"
   elif [[ "$source_path" == *'pkglist.x86_64.txt' ]]; then
-    printf '%s\n' 'base 1-1' 'archiso 91-1' > "$destination_path"
+    printf '%s\n' 'base 1-1' 'archiso 92-1' > "$destination_path"
   elif [[ "$source_path" == *'/mirrorlist' ]]; then
     printf '%s\n' 'Server = https://mirror.example.invalid/$repo/os/$arch' > "$destination_path"
   elif [[ "$source_path" == *'aur-build.sh' ]]; then
