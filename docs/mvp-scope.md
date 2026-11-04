@@ -41,6 +41,7 @@ project-owned QML.
 | Administrative privilege | installation | sudo | Source: `install/plan/policy.json` |
 | Audio | configure | PipeWire, WirePlumber, pipewire-pulse and pipewire-alsa | Story 4.4 reviewed provider selection; owned volume command and A2DP preference; [hardware procedure](procedures/hardware.md) |
 | Bluetooth | configure | BlueZ (bluez and bluez-utils) | Story 4.4 reviewed provider selection; permanent bluetoothctl terminal path; [hardware procedure](procedures/hardware.md) |
+| Corporate Cisco OpenConnect VPN | configure | networkmanager-openconnect with OpenConnect authentication | Story 4.4 scope addition for daily corporate connectivity; NetworkManager owns routes and DNS; private terminal authentication and profile procedure in the [hardware procedure](procedures/hardware.md) |
 | Package updates with AUR review | configure | yay | Story 4.7 |
 
 ### Hardware
@@ -51,6 +52,7 @@ project-owned QML.
 | Graphics | installation | Per hardware rules | Source: `hardware/rules/` |
 | Virtual machine guest support | installation | Per hardware rules | Source: `hardware/rules/` |
 | Brightness, media keys, battery, lid, and suspend | configure | brightnessctl, playerctl, UPower and systemd-logind with existing hypridle/hyprlock | Story 4.4 reviewed provider selection; owned hardware commands, battery warning, power-key policy and Hyprland runtime display handling; [hardware procedure](procedures/hardware.md) |
+| Automatic AC/battery power profiles | configure | power-profiles-daemon | Story 4.4 scope addition for daily-use power behavior; owned command and user watcher remember per-source choices; [hardware procedure](procedures/hardware.md) |
 
 ### Desktop
 
