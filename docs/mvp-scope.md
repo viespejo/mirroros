@@ -39,8 +39,8 @@ project-owned QML.
 | Wired and Wi-Fi network | installation | NetworkManager | Source: `install/plan/policy.json` |
 | Time, locale, and console keyboard | installation | Per installation policy | Source: `install/plan/policy.json` |
 | Administrative privilege | installation | sudo | Source: `install/plan/policy.json` |
-| Audio | configure | open — selected by Story 4.4 | |
-| Bluetooth | configure | open — selected by Story 4.4 | |
+| Audio | configure | PipeWire, WirePlumber, pipewire-pulse and pipewire-alsa | Story 4.4 reviewed provider selection; owned volume command and A2DP preference; [hardware procedure](procedures/hardware.md) |
+| Bluetooth | configure | BlueZ (bluez and bluez-utils) | Story 4.4 reviewed provider selection; permanent bluetoothctl terminal path; [hardware procedure](procedures/hardware.md) |
 | Package updates with AUR review | configure | yay | Story 4.7 |
 
 ### Hardware
@@ -50,7 +50,7 @@ project-owned QML.
 | CPU microcode | installation | Per hardware rules | Source: `hardware/rules/` |
 | Graphics | installation | Per hardware rules | Source: `hardware/rules/` |
 | Virtual machine guest support | installation | Per hardware rules | Source: `hardware/rules/` |
-| Brightness, media keys, battery, lid, and suspend | configure | open — selected by Story 4.4 | |
+| Brightness, media keys, battery, lid, and suspend | configure | brightnessctl, playerctl, UPower and systemd-logind with existing hypridle/hyprlock | Story 4.4 reviewed provider selection; owned hardware commands, battery warning, power-key policy and Hyprland runtime display handling; [hardware procedure](procedures/hardware.md) |
 
 ### Desktop
 
@@ -149,7 +149,7 @@ Neovim, Pi, and the browser are owned by their own configuration and are not lis
 - Pin a window
 - Toggle grouping or tabbed layout and split orientation
 - Move a workspace to another monitor
-- Switch the monitor layout between external, mirrored, and laptop only
+- Switch the monitor layout between external, mirrored, and laptop only (Story 4.4; [hardware procedure](procedures/hardware.md))
 - Toggle the dropdown terminal scratchpad
 
 **Desktop operations**
