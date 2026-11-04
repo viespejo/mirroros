@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+set -Eeuo pipefail
+
+usage() { printf 'Usage: brightness +N%%|N%%-|max|min (N: 1..100)\n' >&2; exit 2; }
+(( $# == 1 )) || usage
+case "$1" in
+  max) value=100% ;;
+  min) value=1% ;;
+  *)
+    [[ "$1" =~ ^\+([1-9][0-9]?|100)%$ || "$1" =~ ^([1-9][0-9]?|100)%-$ ]] || usage
+    value="$1" ;;
+esac
+osd() {
+  if ! qs ipc -p /usr/share/mirroros/shell call osd showSource brightness; then
+    printf 'Brightness OSD unavailable; the backlight command result is unchanged.\n' >&2
+  fi
+}
+# Select only a display backlight, never a keyboard LED. logind requires an active seat session.
+if ! brightnessctl --class=backlight get > /dev/null 2>&1; then
+  printf 'Brightness unavailable: no accessible display backlight.\n' >&2
+  osd
+  exit 4
+fi
+if ! brightnessctl --class=backlight --min-value=1 set "$value"; then
+  printf 'Brightness unavailable: run from the active graphical seat session.\n' >&2
+  osd
+  exit 4
+fi
+osd

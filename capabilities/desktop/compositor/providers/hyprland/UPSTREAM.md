@@ -47,6 +47,50 @@ plain compositor background. The package's Git revision is unverified. These add
 reference VM; the chord and valid-background behavior received bounded attended checks. Missing/corrupt startup
 presentation and real multi-output lifecycle are not visually qualified by those checks.
 
+## Story 4.4 hardware additions
+
+`hardware-bindings.lua` adapts the chords, descriptions and `locked`/`repeating` options from Omarchy
+**4.0.6** (MIT), [media.lua](https://github.com/basecamp/omarchy/blob/v4.0.6/default/hypr/bindings/media.lua)
+and [utilities.lua](https://github.com/basecamp/omarchy/blob/v4.0.6/default/hypr/bindings/utilities.lua).
+This reference is distinct from the older global revision above. The MIT license and copyright attribution
+above apply to these adaptations. All dispatchers call owned `/usr/share/mirroros/hardware/` commands;
+media uses the approved `playerctl` command boundary instead of an Omarchy shell media service.
+No Omarchy helper or shell service is imported. Keyboard-backlight bindings are omitted: supervised T14s
+exploration on 2026-11-03 found firmware-handled Fn+Space and no delivered `XF86Kbd*` keys.
+
+`display` is original MirrorOS Bash integration over native `hyprctl monitors all -j` and `hyprctl eval`
+(`hl.monitor`). It follows Omarchy 4.0.6's connector allowlist, internal-panel identification and clean-scale
+preset behavior, inspected read-only in the ISO package's `usr/bin/omarchy-hyprland-monitor-{internal,
+internal-mirror,scaling,clamshell}`. It does not adopt their persistent toggle files, configuration parsing,
+monitor-file edits, audit logging or reloads. `jq` from the signed Arch **extra** repository is a provider-owned
+runtime dependency for parsing and validating the monitor JSON; `hyprland` also comes from **extra**.
+No downloaded executable or additional package source is used.
+
+Command interface (active graphical session required):
+
+- `display laptop` toggles the internal panel, refusing to disable it without an active external display.
+- `display mirror` toggles mirroring on the first active external output; the internal source is explicitly
+  enabled first. Turning mirroring off returns to extended mode.
+- `display scale up|down` steps the focused output through clean equivalents of 1, 1.25, 1.6, 2, 3 and 4.
+- `display clamshell close|open` handles the lid switches (not launchable from keyboard help). Close disables
+  only the internal panel when an external output is active; undocked close leaves suspend and lock to logind
+  and hypridle. Open explicitly restores the panel with `disabled = false`. Mirrors are detached before their
+  source is disabled so the external output remains usable.
+
+All actions are runtime-only and disappear on reload or reboot. No monitor configuration is written, no
+session process is restarted or reloaded, and no persistent layout manager or hotplug watcher is introduced.
+Native monitor-rule defaults apply to omitted fields; runtime layout changes are not a backup of personal rules.
+Unsafe connector names and invalid arguments are rejected before mutation; absent hardware is unavailable.
+The explicit restore and mirror-source ordering follow the approved T14s exploration evidence
+(`evidence/hardware/exploration-20261103T200419Z/`, ignored). Automated contracts cover bindings, connector
+validation, display actions and exact entry-point migration; attended graphical acceptance remains Task 7.
+
+`hyprland.lua` loads hardware bindings after product defaults initialize the staged registry and before personal
+layers finalize it. `prepare-hyprland` additionally migrates only the exact prior layered entry point
+(SHA-256 `0275ff2835bcd0fe6983fdc1bddf2420a8d16d29ce1bfff2ad38d3b5dd4ca924`); edited files and links remain
+user-owned. This narrowly scoped migration lets existing managed sessions load the delivered hardware bindings
+at their next configuration load without configure triggering that load.
+
 ## Update news
 
 `defaults.lua` sets `ecosystem.no_update_news = true` to suppress Hyprland's own update-news popup in the
@@ -76,7 +120,7 @@ no upstream configuration is copied. See
 
 The prototype loaded these files into a running session with `hyprctl eval` and removed them with
 `MirrorOSKeys.unbind_all()`, which crashed Hyprland 0.56.2 once (cause unknown). Production registers them at
-configuration time instead: the managed `hyprland.lua` loads provider `defaults.lua`, which runs both files with `dofile` at every configuration load.
+configuration time instead: the managed `hyprland.lua` loads provider `defaults.lua`, which runs shell and window bindings with `dofile` at every configuration load; the entry point then runs hardware bindings with `dofile` before personal layers.
 The registry table is created empty at each load; session bindings are staged until the personal binding layer finishes, and nothing is unbound by MirrorOS. Basis: the prototype observed
 that runtime bindings do not survive a configuration reload, and Omarchy's `default/hypr/bootstrap.lua` clears its
 own modules from `package.loaded` at each load, which indicates that the Lua state persists across reloads; `dofile`
@@ -88,6 +132,9 @@ only by the separately authorized session test, not by these sources.
 
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
-SUPER+L / SUPER+Alt+L (workspace layout cycling), SUPER+slash / SUPER+Alt+slash (monitor scaling, Story 4.4), the
-Story 4.4 panels, media and lid keys, the Story 4.5 browser, file manager, editor, clipboard and capture keys.
-Final binding ownership across slices is Story 4.7.
+SUPER+L / SUPER+Alt+L (workspace layout cycling), the Story 4.4 panels deferred to plan 02-26, and the Story 4.5
+browser, file manager, editor, clipboard and capture keys. Hardware exclusions remain unbound:
+SHIFT+XF86AudioMute (audio output switching), SHIFT+XF86AudioPause / SHIFT+XF86AudioPlay (media source switching),
+XF86TouchpadToggle / XF86TouchpadOn / XF86TouchpadOff (outside the slice), XF86Eject (outside the slice), and
+XF86KbdBrightnessUp / XF86KbdBrightnessDown / XF86KbdLightOnOff (not delivered by the explored keyboard).
+Audio output/source switching belongs to plan 02-26. Final binding ownership across slices is Story 4.7.

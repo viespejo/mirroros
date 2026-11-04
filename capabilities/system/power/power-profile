@@ -1,0 +1,52 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Per-state memory and defaults adapted from Omarchy 4.0.6 omarchy-powerprofiles-set (MIT).
+# D-Bus avoids the optional Python runtime required by powerprofilesctl.
+set -Eeuo pipefail
+
+usage() { printf 'Usage: power-profile set [autodetect|ac|battery] [performance|balanced|power-saver]\n' >&2; exit 2; }
+(( $# >= 1 && $# <= 3 )) && [[ "$1" == set ]] || usage
+mode=${2:-autodetect}
+case "$mode" in autodetect|ac|battery) ;; *) usage ;; esac
+profile=${3:-}
+case "$profile" in ''|performance|balanced|power-saver) ;; *) usage ;; esac
+unavailable() { printf 'Power profiles unavailable: %s\n' "$1" >&2; exit 4; }
+if [[ "$mode" == autodetect ]]; then
+  on_battery=$(busctl --system get-property org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower OnBattery) ||
+    unavailable 'UPower is not accessible.'
+  case "$on_battery" in
+    'b true') mode=battery ;;
+    'b false') mode=ac ;;
+    *) unavailable 'invalid UPower power-source state.' ;;
+  esac
+fi
+properties=$(busctl --system get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles Profiles) ||
+  unavailable 'power-profiles-daemon is not accessible.'
+available() { [[ "$properties" == *"\"$1\""* ]]; }
+state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/power-profiles
+if [[ -z "$profile" ]]; then
+  if [[ -f "$state_dir/$mode" ]]; then
+    IFS= read -r profile < "$state_dir/$mode" || unavailable 'invalid remembered profile.'
+    case "$profile" in performance|balanced|power-saver) ;; *) unavailable 'invalid remembered profile.' ;; esac
+  elif [[ "$mode" == ac ]] && available performance; then
+    profile=performance
+  else
+    profile=balanced
+  fi
+fi
+available "$profile" || unavailable 'requested or remembered profile is not exposed by the daemon.'
+active=$(busctl --system get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles ActiveProfile) ||
+  unavailable 'cannot read the active profile.'
+if [[ "$active" != "s \"$profile\"" ]]; then
+  busctl --system set-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles ActiveProfile s "$profile" ||
+    unavailable 'profile switching was denied or failed.'
+fi
+if (( $# == 3 )); then
+  umask 077
+  mkdir -p -- "$state_dir"
+  tmp=$(mktemp "$state_dir/.profile.XXXXXX")
+  trap 'rm -f -- "$tmp"' EXIT
+  printf '%s\n' "$profile" > "$tmp"
+  mv -- "$tmp" "$state_dir/$mode"
+fi
+printf '%s: %s\n' "$mode" "$profile"

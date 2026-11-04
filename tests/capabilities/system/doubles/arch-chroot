@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'arch-chroot %s\n' "$*" >> "$CFG_TEST_CALLS"
+shift
+exec "$@"

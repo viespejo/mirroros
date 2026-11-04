@@ -1,0 +1,16 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  target) exit 0 ;;
+  running) ;;
+  *) exit 6 ;;
+esac
+systemctl is-active --quiet power-profiles-daemon.service
+[[ "$(busctl --system get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager HandlePowerKey)" == 's "ignore"' ]]
+profiles=$(busctl --system get-property net.hadess.PowerProfiles /net/hadess/PowerProfiles net.hadess.PowerProfiles Profiles)
+[[ "$profiles" == *'"balanced"'* ]]
+# UPower is D-Bus activated; no user service or desktop is started by these checks.
+present=$(busctl --system get-property org.freedesktop.UPower /org/freedesktop/UPower/devices/DisplayDevice org.freedesktop.UPower.Device IsPresent)
+if [[ "$present" == 'b false' ]]; then printf 'Battery unavailable: UPower reports no battery.\n'; fi
+if ! compgen -G '/sys/class/backlight/*' > /dev/null; then printf 'Brightness hardware unavailable: no backlight.\n'; fi

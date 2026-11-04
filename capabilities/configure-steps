@@ -8,6 +8,10 @@ CFG_STEPS=(
   workflow/tmux
   workflow/editor
   workflow/pi
+  system/audio
+  system/bluetooth
+  system/power
+  system/vpn
   desktop/compositor/providers/hyprland
   desktop/shell
   desktop/lock

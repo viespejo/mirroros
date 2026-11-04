@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'busctl %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_BUS_FAIL:-0}" == 0 ]] || exit 17
+# --system get-property service path interface property
+property=${6:-}
+case "$2:$property" in
+  get-property:HandlePowerKey)
+    value=poweroff
+    [[ ! -f "$CFG_TEST_DIR/power-key" ]] || value=$(< "$CFG_TEST_DIR/power-key")
+    [[ "${HW_POLICY_FAIL:-0}" == 0 ]] || value=poweroff
+    printf 's "%s"\n' "$value" ;;
+  get-property:Profiles)
+    profiles='aa{sv} 3 1 "Profile" s "power-saver" 1 "Profile" s "balanced" 1 "Profile" s "performance"'
+    printf '%s\n' "${HW_PROFILES:-$profiles}" ;;
+  get-property:ActiveProfile)
+    value=balanced
+    [[ ! -f "$CFG_TEST_DIR/active-profile" ]] || value=$(< "$CFG_TEST_DIR/active-profile")
+    printf 's "%s"\n' "$value" ;;
+  set-property:ActiveProfile) [[ "${HW_SET_FAIL:-0}" == 0 ]] || exit 17; printf '%s\n' "$8" > "$CFG_TEST_DIR/active-profile" ;;
+  get-property:OnBattery) printf 'b %s\n' "${HW_ON_BATTERY:-false}" ;;
+  get-property:IsPresent) printf 'b %s\n' "${HW_BATTERY_PRESENT:-false}" ;;
+  get-property:State) printf 'u %s\n' "${HW_BATTERY_STATE:-2}" ;;
+  get-property:Percentage) printf 'd %s\n' "${HW_BATTERY_PERCENT:-50}" ;;
+  *) printf 'Unexpected busctl invocation\n' >&2; exit 97 ;;
+esac

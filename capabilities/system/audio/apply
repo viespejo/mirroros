@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and a non-root target user.
+# Context: CONFIGURE_CONTEXT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: audio packages, owned commands, user service links and A2DP preference exist.
+# User services are enabled only; a running session takes them up at its next login.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+for command in volume media; do
+  cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
+  cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
+done
+cfg_tracked_file "$STEP_DIR/OMARCHY-LICENSE" /usr/share/mirroros/hardware/licenses/omarchy-audio 0644
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hardware/licenses/omarchy-audio
+cfg_user_file "$STEP_DIR/bluetooth-a2dp-autoconnect.conf" .config/wireplumber/wireplumber.conf.d/bluetooth-a2dp-autoconnect.conf
+for unit in pipewire.service pipewire-pulse.service wireplumber.service; do
+  cfg_user_unit_enable "$unit" "/usr/lib/systemd/user/$unit" default.target
+  cfg_require cfg_user_unit_enabled "$unit" default.target
+done
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_user_file_present .config/wireplumber/wireplumber.conf.d/bluetooth-a2dp-autoconnect.conf

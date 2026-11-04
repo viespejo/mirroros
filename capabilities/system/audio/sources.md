@@ -1,0 +1,32 @@
+# Audio sources and ownership
+
+## Packages
+
+`pipewire`, `wireplumber`, `pipewire-pulse`, `pipewire-alsa` and `playerctl` come from the official Arch `extra`
+repository. Configure records resolved versions in `packages.tsv`; these are not version pins. WirePlumber supplies
+`wpctl`; playerctl is the terminal MPRIS provider. PipeWire services and WirePlumber are enabled only for the
+selected user, under `default.target`, without starting or restarting a user manager or service.
+
+## Owned delivery
+
+`volume` and `media` are independently written MirrorOS commands installed at `/usr/share/mirroros/hardware/`.
+They validate argv before provider calls. Volume changes use `wpctl set-volume -l 1.0`; the existing shell's
+`qs ipc -p /usr/share/mirroros/shell call osd showSource volume` reads the measured source. Microphone mute uses
+a fixed message without a level. Missing audio or MPRIS players return unavailable (4); invalid input returns 2.
+OSD failure does not undo a successful provider action and is reported separately. Configure does not claim an
+active user audio session; activation and physical audio checks follow at the next login.
+
+## Omarchy attribution and approval
+
+The hardware-key command semantics are a behavior reference to Omarchy 4.0.6 (MIT, David Heinemeier Hansson).
+`bluetooth-a2dp-autoconnect.conf` incorporates the rule block from
+[`config/wireplumber/wireplumber.conf.d/bluetooth-a2dp-autoconnect.conf`](https://github.com/basecamp/omarchy/blob/v4.0.6/config/wireplumber/wireplumber.conf.d/bluetooth-a2dp-autoconnect.conf),
+Omarchy 4.0.6, MIT; see the repository's [license](https://github.com/basecamp/omarchy/blob/v4.0.6/LICENSE).
+The MIT permission and copyright notice are retained in the adjacent `OMARCHY-LICENSE`.
+The user drop-in changes A2DP auto-connect only, preserving microphone profile autoswitch.
+
+Approval: Story 4.4 exploration gate, 2026-11-03. Ignored evidence:
+`evidence/hardware/exploration-20261103T200419Z/REPORT.md` and `bluetooth-a2dp-dropin.txt`. Reconnection selected
+HFP before the rule, A2DP after it; capture switched to HFP and back. This is T14s exploratory evidence, not
+Framework qualification. User-owned drop-ins are preserved by the configure file helper. No pairing data is read,
+written or recorded by configure. Terminal pairing uses `bluetoothctl` from `system/bluetooth`.

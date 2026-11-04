@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# UPower event trigger is independent of the shell; 10% episode policy follows Omarchy 4.0.6 (MIT).
+set -Eeuo pipefail
+
+power_watch_profile() { /usr/share/mirroros/hardware/power-profile set autodetect; }
+
+power_watch_refresh() {
+  local source present state percentage
+  if ! source=$(busctl --system get-property org.freedesktop.UPower /org/freedesktop/UPower org.freedesktop.UPower OnBattery); then
+    printf 'Power source unavailable: UPower query failed.\n' >&2
+    return 0
+  fi
+  case "$source" in
+    'b true'|'b false') ;;
+    *) printf 'Power source unavailable: invalid UPower state.\n' >&2; return 0 ;;
+  esac
+  if [[ "$source" != "$last_source" ]]; then
+    if power_watch_profile; then last_source=$source; fi
+  fi
+  if ! present=$(busctl --system get-property org.freedesktop.UPower /org/freedesktop/UPower/devices/DisplayDevice org.freedesktop.UPower.Device IsPresent) ||
+    [[ "$present" != 'b true' ]]; then
+    printf 'Battery unavailable: no readable UPower display battery.\n' >&2
+    warned=0
+    return 0
+  fi
+  if ! state=$(busctl --system get-property org.freedesktop.UPower /org/freedesktop/UPower/devices/DisplayDevice org.freedesktop.UPower.Device State) ||
+    ! percentage=$(busctl --system get-property org.freedesktop.UPower /org/freedesktop/UPower/devices/DisplayDevice org.freedesktop.UPower.Device Percentage); then
+    printf 'Battery unavailable: cannot read charge state.\n' >&2
+    return 0
+  fi
+  if [[ ! "$percentage" =~ ^d\ ([0-9]+([.][0-9]+)?)$ ]]; then
+    printf 'Battery unavailable: invalid percentage.\n' >&2
+    return 0
+  fi
+  percentage=${percentage#d }
+  if [[ "$source" == 'b true' && "$state" == 'u 2' ]] &&
+    awk -v value="$percentage" 'BEGIN { exit !(value >= 0 && value <= 10) }'; then
+    if (( warned == 0 )); then
+      if notify-send --urgency=critical --expire-time=30000 'Low battery' 'Battery at or below 10%; connect AC power.'; then
+        warned=1
+      fi
+    fi
+  else
+    warned=0
+  fi
+}
+
+power_watch_main() {
+  last_source=''
+  warned=0
+  power_watch_refresh
+  # The monitor carries no evidence: event payloads are discarded, and every update is read from UPower.
+  # pipefail propagates monitor failure to systemd's bounded RestartSec policy.
+  upower --monitor | while IFS= read -r _; do power_watch_refresh; done
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then power_watch_main; fi

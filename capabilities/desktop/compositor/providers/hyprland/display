@@ -1,0 +1,105 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Runtime-only Hyprland display actions; no configuration or toggle files are written.
+set -Eeuo pipefail
+
+usage() { printf 'Usage: display laptop|mirror|scale up|scale down|clamshell close|clamshell open\n' >&2; exit 2; }
+unavailable() { printf 'Display unavailable: %s\n' "$1" >&2; exit 4; }
+(( $# >= 1 )) || usage
+action="$1"
+case "$action" in
+  laptop|mirror) (( $# == 1 )) || usage ;;
+  scale) (( $# == 2 )) && [[ "$2" == up || "$2" == down ]] || usage ;;
+  clamshell) (( $# == 2 )) && [[ "$2" == close || "$2" == open ]] || usage ;;
+  *) usage ;;
+esac
+if ! monitors=$(hyprctl monitors all -j); then unavailable 'cannot query the graphical session.'; fi
+# Validate every connector before constructing Lua, including outputs created by untrusted clients.
+if ! jq -e 'type == "array" and all(.[]; (.name | type == "string" and test("^[A-Za-z0-9._-]+\\z"))
+    and ((.disabled // false) | type == "boolean"))
+    and ([.[].name] | length == (unique | length))' <<< "$monitors" > /dev/null; then
+  printf 'Refusing invalid monitor data or unsafe connector name.\n' >&2
+  exit 2
+fi
+internal=$(jq -r '[.[] | select(.name | test("^(eDP|LVDS|DSI)-"))][0].name // empty' <<< "$monitors")
+external=$(jq -r '[.[] | select((.name | test("^(eDP|LVDS|DSI)-")) | not) | select(.disabled != true)][0].name // empty' <<< "$monitors")
+lua=''
+append() { lua+="$1; "; }
+restore_internal() {
+  append "hl.monitor({ output = \"$internal\", disabled = false, mirror = \"\" })"
+}
+# A mirror depends on its source: remove that dependency before disabling the internal panel.
+unmirror() {
+  local name
+  while IFS= read -r name; do
+    [[ -n "$name" ]] || continue
+    append "hl.monitor({ output = \"$name\", disabled = false, mirror = \"\" })"
+  done < <(jq -r '.[] | select(.disabled != true and (.mirrorOf // "none") != "none" and .mirrorOf != -1) | .name' <<< "$monitors")
+}
+case "$action" in
+  laptop|clamshell)
+    [[ -n "$internal" ]] || unavailable 'no internal laptop display.'
+    disabled=$(jq -r --arg name "$internal" '.[] | select(.name == $name) | .disabled == true' <<< "$monitors")
+    if [[ "$action" == clamshell && "$2" == open ]] || [[ "$action" == laptop && "$disabled" == true ]]; then
+      restore_internal
+    else
+      # Without an external output, leave lid suspend/lock policy entirely to logind and hypridle.
+      if [[ -z "$external" ]]; then
+        [[ "$action" == clamshell ]] && exit 0
+        unavailable 'cannot disable the only usable display.'
+      fi
+      unmirror
+      append "hl.monitor({ output = \"$internal\", disabled = true })"
+    fi
+    ;;
+  mirror)
+    [[ -n "$internal" && -n "$external" ]] || unavailable 'mirroring requires internal and active external displays.'
+    mirrored=$(jq -r --arg name "$external" '.[] | select(.name == $name) | (.mirrorOf // "none") != "none" and .mirrorOf != -1' <<< "$monitors")
+    restore_internal
+    if [[ "$mirrored" == true ]]; then
+      unmirror
+    else
+      append "hl.monitor({ output = \"$external\", disabled = false, mode = \"preferred\", position = \"auto\", scale = 1, mirror = \"$internal\" })"
+    fi
+    ;;
+  scale)
+    focused=$(jq -c '[.[] | select(.focused == true and .disabled != true)][0] // empty' <<< "$monitors")
+    [[ -n "$focused" ]] || unavailable 'no focused display.'
+    if ! jq -e 'all(.width, .height; type == "number" and . > 0 and . <= 65536 and floor == .)
+        and (.scale | type == "number" and . > 0 and . <= 10)' <<< "$focused" > /dev/null; then
+      unavailable 'invalid focused display dimensions or scale.'
+    fi
+    name=$(jq -r '.name' <<< "$focused")
+    width=$(jq -r '.width' <<< "$focused")
+    height=$(jq -r '.height' <<< "$focused")
+    current=$(jq -r '.scale' <<< "$focused")
+    # Select the next distinct preset rounded upward to whole logical pixels in 1/120 steps.
+    scale=$(awk -v width="$width" -v height="$height" -v current="$current" -v direction="$2" '
+      function gcd(a, b, t) { while (b) { t = a % b; a = b; b = t } return a }
+      BEGIN {
+        g = gcd(width * 120, height * 120)
+        n = split("1 1.25 1.6 2 3 4", presets, " ")
+        best = current
+        for (i = 1; i <= n; i++) {
+          k = int(presets[i] * 120 + 0.5)
+          if (k > g) k = g
+          while (g % k != 0 && k < g) k++
+          candidate = k / 120
+          if (candidate > 4) continue
+          if (direction == "up" && candidate > current + 0.001) { best = candidate; break }
+          if (direction == "down" && candidate < current - 0.001) best = candidate
+        }
+        printf "%g", best
+      }')
+    [[ "$scale" != "$current" ]] || exit 0
+    append "hl.monitor({ output = \"$name\", scale = $scale })"
+    ;;
+esac
+if ! result=$(hyprctl eval "$lua"); then
+  printf 'Display action failed.\n' >&2
+  exit 5
+fi
+if [[ "$result" != ok ]]; then
+  printf 'Display action rejected by Hyprland: %s\n' "$result" >&2
+  exit 5
+fi

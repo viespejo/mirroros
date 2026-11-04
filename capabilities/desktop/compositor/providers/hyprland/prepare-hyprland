@@ -5,6 +5,7 @@ umask 022
 readonly legacy=4f152e77e8a11029ad07686e62445d780360ba34c84cfd772640c8f610b56eb0
 readonly jade_legacy=4f77f9fd2dc4b8260fb7fde5d5b073b9ab0420515a23da5dfa92752d55acc744
 readonly theme_legacy=9c7ac92d0345509d2c0fe25cabf8f80f192af4ac68de218cec0a053a20a14d27
+readonly layers_legacy=0275ff2835bcd0fe6983fdc1bddf2420a8d16d29ce1bfff2ad38d3b5dd4ca924
 dest="$HOME/.config/hypr/hyprland.lua"
 old="$HOME/.config/hypr/hyprland.conf"
 if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) || -e "$old" || -L "$old" ]]; then
@@ -21,7 +22,7 @@ if [[ -f "$dest" ]]; then
     exit 0
   fi
   current=$(sha256sum < "$dest")
-  if [[ ${current%% *} != "$legacy" && ${current%% *} != "$jade_legacy" && ${current%% *} != "$theme_legacy" ]]; then
+  if [[ ${current%% *} != "$legacy" && ${current%% *} != "$jade_legacy" && ${current%% *} != "$theme_legacy" && ${current%% *} != "$layers_legacy" ]]; then
     printf 'unchanged user-owned: .config/hypr/hyprland configuration; left untouched\n'
     exit 0
   fi

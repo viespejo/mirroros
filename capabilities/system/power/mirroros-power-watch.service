@@ -1,0 +1,13 @@
+# managed by MirrorOS configure
+[Unit]
+Description=MirrorOS power-source profiles and low-battery warning
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/share/mirroros/hardware/power-watch
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

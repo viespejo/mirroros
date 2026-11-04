@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages; NetworkManager owns connectivity and DNS.
+# Context: CONFIGURE_CONTEXT, STEP_DIR and shared helpers.
+# Postconditions: the OpenConnect plugin is installed and recognised by NetworkManager's client.
+# No corporate profile, authentication, connection or secret is required or created.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_exec bash -s < "$STEP_DIR/check"

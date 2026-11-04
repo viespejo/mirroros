@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+name=${0##*/}
+printf '%s %s\n' "$name" "$*" >> "$CFG_TEST_CALLS"
+case "$name" in
+  wpctl)
+    [[ "${HW_AUDIO_UNAVAILABLE:-0}" == 0 ]] || exit 1
+    if [[ "$1" == get-volume ]]; then printf 'Volume: 0.50\n'; fi ;;
+  brightnessctl)
+    [[ "${HW_BRIGHTNESS_UNAVAILABLE:-0}" == 0 ]] || exit 1
+    printf '50\n' ;;
+  playerctl) [[ "${HW_MEDIA_UNAVAILABLE:-0}" == 0 ]] || exit 1 ;;
+  qs) [[ "${HW_OSD_UNAVAILABLE:-0}" == 0 ]] || exit 1 ;;
+  notify-send) [[ "${HW_NOTIFY_FAIL:-0}" == 0 ]] || exit 1 ;;
+  bluetoothctl) exit 0 ;;
+  nmcli)
+    [[ "$*" == '--offline connection add type vpn vpn-type openconnect con-name mirroros-plugin-check' ]] || exit 97
+    [[ "${HW_PLUGIN_FAIL:-0}" == 0 ]] || exit 1 ;;
+  upower) [[ "${HW_MONITOR_FAIL:-0}" == 0 ]] || exit 17 ;;
+  *) exit 97 ;;
+esac

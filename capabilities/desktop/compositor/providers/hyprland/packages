@@ -1,1 +1,3 @@
 hyprland extra
+# Runtime display actions parse and validate Hyprland monitor JSON.
+jq extra

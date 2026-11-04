@@ -1,0 +1,26 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and a non-root target user; no battery or backlight is required.
+# Context: CONFIGURE_CONTEXT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: packages, owned commands, logind policy and enabled units exist; running system policy is effective.
+# The user watcher is enable-only and begins at the next graphical login.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+for command in brightness power-profile power-watch; do
+  cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
+  cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
+done
+unit=/etc/systemd/user/mirroros-power-watch.service
+cfg_tracked_file "$STEP_DIR/mirroros-power-watch.service" "$unit" 0644
+cfg_user_unit_enable mirroros-power-watch.service "$unit" graphical-session.target
+policy=/etc/systemd/logind.conf.d/60-mirroros-power-key.conf
+cfg_tracked_file "$STEP_DIR/60-mirroros-power-key.conf" "$policy" 0644
+cfg_unit_reload systemd-logind "$policy"
+cfg_unit_enable power-profiles-daemon.service
+cfg_unit_start power-profiles-daemon.service
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_tracked_file_present "$unit"
+cfg_require cfg_user_unit_enabled mirroros-power-watch.service graphical-session.target
+cfg_require cfg_tracked_file_present "$policy"
+cfg_require cfg_unit_enabled power-profiles-daemon.service
+cfg_require cfg_exec bash -s -- "$CONFIGURE_CONTEXT" < "$STEP_DIR/check"

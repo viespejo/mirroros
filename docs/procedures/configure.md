@@ -131,7 +131,7 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The fourteen steps run in this order:
+The eighteen steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -143,7 +143,11 @@ The fourteen steps run in this order:
 | `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |
 | `workflow/editor` | Lazygit, tree-sitter-cli, unzip and Go, managed Lazygit and `vim` wrapper files, the external Neovim configuration at `~/code/nvim` linked from `~/.config/nvim`, and its locked plugins, tools and parsers prepared by the user |
 | `workflow/pi` | ffmpeg, the external pi-config at `~/code/pi-config`, the Pi executable in the user's NVM prefix selected from pi-config's exact declaration, the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, the `pi-editor` and `gcloud` links, and the initialize-only `~/.pi` defaults with their npm packages and owned skills |
-| `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 bindings, the greeter layout indicator, Wayland greeter, and one uwsm session entry |
+| `system/audio` | PipeWire, WirePlumber, pipewire-pulse, pipewire-alsa and playerctl; owned volume/media commands, user audio units enabled only, and the approved A2DP preference |
+| `system/bluetooth` | BlueZ and bluez-utils; bluetooth.service enabled and started only if inactive and the Bluetooth subsystem exists |
+| `system/power` | UPower, brightnessctl, power-profiles-daemon and libnotify; owned commands, enable-only user watcher, PPD enabled and started only if inactive, and a tracked logind power-key drop-in with change-triggered reload |
+| `system/vpn` | NetworkManager OpenConnect plugin, with an offline registration check; no corporate profile or connection |
+| `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 and hardware bindings, runtime-only display helper, the greeter layout indicator, Wayland greeter, and one uwsm session entry |
 | `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell`, and its user unit enabled for the selected user |
 | `desktop/lock` | hyprlock and hypridle, native lock and idle configuration, a hypridle drop-in, and hypridle enabled for the selected user |
 | `visual/branding` | librsvg, the shared MirrorOS wordmark SVG and the PNG rendered from it by the installed `rsvg-convert` |
@@ -226,7 +230,23 @@ Managed destinations are:
   shortcuts and avoid duplicate registered chords. To replace an existing action without changing its chord, use
   `MirrorOSKeys.replace(id, description, dispatcher)` in `bindings.lua`. Bindings are registered after this file
   runs, even when it fails after partial changes. Direct `hl.bind` can bypass the registry.
-- `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`: the approved key table and the registry the
+- `/usr/share/mirroros/hardware/{volume,media,brightness,power-profile,power-watch}`: validated owned action
+  commands; Hyprland delivers `/usr/share/mirroros/hardware/display` for runtime-only layout and clamshell changes.
+  Volume is capped at 100%; volume and brightness request measured OSD values, microphone mute a fixed message.
+  Missing hardware is reported unavailable rather than assigned a level. See the [hardware procedure](hardware.md).
+- `~/.config/wireplumber/wireplumber.conf.d/bluetooth-a2dp-autoconnect.conf`: the evidence-approved A2DP rule,
+  following managed user-file ownership. The audio MIT notice is delivered at
+  `/usr/share/mirroros/hardware/licenses/omarchy-audio`. User audio units are enabled under `default.target` only.
+- `/etc/systemd/logind.conf.d/60-mirroros-power-key.conf`: tracked `HandlePowerKey=ignore`; configure reloads
+  logind, never restarts it, only after this delivery changes in the current step. Running postconditions read
+  the effective property through D-Bus; an administrator override that prevents it taking effect fails the step.
+  No lid policy, inhibit-delay or lock-timing workaround is added.
+- `/etc/systemd/user/mirroros-power-watch.service`: tracked unit, enabled for the selected user's
+  `graphical-session.target`, never started by configure. At the next login it applies remembered AC/battery
+  profiles through D-Bus and sends one critical notification per low discharging episode at or below 10%.
+  Profile choices in `$XDG_STATE_HOME/mirroros/power-profiles/{ac,battery}` are runtime user state, not privileged
+  configure inputs. Defaults are performance (or balanced) on AC and balanced on battery.
+- `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`, `hardware-bindings.lua`: the approved key table and the registry the
   shell's keyboard help reads (`$XDG_RUNTIME_DIR/mirroros-keybindings.tsv`). Nothing is unbound at runtime. See
   [Hyprland bindings provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md).
 - `/usr/share/mirroros/hypr/keyboard.lua`: runtime layout resolution for the greeter.
@@ -257,6 +277,13 @@ Managed destinations are:
   background with the selected theme's colors (ADR 0021) and system PAM authentication; `/etc/systemd/user/hypridle.service.d/10-mirroros.conf`: stale-marker cleanup before hypridle
   starts; `~/.config/systemd/user/graphical-session.target.wants/hypridle.service`: enablement of the packaged unit
   for the selected user. See [lock sources](../../capabilities/desktop/lock/sources.md).
+
+The hardware steps check effective system state in running context and declared files/enablement in target
+context. A missing Bluetooth subsystem is reported unavailable with the service still enabled; when present,
+Bluetooth must be active. Battery and backlight absence are reported without failing configure. Audio delivery
+and VPN plugin registration do not prove audible output or authentication. No profile or secret is created by
+`system/vpn`. See the [hardware validation matrix](hardware.md#validation-matrix) for pending real-machine checks.
+Configure never starts, restarts or reloads user audio, the power watcher, shell, hypridle or desktop.
 
 SDDM is enabled, **never started or restarted**; `graphical.target` becomes the default. Postconditions check the
 SDDM display-manager alias, the absence of another enabled display manager, and the default target. Configure
@@ -325,6 +352,15 @@ records what it delivered (`/var/lib/mirroros/configure/delivered/`, or the runt
 local edit is detected even when it keeps the managed header. An absent destination is created and the intact
 previous delivery is updated; an edited, unknown or linked destination is a conflict that fails the step with
 outcome `4` and is never overwritten. Move it aside (or restore it) and rerun.
+
+System-unit live activation is bounded inside the helpers, not selected by context branches in steps.
+`cfg_unit_start <unit>` checks `systemctl is-active` and starts only an inactive unit, recording a change.
+`cfg_unit_reload <unit> <governing-file>` uses `systemctl reload`, never restart, only after that absolute path
+changed through `cfg_system_file` or `cfg_tracked_file` in the current step of this run. An unrelated change,
+an unchanged file or a preserved user-owned file cannot trigger the reload. The per-path change record is
+in memory, reset for each step and never reused by a rerun. Both helpers validate unit names (the `.service`
+suffix is optional) and do nothing in target context, including no unit queries. They do not start user units.
+A failed start or reload remains a step failure, not a successful change.
 
 User units are enabled offline by creating the selected user's own `graphical-session.target.wants` link, as
 that user; no user manager or bus is needed and no other account is affected. A user's own unit file or mask in

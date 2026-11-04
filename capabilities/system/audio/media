@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+set -Eeuo pipefail
+
+if (( $# != 1 )) || [[ "$1" != play-pause && "$1" != next && "$1" != previous ]]; then
+  printf 'Usage: media play-pause|next|previous\n' >&2
+  exit 2
+fi
+if ! playerctl "$1"; then
+  printf 'Media control unavailable: no compatible MPRIS player or action.\n' >&2
+  exit 4
+fi

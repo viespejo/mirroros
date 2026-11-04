@@ -3,6 +3,88 @@ load support
 setup() { cfg_test_setup; }
 teardown() { cfg_test_teardown; }
 
+@test "system unit start activates only inactive units and reruns without change" {
+  cfg_test_step example 'systemctl() {
+  printf "systemctl %s\n" "$*" >> "$CFG_TEST_CALLS"
+  case "$1" in
+    is-active) [[ -e "$CFG_TEST_DIR/active" ]] ;;
+    start) : > "$CFG_TEST_DIR/active" ;;
+    *) return 97 ;;
+  esac
+}
+cfg_unit_start bluetooth.service'
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/first"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'example: changed'* ]]
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/second"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'example: unchanged'* ]]
+  [ "$(grep -c '^systemctl start bluetooth.service$' "$CFG_TEST_CALLS")" -eq 1 ]
+  [ "$(grep -c '^systemctl is-active --quiet bluetooth.service$' "$CFG_TEST_CALLS")" -eq 2 ]
+  ! grep -q 'systemctl restart' "$CFG_TEST_CALLS"
+}
+
+@test "system unit reload follows only its governing delivery and reruns without change" {
+  for helper in cfg_system_file cfg_tracked_file; do
+    rm -f "$MIRROROS_CONFIGURE_ROOT/etc/unrelated.conf" "$MIRROROS_CONFIGURE_ROOT/etc/power-key.conf"
+    printf '# managed by MirrorOS configure\n%s\n' "$helper" > "$CFG_TEST_DIR/source"
+    cfg_test_step example 'systemctl() { printf "systemctl %s\n" "$*" >> "$CFG_TEST_CALLS"; }
+cfg_unit_reload systemd-logind /etc/power-key.conf
+'"$helper"' "$CFG_TEST_DIR/source" /etc/unrelated.conf 0644
+cfg_unit_reload systemd-logind /etc/power-key.conf
+'"$helper"' "$CFG_TEST_DIR/source" /etc/power-key.conf 0644
+cfg_unit_reload systemd-logind /etc/power-key.conf'
+    : > "$CFG_TEST_CALLS"
+    run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/$helper-first"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'example: changed'* ]]
+    [ "$(grep -c '^systemctl reload systemd-logind$' "$CFG_TEST_CALLS")" -eq 1 ]
+    run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/$helper-second"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'example: unchanged'* ]]
+    [ "$(grep -c '^systemctl reload systemd-logind$' "$CFG_TEST_CALLS")" -eq 1 ]
+    ! grep -q 'systemctl restart' "$CFG_TEST_CALLS"
+  done
+}
+
+@test "preserved governing files do not trigger system unit reload" {
+  printf '# managed by MirrorOS configure\nnew\n' > "$CFG_TEST_DIR/source"
+  printf 'user-owned\n' > "$MIRROROS_CONFIGURE_ROOT/etc/power-key.conf"
+  run cfg_test_helpers 'systemctl() { exit 97; }
+cfg_system_file "$CFG_TEST_DIR/source" /etc/power-key.conf 0644
+cfg_unit_reload systemd-logind /etc/power-key.conf'
+  [ "$status" -eq 0 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+}
+
+@test "live activation rejects invalid unit names and governing paths without commands" {
+  for unit in ../x.service --user 'example service' '/etc/example.service' 'x;reboot'; do
+    run cfg_test_helpers 'systemctl() { exit 97; }
+cfg_unit_start '"'${unit}'"
+    [ "$status" -eq 6 ]
+    run cfg_test_helpers 'systemctl() { exit 97; }
+cfg_unit_reload '"'${unit}'"' /etc/power-key.conf'
+    [ "$status" -eq 6 ]
+  done
+  for path in relative /etc/../power-key.conf; do
+    run cfg_test_helpers 'systemctl() { exit 97; }
+cfg_unit_reload systemd-logind '"'${path}'"
+    [ "$status" -eq 6 ]
+  done
+}
+
+@test "live activation failures propagate without recording a successful change" {
+  run cfg_test_helpers 'systemctl() { return 17; }
+cfg_unit_start bluetooth.service'
+  [ "$status" -eq 17 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  run cfg_test_helpers 'systemctl() { return 17; }
+CFG_FILES_CHANGED[/etc/power-key.conf]=1
+cfg_unit_reload systemd-logind /etc/power-key.conf'
+  [ "$status" -eq 17 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+}
+
 @test "managed user files are created updated and never replace user-owned content or links" {
   printf '# managed by MirrorOS configure\nfirst\n' > "$CFG_TEST_DIR/source"
   run cfg_test_helpers 'cfg_user_file "$CFG_TEST_DIR/source" .config/example'

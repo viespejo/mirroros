@@ -64,6 +64,30 @@ apply_config() { HOME="$home" bash "$script" "$encoded"; }
   cmp "$BATS_TEST_TMPDIR/personal-themed" "$home/.config/hypr/hyprland.lua"
 }
 
+@test "migrates the exact previous layered configuration and preserves edits and links" {
+  local layered="$BATS_TEST_DIRNAME/hyprland-layers-legacy.lua"
+  [ "$(sha256sum < "$layered" | cut -d ' ' -f 1)" = 0275ff2835bcd0fe6983fdc1bddf2420a8d16d29ce1bfff2ad38d3b5dd4ca924 ]
+  cp "$layered" "$home/.config/hypr/hyprland.lua"
+  run apply_config
+  [ "$status" -eq 0 ]
+  [ "$output" = changed ]
+  cmp "$config" "$home/.config/hypr/hyprland.lua"
+  run apply_config
+  [ "$output" = unchanged ]
+  cp "$layered" "$home/.config/hypr/hyprland.lua"
+  printf '\n-- personal edit\n' >> "$home/.config/hypr/hyprland.lua"
+  cp "$home/.config/hypr/hyprland.lua" "$BATS_TEST_TMPDIR/personal-layered"
+  run apply_config
+  [[ "$output" == 'unchanged user-owned:'* ]]
+  cmp "$BATS_TEST_TMPDIR/personal-layered" "$home/.config/hypr/hyprland.lua"
+  rm "$home/.config/hypr/hyprland.lua"
+  ln -s "$layered" "$home/.config/hypr/hyprland.lua"
+  run apply_config
+  [[ "$output" == 'unchanged user-owned:'* ]]
+  [ -L "$home/.config/hypr/hyprland.lua" ]
+  cmp "$layered" "$home/.config/hypr/hyprland.lua"
+}
+
 @test "preserves edits to the current configuration including monitor settings" {
   cp "$config" "$home/.config/hypr/hyprland.lua"
   printf '\n-- local monitor\nhl.monitor({ output = "Virtual-1", scale = 1.6 })\n' >> "$home/.config/hypr/hyprland.lua"

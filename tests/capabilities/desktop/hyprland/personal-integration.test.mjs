@@ -15,7 +15,7 @@ for (const scenario of ['missing', 'valid', 'error', 'replacement', 'missing-loa
     const home = join(dir, 'home'), runtime = join(dir, 'runtime'), personal = join(home, '.config/hypr');
     mkdirSync(personal, { recursive: true });
     mkdirSync(runtime, { mode: 0o700 });
-    const names = ['defaults.lua', 'personal-loader.lua', 'theme-runtime.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua'];
+    const names = ['defaults.lua', 'personal-loader.lua', 'theme-runtime.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua'];
     let defaults = readFileSync(join(provider, 'defaults.lua'), 'utf8');
     let entry = readFileSync(join(provider, 'hyprland.lua'), 'utf8');
     for (const name of names) {
@@ -29,6 +29,7 @@ for (const scenario of ['missing', 'valid', 'error', 'replacement', 'missing-loa
     const realBindings = ['replacement', 'missing-loader'].includes(scenario);
     writeFileSync(join(dir, 'shell-bindings.lua'), realBindings ? readFileSync(join(provider, 'shell-bindings.lua')) : 'MirrorOSKeys = { export = function() print("EXPORT") end }\n');
     writeFileSync(join(dir, 'window-bindings.lua'), realBindings ? readFileSync(join(provider, 'window-bindings.lua')) : '-- isolated\n');
+    writeFileSync(join(dir, 'hardware-bindings.lua'), realBindings ? readFileSync(join(provider, 'hardware-bindings.lua')) : '-- isolated\n');
     if (scenario !== 'missing' && scenario !== 'missing-loader') {
       writeFileSync(join(personal, 'looknfeel.lua'), 'hl.config({ general = { border_size = 5 } })\n');
       writeFileSync(join(personal, 'bindings.lua'), scenario === 'error' ? 'print("PARTIAL")\nerror("synthetic failure")\n' : scenario === 'replacement' ? 'MirrorOSKeys.replace("window.close", "Personal close action", hl.dsp.exec_cmd("true"))\n' : 'print("PERSONAL BINDINGS")\n');

@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages; no Bluetooth adapter is required.
+# Context: CONFIGURE_CONTEXT, STEP_DIR and shared helpers.
+# Postconditions: BlueZ is installed and enabled; running service is active when the Bluetooth subsystem exists.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_unit_enable bluetooth.service
+# BlueZ's ConditionPathIsDirectory skips activation without the kernel Bluetooth subsystem.
+if [[ -d "$(cfg_path /sys/class/bluetooth)" ]]; then cfg_unit_start bluetooth.service; fi
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_unit_enabled bluetooth.service
+cfg_require cfg_exec bash -s -- "$CONFIGURE_CONTEXT" < "$STEP_DIR/check"

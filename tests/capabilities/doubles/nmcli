@@ -1,0 +1,4 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'nmcli %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "$*" == '--offline connection add type vpn vpn-type openconnect con-name mirroros-plugin-check' ]] || exit 97

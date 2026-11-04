@@ -46,6 +46,9 @@ for load = 1, 2 do
   dofile(arg[2] .. "/shell-bindings.lua")
   if mode == "duplicate" then MirrorOSKeys.bind("extra.duplicate", "SHIFT + SUPER + i", "Duplicate", "x") end
   dofile(arg[2] .. "/window-bindings.lua")
+  dofile(arg[2] .. "/hardware-bindings.lua")
+  if mode == "duplicate-id" then MirrorOSKeys.bind("audio.raise", "SUPER + F11", "Duplicate id", "x") end
+  if mode == "hardware-duplicate" then MirrorOSKeys.bind("extra.hardware", "ALT + SUPER + slash", "Duplicate", "x") end
   if mode == "replacement" or mode == "replacement-invalid" then
     assert(#out == 0)
     if mode == "replacement" then
@@ -105,8 +108,8 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 117);
-  for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
+  assert.equal(bindings.length, 141);
+  for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
     assert.doesNotMatch(code, /\brequire\s*\(\s*["'][^"']*bindings/, file);
@@ -119,6 +122,42 @@ test('no chord is bound twice and the helper rejects a repeated chord', { skip: 
   const duplicate = load('duplicate');
   assert.notEqual(duplicate.status, 0);
   assert.match(duplicate.stderr, /repeated chord SHIFT \+ SUPER \+ i/);
+});
+
+test('hardware ids and chords cannot be registered twice', { skip: !lua && 'no Lua interpreter' }, () => {
+  for (const [mode, message] of [['duplicate-id', /repeated binding id: audio.raise/], ['hardware-duplicate', /repeated chord ALT \+ SUPER \+ slash/]]) {
+    const result = load(mode);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, message);
+  }
+});
+
+test('hardware bindings use only owned commands with the approved chords and options', { skip: !lua && 'no Lua interpreter' }, () => {
+  const expected = [
+    ['XF86AudioRaiseVolume', 'volume raise', true], ['XF86AudioLowerVolume', 'volume lower', true],
+    ['XF86AudioMute', 'volume mute-toggle'], ['XF86AudioMicMute', 'volume mic-mute'],
+    ['ALT+XF86AudioRaiseVolume', 'volume +1', true], ['ALT+XF86AudioLowerVolume', 'volume -1', true],
+    ['XF86MonBrightnessUp', 'brightness +5%', true], ['XF86MonBrightnessDown', 'brightness 5%-', true],
+    ['SHIFT+XF86MonBrightnessUp', 'brightness max', true], ['SHIFT+XF86MonBrightnessDown', 'brightness min', true],
+    ['ALT+XF86MonBrightnessUp', 'brightness +1%', true], ['ALT+XF86MonBrightnessDown', 'brightness 1%-', true],
+    ['XF86AudioNext', 'media next'], ['ALT+XF86AudioPlay', 'media next'],
+    ['XF86AudioPause', 'media play-pause'], ['XF86AudioPlay', 'media play-pause'],
+    ['XF86AudioPrev', 'media previous'], ['ALT+SHIFT+XF86AudioPlay', 'media previous'],
+    ['SUPER+CTRL+Delete', 'display laptop'], ['SUPER+CTRL+ALT+Delete', 'display mirror'],
+    ['SUPER+slash', 'display scale up'], ['SUPER+ALT+slash', 'display scale down'],
+    ['switch:on:Lid Switch', 'display clamshell close'], ['switch:off:Lid Switch', 'display clamshell open'],
+  ];
+  assert.equal(bindings.filter(binding => binding.action.startsWith('/usr/share/mirroros/hardware/')).length, expected.length);
+  for (const [keys, command, repeats] of expected) {
+    const binding = byChord.get(chord(keys));
+    assert.ok(binding, keys);
+    assert.equal(binding.action, '/usr/share/mirroros/hardware/' + command);
+    assert.equal(binding.options.includes('locked=true'), !keys.startsWith('SUPER'));
+    assert.equal(binding.options.includes('repeating=true'), repeats === true);
+  }
+  const entry = fs.readFileSync(path.join(provider, 'hyprland.lua'), 'utf8');
+  assert.ok(entry.indexOf('/hypr/defaults.lua') < entry.indexOf('/hypr/hardware-bindings.lua'));
+  assert.ok(entry.indexOf('/hypr/hardware-bindings.lua') < entry.indexOf('/hypr/personal-loader.lua'));
 });
 
 test('personal registry additions require a new export and reject product chords', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -148,7 +187,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 117);
+  assert.equal(replaced.stdout.trim().split('\n').length, 141);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -177,7 +216,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
   for (const mods of ['SUPER', 'ALT+SUPER', 'CTRL+SUPER'])
     for (const key of ['CODE:20', 'CODE:21']) required.push(`${mods}+${key}`, `${mods.replace('SUPER', 'SHIFT+SUPER')}+${key}`);
   for (const key of required) assert.ok(byChord.has(key), 'missing ' + key);
-  assert.equal(new Set(required).size, bindings.length, 'every bound chord is in the approved list');
+  assert.equal(new Set(required).size, bindings.filter(binding => !binding.action.startsWith('/usr/share/mirroros/hardware/')).length, 'every Story 4.3 chord is in the approved list');
   for (const binding of bindings) assert.ok(binding.description && binding.description !== 'nil', binding.keys);
   assert.match(byChord.get('XF86POWEROFF').options, /locked=true/);
   for (const chord of ['SUPER+I', 'SHIFT+SUPER+I']) assert.doesNotMatch(byChord.get(chord).options, /locked=true/, chord);
@@ -187,10 +226,12 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
 test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua interpreter' }, () => {
   const unbound = [
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
-    'SUPER+SLASH', 'ALT+SUPER+SLASH', 'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
+    'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
     'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V', 'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
     'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+F', 'SHIFT+SUPER+N', 'CTRL+SUPER+A', 'CTRL+SUPER+B',
-    'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P', 'XF86AUDIORAISEVOLUME', 'XF86MONBRIGHTNESSUP', 'SUPER+O',
+    'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P', 'SUPER+O',
+    'SHIFT+XF86AUDIOMUTE', 'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
+    'XF86TOUCHPADTOGGLE', 'XF86TOUCHPADON', 'XF86TOUCHPADOFF', 'XF86KBDBRIGHTNESSUP', 'XF86KBDBRIGHTNESSDOWN', 'XF86KBDLIGHTONOFF',
     'SUPER+M', 'ALT+CTRL+DELETE',
   ];
   for (const key of unbound) assert.ok(!byChord.has(key), 'unexpected ' + key);
@@ -219,9 +260,9 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 111);
+  assert.equal(rows.length, 133);
   for (const row of rows) assert.equal(row.length, 3);
-  for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev']) assert.ok(!ids.includes(hidden));
+  for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));
   assert.deepEqual(loaded.leftovers, ['mirroros-keybindings.tsv']);
 });
@@ -229,7 +270,7 @@ test('the registry lists launchable entries for the current instance and leaves 
 test('Lua sources parse', { skip: !lua && 'no Lua interpreter' }, () => {
   const luac = ['luac5.4', 'luac'].find(name => spawnSync(name, ['-v']).status === 0);
   if (!luac) return;
-  execFileSync(luac, ['-p', ...['hyprland.lua', 'defaults.lua', 'personal-loader.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua',
+  execFileSync(luac, ['-p', ...['hyprland.lua', 'defaults.lua', 'personal-loader.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua',
     'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
 });
 
@@ -245,7 +286,8 @@ test('session and greeter reload shared monitor rules and session sets GDK scale
       if file == '/usr/share/mirroros/hypr/personal-loader.lua' then return function() end end
       if file == '/usr/share/mirroros/hypr/theme-runtime.lua' then return function() return nil end end
       assert(file == '/usr/share/mirroros/hypr/shell-bindings.lua'
-        or file == '/usr/share/mirroros/hypr/window-bindings.lua', file)
+        or file == '/usr/share/mirroros/hypr/window-bindings.lua'
+        or file == '/usr/share/mirroros/hypr/hardware-bindings.lua', file)
     end
     hl = {
       config = function() end, bind = function() end, on = function() end,

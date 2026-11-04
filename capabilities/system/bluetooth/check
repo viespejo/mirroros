@@ -1,0 +1,16 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  target) exit 0 ;;
+  running) ;;
+  *) exit 6 ;;
+esac
+if [[ ! -d /sys/class/bluetooth ]]; then
+  printf 'Bluetooth hardware unavailable: kernel subsystem absent; service enabled for future hardware.\n'
+  exit 0
+fi
+systemctl is-active --quiet bluetooth.service
+if ! bluetoothctl list | grep -q '^Controller '; then
+  printf 'Bluetooth hardware unavailable; BlueZ is active and bluetoothctl remains the terminal fallback.\n'
+fi

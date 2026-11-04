@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+# Only the streamed postcondition scripts need filesystem translation into the fake root.
+if [[ "${1:-}" == -s ]]; then
+  script=$(</dev/stdin)
+  script=${script//\/usr\/lib\//$HW_TEST_ROOT/usr/lib/}
+  script=${script//\/sys\/class\//$HW_TEST_ROOT/sys/class/}
+  exec /usr/bin/bash "$@" <<< "$script"
+fi
+exec /usr/bin/bash "$@"

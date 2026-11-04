@@ -1,0 +1,39 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+set -Eeuo pipefail
+
+usage() { printf 'Usage: volume raise|lower|+N|-N|mute-toggle|mic-mute (N: 1..100)\n' >&2; exit 2; }
+(( $# == 1 )) || usage
+sink=@DEFAULT_AUDIO_SINK@
+case "$1" in
+  raise) value=5%+ ;;
+  lower) value=5%- ;;
+  mute-toggle) value=toggle ;;
+  mic-mute) sink=@DEFAULT_AUDIO_SOURCE@; value=toggle ;;
+  *)
+    [[ "$1" =~ ^([+-])([1-9][0-9]?|100)$ ]] || usage
+    value="${BASH_REMATCH[2]}%${BASH_REMATCH[1]}" ;;
+esac
+osd() {
+  if ! qs ipc -p /usr/share/mirroros/shell call osd "$@"; then
+    printf 'Volume OSD unavailable; the audio command result is unchanged.\n' >&2
+  fi
+}
+if ! wpctl get-volume "$sink" > /dev/null 2>&1; then
+  printf 'Audio unavailable: no accessible default device.\n' >&2
+  if [[ "$1" == mic-mute ]]; then
+    osd show '{"icon":"microphone","message":"Microphone unavailable"}'
+  else
+    osd showSource volume
+  fi
+  exit 4
+fi
+case "$1" in
+  mute-toggle|mic-mute) wpctl set-mute "$sink" "$value" ;;
+  *) wpctl set-volume -l 1.0 "$sink" "$value" ;;
+esac
+if [[ "$1" == mic-mute ]]; then
+  osd show '{"icon":"microphone","message":"Microphone mute toggled"}'
+else
+  osd showSource volume
+fi

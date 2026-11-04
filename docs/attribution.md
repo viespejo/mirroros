@@ -53,6 +53,13 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **License texts:** Omarchy's MIT text and Omapager's complete MIT text (Copyright (c) 2026 Neil Jagdish Patel) are retained unchanged as `LICENSE.omarchy` and `LICENSE.omapager` in `capabilities/desktop/shell/`; the Omapager text was verified externally as license evidence only (not a code-source pin or full license audit)
 - **Detailed provenance:** [Desktop shell upstream record](../capabilities/desktop/shell/UPSTREAM.md) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md)
 
+### Omarchy hardware integration
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** A2DP auto-connect rule block at `capabilities/system/audio/bluetooth-a2dp-autoconnect.conf`; hardware chord choices and options adapted into `capabilities/desktop/compositor/providers/hyprland/hardware-bindings.lua`
+- **License text:** Copyright and permission notice retained at `capabilities/system/audio/OMARCHY-LICENSE`
+- **Detailed provenance:** [Audio sources](../capabilities/system/audio/sources.md) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md)
+
 ### Omarchy Osaka Jade palette
 
 - **License (SPDX):** `MIT`

@@ -17,7 +17,7 @@ CFG_FINISHING=0
 CFG_EVIDENCE=0
 CFG_ERRORS=()
 CFG_STEPS=()
-declare -A CFG_STATUS=() CFG_POST=() CFG_RESOLVED=() CFG_INSTALLED=()
+declare -A CFG_STATUS=() CFG_POST=() CFG_RESOLVED=() CFG_INSTALLED=() CFG_FILES_CHANGED=()
 
 cfg_path() { printf '%s%s' "$CONFIGURE_ROOT" "$1"; }
 
@@ -115,6 +115,7 @@ cfg_execute() {
     (
       set -Eeuo pipefail
       CFG_IN_STEP=1
+      CFG_FILES_CHANGED=()
       trap 'printf "Command failed (child status %s).\\n" "$?" >&2; exit 5' ERR
       trap 'exit 3' INT
       trap 'exit 5' TERM HUP

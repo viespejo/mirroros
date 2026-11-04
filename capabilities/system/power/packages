@@ -1,0 +1,4 @@
+upower extra
+power-profiles-daemon extra
+brightnessctl extra
+libnotify extra

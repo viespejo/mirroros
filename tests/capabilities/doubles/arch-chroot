@@ -10,6 +10,12 @@ if [[ "$1" == bash && "${2:-}" == -c && "$3" == command\ -v* ]]; then
   printf '/usr/bin/%s\n' "$tool"
   exit 0
 fi
+# Streamed hardware postconditions inspect only the fake target's plugin paths.
+if [[ "$1" == bash && "${2:-}" == -s ]]; then
+  script=$(</dev/stdin)
+  script=${script//\/usr\/lib\//$root/usr/lib/}
+  exec bash "${@:2}" <<< "$script"
+fi
 if [[ "$1" == runuser ]]; then
   home=$(awk -F: -v user="$3" '$1 == user { print $6 }' "$root/etc/passwd")
   [[ "$home" == /* ]] || exit 97
@@ -19,12 +25,21 @@ if [[ "$1" == usermod ]]; then export CFG_TEST_PASSWD_ROOT="$root"; fi
 if [[ "$1" == systemctl ]]; then
   shift
   case "$1" in
-    is-enabled) [[ -e "$root/etc/systemd/system/.sddm-enabled" ]] ;;
+    is-enabled)
+      case "${*: -1}" in
+        sddm.service) [[ -e "$root/etc/systemd/system/.sddm-enabled" ]] ;;
+        bluetooth.service|power-profiles-daemon.service) [[ -e "$root/etc/systemd/system/.${*: -1}-enabled" ]] ;;
+        *) exit 97 ;;
+      esac ;;
     enable)
-      [[ "$2" == sddm.service ]] || exit 97
       mkdir -p "$root/etc/systemd/system"
-      : > "$root/etc/systemd/system/.sddm-enabled"
-      ln -s /usr/lib/systemd/system/sddm.service "$root/etc/systemd/system/display-manager.service" ;;
+      case "$2" in
+        sddm.service)
+          : > "$root/etc/systemd/system/.sddm-enabled"
+          ln -s /usr/lib/systemd/system/sddm.service "$root/etc/systemd/system/display-manager.service" ;;
+        bluetooth.service|power-profiles-daemon.service) : > "$root/etc/systemd/system/.$2-enabled" ;;
+        *) exit 97 ;;
+      esac ;;
     get-default) if [[ -f "$root/etc/systemd/system/.default-target" ]]; then
         cat "$root/etc/systemd/system/.default-target"
       else printf 'multi-user.target\n'; fi ;;

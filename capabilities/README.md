@@ -10,19 +10,33 @@ for invocation, effects, evidence, and recovery.
 `configure-steps` is an explicit Bash `CFG_STEPS` array of paths relative to this directory. There is no discovery,
 dependency graph, or resume state. The current order is:
 
-1. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
-2. `workflow/node`: the user's NVM release and the declared Node.js runtime, with its managed environment file.
-3. `workflow/shell`: Zsh as the interactive shell with its approved native startup files, Zplug and identified plugin sources, shell tools, and the Starship initialization for bash.
-4. `workflow/tmux`: tmux with the approved native defaults, TPM and identified plugin sources, the compiled tmux-thumbs helper, and Sesh from a reviewed local recipe.
-5. `workflow/editor`: Lazygit and the editor prerequisites, the `vim` wrapper, the external Neovim configuration cloned at `~/code/nvim` and linked from `~/.config/nvim`, with its locked plugins, tools and parsers prepared.
-6. `workflow/pi`: ffmpeg, the external pi-config cloned at `~/code/pi-config`, the Pi executable in the user's NVM prefix and the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, with the `pi-editor` and `gcloud` launcher links and the initialize-only `~/.pi` defaults, npm packages and owned skills.
-7. `desktop/compositor/providers/hyprland`: session, keyboard module, greeter, and session selection.
-8. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
-9. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
-10. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
-11. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
+1. `visual/theme`: the reviewed theme, backgrounds and initialize-only current theme/background links.
+2. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
+3. `desktop/files`: Nautilus, without personal settings or optional integrations.
+4. `workflow/node`: the user's NVM release and the declared Node.js runtime, with its managed environment file.
+5. `workflow/shell`: Zsh as the interactive shell with its approved native startup files, Zplug and identified plugin sources, shell tools, and the Starship initialization for bash.
+6. `workflow/tmux`: tmux with the approved native defaults, TPM and identified plugin sources, the compiled tmux-thumbs helper, and Sesh from a reviewed local recipe.
+7. `workflow/editor`: Lazygit and the editor prerequisites, the `vim` wrapper, the external Neovim configuration cloned at `~/code/nvim` and linked from `~/.config/nvim`, with its locked plugins, tools and parsers prepared.
+8. `workflow/pi`: ffmpeg, the external pi-config cloned at `~/code/pi-config`, the Pi executable in the user's NVM prefix and the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, with the `pi-editor` and `gcloud` launcher links and the initialize-only `~/.pi` defaults, npm packages and owned skills.
+9. `system/audio`: PipeWire stack, playerctl, owned volume/media commands, enable-only user audio units and the approved A2DP preference.
+10. `system/bluetooth`: BlueZ and bluetoothctl; enable bluetooth.service and start it only if inactive and the Bluetooth subsystem exists.
+11. `system/power`: UPower, brightnessctl, power-profiles-daemon and libnotify; owned brightness/profile/watcher commands, enable-only user watcher, and tracked power-key policy with bounded logind reload.
+12. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
+13. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, and session selection.
+14. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
+15. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
+16. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
+17. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
     overlay of the recognized boot configuration, and the regenerated boot images ([ADR 0014](../docs/adr/0014-native-login-and-boot-presentation.md)).
-12. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+18. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+
+The [hardware procedure](../docs/procedures/hardware.md) records terminal paths, effects, recovery and the
+three-environment validation matrix. The four system steps precede their Hyprland bindings. Running checks
+require effective system state; target checks require declared files and unit links, without live activation.
+Absent hardware is not a failed configuration or a fabricated reading. A present Bluetooth subsystem requires
+an active service; an absent subsystem leaves the unit enabled and reports unavailable. User audio and the
+power watcher take effect at the next login, not during configure. Provenance belongs to each step's
+`sources.md` and the provider's `UPSTREAM.md`; only the evidence-approved A2DP tuning is delivered.
 
 Each step supplies:
 
@@ -48,7 +62,7 @@ Helpers in `lib/` own the effect boundary:
 | `validate.sh` | Arguments, prerequisites, lock, keyboard validation, package resolution and upgrade guard |
 | `packages.sh` | Missing-package transactions, installed-package postconditions, and the reviewed local-recipe package build |
 | `files.sh` | Managed files and links, user work and scripts, bashrc block, Node.js declaration, and single-session query |
-| `units.sh` | Enable-only units, default target, and read-only display-manager queries |
+| `units.sh` | Unit enablement, bounded system-unit start/reload, default target, and read-only display-manager queries |
 | `evidence.sh` | Private run directory, sanitized TSV records, package versions, source identities, and allowed logs |
 | `repositories.sh` | User-level current-branch resolution and safe external source synchronization |
 
@@ -59,6 +73,15 @@ commands directly in running context and through `arch-chroot "$CONFIGURE_ROOT"`
 user, and unit queries and commands use it; user writes run through `runuser` inside the target with its `HOME`.
 System files and links, keyboard and session-file checks, the lock, and evidence remain live-side operations on
 `cfg_path`-prefixed paths. SDDM is never started by either context.
+
+`cfg_unit_start <unit>` starts a system unit only when `systemctl is-active` is false, recording a change.
+`cfg_unit_reload <unit> <governing-file>` reloads (never restarts) a system unit only when that absolute path was
+changed by `cfg_system_file` or `cfg_tracked_file` in the current step of this run. Changes to other files do not
+trigger a reload; unchanged or preserved deliveries do not either. The per-path record is in memory and reset
+for each step, so a rerun cannot reuse an earlier delivery's change. Both helpers validate unit names (with an
+optional `.service` suffix) and are no-ops in target context, without unit queries. They add no user-unit start
+or restart support. Configure never starts, restarts or reloads the shell, hypridle or the desktop; their changes
+take effect at the next login.
 
 The installer embeds this tree and `operations/configure` under the same code identity as the engine. After
 base postconditions pass it copies the rerun code and `identity.json` to the installed system's
@@ -339,8 +362,10 @@ state. SDDM is enabled last and is never started or restarted by configure.
 [Omarchy](https://github.com/basecamp/omarchy) is an idea reference for running the SDDM greeter on Hyprland and
 reading the system keyboard layout from `vconsole.conf` at runtime. Its explicit generic font declaration also
 informed the SDDM dependency fix. MirrorOS's scripts and configuration are independently written; no Omarchy
-fragment is incorporated, so these references do not add copied-material attribution entries. Any future copied
-fragment must receive its applicable license and an entry in [attribution](../docs/attribution.md) in the same
+fragment is incorporated for those login behaviors, so those references do not add copied-material attribution
+entries. Story 4.4 separately incorporates the approved Omarchy 4.0.6 A2DP rule with its MIT notice; see
+[audio sources](system/audio/sources.md) and [Hyprland provenance](desktop/compositor/providers/hyprland/UPSTREAM.md)
+for hardware behavior and chord references. Any future copied fragment must receive its applicable license and an entry in [attribution](../docs/attribution.md) in the same
 change. The unchanged [interview log](../docs/technical-interviews/story-4-2-minimal-graphical-login_log.md) and
 [consolidated plan](../docs/technical-interviews/story-4-2-minimal-graphical-login_plan.md) record the original
 decisions; implementation adjustments are documented here and in the procedure.

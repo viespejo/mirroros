@@ -23,6 +23,14 @@ Known exploratory findings in `TODO-582784b9`:
 - Fingerprint-session behaviour was observed on Omarchy. This finding remains open; this profile adds
   no fingerprint mitigation or `fprintd`.
 
+Story 4.4 provider exploration was approved on 2026-11-03. The
+[hardware procedure](../../docs/procedures/hardware.md) owns the per-capability validation matrix, terminal
+connectivity fallback, private VPN workflow, diagnostics and rollback. Clean reference-VM and delivered T14s
+daily-use acceptance remain pending in plan 02-25; exploration does not establish candidate readiness.
+The approved tuning is the user A2DP reconnect preference only. Wi-Fi power-save delivery (TODO-005) is deferred;
+no target override, global USB autosuspend change or keyboard-backlight hook is added here. Final acceptance
+findings will be appended separately without resolving the existing Wi-Fi or fingerprint findings.
+
 Every target also has to satisfy the common boundary enforced by discovery: `x86_64`, 64-bit UEFI, and at
 least one eligible non-removable disk that is not the live medium. Recognition grants no installation
 authorization and is not qualification.

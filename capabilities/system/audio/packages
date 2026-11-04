@@ -1,0 +1,5 @@
+pipewire extra
+wireplumber extra
+pipewire-pulse extra
+pipewire-alsa extra
+playerctl extra

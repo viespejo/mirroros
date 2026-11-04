@@ -1,0 +1,9 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+plugin=/usr/lib/NetworkManager/VPN/nm-openconnect-service.name
+[[ -r "$plugin" && -x /usr/lib/nm-openconnect-service ]]
+grep -qxF 'service=org.freedesktop.NetworkManager.openconnect' "$plugin"
+# Offline mode recognises the short plugin name without creating a profile or contacting a VPN server.
+# This is a plugin registration check, not proof of authentication or a live corporate connection.
+nmcli --offline connection add type vpn vpn-type openconnect con-name mirroros-plugin-check > /dev/null

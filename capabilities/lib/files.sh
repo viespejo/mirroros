@@ -18,6 +18,8 @@ cfg_system_file() {
     [[ "$(stat -c '%a:%u:%g' -- "$dest")" == "${mode#0}:$owner:$group" ]]; then return 0; fi
   cfg_run_host install -d -m 0755 -- "$(dirname -- "$dest")"
   cfg_run_host install -o "$owner" -g "$group" -m "$mode" -- "$src" "$dest"
+  # shellcheck disable=SC2034 # Per-path state is consumed by units.sh.
+  CFG_FILES_CHANGED["$2"]=1
   cfg_changed
 }
 
@@ -65,6 +67,8 @@ cfg_tracked_file() {
   cfg_run_host install -d -m 0755 -- "$(dirname -- "$record")"
   cfg_run_host install -o "$owner" -g "$group" -m 0644 -- "$CFG_OUTPUT/.tracked-record" "$record"
   rm -f -- "$CFG_OUTPUT/.tracked-record"
+  # shellcheck disable=SC2034 # Per-path state is consumed by units.sh.
+  CFG_FILES_CHANGED["$path"]=1
   cfg_changed
 }
 

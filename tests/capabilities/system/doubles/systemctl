@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'systemctl %s\n' "$*" >> "$CFG_TEST_CALLS"
+state=$CFG_TEST_DIR/units
+mkdir -p "$state"
+unit=${*: -1}
+case "$1" in
+  is-enabled) [[ -e "$state/$unit.enabled" ]] ;;
+  enable) : > "$state/$unit.enabled" ;;
+  is-active) [[ -e "$state/$unit.active" ]] ;;
+  start)
+    [[ "${CFG_TEST_START_FAIL:-}" != "$unit" ]] || exit 17
+    : > "$state/$unit.active" ;;
+  reload)
+    [[ "$unit" == systemd-logind ]] || exit 97
+    printf 'ignore\n' > "$CFG_TEST_DIR/power-key" ;;
+  *) exit 97 ;;
+esac

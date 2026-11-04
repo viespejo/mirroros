@@ -12,6 +12,29 @@ cfg_unit_enable() {
   fi
 }
 
+cfg_unit_start() {
+  local unit="$1"
+  cfg_context
+  [[ "$unit" =~ ^[a-z0-9@._-]+$ && "$unit" != -* && "$unit" != *..* ]] || exit 6
+  if [[ "$CONFIGURE_CONTEXT" == target ]]; then return 0; fi
+  if ! cfg_exec systemctl is-active --quiet "$unit"; then
+    cfg_run systemctl start "$unit"
+    cfg_changed
+  fi
+}
+
+cfg_unit_reload() {
+  local unit="$1" path="$2"
+  cfg_context
+  [[ "$unit" =~ ^[a-z0-9@._-]+$ && "$unit" != -* && "$unit" != *..* &&
+    "$path" == /* && "$path" != *..* ]] || exit 6
+  if [[ "$CONFIGURE_CONTEXT" == target ]]; then return 0; fi
+  if [[ "${CFG_FILES_CHANGED[$path]:-0}" == 1 ]]; then
+    cfg_run systemctl reload "$unit"
+    cfg_changed
+  fi
+}
+
 # Enables a user unit for the selected user only, offline: the user creates the same wants link that
 # `systemctl --user enable` would, so no user manager or bus is needed (also inside arch-chroot), nothing is started
 # and no other user is affected. A user's own unit, mask or different link is user-owned and left untouched.
