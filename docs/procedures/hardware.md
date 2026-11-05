@@ -50,7 +50,7 @@ These source identities must not be substituted for a future clean acceptance co
 
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
 |---|---|---|---|
-| Audio output, mute and microphone | Pending Task 6; report unavailable when absent | E1: wpctl volume cap/mute/mic mechanisms exercised; delivered bindings/OSD pending Task 7 | pending target-laptop validation |
+| Audio output, mute and microphone | 2026-11-05, `a4313ad`: dummy output incorrectly reported as 100%. Authorized two-QML development delivery reports no audio output without a level; maintainer confirmed bar tooltip and audio/brightness OSD visually. Clean fixed-candidate acceptance pending | E1: wpctl volume cap/mute/mic mechanisms exercised; delivered bindings/OSD pending Task 7 | pending target-laptop validation |
 | Bluetooth and A2DP/HFP | Pending Task 6; absent subsystem must not fail configure | E1: pairing/reconnection and profiles exercised; HFP reconnect defect corrected by temporary A2DP rule, then reverted; delivered rule pending Task 7 | pending target-laptop validation |
 | Display brightness | Pending Task 6; report unavailable without backlight | E1: SSH write denied; E2: seat-session brightnessctl 65535 → 62258 → 65535 restored; bindings pending Task 7 | pending target-laptop validation |
 | Media keys and MPRIS | Pending Task 6; no player must report unavailable | E1: no MPRIS player, no physical media keys; not exercised; pending Task 7 | pending target-laptop validation |

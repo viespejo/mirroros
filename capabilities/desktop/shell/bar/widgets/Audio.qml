@@ -7,7 +7,7 @@ import qs.Ui
 // 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, Copyright (c) David Heinemeier
 // Hansson): bar glyphs, volume wheel, OSD and mute-all. Headphone detection
 // comes from audio/Model.js. No panel, DSP sink resolver or untyped input.
-// New: delayed unavailable state; ready provider without a sink stays hidden.
+// New: delayed unavailable state and dummy-output rejection; no sink stays hidden.
 BarWidget {
   id: root
   moduleName: "omarchy.audio"
@@ -15,13 +15,13 @@ BarWidget {
   readonly property var sink: Pipewire.defaultAudioSink
   readonly property var source: Pipewire.defaultAudioSource
   readonly property var volumeSink: sink
-  readonly property bool hasOutput: !!(volumeSink && volumeSink.audio)
+  readonly property bool hasOutput: !!(volumeSink && volumeSink.audio && volumeSink.name !== "auto_null")
   readonly property bool hasInput: !!(source && source.audio)
   readonly property real outputVolume: hasOutput ? volumeSink.audio.volume : 0
   readonly property bool outputMuted: hasOutput ? volumeSink.audio.muted : false
   readonly property bool inputMuted: hasInput ? source.audio.muted : false
   readonly property bool anyAudible: (hasOutput && !outputMuted) || (hasInput && !inputMuted)
-  readonly property bool unavailable: !Pipewire.ready && providerSettled
+  readonly property bool unavailable: (!Pipewire.ready && providerSettled) || !!(Pipewire.ready && sink && sink.name === "auto_null")
   property bool providerSettled: false
   property real wheelAccumulator: 0
 
@@ -69,7 +69,7 @@ BarWidget {
   }
 
   function setOutputVolume(v) {
-    if (!volumeSink || !volumeSink.audio) return outputVolume
+    if (!hasOutput) return outputVolume
     var volume = Math.max(0, Math.min(1, v))
     volumeSink.audio.volume = volume
     return volume
@@ -99,7 +99,9 @@ BarWidget {
     bar: root.bar
     text: root.unavailable ? "\uf071" : root.outputIcon()
     tooltipText: root.unavailable
-      ? "Audio unavailable: PipeWire is not ready; install pipewire and wireplumber and start their user services."
+      ? (Pipewire.ready
+        ? "Audio unavailable: no audio output; connect an audio device."
+        : "Audio unavailable: PipeWire is not ready; install pipewire and wireplumber and start their user services.")
       : ""
     onPressed: function(b) {
       if (Pipewire.ready && b === Qt.RightButton) root.toggleAllMuted()

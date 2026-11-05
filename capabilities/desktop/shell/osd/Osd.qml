@@ -126,7 +126,7 @@ Item {
     if (name === "brightness") return brightnessState
     if (name !== "volume") return { available: false, reason: "Unknown source; use volume or brightness" }
     if (!Pipewire.ready) return { available: false, reason: "PipeWire unavailable; start the audio provider" }
-    if (!output || !output.audio) return { available: false, reason: "No audio output; connect an audio device" }
+    if (!output || !output.audio || output.name === "auto_null") return { available: false, reason: "No audio output; connect an audio device" }
     return { available: true, value: Math.round(output.audio.volume * 100), max: 100, muted: output.audio.muted }
   }
 

@@ -79,6 +79,15 @@ pairs use NUL records to preserve tabs and newlines. External selector protocol,
 filter modes are unnecessary for the integrated background-only picker. Cache failures do not change selection.
 `libvips` is declared from official Arch `extra`; `util-linux` supplies `flock`. No image downloads or daemon are added.
 
+## Audio availability
+
+The OSD and existing audio bar widget reject WirePlumber's `auto_null` fallback as an unavailable output,
+not a measured hardware volume. Other virtual sinks, including processing and network outputs, are not rejected
+merely for being virtual. A dummy output shows the existing unavailable glyph/reason and accepts no bar volume
+writes; normal missing-sink and provider-startup behavior is unchanged. This bounded MirrorOS correction follows
+the Story 4.4 reference-VM finding on 2026-11-05; regression coverage is in
+`tests/capabilities/desktop/shell/audio-availability.test.mjs`. It adds no panel or service.
+
 ## Delivery and lifecycle
 
 The `desktop/shell` configure step (`apply`) installs `packages`, publishes the
