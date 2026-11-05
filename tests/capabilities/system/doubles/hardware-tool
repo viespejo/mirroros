@@ -10,7 +10,12 @@ case "$name" in
     [[ "${HW_BRIGHTNESS_UNAVAILABLE:-0}" == 0 ]] || exit 1
     printf '50\n' ;;
   playerctl) [[ "${HW_MEDIA_UNAVAILABLE:-0}" == 0 ]] || exit 1 ;;
-  qs) [[ "${HW_OSD_UNAVAILABLE:-0}" == 0 ]] || exit 1 ;;
+  qs)
+    if [[ "${4:-}" == call && "${5:-}" != -- && "${6:-}" == show ]]; then
+      printf 'show: The following argument was not expected\n' >&2
+      exit 109
+    fi
+    [[ "${HW_OSD_UNAVAILABLE:-0}" == 0 ]] || exit 1 ;;
   notify-send) [[ "${HW_NOTIFY_FAIL:-0}" == 0 ]] || exit 1 ;;
   bluetoothctl) exit 0 ;;
   nmcli)

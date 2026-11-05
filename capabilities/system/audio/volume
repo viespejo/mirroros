@@ -15,7 +15,7 @@ case "$1" in
     value="${BASH_REMATCH[2]}%${BASH_REMATCH[1]}" ;;
 esac
 osd() {
-  if ! qs ipc -p /usr/share/mirroros/shell call osd "$@"; then
+  if ! qs ipc -p /usr/share/mirroros/shell call -- osd "$@"; then
     printf 'Volume OSD unavailable; the audio command result is unchanged.\n' >&2
   fi
 }

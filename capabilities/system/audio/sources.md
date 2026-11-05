@@ -11,8 +11,9 @@ selected user, under `default.target`, without starting or restarting a user man
 
 `volume` and `media` are independently written MirrorOS commands installed at `/usr/share/mirroros/hardware/`.
 They validate argv before provider calls. Volume changes use `wpctl set-volume -l 1.0`; the existing shell's
-`qs ipc -p /usr/share/mirroros/shell call osd showSource volume` reads the measured source. Microphone mute uses
-a fixed message without a level. Missing audio or MPRIS players return unavailable (4); invalid input returns 2.
+`qs ipc -p /usr/share/mirroros/shell call -- osd showSource volume` reads the measured source. The `--`
+terminator prevents the microphone's `show` function from being parsed as Quickshell's IPC `show` subcommand.
+Microphone mute uses a fixed message without a level. Missing audio or MPRIS players return unavailable (4); invalid input returns 2.
 OSD failure does not undo a successful provider action and is reported separately. Configure does not claim an
 active user audio session; activation and physical audio checks follow at the next login.
 

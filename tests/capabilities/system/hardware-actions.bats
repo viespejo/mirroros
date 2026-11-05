@@ -13,18 +13,29 @@ teardown() { cfg_test_teardown; }
   [ "$(grep -c '^wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@' "$CFG_TEST_CALLS")" -eq 6 ]
   grep -qxF 'wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+' "$CFG_TEST_CALLS"
   grep -qxF 'wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 1%-' "$CFG_TEST_CALLS"
-  [ "$(grep -c 'call osd showSource volume' "$CFG_TEST_CALLS")" -eq 6 ]
+  [ "$(grep -c 'call -- osd showSource volume' "$CFG_TEST_CALLS")" -eq 6 ]
 }
 
 @test "mic mute uses its source and a fixed message without a fabricated level" {
   run hardware_command audio/volume mic-mute
   [ "$status" -eq 0 ]
   grep -qxF 'wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle' "$CFG_TEST_CALLS"
-  grep -q 'call osd show .*Microphone mute toggled' "$CFG_TEST_CALLS"
+  grep -qxF 'qs ipc -p /usr/share/mirroros/shell call -- osd show {"icon":"microphone","message":"Microphone mute toggled"}' "$CFG_TEST_CALLS"
+  [[ "$output" != *'OSD unavailable'* ]]
   ! grep -qE '"value"|showSource' "$CFG_TEST_CALLS"
   run hardware_command audio/volume mute-toggle
   [ "$status" -eq 0 ]
   grep -qxF 'wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle' "$CFG_TEST_CALLS"
+}
+
+@test "missing microphone uses an unambiguous fixed-message OSD call without a write" {
+  export HW_AUDIO_UNAVAILABLE=1
+  run hardware_command audio/volume mic-mute
+  [ "$status" -eq 4 ]
+  grep -qxF 'qs ipc -p /usr/share/mirroros/shell call -- osd show {"icon":"microphone","message":"Microphone unavailable"}' "$CFG_TEST_CALLS"
+  [[ "$output" != *'OSD unavailable'* ]]
+  ! grep -q 'wpctl set-' "$CFG_TEST_CALLS"
+  ! grep -qE '"value"|showSource' "$CFG_TEST_CALLS"
 }
 
 @test "invalid volume inputs have no provider or OSD effect" {
@@ -44,7 +55,7 @@ teardown() { cfg_test_teardown; }
   run hardware_command audio/volume raise
   [ "$status" -eq 4 ]
   [[ "$output" == *'Audio unavailable'* ]]
-  grep -q 'call osd showSource volume' "$CFG_TEST_CALLS"
+  grep -q 'call -- osd showSource volume' "$CFG_TEST_CALLS"
   ! grep -q 'wpctl set-' "$CFG_TEST_CALLS"
 }
 
