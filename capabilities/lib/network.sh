@@ -24,6 +24,11 @@ cfg_network_link_is_stub() {
     "$(readlink -- "$(cfg_path /etc/resolv.conf)")" == /run/systemd/resolve/stub-resolv.conf ]]
 }
 
+# A pacstrap target carries a comment-only placeholder: no DNS policy to preserve.
+cfg_network_resolver_placeholder() {
+  awk '/^[[:space:]]*($|#|;)/ { next } { bad=1 } END { exit bad }' "$1"
+}
+
 cfg_network_unit_state() {
   local value
   value=$(cfg_exec systemctl is-enabled systemd-resolved.service 2>/dev/null) || :
@@ -315,7 +320,8 @@ cfg_network_dns_apply() {
     path="$(cfg_path /etc/resolv.conf)"
     if [[ -e "$path" || -L "$path" ]]; then
       if [[ "$CONFIGURE_CONTEXT" == target ]]; then
-        if [[ ! -f "$path" || -L "$path" ]] || ! cmp -s "$path" /etc/resolv.conf; then
+        if [[ ! -f "$path" || -L "$path" ]] ||
+          { ! cmp -s "$path" /etc/resolv.conf && ! cfg_network_resolver_placeholder "$path"; }; then
           cfg_network_fail 'target resolver is not the live-medium copy; review manual DNS policy.'
         fi
       else

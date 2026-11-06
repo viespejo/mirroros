@@ -42,6 +42,17 @@ teardown() { cfg_test_teardown; }
   [ "$status" -eq 0 ]
 }
 
+@test "DNS target accepts the comment-only pacstrap placeholder and reruns unchanged" {
+  cfg_test_target_context
+  printf '# Resolver configuration file.\n# See resolv.conf(5) for details.\n' > "$HW_TEST_ROOT/etc/resolv.conf"
+  run network_run --output "$CFG_TEST_DIR/first"
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$HW_TEST_ROOT/etc/resolv.conf")" = /run/systemd/resolve/stub-resolv.conf ]
+  run network_run --output "$CFG_TEST_DIR/second"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'system/network: unchanged'* ]]
+}
+
 @test "DNS rejects manual legacy policy not represented by NetworkManager" {
   printf 'nameserver 192.0.2.99\n' > "$HW_TEST_ROOT/etc/resolv.conf"
   run network_run --output "$CFG_TEST_DIR/failed"
