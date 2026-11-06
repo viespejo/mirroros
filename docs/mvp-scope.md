@@ -36,7 +36,8 @@ project-owned QML.
 | Base system, kernel, and boot | installation | Per installation policy | Source: `install/plan/policy.json`, [ADR 0003](adr/0003-storage-and-recovery-baseline.md), [ADR 0009](adr/0009-storage-option-promotion-and-esp-size.md) |
 | Storage with snapshots and rollback | installation | Per installation policy | Source: [ADR 0003](adr/0003-storage-and-recovery-baseline.md), [ADR 0009](adr/0009-storage-option-promotion-and-esp-size.md) |
 | zram and hibernation | installation | Per installation policy | Source: [ADR 0007](adr/0007-zram-and-hibernation-policy.md) |
-| Wired and Wi-Fi network | installation | NetworkManager | Source: `install/plan/policy.json` |
+| Wired and Wi-Fi network | installation | NetworkManager | Source: `install/plan/policy.json`; generic configure-owned DNS integration is separate below |
+| Per-domain DNS integration | configure | NetworkManager with systemd-resolved and local stub | Story 4.4 reviewed scope expansion, [ADR 0024](adr/0024-networkmanager-resolved-dns-integration.md); preserves public DNS choices, private VPN DNS/domains received dynamically; [hardware procedure](procedures/hardware.md#dns-integration-and-migration) |
 | Time, locale, and console keyboard | installation | Per installation policy | Source: `install/plan/policy.json` |
 | Administrative privilege | installation | sudo | Source: `install/plan/policy.json` |
 | Audio | configure | PipeWire, WirePlumber, pipewire-pulse and pipewire-alsa | Story 4.4 reviewed provider selection; owned volume command and A2DP preference; [hardware procedure](procedures/hardware.md) |
