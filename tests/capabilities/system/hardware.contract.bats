@@ -108,5 +108,5 @@ hardware_assert_rerun() {
 @test "hardware steps precede the compositor in the declared order" {
   run /usr/bin/bash -c 'source "$1"; printf "%s\n" "${CFG_STEPS[@]}"' bash "$CFG_SOURCE_ROOT/capabilities/configure-steps"
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'system/audio\nsystem/bluetooth\nsystem/power\nsystem/vpn\ndesktop/compositor/providers/hyprland'* ]]
+  [[ "$output" == *$'system/audio\nsystem/bluetooth\nsystem/power\nsystem/network\nsystem/vpn\ndesktop/compositor/providers/hyprland'* ]]
 }

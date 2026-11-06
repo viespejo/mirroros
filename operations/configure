@@ -22,7 +22,7 @@ if [[ ! -f "$HELPER_PATH" ]] || ! source "$HELPER_PATH"; then
   exit 6
 fi
 
-for library in common validate packages files units evidence repositories; do
+for library in common validate packages files units evidence repositories network; do
   library_path="$CAPABILITIES_DIR/lib/$library.sh"
   # shellcheck disable=SC1090 # The required libraries are checked before loading.
   if [[ ! -f "$library_path" ]] || ! bash -n "$library_path" || ! source "$library_path"; then
@@ -31,6 +31,10 @@ for library in common validate packages files units evidence repositories; do
     exit 6
   fi
 done
+if [[ ! -f "$CAPABILITIES_DIR/lib/target-exec" ]] || ! bash -n "$CAPABILITIES_DIR/lib/target-exec"; then
+  printf '%s\n' 'MirrorOS: incomplete or damaged checkout; restore the target DNS execution adapter.' >&2
+  exit 6
+fi
 # shellcheck disable=SC1091 # Loaded from the checked checkout root.
 if [[ ! -f "$CAPABILITIES_DIR/configure-steps" ]] || ! bash -n "$CAPABILITIES_DIR/configure-steps" ||
   ! source "$CAPABILITIES_DIR/configure-steps"; then
@@ -54,7 +58,7 @@ if [[ "$#" == 1 && "$1" == --help ]]; then
     'Configure minimal graphical login and user tools on the running installed system or an installer target root.' \
     'Root via sudo, a non-root target user, base tools, sync databases, and xkeyboard-config layout data.' \
     '--user <name> (default SUDO_USER on the running system), --target-root <mounted-dir> (requires --user), --refresh, --output <absent-or-empty-dir>, --help.' \
-    'Install missing packages, preserve user-owned files, configure user files through runuser, enable SDDM without starting it, and select graphical.target. Safe full rerun.' \
+    'Install missing packages, converge NetworkManager/resolved DNS with private recovery, preserve user-owned files, configure user files through runuser, enable SDDM without starting it, and select graphical.target. Safe full rerun.' \
     '/var/log/mirroros/configure/<run-id>/ or --output; private configure.log, configure-run.tsv, packages.tsv. No secrets.' \
     "$@"
   exit 0

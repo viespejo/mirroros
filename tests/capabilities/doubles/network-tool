@@ -1,0 +1,69 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+name=$1
+shift
+printf '%s %s\n' "$name" "$*" >> "$CFG_TEST_CALLS"
+state=$CFG_TEST_DIR/network-state
+mkdir -p "$state"
+case "$name" in
+  NetworkManager)
+    [[ "${NET_CONFLICT:-0}" == 0 ]] || { printf '[global-dns-domain-*]\nservers=private-fixture\n'; exit 0; }
+    if [[ -e "$state/configured" ]]; then printf '[main]\ndns=systemd-resolved\nrc-manager=unmanaged\n'
+    else printf '[main]\n'; fi ;;
+  systemd-analyze)
+    printf '[Resolve]\n'
+    [[ "${NET_GLOBAL:-0}" == 0 ]] || printf 'DNS=private-fixture\n' ;;
+  systemctl)
+    if [[ " $* " != *' systemd-resolved.service '* ]]; then
+      [[ "$1" == is-active || "$1" == is-enabled ]] || exit 97
+      [[ "${NET_COMPETING:-0}" == 1 ]]
+      exit $?
+    fi
+    case "$1" in
+      is-enabled)
+        if [[ "${NET_MASKED:-0}" == 1 ]]; then printf 'masked\n'; exit 1; fi
+        if [[ -e "$state/enabled" ]]; then printf 'enabled\n'; else printf 'disabled\n'; exit 1; fi ;;
+      is-active) [[ -e "$state/active" ]] ;;
+      enable) : > "$state/enabled" ;;
+      disable) rm -f "$state/enabled" ;;
+      start) : > "$state/active" ;;
+      stop) rm -f "$state/active" ;;
+      reload)
+        [[ "${NET_FAIL:-}" != refresh ]] || { printf 'private-fixture diagnostic\n' >&2; exit 17; }
+        : > "$state/refreshed" ;;
+      show) printf '%s\n' "${NET_CAN_RELOAD:-yes}" ;;
+      *) exit 97 ;;
+    esac ;;
+  nmcli)
+    case "$*" in
+      '-g TYPE connection show --active') printf '%s\n' "${NET_ACTIVE_TYPES:-802-11-wireless}" ;;
+      '--escape no -t -f IP4.DNS,IP6.DNS device show') printf 'IP4.DNS[1]:192.0.2.53\n' ;;
+      '--escape no -t -f IP4.DOMAIN,IP6.DOMAIN device show') : ;;
+      'general reload conf')
+        [[ "${NET_FAIL:-}" != config ]] || { printf 'private-fixture diagnostic\n' >&2; exit 17; }
+        if grep -q 'dns=systemd-resolved' "${HW_TEST_ROOT:-${CFG_TEST_TARGET_ROOT:-$MIRROROS_CONFIGURE_ROOT}}/etc/NetworkManager/conf.d/20-mirroros-dns.conf" 2>/dev/null; then
+          : > "$state/configured"
+        else rm -f "$state/configured"; fi ;;
+      'general reload dns-full') : ;;
+      '--offline connection add type vpn vpn-type openconnect con-name mirroros-plugin-check') : ;;
+      *) exit 97 ;;
+    esac ;;
+  busctl)
+    case "${*: -1}" in
+      Mode) [[ -e "$state/configured" ]] && printf 's "systemd-resolved"\n' || printf 's "default"\n' ;;
+      RcManager) [[ -e "$state/configured" ]] && printf 's "unmanaged"\n' || printf 's "auto"\n' ;;
+      DNS)
+        if [[ -n "${NET_DNS_JSON:-}" ]]; then printf '%s\n' "$NET_DNS_JSON"; exit 0; fi
+        index=0
+        [[ ! -e "$state/refreshed" ]] || index=2
+        [[ "${NET_GLOBAL_RUNTIME:-0}" != 1 ]] || index=0
+        printf '{"type":"a(iiay)","data":[[%s,2,[192,0,2,53]]]}\n' "$index" ;;
+      Domains) printf '{"type":"a(isb)","data":[[2,"fixture.invalid",false]]}\n' ;;
+      *) exit 97 ;;
+    esac ;;
+  timeout)
+    if [[ "$1" == 30 ]]; then shift; exec "$0" "$@"; fi
+    [[ "$*" == '15 getent ahostsv4 example.com' ]] || exit 97
+    [[ "${NET_LOOKUP_FAIL:-0}" == 0 ]] ;;
+  *) exit 97 ;;
+esac

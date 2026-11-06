@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# Prerequisites: installer-owned NetworkManager; no VPN or corporate profile is required.
+# Context differences and effects belong to the reviewed mechanism, not this step.
+# Postconditions: declared target integration or effective running DNS; no provider/profile edits.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_network_dns_apply "$STEP_DIR/20-mirroros-dns.conf"
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_network_dns_present

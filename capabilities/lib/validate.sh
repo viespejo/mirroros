@@ -106,7 +106,14 @@ cfg_validate() {
       cfg_problem '--target-root must not be /.'
       context_ok=0
     fi
-    for tool in arch-chroot flock mountpoint; do
+    if [[ -d "$CONFIGURE_ROOT" ]]; then
+      case "$(readlink -f -- "$CONFIGURE_ROOT")" in
+        /run|/run/*)
+          cfg_problem '--target-root must be outside /run for isolated target DNS.'
+          context_ok=0 ;;
+      esac
+    fi
+    for tool in arch-chroot flock mountpoint unshare mount lsattr; do
       if ! command -v "$tool" > /dev/null 2>&1; then
         cfg_problem "Missing live-medium tool: $tool; restore the installation medium."
         tools_ok=0

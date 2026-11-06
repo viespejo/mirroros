@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+# Internal cfg_exec adapter: the caller supplies live resolver input on fd 3.
+# All mounts and resolver copies exist only in a private mount namespace.
+set -Eeuo pipefail
+root=$(readlink -f -- "$1")
+shift
+case "$root" in /|/run|/run/*) printf 'Target DNS isolation requires a target outside /run.\n' >&2; exit 4 ;; esac
+[[ -d "$root" && -f /proc/self/fd/3 ]] || { printf 'Target DNS isolation requires readable live resolver input.\n' >&2; exit 4; }
+# shellcheck disable=SC2016 # The namespace child expands only its positional arguments.
+exec unshare --mount --propagation private -- bash -Eeuo pipefail -c '
+  root=$1
+  shift
+  # arch-chroot binds this namespace-private /run into the target. Never create
+  # a stub destination in the real host /run or follow the target link there.
+  mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
+  install -d -m 0755 /run/systemd/resolve
+  install -m 0644 /proc/self/fd/3 /run/systemd/resolve/stub-resolv.conf
+  exec 3<&-
+  arch-chroot -r "$root" "$@"
+' bash "$root" "$@"

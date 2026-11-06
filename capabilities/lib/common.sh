@@ -31,7 +31,12 @@ cfg_context() {
 cfg_exec() {
   cfg_context
   if [[ "$CONFIGURE_CONTEXT" == target ]]; then
-    arch-chroot "$CONFIGURE_ROOT" "$@"
+    if [[ -L "$(cfg_path /etc/resolv.conf)" &&
+      "$(readlink -- "$(cfg_path /etc/resolv.conf)")" == /run/systemd/resolve/stub-resolv.conf ]]; then
+      bash "$CAPABILITIES_DIR/lib/target-exec" "$CONFIGURE_ROOT" "$@" 3< /etc/resolv.conf
+    else
+      arch-chroot "$CONFIGURE_ROOT" "$@"
+    fi
   else
     "$@"
   fi

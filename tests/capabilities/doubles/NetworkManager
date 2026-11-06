@@ -1,0 +1,2 @@
+#!/usr/bin/bash
+exec "${BASH_SOURCE[0]%/*}/network-tool" NetworkManager "$@"

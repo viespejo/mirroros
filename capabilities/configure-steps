@@ -11,6 +11,7 @@ CFG_STEPS=(
   system/audio
   system/bluetooth
   system/power
+  system/network
   system/vpn
   desktop/compositor/providers/hyprland
   desktop/shell

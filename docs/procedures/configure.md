@@ -44,7 +44,7 @@ operations/configure --help
 
 Replace `alice` with an existing non-root account. Only a sole `--help` returns help without mutation or root.
 Help also requires intact configure helpers and listed steps. A missing or unloadable lifecycle helper, missing
-capability helpers, or missing or invalid listed steps reports an incomplete or damaged checkout with outcome
+capability helpers or target DNS adapter, or missing or invalid listed steps reports an incomplete or damaged checkout with outcome
 `6`; restore the files from Git or reclone.
 
 ## Prerequisites and inputs
@@ -55,8 +55,8 @@ capability helpers, or missing or invalid listed steps reports an incomplete or 
   changes the login shell to Zsh only when it is currently Bash; another chosen shell is preserved.
 - Use a running MirrorOS-installed Arch system with Bash, pacman, flock, runuser, systemctl, install, usermod, and the
   standard text and filesystem tools checked by validation. In target context, the live medium needs
-  `arch-chroot`, `flock`, and `mountpoint`; base tools are checked inside the target. No Node.js, jq, or git
-  runtime dependency is added.
+  `arch-chroot`, `flock`, `mountpoint`, `unshare`, `mount` and `lsattr`; base tools are checked inside the target.
+  Target dispatch adds no Node.js or git dependency; the network step declares jq for structured D-Bus validation.
 - Existing pacman sync databases and access to declared official repositories are required. Network access is
   needed for missing packages; configure never initializes databases or modifies the keyring automatically.
   The Node.js step also needs HTTPS access to GitHub and nodejs.org when the declared runtime is missing, and the
@@ -131,7 +131,7 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The eighteen steps run in this order:
+The nineteen steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -146,6 +146,7 @@ The eighteen steps run in this order:
 | `system/audio` | PipeWire, WirePlumber, pipewire-pulse, pipewire-alsa and playerctl; owned volume/media commands, user audio units enabled only, and the approved A2DP preference |
 | `system/bluetooth` | BlueZ and bluez-utils; bluetooth.service enabled and started only if inactive and the Bluetooth subsystem exists |
 | `system/power` | UPower, brightnessctl, power-profiles-daemon and libnotify; owned commands, enable-only user watcher, PPD enabled and started only if inactive, and a tracked logind power-key drop-in with change-triggered reload |
+| `system/network` | NetworkManager/systemd-resolved backend and stub, resolver enablement, private migration/recovery and isolated target DNS; no provider/profile edits |
 | `system/vpn` | NetworkManager OpenConnect plugin, with an offline registration check; no corporate profile or connection |
 | `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 and hardware bindings, runtime-only display helper, the greeter layout indicator, Wayland greeter, and one uwsm session entry |
 | `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell`, and its user unit enabled for the selected user |
@@ -237,6 +238,15 @@ Managed destinations are:
 - `~/.config/wireplumber/wireplumber.conf.d/bluetooth-a2dp-autoconnect.conf`: the evidence-approved A2DP rule,
   following managed user-file ownership. The audio MIT notice is delivered at
   `/usr/share/mirroros/hardware/licenses/omarchy-audio`. User audio units are enabled under `default.target` only.
+- `/etc/NetworkManager/conf.d/20-mirroros-dns.conf` and `/etc/resolv.conf`: tracked DNS backend and local stub
+  symlink under [ADR 0024](../adr/0024-networkmanager-resolved-dns-integration.md). Enable systemd-resolved;
+  running transitions start it only if inactive and reload/republish DNS through bounded mechanism operations,
+  never restart NetworkManager. No public DNS provider or connection profile is changed. Conflicting/ambiguous
+  legacy resolver state fails rather than being overwritten. Recovery snapshots and mutation diagnostics stay
+  root-private under `/var/lib/mirroros/configure/network-dns/`, outside configure evidence. Target commands
+  after stub delivery use `arch-chroot -r` inside a private mount namespace with namespace-only transient DNS;
+  no host resolver file or mount is changed. Live unshare/mount/lsattr are required; targets under `/run` are
+  unsupported for this adapter. See [DNS migration and limitations](hardware.md#dns-integration-and-migration).
 - `/etc/systemd/logind.conf.d/60-mirroros-power-key.conf`: tracked `HandlePowerKey=ignore`; configure reloads
   logind, never restarts it, only after this delivery changes in the current step. Running postconditions read
   the effective property through D-Bus; an administrator override that prevents it taking effect fails the step.

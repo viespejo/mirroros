@@ -3,7 +3,9 @@
 `networkmanager-openconnect` comes from the official Arch `extra` repository. Its dependencies provide the
 OpenConnect transport and NetworkManager service (`networkmanager-vpn-plugin-openconnect` on the explored T14s);
 configure records resolved package versions rather than pinning observations. NetworkManager remains the single
-owner of connections, routes and DNS. No standalone OpenConnect tunnel or vpnc-script is launched by this step.
+owner of connections, routes and DNS policy. The generic [network step](../network/sources.md) delivers
+systemd-resolved/stub integration under [ADR 0024](../../../docs/adr/0024-networkmanager-resolved-dns-integration.md);
+VPN DNS/domains are received dynamically. No standalone OpenConnect tunnel or vpnc-script is launched by this step.
 
 The independently written step and `check` require the installed service registration and executable and ask
 `nmcli --offline` to recognise the `openconnect` alias. Output is discarded: no profile is saved and no connection

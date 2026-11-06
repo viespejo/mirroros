@@ -217,7 +217,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the eighteen-step configuration converges in the target and reruns without transactions" {
+@test "the nineteen-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -225,6 +225,8 @@ NODE
   printf 'service=org.freedesktop.NetworkManager.openconnect\n' > "$CFG_TEST_TARGET_ROOT/usr/lib/NetworkManager/VPN/nm-openconnect-service.name"
   printf '#!/usr/bin/bash\nexit 0\n' > "$CFG_TEST_TARGET_ROOT/usr/lib/nm-openconnect-service"
   chmod 0755 "$CFG_TEST_TARGET_ROOT/usr/lib/nm-openconnect-service"
+  mkdir -p "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/system"
+  printf '[Unit]\nDescription=packaged resolver\n' > "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/system/systemd-resolved.service"
   printf '[Unit]\nDescription=packaged hypridle\n' > "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user/hypridle.service"
   printf '[Desktop Entry]\nExec=foot\n' > "$CFG_TEST_HOME/.local/share/applications/foot.desktop"
   printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
@@ -233,15 +235,16 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/18 visual/theme =='* ]]
-  [[ "$output" == *'== 3/18 desktop/files =='* ]]
-  [[ "$output" == *'== 9/18 system/audio =='* ]]
-  [[ "$output" == *'== 10/18 system/bluetooth =='* ]]
-  [[ "$output" == *'== 11/18 system/power =='* ]]
-  [[ "$output" == *'== 12/18 system/vpn =='* ]]
-  [[ "$output" == *'== 16/18 visual/branding =='* ]]
-  [[ "$output" == *'== 17/18 system/boot-splash =='* ]]
-  [[ "$output" == *'== 18/18 desktop/login =='* ]]
+  [[ "$output" == *'== 1/19 visual/theme =='* ]]
+  [[ "$output" == *'== 3/19 desktop/files =='* ]]
+  [[ "$output" == *'== 9/19 system/audio =='* ]]
+  [[ "$output" == *'== 10/19 system/bluetooth =='* ]]
+  [[ "$output" == *'== 11/19 system/power =='* ]]
+  [[ "$output" == *'== 12/19 system/network =='* ]]
+  [[ "$output" == *'== 13/19 system/vpn =='* ]]
+  [[ "$output" == *'== 17/19 visual/branding =='* ]]
+  [[ "$output" == *'== 18/19 system/boot-splash =='* ]]
+  [[ "$output" == *'== 19/19 desktop/login =='* ]]
   [ -e "$CFG_TEST_INSTALLED/nautilus" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/colors.toml" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/colors.toml"
@@ -297,7 +300,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 18 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 19 ]
   cfg_test_no_install
   run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]

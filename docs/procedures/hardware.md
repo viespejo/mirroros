@@ -8,7 +8,7 @@ Laptop 13 Pro remains the sole MVP laptop target, with physical validation pendi
 ## Ownership and activation
 
 The explicit [step order](../../capabilities/configure-steps) places `system/audio`, `system/bluetooth`,
-`system/power` and `system/vpn` before the Hyprland provider. See the [configure procedure](configure.md) for
+`system/power`, `system/network` and `system/vpn` before the Hyprland provider. See the [configure procedure](configure.md) for
 prerequisites, both contexts, tracked-file conflicts, normalized outcomes and evidence. Running postconditions
 check effective system state; target postconditions check installed files and enabled units without activation.
 A successful configure is not proof of hardware usability.
@@ -26,6 +26,9 @@ A successful configure is not proof of hardware usability.
   after the drop-in changes in the current step. Logind is never restarted. Existing hypridle/hyprlock continue
   to own lock-before-sleep. The user power watcher is enabled for `graphical-session.target`, never started by
   configure, and begins at the next graphical login.
+- [Network sources](../../capabilities/system/network/sources.md): generic NetworkManager/systemd-resolved
+  backend and stub integration under [ADR 0024](../adr/0024-networkmanager-resolved-dns-integration.md).
+  Profiles and public DNS choices are preserved; VPN DNS/domains arrive dynamically. See migration below.
 - [VPN sources](../../capabilities/system/vpn/sources.md): networkmanager-openconnect, including OpenConnect;
   configure checks plugin registration offline, without creating a profile or authenticating.
 - [Hyprland provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md): hardware bindings
@@ -64,6 +67,7 @@ These source identities must not be substituted for a future clean acceptance co
 | Wi-Fi | Pending Task 6; do not infer Wi-Fi from wired networking | E1: on/off power-save latency compared; hibernate Wi-Fi recovery about 3 s with -110; delivered daily-use check pending Task 7 | pending target-laptop validation |
 | Corporate VPN | Pending Task 6; plugin only, no corporate connection | E1: terminal authentication handoff connected, NM retained DNS; auth-dialog path failed; repeat acceptance pending Task 7 | pending target-laptop validation |
 | Automatic power profiles | Pending Task 6; check exposed profiles/effective service | E1: platform_profile, three profiles, unprivileged D-Bus switch from active seat; automatic watcher acceptance pending Task 7 | pending target-laptop validation |
+| Per-domain DNS integration | Updated-candidate clean target/boot/running acceptance pending; fixture tests do not validate real mount namespaces | 2026-11-06, clean `f075cf1` plus external prototype: dynamic VPN scope, public/private lookups, disconnect/reconnect and bounded positive/NXDOMAIN observations; product migration, reboot persistence and transport-timeout isolation pending | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
 `evidence/hardware/task-3/verification.md`. Task 2–4 source/contract test results are recorded in the local plan
@@ -130,6 +134,48 @@ observed address. Confirm any device-side request, verify bonding and reconnect,
 Do not copy device addresses, PINs, passkeys or pairing keys to logs or source. PIN/passkey UX beyond this
 terminal path belongs to plan 02-26. Audio reconnect should select A2DP; microphone capture may switch to HFP.
 
+## DNS integration and migration
+
+[ADR 0024](../adr/0024-networkmanager-resolved-dns-integration.md) selects NetworkManager as the DNS-policy
+authority and systemd-resolved as the per-link resolver, through `/run/systemd/resolve/stub-resolv.conf`.
+No DNS provider is imposed: existing DHCP/RA and manual profile choices remain. VPN servers and domains are
+received dynamically, not written into source or copied into a manual forwarding list.
+
+Before a running migration, save work, ensure independent recovery access and explicitly approve a safe network
+window. An active VPN/tunnel blocks a required transition; configure never disconnects it automatically.
+An already-converged integration needs no migration, reload or new backup, even with an active VPN.
+
+The mechanism accepts an absent target resolver or the exact live-medium regular-file copy; an arbitrary target
+resolver requires private review. In running context, a legacy regular file's DNS servers and search domains must
+match the current NetworkManager-provided values. Other options or an unrepresented manual policy require a
+separately reviewed migration; do not remove them just to pass configure. Foreign links, conflicting backend/global
+rules, an unavailable/masked resolver, unsafe parents, hardlinks or immutable/append-only files are rejected.
+The exact retained prototype backend/stub may be adopted without rewriting profile DNS choices.
+
+Recovery snapshots and operation diagnostics are root-private under `/var/lib/mirroros/configure/network-dns/`:
+`current/` retains before/after files, service baseline, context and phase; prior attempts remain in private
+`recovery.*` directories. Never copy these into evidence or Git. Normal failures attempt guarded restoration of
+files, enablement and activity and report its outcome. A later run detects an interrupted applying transaction,
+restores only recognised before/after states in the same context and stops for review before retrying. Subsequent
+local edits, an incomplete snapshot or incomplete recovery require private inspection with rescue access;
+do not delete phase markers or force restoration over edits. Retain recovery material until acceptance and a
+separately approved cleanup. A Snapper snapshot/home backup remains independent protection.
+
+Running postconditions inspect NM D-Bus mode, enabled/active resolved and absence of global index-0 DNS/domain
+entries, then make a 15-second public `example.com` lookup. Operation limits are 30 seconds; missing connectivity
+is not a passed lookup or a ready step. Target postconditions inspect declarations only. For subsequent target
+commands, a private mount namespace supplies transient live-medium resolver input under a namespace-only `/run`
+and uses `arch-chroot -r`; no host resolver file or mount is changed. Targets under `/run` are rejected, and live
+unshare/mount/lsattr support is required. Real first boot and namespace behavior remain candidate-VM validation,
+not a conclusion from doubles.
+
+Privately verify VPN suffix scope, no unexpected root routing/default DNS route and unrelated public lookups on
+the normal link. Search suffixes also route DNS; no conversion to a hard-coded route-only list is required.
+A VPN pushing broader/missing/conflicting scope needs private review, not automatic profile rewriting.
+There is no disconnected-name blocker: private names can reach the normal resolver while disconnected.
+Application DoH/bypass is outside enforcement. Bounded positive/NXDOMAIN evidence is not transport-timeout or
+universal no-leak evidence; timeout isolation and reboot persistence remain pending.
+
 ## Private corporate VPN procedure
 
 The approved provider remains the NetworkManager OpenConnect plugin. Exploration found that username,
@@ -167,7 +213,9 @@ files and persistent history disabled; if that cannot be guaranteed, stop rather
    `vpn.secrets`, use `--show-secrets`, or export a profile. A host crash cannot be handled by a trap; runtime
    tmpfs is cleared on reboot.
 6. Privately verify tunnel reachability, expected split routes and DNS ownership, recording only pass/fail and
-   sanitized reasons. NetworkManager must remain the single route/DNS owner. Do not run standalone OpenConnect
+   sanitized reasons. NetworkManager must remain the single route/DNS-policy owner, with resolved executing
+   its per-link policy. Check the scope and limitations above; successful resource access alone does not prove
+   DNS routing. Do not run standalone OpenConnect
    as a tunnel or introduce another DNS writer. Disconnect through NetworkManager when finished.
 
 The gateway, certificate/fingerprint, authentication result, resolved addresses and credentials are all private.

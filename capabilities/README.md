@@ -21,17 +21,18 @@ dependency graph, or resume state. The current order is:
 9. `system/audio`: PipeWire stack, playerctl, owned volume/media commands, enable-only user audio units and the approved A2DP preference.
 10. `system/bluetooth`: BlueZ and bluetoothctl; enable bluetooth.service and start it only if inactive and the Bluetooth subsystem exists.
 11. `system/power`: UPower, brightnessctl, power-profiles-daemon and libnotify; owned brightness/profile/watcher commands, enable-only user watcher, and tracked power-key policy with bounded logind reload.
-12. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
-13. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, and session selection.
-14. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
-15. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
-16. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
-17. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
+12. `system/network`: NetworkManager/systemd-resolved DNS integration, local stub, private migration/recovery and isolated target DNS; profiles and public provider unchanged ([ADR 0024](../docs/adr/0024-networkmanager-resolved-dns-integration.md)).
+13. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
+14. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, and session selection.
+15. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
+16. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
+17. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
+18. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
     overlay of the recognized boot configuration, and the regenerated boot images ([ADR 0014](../docs/adr/0014-native-login-and-boot-presentation.md)).
-18. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+19. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
 
 The [hardware procedure](../docs/procedures/hardware.md) records terminal paths, effects, recovery and the
-three-environment validation matrix. The four system steps precede their Hyprland bindings. Running checks
+three-environment validation matrix. The system steps precede their Hyprland bindings. Running checks
 require effective system state; target checks require declared files and unit links, without live activation.
 Absent hardware is not a failed configuration or a fabricated reading. A present Bluetooth subsystem requires
 an active service; an absent subsystem leaves the unit enabled and reports unavailable. User audio and the
@@ -65,11 +66,15 @@ Helpers in `lib/` own the effect boundary:
 | `units.sh` | Unit enablement, bounded system-unit start/reload, default target, and read-only display-manager queries |
 | `evidence.sh` | Private run directory, sanitized TSV records, package versions, source identities, and allowed logs |
 | `repositories.sh` | User-level current-branch resolution and safe external source synchronization |
+| `network.sh` | Generic DNS preconditions, private migration/rollback, bounded resolver/NM activation and declared/effective postconditions |
 
 Both `CONFIGURE_CONTEXT=running` and `target` are implemented inside the helpers; steps do not branch on context.
 The public `--target-root <mounted-dir>` requires root, an absolute existing mount point other than `/`, and an
 explicit `--user` from the target's `passwd`. Validation collects problems before convergence. `cfg_exec` runs
-commands directly in running context and through `arch-chroot "$CONFIGURE_ROOT"` in target context. All package,
+commands directly in running context and through `arch-chroot "$CONFIGURE_ROOT"` in target context. With the exact
+resolved stub link, `lib/target-exec` instead uses a private mount namespace and namespace-only `/run` resolver,
+then `arch-chroot -r`, retaining stdin/argv/status without host DNS mutation. This requires live unshare/mount;
+targets under `/run` are rejected. The adapter is not installed as a user action. All package,
 user, and unit queries and commands use it; user writes run through `runuser` inside the target with its `HOME`.
 System files and links, keyboard and session-file checks, the lock, and evidence remain live-side operations on
 `cfg_path`-prefixed paths. SDDM is never started by either context.
@@ -82,6 +87,14 @@ for each step, so a rerun cannot reuse an earlier delivery's change. Both helper
 optional `.service` suffix) and are no-ops in target context, without unit queries. They add no user-unit start
 or restart support. Configure never starts, restarts or reloads the shell, hypridle or the desktop; their changes
 take effect at the next login.
+
+`cfg_network_dns_apply <drop-in>` owns the DNS transaction, not arbitrary service actions. It preserves profiles
+and public providers, starts resolved only if inactive, reloads the supported resolver and NM configuration/DNS
+only during a required transition, and never restarts NetworkManager. It rejects unsafe paths, foreign resolver
+policy and active tunnels during migration. `cfg_network_dns_present` checks declared state in target context,
+and effective NM mode, no global DNS/domain entries and a bounded public lookup in running context. Private
+snapshots and upstream mutation diagnostics stay outside configure evidence. A converged rerun activates nothing;
+interrupted recovery requires review before another migration attempt. See [DNS migration](../docs/procedures/hardware.md#dns-integration-and-migration).
 
 The installer embeds this tree and `operations/configure` under the same code identity as the engine. After
 base postconditions pass it copies the rerun code and `identity.json` to the installed system's

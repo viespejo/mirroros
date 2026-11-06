@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# Simulates only the reviewed target-exec namespace; never invokes real unshare or mounts.
+set -Eeuo pipefail
+printf 'unshare --mount --propagation private (target DNS fixture)\n' >> "$CFG_TEST_CALLS"
+[[ "$1 $2 $3 $4" == '--mount --propagation private --' ]] || exit 97
+shift 4
+[[ "$1 $2 $3 $4" == 'bash -Eeuo pipefail -c' && "$5" == *'arch-chroot -r'* && "$6" == bash ]] || exit 97
+shift 6
+exec 3<&-
+exec arch-chroot "$@"
