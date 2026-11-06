@@ -19,17 +19,23 @@ Known exploratory findings in `TODO-582784b9`:
 
 - Hibernation in the default `platform` mode aborts during firmware S4 entry. The local `shutdown`
   workaround permits resume; product delivery and attended verification are tracked by plan 02-24.
-- `mt7921e` reports restore error `-110` with delayed Wi-Fi recovery. This finding remains open.
+- `mt7921e` reports restore error `-110` with delayed Wi-Fi recovery. This finding remains open. Story 4.4
+  acceptance (2026-11-05/06) saw the error persist after session-menu hibernate while Wi-Fi reconnected;
+  recovery latency was not measured. Disabling `wifi.powersave` reduced exploratory idle RTT from about 21 to
+  5 ms but did not remove the error (2026-11-03); TODO-005 is deferred.
+- The firmware reports battery charge thresholds of 95 and 100 with automatic charge behavior. Their origin is
+  unknown, nothing in this repository sets them, and the maintainer left them unchanged.
 - Fingerprint-session behaviour was observed on Omarchy. This finding remains open; this profile adds
   no fingerprint mitigation or `fprintd`.
 
 Story 4.4 provider exploration was approved on 2026-11-03. The
 [hardware procedure](../../docs/procedures/hardware.md) owns the per-capability validation matrix, terminal
 connectivity fallback, private VPN workflow, diagnostics and rollback. Clean reference-VM and delivered T14s
-daily-use acceptance remain pending in plan 02-25; exploration does not establish candidate readiness.
+daily-use acceptance finished in plan 02-25 as non-qualifying evidence; the matrix records each result with its
+date and commit.
 The approved tuning is the user A2DP reconnect preference only. Wi-Fi power-save delivery (TODO-005) is deferred;
-no target override, global USB autosuspend change or keyboard-backlight hook is added here. Final acceptance
-findings will be appended separately without resolving the existing Wi-Fi or fingerprint findings.
+no target override, global USB autosuspend change or keyboard-backlight hook is added here. The acceptance
+findings above do not resolve the existing Wi-Fi or fingerprint findings.
 
 Every target also has to satisfy the common boundary enforced by discovery: `x86_64`, 64-bit UEFI, and at
 least one eligible non-removable disk that is not the live medium. Recognition grants no installation

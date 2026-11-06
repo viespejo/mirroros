@@ -42,32 +42,42 @@ plan 02-26 with its ADR amending ADR 0012; this plan adds no QML or shell servic
 
 ## Validation matrix
 
-Each row has three environment-result columns. `Pending` means not performed, not passed. Exploration validates
-individual mechanisms, not the delivered candidate. Clean VM acceptance (plan 02-25 Task 6) and supervised T14s
-acceptance (Task 7) are still pending. No capability below is claimed qualified.
+Each row has three environment-result columns. `Pending` means not performed, not passed; `Not applicable` means
+the environment has no such hardware. Exploration validates individual mechanisms, not the delivered candidate.
+Clean VM acceptance (plan 02-25 Task 6) and supervised T14s acceptance (Task 7) are complete as non-qualifying
+evidence: they show how the candidate installs and behaves as recorded, not that any capability is qualified.
+No capability below is claimed qualified.
 
 Exploration date E1 is 2026-11-03: host base commit `03233ed55a190a78d129bd2f28ca9e49da979271`; installed ISO
 commit reported as `ee07c83`, not independently reverified during exploration. E2 is the supervised seat-session
 brightness check on 2026-11-04, same host base plus uncommitted Task 2/3 changes; no candidate configure was run.
 These source identities must not be substituted for a future clean acceptance commit.
 
+Acceptance identities, all exploratory or uncounted and none qualifying: V1 is the 2026-11-05 laboratory-VM
+exception at `5e93654` (manual lab installation with a VirGL/SPICE display instead of the fixed reference VM, not
+fixed-harness qualification). V2 is the 2026-11-06 runner-based clean installation at `179f288`: uncounted,
+console-driven, with no separate reboot-persistence check. T14s acceptance A1 spans 2026-11-05 to 2026-11-06 on
+candidates `5e93654`, `f075cf1` (microphone OSD IPC correction) and `e3c3228` (ALSA microphone state); the rows
+name the commit where it matters. A2 is the final 2026-11-06 deployment of `179f288`: real DNS migration, reboot
+persistence and a no-change rerun with 19 of 19 steps unchanged.
+
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
 |---|---|---|---|
-| Audio output, mute and microphone | 2026-11-05, `a4313ad`: dummy output incorrectly reported as 100%. Authorized two-QML development delivery reports no audio output without a level; maintainer confirmed bar tooltip and audio/brightness OSD visually. Clean fixed-candidate acceptance pending | E1: wpctl volume cap/mute/mic mechanisms exercised; delivered bindings/OSD pending Task 7 | pending target-laptop validation |
-| Bluetooth and A2DP/HFP | Pending Task 6; absent subsystem must not fail configure | E1: pairing/reconnection and profiles exercised; HFP reconnect defect corrected by temporary A2DP rule, then reverted; delivered rule pending Task 7 | pending target-laptop validation |
-| Display brightness | Pending Task 6; report unavailable without backlight | E1: SSH write denied; E2: seat-session brightnessctl 65535 → 62258 → 65535 restored; bindings pending Task 7 | pending target-laptop validation |
-| Media keys and MPRIS | Pending Task 6; no player must report unavailable | E1: no MPRIS player, no physical media keys; not exercised; pending Task 7 | pending target-laptop validation |
-| Battery status | Pending Task 6; no battery must report unavailable | E1: UPower charge/source data and AC transition observed; delivered watcher pending Task 7 | pending target-laptop validation |
-| Low-battery warning | Pending Task 6; no fabricated charge | E1: not exercised (battery near full); source tests do not prove notification delivery; pending Task 7 | pending target-laptop validation |
-| Power key | Pending Task 6; inspect effective logind property | E1: baseline HandlePowerKey=poweroff confirmed by property, not key press; corrected delivered behavior pending Task 7 | pending target-laptop validation |
-| Lid lock timing and clamshell | Pending Task 6; source checks only without lid/monitor | E1: lock screen only on resume; docked lid did not suspend; runtime display mechanisms exercised; delivered clamshell pending Task 7 | pending target-laptop validation |
-| Display layout and scale | Pending Task 6; helper/source checks, not physical clamshell | E1: disable/restore/mirror mechanisms exercised; all delivered chords and scale pending Task 7 | pending target-laptop validation |
-| Suspend and resume | Pending Task 6 | E1: one supervised lid s2idle cycle passed; full session-menu acceptance pending Task 7 | pending target-laptop validation |
-| Hibernate and resume | Pending Task 6 | E1: one shutdown-mode same-boot resume; mt7921e restore -110 persists; session-menu acceptance pending Task 7 | pending target-laptop validation |
-| Wi-Fi | Pending Task 6; do not infer Wi-Fi from wired networking | E1: on/off power-save latency compared; hibernate Wi-Fi recovery about 3 s with -110; delivered daily-use check pending Task 7 | pending target-laptop validation |
-| Corporate VPN | Pending Task 6; plugin only, no corporate connection | E1: terminal authentication handoff connected, NM retained DNS; auth-dialog path failed; repeat acceptance pending Task 7 | pending target-laptop validation |
-| Automatic power profiles | Pending Task 6; check exposed profiles/effective service | E1: platform_profile, three profiles, unprivileged D-Bus switch from active seat; automatic watcher acceptance pending Task 7 | pending target-laptop validation |
-| Per-domain DNS integration | Updated-candidate clean target/boot/running acceptance pending; fixture tests do not validate real mount namespaces | 2026-11-06, clean `f075cf1` plus external prototype: dynamic VPN scope, public/private lookups, disconnect/reconnect and bounded positive/NXDOMAIN observations; product migration, reboot persistence and transport-timeout isolation pending | pending target-laptop validation |
+| Audio output, mute and microphone | V1: audio reported unavailable without a level in the bar and OSD (maintainer visual). V2: console probe passed on the virtual dummy sink; graphical unavailable-audio not rechecked at `179f288` | A1 (`5e93654`, `f075cf1`, `e3c3228`): volume ±5/±1 and output mute with correct OSD; microphone key toggles both ways with a level-free message, and the ALSA capture switch and LED agree on `e3c3228`. Not verified: 100% cap, locked-session keys, capture quality. The microphone message is truncated with an ellipsis (unresolved) | pending target-laptop validation |
+| Bluetooth and A2DP/HFP | V1, V2: no Bluetooth subsystem; BlueZ inactive and configure succeeded without failure | A1 (`f075cf1`, 2026-11-06): an existing headset pairing reconnected through `bluetoothctl`; A2DP active and audible. HFP availability only: capture and profile switch not exercised. New pairing and PIN/passkey not exercised | pending target-laptop validation |
+| Display brightness | V1, V2: no backlight; brightness reported unavailable without a value | A1 (`5e93654`, 2026-11-05): all chords (±5/±1, max, min) with correct OSD, confirmed by the maintainer. E2 mechanism result retained | pending target-laptop validation |
+| Media keys and MPRIS | Not applicable: no media keys or player; source and contract tests only | A1 (`5e93654`, 2026-11-05/06): owned actions through the keyboard launcher verified with a temporary test player (play-pause, next, previous). Physical media keys on an external keyboard confirmed; keycodes not captured. No dedicated multimedia keys were mapped on the T14s | pending target-laptop validation |
+| Battery status | V1: battery indicator absent (maintainer visual). V2: battery count 0 | A1 (`5e93654`, 2026-11-05): UPower charge and source transitions observed. The 95/100 charge thresholds have an unknown origin and were left unchanged by maintainer decision | pending target-laptop validation |
+| Low-battery warning | Not applicable: no battery; no fabricated charge | A1 (`e3c3228`, 2026-11-06): with a temporary 100% threshold the watcher sent a critical notification on a real discharge, did not repeat after dismissal and re-armed after an AC transition; the original 10% was restored. A real 10% crossing was not performed (waived by the maintainer) | pending target-laptop validation |
+| Power key | V1, V2: effective HandlePowerKey=ignore; no key press | A1 (`5e93654`, 2026-11-05): a brief press opens only the session menu; no shutdown or suspend | pending target-laptop validation |
+| Lid lock timing and clamshell | Not applicable: no lid or external monitor | A1 (`5e93654`, 2026-11-05): with an external monitor, lid close disabled only the internal panel and lid open restored both at their original scales, with the personal `monitors.lua` hash unchanged. Without a monitor the lock screen was the first content on resume (maintainer observation; the journal shows suspend and resume) | pending target-laptop validation |
+| Display layout and scale | Not applicable: no external monitor; helper and source tests only | A1 (`5e93654`, 2026-11-05): internal-display toggle, mirror toggle and scale up/down confirmed visually, with readbacks for toggle and scale; the mirror state was not sampled independently. Persistent monitor files unchanged | pending target-laptop validation |
+| Suspend and resume | Not applicable: no lid or sleep hardware | A1 (`5e93654`, 2026-11-05): session-menu suspend and lid suspend (s2idle) resumed to the lock screen first, in the same boot | pending target-laptop validation |
+| Hibernate and resume | Not applicable: no sleep hardware | A1 (`5e93654`, 2026-11-05/06): session-menu hibernate resumed with the lock screen first, with `HibernateMode=shutdown` delivered per ADR 0023. mt7921e restore errors persist; recovery latency was not measured | pending target-laptop validation |
+| Wi-Fi | Not applicable: no Wi-Fi hardware; do not infer Wi-Fi from wired networking | A1 (`f075cf1`, 2026-11-06): terminal reconnection through `nmtui` restored connectivity; the outage was not timed and no fresh public lookup was made. E1: power-save latency compared; mt7921e finding open. Global `wifi.powersave` delivery deferred (TODO-005) | pending target-laptop validation |
+| Corporate VPN | V2: plugin registration only; no corporate profile or connection | A1 (`f075cf1`, 2026-11-05/06): a private acceptance script outside the product authenticated and activated an existing profile through NetworkManager, and a corporate resource was reached. An earlier unexplained VPN loss was not resolved. The authentication dialog under Hyprland remains unvalidated, and DNS transport-timeout behavior with the corporate resolver was not tested (documented unverified limit) | pending target-laptop validation |
+| Automatic power profiles | V1, V2: power-profiles-daemon active | A1 (`5e93654`, `f075cf1`): default AC performance and battery balanced round trip; remembered custom choices (AC balanced, battery power-saver) were restored across source transitions in the same session and then removed. Persistence across re-login or reboot was not tested. A polkit denial of switching over SSH is expected | pending target-laptop validation |
+| Per-domain DNS integration | V2 (`179f288`, 2026-11-06, uncounted runner): target configure 19 of 19 changed and running rerun 19 of 19 unchanged; stub link, resolved enabled and active, NetworkManager in systemd-resolved mode and a public lookup passed on first boot without manual repair | A2 (`179f288`, 2026-11-06): real migration from the external prototype (only `system/network` changed) with per-profile public DNS preserved, reboot persistence confirmed and a no-change rerun. Prototype on `f075cf1`: dynamic VPN scope and positive/NXDOMAIN lookups. Transport-timeout isolation not tested | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
 `evidence/hardware/task-3/verification.md`. Task 2–4 source/contract test results are recorded in the local plan
@@ -166,15 +176,16 @@ entries, then make a 15-second public `example.com` lookup. Operation limits are
 is not a passed lookup or a ready step. Target postconditions inspect declarations only. For subsequent target
 commands, a private mount namespace supplies transient live-medium resolver input under a namespace-only `/run`
 and uses `arch-chroot -r` on a namespace-only recursive bind of the target at `/mnt`, so installer targets under
-`/run` remain reachable; no host resolver file or mount is changed. Live unshare/mount/lsattr support is required. Real first boot and namespace behavior remain candidate-VM validation,
-not a conclusion from doubles.
+`/run` remain reachable; no host resolver file or mount is changed. Live unshare/mount/lsattr support is required. Real first-boot and namespace behavior were exercised in the V2 clean installation (uncounted runner);
+doubles alone do not establish them.
 
 Privately verify VPN suffix scope, no unexpected root routing/default DNS route and unrelated public lookups on
 the normal link. Search suffixes also route DNS; no conversion to a hard-coded route-only list is required.
 A VPN pushing broader/missing/conflicting scope needs private review, not automatic profile rewriting.
 There is no disconnected-name blocker: private names can reach the normal resolver while disconnected.
 Application DoH/bypass is outside enforcement. Bounded positive/NXDOMAIN evidence is not transport-timeout or
-universal no-leak evidence; timeout isolation and reboot persistence remain pending.
+universal no-leak evidence; transport-timeout isolation was not tested and remains an unverified limit. Reboot
+persistence was confirmed on the T14s (A2).
 
 ## Private corporate VPN procedure
 
@@ -283,4 +294,4 @@ allowlisted summaries with date, commit and result. Redact SSIDs, MACs, VPN serv
 serials and internal addresses before collection; scan selected evidence with Gitleaks on the host. Do not commit
 generated output. T14s-specific findings belong in its [target notes](../../targets/thinkpad-t14s-gen1-amd/README.md)
 and local TODO-582784b9 without resolving the open Wi-Fi/fingerprint findings or changing the todo's existing
-closed status. Final matrix updates belong to plan 02-25 Task 8 after the two acceptance checkpoints.
+closed status. Plan 02-25 Task 8 finalized the matrix after the two acceptance checkpoints.
