@@ -33,7 +33,17 @@ case "$1" in
   *) wpctl set-volume -l 1.0 "$sink" "$value" ;;
 esac
 if [[ "$1" == mic-mute ]]; then
-  osd show '{"icon":"microphone","message":"Microphone mute toggled"}'
+  if ! microphone_state=$(wpctl get-volume "$sink" 2> /dev/null) ||
+      [[ ! "$microphone_state" =~ ^Volume:\ [0-9]+([.][0-9]+)?(\ \[MUTED\])?$ ]]; then
+    printf 'Microphone state unavailable after mute toggle; the audio command was not retried.\n' >&2
+    osd show '{"icon":"microphone","message":"Microphone unavailable"}'
+    exit 4
+  fi
+  if [[ "$microphone_state" == *'[MUTED]' ]]; then
+    osd show '{"icon":"microphone-muted","message":"Mic muted"}'
+  else
+    osd show '{"icon":"microphone","message":"Mic on"}'
+  fi
 else
   osd showSource volume
 fi

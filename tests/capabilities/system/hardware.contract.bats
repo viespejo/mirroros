@@ -7,6 +7,7 @@ teardown() { cfg_test_teardown; }
 
 hardware_assert_delivery() {
   local command unit
+  [ -f "$CFG_TEST_INSTALLED/alsa-utils" ]
   for command in volume media brightness power-profile power-watch; do
     [ -x "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command" ]
   done

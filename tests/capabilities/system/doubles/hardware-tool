@@ -5,7 +5,20 @@ printf '%s %s\n' "$name" "$*" >> "$CFG_TEST_CALLS"
 case "$name" in
   wpctl)
     [[ "${HW_AUDIO_UNAVAILABLE:-0}" == 0 ]] || exit 1
-    if [[ "$1" == get-volume ]]; then printf 'Volume: 0.50\n'; fi ;;
+    if [[ "$1" == set-mute && "$2" == @DEFAULT_AUDIO_SOURCE@ ]]; then
+      : > "$CFG_TEST_DIR/mic-toggled"
+    elif [[ "$1" == get-volume ]]; then
+      if [[ "$2" == @DEFAULT_AUDIO_SOURCE@ && -e "$CFG_TEST_DIR/mic-toggled" ]]; then
+        case "${HW_MIC_RESULT:-unmuted}" in
+          muted) printf 'Volume: 0.50 [MUTED]\n' ;;
+          unmuted) printf 'Volume: 0.50\n' ;;
+          unavailable) exit 1 ;;
+          invalid) printf 'Unknown microphone state\n' ;;
+        esac
+      else
+        printf 'Volume: 0.50\n'
+      fi
+    fi ;;
   brightnessctl)
     [[ "${HW_BRIGHTNESS_UNAVAILABLE:-0}" == 0 ]] || exit 1
     printf '50\n' ;;

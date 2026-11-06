@@ -2,4 +2,5 @@ pipewire extra
 wireplumber extra
 pipewire-pulse extra
 pipewire-alsa extra
+alsa-utils extra
 playerctl extra

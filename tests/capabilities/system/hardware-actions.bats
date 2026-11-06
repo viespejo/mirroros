@@ -16,16 +16,39 @@ teardown() { cfg_test_teardown; }
   [ "$(grep -c 'call -- osd showSource volume' "$CFG_TEST_CALLS")" -eq 6 ]
 }
 
-@test "mic mute uses its source and a fixed message without a fabricated level" {
+@test "mic mute reads the resulting muted state and shows a crossed icon without a level" {
+  export HW_MIC_RESULT=muted
   run hardware_command audio/volume mic-mute
   [ "$status" -eq 0 ]
   grep -qxF 'wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle' "$CFG_TEST_CALLS"
-  grep -qxF 'qs ipc -p /usr/share/mirroros/shell call -- osd show {"icon":"microphone","message":"Microphone mute toggled"}' "$CFG_TEST_CALLS"
+  [ "$(grep -cxF 'wpctl get-volume @DEFAULT_AUDIO_SOURCE@' "$CFG_TEST_CALLS")" -eq 2 ]
+  grep -qxF 'qs ipc -p /usr/share/mirroros/shell call -- osd show {"icon":"microphone-muted","message":"Mic muted"}' "$CFG_TEST_CALLS"
   [[ "$output" != *'OSD unavailable'* ]]
+  ! grep -qE '"value"|showSource' "$CFG_TEST_CALLS"
+}
+
+@test "mic mute reads the resulting unmuted state and shows a normal icon without a level" {
+  run hardware_command audio/volume mic-mute
+  [ "$status" -eq 0 ]
+  grep -qxF 'qs ipc -p /usr/share/mirroros/shell call -- osd show {"icon":"microphone","message":"Mic on"}' "$CFG_TEST_CALLS"
   ! grep -qE '"value"|showSource' "$CFG_TEST_CALLS"
   run hardware_command audio/volume mute-toggle
   [ "$status" -eq 0 ]
   grep -qxF 'wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle' "$CFG_TEST_CALLS"
+}
+
+@test "failed or invalid microphone readback reports unavailable without retrying the toggle" {
+  for result in unavailable invalid; do
+    export HW_MIC_RESULT=$result
+    : > "$CFG_TEST_CALLS"
+    rm -f "$CFG_TEST_DIR/mic-toggled"
+    run hardware_command audio/volume mic-mute
+    [ "$status" -eq 4 ]
+    [[ "$output" == *'Microphone state unavailable'* ]]
+    [ "$(grep -cxF 'wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle' "$CFG_TEST_CALLS")" -eq 1 ]
+    grep -qxF 'qs ipc -p /usr/share/mirroros/shell call -- osd show {"icon":"microphone","message":"Microphone unavailable"}' "$CFG_TEST_CALLS"
+    ! grep -qE '"value"|showSource|Mic muted|Mic on' "$CFG_TEST_CALLS"
+  done
 }
 
 @test "missing microphone uses an unambiguous fixed-message OSD call without a write" {

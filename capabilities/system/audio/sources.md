@@ -2,10 +2,18 @@
 
 ## Packages
 
-`pipewire`, `wireplumber`, `pipewire-pulse`, `pipewire-alsa` and `playerctl` come from the official Arch `extra`
+`pipewire`, `wireplumber`, `pipewire-pulse`, `pipewire-alsa`, `alsa-utils` and `playerctl` come from the official Arch `extra`
 repository. Configure records resolved versions in `packages.tsv`; these are not version pins. WirePlumber supplies
 `wpctl`; playerctl is the terminal MPRIS provider. PipeWire services and WirePlumber are enabled only for the
 selected user, under `default.target`, without starting or restarting a user manager or service.
+
+`alsa-utils` supplies the standard ALSA state/initialization units and udev rules. The T14s exploratory check on
+2026-11-06 (candidate `f075cf1` plus the authorized package installation) found that installation followed by a
+normal reboot created the UCM `Mic ACP LED Capture Switch`; the physical microphone mute key, ALSA control and
+LED then agreed. MirrorOS does not write LED controls, patch UCM or invoke `alsactl` from configure. The first boot
+had no saved ALSA state and used initialization fallback; the restore process returned 99, whose exact cause
+remains unresolved. This is not Framework qualification or clean rebuilt-candidate validation. See plan 02-25's
+Task 7 execution records and ignored `evidence/hardware/acceptance-20261105T223002Z/`.
 
 ## Owned delivery
 
@@ -13,7 +21,10 @@ selected user, under `default.target`, without starting or restarting a user man
 They validate argv before provider calls. Volume changes use `wpctl set-volume -l 1.0`; the existing shell's
 `qs ipc -p /usr/share/mirroros/shell call -- osd showSource volume` reads the measured source. The `--`
 terminator prevents the microphone's `show` function from being parsed as Quickshell's IPC `show` subcommand.
-Microphone mute uses a fixed message without a level. Missing audio or MPRIS players return unavailable (4); invalid input returns 2.
+Microphone mute reads the resulting `wpctl get-volume` state after toggling, using the existing normal/muted
+microphone icons with `Mic on` or `Mic muted`, without a level. Failed or unrecognised readback reports unavailable
+(4) without retrying the toggle or claiming a resulting mute state. Missing audio or MPRIS players return
+unavailable (4); invalid input returns 2.
 OSD failure does not undo a successful provider action and is reported separately. Configure does not claim an
 active user audio session; activation and physical audio checks follow at the next login.
 
