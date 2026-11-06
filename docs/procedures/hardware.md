@@ -165,8 +165,8 @@ Running postconditions inspect NM D-Bus mode, enabled/active resolved and absenc
 entries, then make a 15-second public `example.com` lookup. Operation limits are 30 seconds; missing connectivity
 is not a passed lookup or a ready step. Target postconditions inspect declarations only. For subsequent target
 commands, a private mount namespace supplies transient live-medium resolver input under a namespace-only `/run`
-and uses `arch-chroot -r`; no host resolver file or mount is changed. Targets under `/run` are rejected, and live
-unshare/mount/lsattr support is required. Real first boot and namespace behavior remain candidate-VM validation,
+and uses `arch-chroot -r` on a namespace-only recursive bind of the target at `/mnt`, so installer targets under
+`/run` remain reachable; no host resolver file or mount is changed. Live unshare/mount/lsattr support is required. Real first boot and namespace behavior remain candidate-VM validation,
 not a conclusion from doubles.
 
 Privately verify VPN suffix scope, no unexpected root routing/default DNS route and unrelated public lookups on

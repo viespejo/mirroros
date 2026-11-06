@@ -22,7 +22,14 @@ function fixture(t, overrides = {}) {
 shift 4
 printf 'private-namespace\n' >> "$TRACE"
 exec "$@"`,
-    mount: `[[ "$*" == '-t tmpfs -o mode=0755,nosuid,nodev tmpfs /run' ]] || exit 97
+    mount: `if [[ "$*" == "--rbind $EXPECTED_ROOT /mnt" ]]; then
+  [[ "$(tail -1 "$TRACE")" == private-namespace ]] || exit 97
+  [[ "\${DENY_BIND:-0}" == 0 ]] || exit 19
+  printf 'target-bind\n' >> "$TRACE"
+  exit 0
+fi
+[[ "$*" == '-t tmpfs -o mode=0755,nosuid,nodev tmpfs /run' ]] || exit 97
+[[ "$(tail -1 "$TRACE")" == target-bind ]] || exit 97
 [[ "\${DENY_MOUNT:-0}" == 0 ]] || exit 18
 printf 'private-run\n' >> "$TRACE"`,
     install: `[[ "$(tail -1 "$TRACE")" == private-run || "$(tail -1 "$TRACE")" == directory ]] || exit 97
@@ -35,7 +42,7 @@ case "$*" in
     printf 'resolver-copy\n' >> "$TRACE" ;;
   *) exit 97 ;;
 esac`,
-    'arch-chroot': `[[ "$1" == -r && "$2" == "$EXPECTED_ROOT" ]] || exit 97
+    'arch-chroot': `[[ "$1" == -r && "$2" == /mnt ]] || exit 97
 [[ ! -e /proc/self/fd/3 ]] || exit 97
 cmp -s "$FAKE_RUN/systemd/resolve/stub-resolv.conf" "$EXPECTED_RESOLVER" || exit 97
 shift 2
@@ -57,7 +64,7 @@ exit "\${CHILD_STATUS:-0}"`,
     trace, args,
     run: (target = root) => spawnSync('bash', [helper, target, 'fixture-command', 'literal; no shell expansion'], {
       env: { ...process.env, PATH: `${bin}:/usr/bin:/bin`, TRACE: trace, ARGUMENTS: args,
-        FAKE_RUN: join(dir, 'private-run'), EXPECTED_ROOT: root, EXPECTED_RESOLVER: resolver, ...overrides },
+        FAKE_RUN: join(dir, 'private-run'), EXPECTED_ROOT: target, EXPECTED_RESOLVER: resolver, ...overrides },
       input: 'fixture-stdin\n', encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe', fd],
     }),
   };
@@ -67,7 +74,7 @@ test('target adapter isolates before resolver copy, preserves argv/stdin and clo
   const f = fixture(t);
   const result = f.run();
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(f.trace, 'utf8'), 'private-namespace\nprivate-run\ndirectory\nresolver-copy\nchroot\n');
+  assert.equal(readFileSync(f.trace, 'utf8'), 'private-namespace\ntarget-bind\nprivate-run\ndirectory\nresolver-copy\nchroot\n');
   assert.equal(readFileSync(f.args, 'utf8'), 'fixture-command\nliteral; no shell expansion\n');
 });
 
@@ -77,10 +84,16 @@ test('namespace failure never reaches mount or resolver copy', (t) => {
   assert.equal(readFileSync(f.trace, 'utf8'), '');
 });
 
+test('target bind failure never replaces /run or reaches chroot', (t) => {
+  const f = fixture(t, { DENY_BIND: '1' });
+  assert.equal(f.run().status, 19);
+  assert.equal(readFileSync(f.trace, 'utf8'), 'private-namespace\n');
+});
+
 test('mount failure never reaches resolver copy or chroot', (t) => {
   const f = fixture(t, { DENY_MOUNT: '1' });
   assert.equal(f.run().status, 18);
-  assert.equal(readFileSync(f.trace, 'utf8'), 'private-namespace\n');
+  assert.equal(readFileSync(f.trace, 'utf8'), 'private-namespace\ntarget-bind\n');
 });
 
 test('child exit is preserved', (t) => {
@@ -88,8 +101,19 @@ test('child exit is preserved', (t) => {
   assert.equal(f.run().status, 23);
 });
 
-test('a target hidden by private /run is rejected before isolation', (t) => {
+test('a target under /run is bound before the private /run replaces it', (t) => {
+  const runtime = process.env.XDG_RUNTIME_DIR;
+  if (!runtime || !resolve(runtime).startsWith('/run/')) return t.skip('no runtime directory under /run');
+  const target = mkdtempSync(join(runtime, 'mirroros-target-'));
+  t.after(() => rmSync(target, { recursive: true, force: true }));
   const f = fixture(t);
-  assert.equal(f.run('/run').status, 4);
+  const result = f.run(target);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(f.trace, 'utf8'), 'private-namespace\ntarget-bind\nprivate-run\ndirectory\nresolver-copy\nchroot\n');
+});
+
+test('the live root is rejected before isolation', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('/').status, 4);
   assert.equal(readFileSync(f.trace, 'utf8'), '');
 });

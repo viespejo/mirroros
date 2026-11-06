@@ -4,17 +4,20 @@
 set -Eeuo pipefail
 root=$(readlink -f -- "$1")
 shift
-case "$root" in /|/run|/run/*) printf 'Target DNS isolation requires a target outside /run.\n' >&2; exit 4 ;; esac
-[[ -d "$root" && -f /proc/self/fd/3 ]] || { printf 'Target DNS isolation requires readable live resolver input.\n' >&2; exit 4; }
+[[ "$root" != / ]] || { printf 'Target DNS isolation requires a mounted target, not /.\n' >&2; exit 4; }
+[[ -d "$root" && -d /mnt && -f /proc/self/fd/3 ]] || { printf 'Target DNS isolation requires readable live resolver input.\n' >&2; exit 4; }
 # shellcheck disable=SC2016 # The namespace child expands only its positional arguments.
 exec unshare --mount --propagation private -- bash -Eeuo pipefail -c '
   root=$1
   shift
+  # The target may live under /run (the installer uses /run/mirroros/target).
+  # Reach it through a namespace-only recursive bind before /run is replaced.
+  mount --rbind "$root" /mnt
   # arch-chroot binds this namespace-private /run into the target. Never create
   # a stub destination in the real host /run or follow the target link there.
   mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
   install -d -m 0755 /run/systemd/resolve
   install -m 0644 /proc/self/fd/3 /run/systemd/resolve/stub-resolv.conf
   exec 3<&-
-  arch-chroot -r "$root" "$@"
+  arch-chroot -r /mnt "$@"
 ' bash "$root" "$@"

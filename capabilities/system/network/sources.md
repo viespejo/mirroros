@@ -23,9 +23,10 @@ No package version pin, AUR source, public DNS provider, private profile, corpor
   activation/recovery. Running checks read effective NM D-Bus mode and resolved global scope, then perform a
   bounded public lookup; target checks inspect declared integration only.
 - `capabilities/lib/target-exec` is invoked by cfg_exec for the exact absolute stub link. It runs unshare with
-  private mount propagation, creates a namespace-only tmpfs /run with resolver input from fd 3, closes that fd,
-  then invokes arch-chroot -r. The command retains argv/stdin/status. Targets under /run are rejected because
-  the private mount would hide them. No real host resolver file is created, replaced or used as a mount target.
+  private mount propagation, recursively binds the target to the namespace-only /mnt (the installer target lives
+  under /run/mirroros/target), creates a namespace-only tmpfs /run with resolver input from fd 3, closes that fd,
+  then invokes arch-chroot -r /mnt. arch-chroot binds /run non-recursively, so the whole /run is replaced. The
+  command retains argv/stdin/status. No real host resolver file is created, replaced or used as a mount target.
 - Root-private migration material is under `/var/lib/mirroros/configure/network-dns/`, never configure evidence.
   A converged rerun checks state without new backups or activation. An incomplete transaction cannot pass as
   converged; recovery rejects subsequent local edits and cross-context restoration.
