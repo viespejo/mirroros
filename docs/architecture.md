@@ -258,6 +258,17 @@ Exact repository paths and privilege boundaries may be refined by the first impl
 - Automated drift reconciliation.
 - Broader hardware support.
 
+### Installed DNS integration
+
+[ADR 0024](adr/0024-networkmanager-resolved-dns-integration.md) selects NetworkManager as the sole
+connection/DNS-policy authority and systemd-resolved with its local stub as the resolver. The configure-owned
+`system/network` step delivers backend integration independently of VPN authentication; installation retains
+base NetworkManager ownership. Public DNS preferences and profiles are preserved, while private VPN DNS and
+domains are received dynamically. No provider default, corporate profile or disconnected-name firewall is added.
+Migration/recovery material is root-private, outside evidence. Target execution supplies transient DNS in a
+private mount namespace without activating services or changing host DNS. Readiness requires effective running
+checks, reproducible first boot and candidate-specific validation; prototype success is not qualification.
+
 ### Data Architecture
 
 MirrorOS uses no application database. Version-controlled text declarations are authoritative, while generated plans, artifacts, logs, and verification reports are derived operational data.

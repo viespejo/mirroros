@@ -32,6 +32,13 @@ non-editable hibernate-mode override with conditional installed-tree delivery. T
 qualified laptop target; recognition adds no qualification or support commitment. ADRs 0005, 0006 and 0007
 remain related and unchanged; none is superseded.
 
+## Installed DNS integration extension
+
+[ADR 0024: NetworkManager and systemd-resolved DNS Integration](0024-networkmanager-resolved-dns-integration.md)
+is Accepted. It selects the generic installed DNS backend/stub integration, preserving public DNS choices and
+private dynamic VPN input. Configure owns bounded migration and both execution contexts; no accepted ADR is
+superseded. The prototype and local tests do not establish updated-candidate or target-laptop readiness.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.
