@@ -123,3 +123,5 @@ After adoption, through Stories 4.4 and 4.7:
 ## Superseded by
 
 [ADR 0020](0020-wallpaper-selection.md) amends the background-management exclusion for its bounded wallpaper capability only; the remaining decision is unchanged.
+
+[ADR 0025](0025-shell-panels.md) amends the surface list and control-panel exclusion for its bounded shell panels only; the remaining decision is unchanged.

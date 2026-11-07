@@ -39,6 +39,13 @@ is Accepted. It selects the generic installed DNS backend/stub integration, pres
 private dynamic VPN input. Configure owns bounded migration and both execution contexts; no accepted ADR is
 superseded. The prototype and local tests do not establish updated-candidate or target-laptop readiness.
 
+## Shell panels extension
+
+[ADR 0025: Shell Panels](0025-shell-panels.md) is Accepted. It amends [ADR 0012](0012-owned-quickshell-desktop-shell.md)
+with bar-anchored audio, network/Wi-Fi, Bluetooth, display and power panels and their credential, privilege, DNS
+and service boundaries, as [ADR 0020](0020-wallpaper-selection.md) did for wallpaper. ADR 0012's remaining
+exclusions and authentication rules stay in force; per-panel hardware validation belongs to the production plans.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.
