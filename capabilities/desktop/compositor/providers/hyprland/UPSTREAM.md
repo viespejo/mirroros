@@ -132,9 +132,9 @@ only by the separately authorized session test, not by these sources.
 
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
-SUPER+L / SUPER+Alt+L (workspace layout cycling), the Story 4.4 panels deferred to plan 02-26, and the Story 4.5
+SUPER+L / SUPER+Alt+L (workspace layout cycling), the Story 4.4 panels deferred to plans 02-27 to 02-30, and the Story 4.5
 browser, file manager, editor, clipboard and capture keys. Hardware exclusions remain unbound:
 SHIFT+XF86AudioMute (audio output switching), SHIFT+XF86AudioPause / SHIFT+XF86AudioPlay (media source switching),
 XF86TouchpadToggle / XF86TouchpadOn / XF86TouchpadOff (outside the slice), XF86Eject (outside the slice), and
 XF86KbdBrightnessUp / XF86KbdBrightnessDown / XF86KbdLightOnOff (not delivered by the explored keyboard).
-Audio output/source switching belongs to plan 02-26. Final binding ownership across slices is Story 4.7.
+Audio output/source switching belongs to plan 02-27. Final binding ownership across slices is Story 4.7.

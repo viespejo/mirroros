@@ -37,8 +37,9 @@ A successful configure is not proof of hardware usability.
 
 Configure never starts, restarts or reloads the shell, hypridle or desktop. Review configure evidence before
 re-login or reboot; do not restart a graphical session remotely without the maintainer's explicit authorization.
-Panels, graphical VPN access, audio output/source switching and a possible shell media service belong to later
-plan 02-26 with its ADR amending ADR 0012; this plan adds no QML or shell service.
+Panels, graphical VPN access and audio output/source switching belong to later plans 02-27 to 02-30 under
+[ADR 0025](../adr/0025-shell-panels.md), which amends ADR 0012 and admits no shell media service; this plan adds no
+QML or shell service.
 
 ## Validation matrix
 
@@ -141,8 +142,9 @@ no alternate Wi-Fi daemon is introduced.
 For Bluetooth, use one private `bluetoothctl` session: `power on`, `agent on`, `default-agent`, `pairable on`,
 then `scan on`. Select the device locally, stop scanning, and use `pair`, `trust` and `connect` with its locally
 observed address. Confirm any device-side request, verify bonding and reconnect, then `pairable off` when done.
-Do not copy device addresses, PINs, passkeys or pairing keys to logs or source. PIN/passkey UX beyond this
-terminal path belongs to plan 02-26. Audio reconnect should select A2DP; microphone capture may switch to HFP.
+Do not copy device addresses, PINs, passkeys or pairing keys to logs or source. PIN and passkey pairing stay on
+this terminal path; plan 02-29 adds the Bluetooth panel and its "Just Works" agent
+([ADR 0025](../adr/0025-shell-panels.md)). Audio reconnect should select A2DP; microphone capture may switch to HFP.
 
 ## DNS integration and migration
 
@@ -192,7 +194,7 @@ persistence was confirmed on the T14s (A2).
 The approved provider remains the NetworkManager OpenConnect plugin. Exploration found that username,
 password and OTP authentication worked through terminal OpenConnect, but `nmcli --ask connection up` alone
 failed without a working graphical secret agent. Do not describe the auth dialog as validated under Hyprland.
-An owned connect wrapper and graphical access are deferred to plan 02-26.
+An owned connect wrapper and graphical access are deferred to plan 02-30.
 
 Perform this workflow locally in an unrecorded terminal, as the graphical user, never through configure or a
 captured SSH session. Disable shell tracing and terminal recording. Do not paste real values into command

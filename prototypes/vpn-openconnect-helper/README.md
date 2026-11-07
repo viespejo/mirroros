@@ -3,7 +3,7 @@
 ## Status
 
 Executed during plan 02-25 Task 7 (Story 4.4 T14s supervised acceptance) as acceptance-only tooling. Preserved here
-as the starting point for the owned VPN wrapper deferred to plan 02-26. It is not a MirrorOS product command:
+as the starting point for the owned VPN wrapper deferred to plan 02-30. It is not a MirrorOS product command:
 configure does not deliver it, and production code never sources it. A product wrapper must be reimplemented
 through `capabilities/system/vpn` with its own review, not promoted by moving this directory.
 
@@ -58,7 +58,7 @@ not implemented.
 - Not verified: whether a server-specific authentication form still asks for the username; cookie reuse;
   non-AnyConnect protocols; behaviour without the not-saved secret flags.
 
-## Findings for plan 02-26
+## Findings for plan 02-30
 
 - Disconnecting over SSH failed: `nmcli connection down` returned 0 while NetworkManager audited an
   authorization denial (`org.freedesktop.NetworkManager.network-control` is `auth` for SSH sessions) and the VPN
@@ -71,7 +71,8 @@ not implemented.
   its own reviewed location (for example under `$XDG_STATE_HOME/mirroros/`) and a migration or reset path.
 - The product provides only the plugin and the documented private profile procedure
   ([hardware procedure](../../docs/procedures/hardware.md#private-corporate-vpn-procedure)); profile creation, graphical access and a bar panel
-  remain 02-26 scope.
+  remain later scope; graphical access through the network panel and an owned wrapper is plan 02-30
+  ([ADR 0025](../../docs/adr/0025-shell-panels.md)).
 
 ## Handoff boundaries
 
