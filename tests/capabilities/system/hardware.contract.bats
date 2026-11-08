@@ -8,7 +8,8 @@ teardown() { cfg_test_teardown; }
 hardware_assert_delivery() {
   local command unit
   [ -f "$CFG_TEST_INSTALLED/alsa-utils" ]
-  for command in volume media brightness power-profile power-watch; do
+  for package in libpulse jq pavucontrol; do [ -f "$CFG_TEST_INSTALLED/$package" ]; done
+  for command in volume media audio-device brightness battery-status power-profile power-watch; do
     [ -x "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command" ]
   done
   for unit in pipewire.service pipewire-pulse.service wireplumber.service; do

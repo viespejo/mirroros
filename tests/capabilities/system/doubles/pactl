@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'pactl %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_PACTL_FAIL:-0}" == 0 ]] || exit 1
+fixtures=$CFG_TEST_DIR/pactl
+case "$*" in
+  '-f json list '*) /usr/bin/cat "$fixtures/$4.json" ;;
+  get-default-sink) printf '%s\n' "${HW_DEFAULT_SINK:-}" ;;
+  'get-sink-volume '*) printf 'Volume: front-left: 32768 /  %s%% / -18.06 dB\n' "${HW_SINK_VOLUME:-50}" ;;
+  'get-sink-mute '*) printf 'Mute: %s\n' "${HW_SINK_MUTE:-no}" ;;
+  'move-sink-input '*|'move-source-output '*) ;;
+  *) printf 'Unexpected pactl invocation\n' >&2; exit 97 ;;
+esac

@@ -1,18 +1,35 @@
 #!/usr/bin/bash
 # managed by MirrorOS configure
-# Runtime-only Hyprland display actions; no configuration or toggle files are written.
+# Runtime-only Hyprland display actions; no configuration or toggle files are written. Mirroring keeps the
+# external output's prior layout and the cursor setting in the session runtime directory only, to restore them
+# when the mirror ends.
 set -Eeuo pipefail
 
-usage() { printf 'Usage: display laptop|mirror|scale up|scale down|clamshell close|clamshell open\n' >&2; exit 2; }
+usage() {
+  printf 'Usage: display laptop|mirror|scale up|down|<value>|clamshell close|open|output <name> on|off|state\n' >&2
+  exit 2
+}
 unavailable() { printf 'Display unavailable: %s\n' "$1" >&2; exit 4; }
 (( $# >= 1 )) || usage
 action="$1"
 case "$action" in
   laptop|mirror) (( $# == 1 )) || usage ;;
-  scale) (( $# == 2 )) && [[ "$2" == up || "$2" == down ]] || usage ;;
+  scale) (( $# == 2 )) && [[ "$2" == up || "$2" == down || "$2" =~ ^[1-4]([.][0-9]{1,6})?$ ]] || usage ;;
   clamshell) (( $# == 2 )) && [[ "$2" == close || "$2" == open ]] || usage ;;
+  output) (( $# == 3 )) && [[ "$2" =~ ^[A-Za-z0-9._-]+$ && ( "$3" == on || "$3" == off ) ]] || usage ;;
+  state) (( $# == 1 )) || usage ;;
   *) usage ;;
 esac
+# Serialize every mutation and read the monitor state inside the lock, so concurrent invocations
+# (panel click plus chord) cannot each disable a different last output.
+if [[ "$action" != state ]]; then
+  [[ -d "${XDG_RUNTIME_DIR:-}" ]] || unavailable 'no user runtime directory.'
+  exec {lock_fd}> "$XDG_RUNTIME_DIR/mirroros-display.lock"
+  flock -w 10 "$lock_fd" || unavailable 'another display action is still running.'
+  record_file="$XDG_RUNTIME_DIR/mirroros-display-mirror.json"
+fi
+record_action=''
+record_json=''
 if ! monitors=$(hyprctl monitors all -j); then unavailable 'cannot query the graphical session.'; fi
 # Validate every connector before constructing Lua, including outputs created by untrusted clients.
 if ! jq -e 'type == "array" and all(.[]; (.name | type == "string" and test("^[A-Za-z0-9._-]+\\z"))
@@ -25,16 +42,52 @@ internal=$(jq -r '[.[] | select(.name | test("^(eDP|LVDS|DSI)-"))][0].name // em
 external=$(jq -r '[.[] | select((.name | test("^(eDP|LVDS|DSI)-")) | not) | select(.disabled != true)][0].name // empty' <<< "$monitors")
 lua=''
 append() { lua+="$1; "; }
+# State each queued change must show in `hyprctl monitors all -j` once Hyprland has applied it (jq filter;
+# connector names are already validated).
+settled='true'
+expect() { settled+=" and any(.[]; .name == \"$1\" and ($2))"; }
 restore_internal() {
   append "hl.monitor({ output = \"$internal\", disabled = false, mirror = \"\" })"
+  expect "$internal" '.disabled != true'
 }
-# A mirror depends on its source: remove that dependency before disabling the internal panel.
+# Layout an output had before `mirror`, as Lua fields, only from a well-formed record for that output; every value
+# is a bounded number, so the record cannot inject Lua.
+recorded_layout() {
+  [[ -n "${record_file:-}" && -f "$record_file" && ! -L "$record_file" ]] || return 1
+  jq -er --arg name "$1" 'select(type == "object" and .name == $name
+      and all(.width, .height; type == "number" and . > 0 and . <= 65536 and floor == .)
+      and (.refreshRate | type == "number" and . > 0 and . < 1000)
+      and all(.x, .y; type == "number" and floor == . and . >= -1000000 and . <= 1000000)
+      and (.scale | type == "number" and . > 0 and . <= 10))
+    | "mode = \"\(.width)x\(.height)@\(.refreshRate)\", position = \"\(.x)x\(.y)\", scale = \(.scale)"' \
+    "$record_file" 2> /dev/null
+}
+# Cursor setting recorded before `mirror`, only when it is one of Hyprland's documented values.
+recorded_cursor() {
+  jq -er 'select(type == "object") | .cursor | select(type == "number" and (. == 0 or . == 1 or . == 2))' \
+    "$record_file" 2> /dev/null
+}
+# A mirror depends on its source: remove that dependency before disabling the source. Without an
+# argument every mirror is detached; with one, only mirrors of that source (Hyprland reports its id).
+# A detached output returns to the layout recorded when it started mirroring, if any.
 unmirror() {
-  local name
+  local name layout restored_scale cursor
   while IFS= read -r name; do
     [[ -n "$name" ]] || continue
-    append "hl.monitor({ output = \"$name\", disabled = false, mirror = \"\" })"
-  done < <(jq -r '.[] | select(.disabled != true and (.mirrorOf // "none") != "none" and .mirrorOf != -1) | .name' <<< "$monitors")
+    if layout=$(recorded_layout "$name"); then
+      restored_scale=$(jq -r '.scale' "$record_file")
+      append "hl.monitor({ output = \"$name\", disabled = false, mirror = \"\", $layout })"
+      expect "$name" ".disabled != true and (.scale - $restored_scale) * (.scale - $restored_scale) < 0.000001"
+      if cursor=$(recorded_cursor); then append "hl.config({ cursor = { no_hardware_cursors = $cursor } })"; fi
+      record_action='remove'
+    else
+      append "hl.monitor({ output = \"$name\", disabled = false, mirror = \"\" })"
+      expect "$name" '.disabled != true'
+    fi
+  done < <(jq -r --arg source "${1:-}" '(if $source == "" then null else
+      ([.[] | select(.name == $source) | .id | tostring][0] // "") end) as $id
+    | .[] | select(.disabled != true and (.mirrorOf // "none") != "none" and .mirrorOf != -1)
+    | select($id == null or (.mirrorOf | tostring) == $id or .mirrorOf == $source) | .name' <<< "$monitors")
 }
 case "$action" in
   laptop|clamshell)
@@ -50,6 +103,7 @@ case "$action" in
       fi
       unmirror
       append "hl.monitor({ output = \"$internal\", disabled = true })"
+      expect "$internal" '.disabled == true'
     fi
     ;;
   mirror)
@@ -59,8 +113,57 @@ case "$action" in
     if [[ "$mirrored" == true ]]; then
       unmirror
     else
+      # Hyprland 0.57.0 leaves a stale hardware cursor image on the mirror output (seen with amdgpu); software
+      # cursors set before mirroring avoid it. The prior setting is recorded and restored when the mirror ends;
+      # if it cannot be read, the cursor is left untouched.
+      cursor=$(hyprctl -j getoption cursor:no_hardware_cursors 2> /dev/null |
+        jq -r '.int | select(type == "number" and (. == 0 or . == 1 or . == 2))' 2> /dev/null) || cursor=''
+      record_json=$(jq -c --arg name "$external" --arg cursor "$cursor" \
+        '[.[] | select(.name == $name) | {name, width, height, refreshRate, x, y, scale}][0]
+          + (if $cursor == "" then {} else {cursor: ($cursor | tonumber)} end)' <<< "$monitors")
+      record_action='write'
+      [[ -z "$cursor" ]] || append 'hl.config({ cursor = { no_hardware_cursors = 1 } })'
       append "hl.monitor({ output = \"$external\", disabled = false, mode = \"preferred\", position = \"auto\", scale = 1, mirror = \"$internal\" })"
+      expect "$external" '.disabled != true'
     fi
+    ;;
+  output)
+    target=$(jq -c --arg name "$2" '[.[] | select(.name == $name)][0] // empty' <<< "$monitors")
+    [[ -n "$target" ]] || unavailable "no output named $2."
+    enabled=$(jq -r '.disabled != true' <<< "$target")
+    if [[ "$3" == on ]]; then
+      [[ "$enabled" == false ]] || exit 0
+      append "hl.monitor({ output = \"$2\", disabled = false })"
+      expect "$2" '.disabled != true'
+    else
+      [[ "$enabled" == true ]] || exit 0
+      # Mirrors of the target become independent once detached; mirrors of other outputs never are.
+      independent=$(jq -r --arg name "$2" '([.[] | select(.name == $name) | .id | tostring][0] // "") as $id
+        | [.[] | select(.name != $name and .disabled != true)
+          | select((.mirrorOf // "none") == "none" or .mirrorOf == -1
+            or (.mirrorOf | tostring) == $id or .mirrorOf == $name)] | length' <<< "$monitors")
+      (( independent > 0 )) || unavailable 'cannot disable the last enabled display.'
+      unmirror "$2"
+      append "hl.monitor({ output = \"$2\", disabled = true })"
+      expect "$2" '.disabled == true'
+    fi
+    ;;
+  state)
+    backlight=$(brightnessctl --class=backlight -m 2> /dev/null |
+      awk -F, 'NR == 1 { gsub(/%/, "", $4); if ($4 ~ /^[0-9]+$/) print $4 }') || backlight=''
+    jq -c --arg backlight "$backlight" 'def internal: .name | test("^(eDP|LVDS|DSI)-");
+      def mirrored: (.mirrorOf // "none") != "none" and .mirrorOf != -1;
+      . as $all | {
+        focused: ([.[] | select(.focused == true and .disabled != true) | .name][0] // null),
+        internal: ([.[] | select(internal) | .name][0] // null),
+        external: ([.[] | select(internal | not) | .name][0] // null),
+        backlight: (if $backlight == "" then null else ($backlight | tonumber) end),
+        outputs: [.[] | {name, enabled: (.disabled != true), focused: (.focused == true), width, height, scale,
+          internal: internal,
+          mirror: (if mirrored then (.mirrorOf | tostring) as $id
+            | ([$all[] | select((.id | tostring) == $id or .name == $id) | .name][0] // null) else null end)}]
+      }' <<< "$monitors"
+    exit 0
     ;;
   scale)
     focused=$(jq -c '[.[] | select(.focused == true and .disabled != true)][0] // empty' <<< "$monitors")
@@ -91,8 +194,20 @@ case "$action" in
         }
         printf "%g", best
       }')
+    if [[ "$2" != up && "$2" != down ]]; then
+      # An absolute scale must already be clean for the focused mode: whole logical pixels in 1/120 steps.
+      scale=$(awk -v width="$width" -v height="$height" -v requested="$2" '
+        function gcd(a, b, t) { while (b) { t = a % b; a = b; b = t } return a }
+        BEGIN {
+          g = gcd(width * 120, height * 120)
+          k = int(requested * 120 + 0.5)
+          if (requested > 4 || k < 120 || g % k != 0 || (k / 120 - requested) ^ 2 > 0.000025) exit 1
+          printf "%g", k / 120
+        }') || { printf 'Refusing scale %s: not a clean scale for %s.\n' "$2" "$name" >&2; exit 2; }
+    fi
     [[ "$scale" != "$current" ]] || exit 0
     append "hl.monitor({ output = \"$name\", scale = $scale })"
+    expect "$name" "(.scale - $scale) * (.scale - $scale) < 0.000001"
     ;;
 esac
 if ! result=$(hyprctl eval "$lua"); then
@@ -103,3 +218,21 @@ if [[ "$result" != ok ]]; then
   printf 'Display action rejected by Hyprland: %s\n' "$result" >&2
   exit 5
 fi
+# The mirror record changes only once Hyprland confirmed the action; a failed write leaves the action applied.
+finish_record() {
+  case "$record_action" in
+    write) (umask 077; printf '%s\n' "$record_json" > "$record_file.tmp") && mv -f "$record_file.tmp" "$record_file" ;;
+    remove) rm -f "$record_file" ;;
+  esac
+}
+# Hyprland applies monitor changes asynchronously. Hold the lock until it reports them, so the next action
+# re-reads settled state (DEC-042) and a caller refreshing on exit sees the result.
+for (( attempt = 0; attempt < 40; attempt++ )); do
+  if monitors=$(hyprctl monitors all -j) && jq -e "$settled" <<< "$monitors" > /dev/null; then
+    finish_record || printf 'Display action applied; mirror layout record not updated.\n' >&2
+    exit 0
+  fi
+  sleep 0.05
+done
+printf 'Display action not confirmed by Hyprland in time.\n' >&2
+exit 5

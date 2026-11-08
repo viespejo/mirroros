@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+printf 'pw-dump %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_PW_FAIL:-0}" == 0 ]] || exit 1
+/usr/bin/cat "$CFG_TEST_DIR/pw-dump.json"

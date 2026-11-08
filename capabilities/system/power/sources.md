@@ -18,6 +18,18 @@ command validates exposed profiles and atomically remembers explicit selections 
 if exposed, otherwise balanced; battery defaults to balanced. Remembered unavailable profiles are reported rather
 than silently overwritten. No private profile state is touched by privileged configure.
 
+`brightness` also accepts an absolute `N%` (1..100) and a leading `--no-osd`, which suppresses every OSD call; the
+display panel uses both so slider drags do not flood the OSD (plan 02-27).
+
+`battery-status` is a read-only command for the power panel. It selects the first UPower `battery_` device marked
+`power supply: yes` (peripherals are ignored) and prints tab-separated, untranslated values: `percentage`
+(integer), `state` (UPower state, or `holding` when AC is online and a charge-end threshold holds the battery below
+full), `rate` (W, unsigned, preferring the instantaneous sysfs `power_now` or `current_now`×`voltage_now`), `size`
+(full energy, Wh), `cycles`, `threshold` (`end` or `start-end`, from the battery's
+`charge_control_{start,end}_threshold`, falling back to UPower only when the battery exposes none) and `time` (minutes to empty, or to the charge limit while charging).
+UPower is read in the C locale, since a decimal-comma `LC_NUMERIC` would otherwise drop `size` and `time`.
+Keys without a reading are omitted rather than fabricated. No system battery or inaccessible UPower exits 4.
+
 The watcher applies autodetect at login and queries UPower on monitor events. It sends one critical, 30-second
 notification per at-or-below-10% discharging episode, rearmed after leaving that state. Absent batteries are
 reported unavailable. UPower monitor failure reaches systemd's restart policy. The user service is enabled for
@@ -29,6 +41,15 @@ and PPD profiles; target postconditions check delivered files and unit links. Ne
 hypridle is started, restarted or reloaded. Lid suspend and lock behavior remain owned by existing logind/hypridle.
 
 ## Reference, approval and limits
+
+`battery-status` is adapted from Omarchy v4.5.0 (`ac2690cd7be4f47e4a255f5e2e78d904d436b068`) `bin/omarchy-battery-status`
+`--shell` mode (MIT, Copyright (c) David Heinemeier Hansson), read from the `~/code/omarchy` history clone. Its
+battery selection, rate preference, time and holding logic are retained; translated durations and units,
+`omarchy-i18n`, the human status line and the `BAT*` threshold fallback are removed, and absence exits 4 instead of
+printing nothing. Upstream prefers UPower's thresholds; MirrorOS prefers the kernel's, because UPower publishes its
+own policy values (for example an 80% end) even with `ChargeThresholdEnabled` false, which would show a limit the
+firmware does not apply (T14s, plan 02-27). The MIT permission notice is retained in `capabilities/system/audio/OMARCHY-LICENSE` and delivered
+as `/usr/share/mirroros/hardware/licenses/omarchy-audio` beside the commands.
 
 Behavior references: Omarchy 4.0.6 (MIT, David Heinemeier Hansson), `bin/omarchy-powerprofiles-set`, its shell
 battery service (10% warning), and `10-ignore-power-button.conf`. No literal upstream code is incorporated here;

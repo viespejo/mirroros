@@ -115,6 +115,32 @@ teardown() { cfg_test_teardown; }
   ! grep -q 'brightnessctl .*set ' "$CFG_TEST_CALLS"
 }
 
+@test "brightness accepts absolute percentages and suppresses every OSD call with --no-osd" {
+  for action in 1% 42% 100%; do
+    run hardware_command power/brightness "$action"
+    [ "$status" -eq 0 ]
+  done
+  grep -qxF 'brightnessctl --class=backlight --min-value=1 set 42%' "$CFG_TEST_CALLS"
+  [ "$(grep -c 'call osd showSource brightness' "$CFG_TEST_CALLS")" -eq 3 ]
+  : > "$CFG_TEST_CALLS"
+  for action in 42% +5% 5%- max; do
+    run hardware_command power/brightness --no-osd "$action"
+    [ "$status" -eq 0 ]
+  done
+  [ "$(grep -c '^brightnessctl --class=backlight --min-value=1 set ' "$CFG_TEST_CALLS")" -eq 4 ]
+  ! grep -q '^qs ' "$CFG_TEST_CALLS"
+  : > "$CFG_TEST_CALLS"
+  for args in '0%' '101%' '+5%-' '--no-osd' '--no-osd --no-osd 5%' '5% --no-osd' '--osd 5%'; do
+    read -r -a argv <<< "$args"
+    run hardware_command power/brightness "${argv[@]}"
+    [ "$status" -eq 2 ]
+  done
+  [ ! -s "$CFG_TEST_CALLS" ]
+  HW_BRIGHTNESS_UNAVAILABLE=1 run hardware_command power/brightness --no-osd 50%
+  [ "$status" -eq 4 ]
+  ! grep -q '^qs ' "$CFG_TEST_CALLS"
+}
+
 @test "media validates actions and reports unavailable players" {
   for action in play-pause next previous; do
     run hardware_command audio/media "$action"

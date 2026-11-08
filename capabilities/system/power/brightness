@@ -2,16 +2,19 @@
 # managed by MirrorOS configure
 set -Eeuo pipefail
 
-usage() { printf 'Usage: brightness +N%%|N%%-|max|min (N: 1..100)\n' >&2; exit 2; }
+usage() { printf 'Usage: brightness [--no-osd] +N%%|N%%-|N%%|max|min (N: 1..100)\n' >&2; exit 2; }
+show_osd=1
+if (( $# == 2 )) && [[ "$1" == --no-osd ]]; then show_osd=0; shift; fi
 (( $# == 1 )) || usage
 case "$1" in
   max) value=100% ;;
   min) value=1% ;;
   *)
-    [[ "$1" =~ ^\+([1-9][0-9]?|100)%$ || "$1" =~ ^([1-9][0-9]?|100)%-$ ]] || usage
+    [[ "$1" =~ ^\+?([1-9][0-9]?|100)%-?$ && "$1" != +*- ]] || usage
     value="$1" ;;
 esac
 osd() {
+  (( show_osd )) || return 0
   if ! qs ipc -p /usr/share/mirroros/shell call osd showSource brightness; then
     printf 'Brightness OSD unavailable; the backlight command result is unchanged.\n' >&2
   fi

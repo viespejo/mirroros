@@ -6,7 +6,7 @@
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
-for command in brightness power-profile power-watch; do
+for command in brightness battery-status power-profile power-watch; do
   cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
   cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
 done

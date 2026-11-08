@@ -5,7 +5,9 @@ printf '%s %s\n' "$name" "$*" >> "$CFG_TEST_CALLS"
 case "$name" in
   wpctl)
     [[ "${HW_AUDIO_UNAVAILABLE:-0}" == 0 ]] || exit 1
-    if [[ "$1" == set-mute && "$2" == @DEFAULT_AUDIO_SOURCE@ ]]; then
+    if [[ "$1" == set-default ]]; then
+      [[ "${HW_WPCTL_FAIL:-0}" == 0 ]] || exit 1
+    elif [[ "$1" == set-mute && "$2" == @DEFAULT_AUDIO_SOURCE@ ]]; then
       : > "$CFG_TEST_DIR/mic-toggled"
     elif [[ "$1" == get-volume ]]; then
       if [[ "$2" == @DEFAULT_AUDIO_SOURCE@ && -e "$CFG_TEST_DIR/mic-toggled" ]]; then
@@ -34,6 +36,17 @@ case "$name" in
   nmcli)
     [[ "$*" == '--offline connection add type vpn vpn-type openconnect con-name mirroros-plugin-check' ]] || exit 97
     [[ "${HW_PLUGIN_FAIL:-0}" == 0 ]] || exit 1 ;;
-  upower) [[ "${HW_MONITOR_FAIL:-0}" == 0 ]] || exit 17 ;;
+  upower)
+    case "${1:-}" in
+      -e) [[ "${HW_UPOWER_FAIL:-0}" == 0 ]] || exit 1; printf '%s' "${HW_UPOWER_DEVICES:-}" ;;
+      -i)
+        # HW_UPOWER_LOCALE_COMMA emulates a decimal-comma LC_NUMERIC unless the caller forces the C locale.
+        if [[ "${HW_UPOWER_LOCALE_COMMA:-0}" == 1 && "${LC_ALL:-}" != C ]]; then
+          /usr/bin/sed -E 's/([0-9])\.([0-9])/\1,\2/g' "$CFG_TEST_DIR/upower/${2##*/}"
+        else
+          /usr/bin/cat "$CFG_TEST_DIR/upower/${2##*/}"
+        fi ;;
+      *) [[ "${HW_MONITOR_FAIL:-0}" == 0 ]] || exit 17 ;;
+    esac ;;
   *) exit 97 ;;
 esac

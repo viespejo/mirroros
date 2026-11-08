@@ -1,0 +1,98 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Adapted from Omarchy v4.5.0 omarchy-audio-{output,input}-set-default, -sink-availability and
+# -output-switch (MIT, Copyright (c) David Heinemeier Hansson); see sources.md.
+set -Eeuo pipefail
+
+usage() {
+  printf 'Usage: audio-device default output|input <node-name> | availability output|input | cycle\n' >&2
+  exit 2
+}
+unavailable() { printf 'Audio device unavailable: %s\n' "$1" >&2; exit 4; }
+osd() {
+  if ! qs ipc -p /usr/share/mirroros/shell call -- osd show "$1"; then
+    printf 'Audio OSD unavailable; the audio device result is unchanged.\n' >&2
+  fi
+}
+kind_arg() {
+  case "$1" in
+    output) class=Audio/Sink; list=sinks; streams='sink-inputs'; move='move-sink-input' ;;
+    input) class=Audio/Source; list=sources; streams='source-outputs'; move='move-source-output' ;;
+    *) usage ;;
+  esac
+}
+(( $# >= 1 )) || usage
+case "$1" in
+  default)
+    (( $# == 3 )) || usage
+    kind_arg "$2"
+    [[ "$3" =~ ^[A-Za-z0-9._:@+-]+$ ]] || usage ;;
+  availability) (( $# == 2 )) || usage; kind_arg "$2" ;;
+  cycle) (( $# == 1 )) || usage; kind_arg output ;;
+  *) usage ;;
+esac
+
+# Only application streams follow the new default. Filter-chain, loopback and echo-cancel internals
+# (node.link-group), virtual nodes and EasyEffects stay where they are so processing is never rewired.
+application_streams='.[] | select((.properties["node.link-group"] // "") == ""
+  and (.properties["node.virtual"] // "false") != "true"
+  and (.properties["application.name"] // "") != "EasyEffects") | .index'
+
+# wpctl expects the PipeWire object id; pactl indexes are object serials, so resolve by node name.
+set_default() {
+  local name=$1 id dump stream
+  dump=$(pw-dump) || unavailable 'PipeWire is not accessible.'
+  id=$(jq -r --arg name "$name" --arg class "$class" '[.[] | select(.type == "PipeWire:Interface:Node"
+    and .info.props["node.name"] == $name and .info.props["media.class"] == $class) | .id][0] // empty' <<< "$dump") ||
+    unavailable 'invalid PipeWire object data.'
+  [[ "$id" =~ ^[0-9]+$ ]] || unavailable "no $class node named $name."
+  wpctl set-default "$id" || unavailable 'WirePlumber rejected the default device.'
+  if ! stream_list=$(LC_ALL=C pactl -f json list "$streams" | jq -r "$application_streams"); then
+    printf 'Audio streams could not be listed; the default device is set.\n' >&2
+    return 0
+  fi
+  while IFS= read -r stream; do
+    [[ "$stream" =~ ^[0-9]+$ ]] || continue
+    LC_ALL=C pactl "$move" "$stream" "$name" ||
+      printf 'Audio stream %s could not be moved; the default device is set.\n' "$stream" >&2
+  done <<< "$stream_list"
+}
+
+# A device without ports is always usable; with ports, at least one must not report "not available".
+available_devices='[.[] | {name, description: (.description // .properties["device.description"] // .name),
+  available: ((.ports | length) == 0 or ([.ports[] | .availability != "not available"] | any)),
+  hardware: (.name != "auto_null" and (.properties["node.virtual"] // "false") != "true"
+    and (.properties["node.link-group"] // "") == "")}]'
+
+case "$1" in
+  default) set_default "$3" ;;
+  availability)
+    devices=$(LC_ALL=C pactl -f json list "$list") || unavailable 'the PulseAudio interface is not accessible.'
+    jq -r "$available_devices | .[] | \"\\(.name)\\t\\(if .available then 1 else 0 end)\"" <<< "$devices" ||
+      unavailable 'invalid device data.' ;;
+  cycle)
+    devices=$(LC_ALL=C pactl -f json list sinks) || unavailable 'the PulseAudio interface is not accessible.'
+    sinks=$(jq -c "$available_devices | map(select(.available and .hardware))" <<< "$devices") ||
+      unavailable 'invalid device data.'
+    count=$(jq 'length' <<< "$sinks")
+    if (( count == 0 )); then
+      osd '{"icon":"volume-muted","message":"No audio output"}'
+      unavailable 'no available audio output.'
+    fi
+    current=$(LC_ALL=C pactl get-default-sink 2> /dev/null || true)
+    index=$(jq -r --arg name "$current" 'map(.name) | index($name) // -1' <<< "$sinks")
+    next=$(jq -c --argjson index "$index" '.[($index + 1) % length]' <<< "$sinks")
+    name=$(jq -r '.name' <<< "$next")
+    [[ "$name" =~ ^[A-Za-z0-9._:@+-]+$ ]] || unavailable 'unsafe audio output name.'
+    # Mute is a per-device state and is preserved; the OSD only reports it.
+    [[ "$name" == "$current" ]] || set_default "$name"
+    volume=$(LC_ALL=C pactl get-sink-volume "$name" 2> /dev/null |
+      awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+%$/) { sub("%", "", $i); print $i; exit } }') || true
+    if [[ $(LC_ALL=C pactl get-sink-mute "$name" 2> /dev/null || true) == *yes ]] || [[ "${volume:-1}" == 0 ]]; then
+      icon='volume-muted'
+    elif (( ${volume:-100} <= 33 )); then icon='volume-low'
+    elif (( ${volume:-100} <= 66 )); then icon='volume-medium'
+    else icon='volume-high'
+    fi
+    osd "$(jq -nc --arg icon "$icon" --arg message "$(jq -r '.description' <<< "$next")" '{icon: $icon, message: $message}')" ;;
+esac

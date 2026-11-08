@@ -164,3 +164,99 @@ power_watch_refresh'
   [ "$status" -eq 0 ]
   [ "$(grep -c '^notify-send ' "$CFG_TEST_CALLS")" -eq 2 ]
 }
+
+battery_fixture() {
+  # $1 state, $2 percentage, $3 energy-rate; sysfs thresholds and AC presence come from the caller.
+  export MIRROROS_POWER_SUPPLY_PATH=$CFG_TEST_DIR/power_supply
+  export HW_UPOWER_DEVICES=$'/org/freedesktop/UPower/devices/battery_hidpp_battery_4\n/org/freedesktop/UPower/devices/line_power_AC\n/org/freedesktop/UPower/devices/battery_BAT0\n'
+  mkdir -p "$CFG_TEST_DIR/upower" "$MIRROROS_POWER_SUPPLY_PATH/BAT0" "$MIRROROS_POWER_SUPPLY_PATH/AC"
+  printf '  native-path:          hidpp_battery_4\n  power supply:         no\n  mouse\n    percentage:          20%%\n' \
+    > "$CFG_TEST_DIR/upower/battery_hidpp_battery_4"
+  printf '  native-path:          BAT0\n  power supply:         yes\n  battery\n    present:             yes\n    state:               %s\n    energy:              40 Wh\n    energy-full:         50.2 Wh\n    energy-rate:         %s W\n    percentage:          %s%%\n    capacity:            88%%\n' \
+    "$1" "$3" "$2" > "$CFG_TEST_DIR/upower/battery_BAT0"
+  printf 'Mains\n' > "$MIRROROS_POWER_SUPPLY_PATH/AC/type"
+  printf '%s\n' "${HW_AC_ONLINE:-0}" > "$MIRROROS_POWER_SUPPLY_PATH/AC/online"
+  printf '412\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/cycle_count"
+}
+
+@test "battery-status reports machine-readable discharge details from the system battery only" {
+  battery_fixture discharging 80 8
+  run hardware_command power/battery-status
+  [ "$status" -eq 0 ]
+  [ "$output" = $'percentage\t80\nstate\tdischarging\nrate\t8\nsize\t50\ncycles\t412\ntime\t300' ]
+  ! grep -q 'battery_hidpp_battery_4' <<< "$output"
+}
+
+@test "battery-status prefers the instantaneous sysfs rate and counts charging time to the charge limit" {
+  battery_fixture charging 60 5
+  printf '2000000\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/power_now"
+  printf '75\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_start_threshold"
+  printf '90\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_end_threshold"
+  run hardware_command power/battery-status
+  [ "$status" -eq 0 ]
+  grep -qxF $'rate\t2' <<< "$output"
+  grep -qxF $'threshold\t75-90' <<< "$output"
+  grep -qxF $'state\tcharging' <<< "$output"
+  # (50.2 Wh * 0.90 - 40 Wh) / 2 W = 2.59 h, rounded to the nearest minute.
+  grep -qxF $'time\t155' <<< "$output"
+}
+
+@test "battery-status parses UPower in the C locale under a decimal-comma session" {
+  battery_fixture discharging 80 8.5
+  export HW_UPOWER_LOCALE_COMMA=1 LC_NUMERIC=es_ES.UTF-8
+  run hardware_command power/battery-status
+  [ "$status" -eq 0 ]
+  grep -qxF $'size\t50' <<< "$output"
+  grep -qxF $'rate\t8.5' <<< "$output"
+  # 40 Wh / 8.5 W = 4.71 h, rounded to the nearest minute.
+  grep -qxF $'time\t282' <<< "$output"
+}
+
+@test "battery-status prefers the kernel charge thresholds over UPower policy values" {
+  battery_fixture fully-charged 94 0
+  printf '    charge-start-threshold:        95%%\n    charge-end-threshold:          80%%\n' \
+    >> "$CFG_TEST_DIR/upower/battery_BAT0"
+  printf '95\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_start_threshold"
+  printf '100\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_end_threshold"
+  run hardware_command power/battery-status
+  [ "$status" -eq 0 ]
+  grep -qxF $'threshold\t95-100' <<< "$output"
+  rm "$MIRROROS_POWER_SUPPLY_PATH"/BAT0/charge_control_*_threshold
+  run hardware_command power/battery-status
+  [ "$status" -eq 0 ]
+  grep -qxF $'threshold\t95-80' <<< "$output"
+}
+
+@test "battery-status reports holding on AC at an active charge limit" {
+  export HW_AC_ONLINE=1
+  for case in 'pending-charge 80 0' 'fully-charged 95 0' 'charging 95 0.1'; do
+    read -r state percentage rate <<< "$case"
+    battery_fixture "$state" "$percentage" "$rate"
+    printf '95\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_end_threshold"
+    run hardware_command power/battery-status
+    [ "$status" -eq 0 ]
+    grep -qxF $'state\tholding' <<< "$output"
+    grep -qxF $'threshold\t95' <<< "$output"
+  done
+  battery_fixture fully-charged 100 0
+  printf '100\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_end_threshold"
+  run hardware_command power/battery-status
+  grep -qxF $'state\tfully-charged' <<< "$output"
+  HW_AC_ONLINE=0 battery_fixture pending-charge 80 0
+  printf '95\n' > "$MIRROROS_POWER_SUPPLY_PATH/BAT0/charge_control_end_threshold"
+  run hardware_command power/battery-status
+  grep -qxF $'state\tpending-charge' <<< "$output"
+}
+
+@test "battery-status without a system battery or UPower is unavailable without fabricated values" {
+  battery_fixture discharging 80 8
+  export HW_UPOWER_DEVICES=$'/org/freedesktop/UPower/devices/battery_hidpp_battery_4\n'
+  run hardware_command power/battery-status
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'Battery unavailable'* ]]
+  [[ "$output" != *percentage* ]]
+  HW_UPOWER_FAIL=1 run hardware_command power/battery-status
+  [ "$status" -eq 4 ]
+  run hardware_command power/battery-status --shell
+  [ "$status" -eq 2 ]
+}
