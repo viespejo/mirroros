@@ -152,6 +152,26 @@ MirrorOSKeys.bind("notifications.invoke-last", "SUPER + ALT + comma", "Invoke la
 MirrorOSKeys.bind("notifications.history", "SUPER + SHIFT + ALT + comma", "Open notification history",
   shell_ipc("notifications", "showHistory"))
 
+-- Shell panels (plan 02-27, DEC-030/DEC-041): the shell registers GlobalShortcut entries with appid "mirroros", and
+-- hl.dsp.global("mirroros:<name>") reaches them without spawning a process (Hyprland v0.56.2
+-- src/config/lua/bindings/LuaBindingsDispatchers.cpp, hlGlobal/dsp_global). SUPER+CTRL+ALT+comma diverges from
+-- Omarchy 4.5, which uses it for silencing.
+MirrorOSKeys.bind("notifications.panel", "SUPER + CTRL + ALT + comma", "Toggle notification panel",
+  hl.dsp.global("mirroros:panel.notifications"))
+
+-- Panel chords (Omarchy v4.5.0 default/hypr/bindings/utilities.lua:113-131, MIT, adapted to global shortcuts).
+-- SUPER+CTRL+N and SUPER+CTRL+B stay reserved for the network (02-28) and Bluetooth (02-29) panels.
+MirrorOSKeys.bind("panel.audio", "SUPER + CTRL + A", "Audio", hl.dsp.global("mirroros:panel.audio"))
+MirrorOSKeys.bind("panel.display", "SUPER + CTRL + D", "Display", hl.dsp.global("mirroros:panel.display"))
+MirrorOSKeys.bind("panel.power", "SUPER + CTRL + P", "Power", hl.dsp.global("mirroros:panel.power"))
+
+-- The numbers count the panels of the focused monitor's right section; the tray is not counted. A bar with fewer
+-- panels leaves the tail of the range doing nothing.
+for panel = 1, 9 do
+  MirrorOSKeys.bind("panel.at-" .. panel, "SUPER + CTRL + code:" .. tostring(panel + 9), "Bar panel " .. panel,
+    hl.dsp.global("mirroros:panel-at-" .. panel))
+end
+
 -- Ferris Sweep: its ZMK mapping sends Shift+comma as an apostrophe without Shift, so SUPER+Shift+comma reaches
 -- Hyprland as SUPER+apostrophe. MirrorOS exception kept beside the Omarchy keys above, which stay for keyboards that
 -- send Shift+comma; SUPER+ALT+apostrophe is the expected form of SUPER+Shift+Alt+comma on that keyboard.

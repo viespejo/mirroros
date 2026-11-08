@@ -8,6 +8,7 @@ end
 MirrorOSKeys.bind("audio.raise", "XF86AudioRaiseVolume", "Volume up", action("volume raise"), { locked = true, repeating = true })
 MirrorOSKeys.bind("audio.lower", "XF86AudioLowerVolume", "Volume down", action("volume lower"), { locked = true, repeating = true })
 MirrorOSKeys.bind("audio.mute", "XF86AudioMute", "Mute", action("volume mute-toggle"), { locked = true })
+MirrorOSKeys.bind("audio.output-switch", "SHIFT + XF86AudioMute", "Switch audio output", action("audio-device cycle"), { locked = true })
 MirrorOSKeys.bind("audio.mic-mute", "XF86AudioMicMute", "Mute microphone", action("volume mic-mute"), { locked = true })
 MirrorOSKeys.bind("audio.raise-precise", "ALT + XF86AudioRaiseVolume", "Volume up precise", action("volume +1"), { locked = true, repeating = true })
 MirrorOSKeys.bind("audio.lower-precise", "ALT + XF86AudioLowerVolume", "Volume down precise", action("volume -1"), { locked = true, repeating = true })

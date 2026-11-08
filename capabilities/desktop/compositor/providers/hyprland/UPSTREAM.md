@@ -17,7 +17,7 @@
 
 | Destination | Method | Source | Changes / scope |
 |---|---|---|---|
-| `shell-bindings.lua` | Adapted | `default/hypr/bindings/utilities.lua` 1-2, 7-10, 24-28, 130; `default/hypr/bindings/input-method.lua` 19-20 | Keys and descriptions for menus, help, notifications and lock; MirrorOS registry helper, native `qs ipc` targets on the installed shell, XKB layout switching instead of fcitx, `loginctl lock-session`. SUPER+D (Apps) and the SUPER+apostrophe / SUPER+Alt+apostrophe Ferris Sweep forms are MirrorOS additions. |
+| `shell-bindings.lua` | Adapted | `default/hypr/bindings/utilities.lua` 1-2, 7-10, 24-28, 130; `default/hypr/bindings/input-method.lua` 19-20 | Keys and descriptions for menus, help, notifications and lock; MirrorOS registry helper, native `qs ipc` targets on the installed shell, XKB layout switching instead of fcitx, `loginctl lock-session`. SUPER+D (Apps) and the SUPER+apostrophe / SUPER+Alt+apostrophe Ferris Sweep forms are MirrorOS additions. Panel chords SUPER+Ctrl+A/D/P and SUPER+Ctrl+1..9 follow Omarchy v4.5.0 (`ac2690c`) `default/hypr/bindings/utilities.lua` 113, 115, 119, 122-131, dispatched through `hl.dsp.global("mirroros:<name>")` to the shell's GlobalShortcut set instead of `omarchy-shell`; SUPER+Ctrl+Alt+comma (notification panel) is a MirrorOS assignment (Omarchy 4.5 uses it for silencing). |
 | `window-bindings.lua` | Adapted | `default/hypr/bindings/tiling.lua` 1-2, 5-8, 10, 17-20, 23-27, 30-34, 40-61, 63-76, 78-99, 101-103; `default/hypr/bindings/utilities.lua` 121-128; `default/hypr/bindings/applications.lua` 2, 12; `bin/omarchy-launch-terminal-tmux` | Keys, descriptions and dispatcher shapes; workspaces are global with native dispatchers instead of the per-monitor helper; monitor moves use a direction selector; SUPER+Tab is back-and-forth (`previous`); SUPER+Shift+Tab and SUPER+Ctrl+Tab are not bound; terminals run Foot through `uwsm app`; Alt+Tab and Alt+Shift+Tab are one Lua function each (cycle, then bring to top). |
 
 `hyprland.lua`, `defaults.lua` and `personal-loader.lua` are original MirrorOS configuration. The provider's `dwindle.preserve_split = true` follows the observed need of
@@ -55,6 +55,8 @@ and [utilities.lua](https://github.com/basecamp/omarchy/blob/v4.0.6/default/hypr
 This reference is distinct from the older global revision above. The MIT license and copyright attribution
 above apply to these adaptations. All dispatchers call owned `/usr/share/mirroros/hardware/` commands;
 media uses the approved `playerctl` command boundary instead of an Omarchy shell media service.
+SHIFT+XF86AudioMute ("Switch audio output", `locked`) follows the same media.lua chord and calls the owned
+`audio-device cycle` instead of `omarchy-audio-output-switch` (plan 02-27).
 No Omarchy helper or shell service is imported. Keyboard-backlight bindings are omitted: supervised T14s
 exploration on 2026-11-03 found firmware-handled Fn+Space and no delivered `XF86Kbd*` keys.
 
@@ -70,12 +72,40 @@ Command interface (active graphical session required):
 
 - `display laptop` toggles the internal panel, refusing to disable it without an active external display.
 - `display mirror` toggles mirroring on the first active external output; the internal source is explicitly
-  enabled first. Turning mirroring off returns to extended mode.
+  enabled first. Turning mirroring off returns to extended mode. Starting a mirror records the external output's
+  mode, position and scale in `$XDG_RUNTIME_DIR/mirroros-display-mirror.json` (mode 0600, session runtime state,
+  not configuration); detaching that mirror, from the toggle or before disabling its source, reapplies a valid
+  record and removes it. Without a valid record the mirror is only detached (ADR 0027).
+  Hyprland 0.57.0 leaves a stale hardware cursor image on the mirror output (observed on the T14s with amdgpu;
+  software cursors set while already mirrored do not clear it). Starting a mirror therefore also records
+  `cursor:no_hardware_cursors` (`hyprctl -j getoption`, `.int` 0, 1 or 2) and sets it to 1 in the same
+  `hyprctl eval`, before the mirror; detaching with a valid record restores the recorded value. If the setting
+  cannot be read the cursor is left untouched; if Hyprland accepts the mirror but does not confirm it in time,
+  no record is written and software cursors stay until the session reloads its configuration.
 - `display scale up|down` steps the focused output through clean equivalents of 1, 1.25, 1.6, 2, 3 and 4.
+- `display scale <value>` applies an absolute scale (1..4) to the focused output only if it is already clean for
+  that mode (whole logical pixels in 1/120 steps, within 0.005 of the request); other values are refused (2).
+- `display output <name> on|off` enables or disables one connector. `off` first detaches outputs mirroring `<name>`
+  and refuses (4) when no independent enabled output would remain; an output that mirrors another source is not
+  independent (DEC-042).
+- `display state` prints JSON for the display panel: `focused`, `internal`, `external`, `backlight` (display
+  backlight percentage from `brightnessctl --class=backlight`, or `null`) and `outputs` with name, enabled,
+  focused, width, height, scale, internal and mirror source. It is read-only and takes no lock.
 - `display clamshell close|open` handles the lid switches (not launchable from keyboard help). Close disables
   only the internal panel when an external output is active; undocked close leaves suspend and lock to logind
   and hypridle. Open explicitly restores the panel with `disabled = false`. Mirrors are detached before their
   source is disabled so the external output remains usable.
+
+Every mutating action runs under one `flock` on `$XDG_RUNTIME_DIR/mirroros-display.lock` (10 s wait, otherwise
+unavailable); the monitor state is read, validated and applied in a single `hyprctl eval` inside the lock, so
+concurrent invocations cannot each disable a different last output (DEC-042). Hyprland applies monitor changes
+asynchronously, so after the `eval` the action keeps the lock and polls `hyprctl monitors all -j` (up to 2 s) until
+the requested enabled state or scale is reported; otherwise it exits 5 (not confirmed). The next action therefore
+re-reads settled state, and the panel's refresh on exit shows the result (laboratory finding, plan 02-27). The
+`output`, absolute `scale` and
+`state` forms follow the Omarchy v4.5.0 (`ac2690c`) monitor panel's runtime `hl.monitor` disable/enable expression,
+`bin/omarchy-hyprland-monitor-scaling` clean-scale rule and `bin/omarchy-monitor-state` fields as behavior
+references only; no upstream code, text-size, DDC, Apple or audit-log path is incorporated.
 
 All actions are runtime-only and disappear on reload or reboot. No monitor configuration is written, no
 session process is restarted or reloaded, and no persistent layout manager or hotplug watcher is introduced.
@@ -132,9 +162,11 @@ only by the separately authorized session test, not by these sources.
 
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
-SUPER+L / SUPER+Alt+L (workspace layout cycling), the Story 4.4 panels deferred to plans 02-27 to 02-30, and the Story 4.5
-browser, file manager, editor, clipboard and capture keys. Hardware exclusions remain unbound:
-SHIFT+XF86AudioMute (audio output switching), SHIFT+XF86AudioPause / SHIFT+XF86AudioPlay (media source switching),
+SUPER+L / SUPER+Alt+L (workspace layout cycling), and the Story 4.5
+browser, file manager, editor, clipboard and capture keys. Story 4.4 panel chords reserved for later plans:
+SUPER+Ctrl+N (network panel, plan 02-28; DEC-038 replaces DEC-006's W with N, as in Omarchy 4.5) and SUPER+Ctrl+B
+(Bluetooth panel, plan 02-29). SUPER+Ctrl+W stays unbound. Hardware exclusions remain unbound:
+SHIFT+XF86AudioPause / SHIFT+XF86AudioPlay (media source switching, TODO-013),
 XF86TouchpadToggle / XF86TouchpadOn / XF86TouchpadOff (outside the slice), XF86Eject (outside the slice), and
 XF86KbdBrightnessUp / XF86KbdBrightnessDown / XF86KbdLightOnOff (not delivered by the explored keyboard).
-Audio output/source switching belongs to plan 02-27. Final binding ownership across slices is Story 4.7.
+Final binding ownership across slices is Story 4.7.

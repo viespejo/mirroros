@@ -19,6 +19,7 @@ const stub = `
 local out = {}
 local function described(name, args)
   if name == "exec_cmd" then return { kind = "exec", command = args } end
+  if name == "global" then return { kind = "global", command = "global " .. args } end
   return { kind = name }
 end
 local dsp = setmetatable({}, { __index = function(_, family)
@@ -108,7 +109,7 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 141);
+  assert.equal(bindings.length, 155);
   for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
@@ -136,6 +137,7 @@ test('hardware bindings use only owned commands with the approved chords and opt
   const expected = [
     ['XF86AudioRaiseVolume', 'volume raise', true], ['XF86AudioLowerVolume', 'volume lower', true],
     ['XF86AudioMute', 'volume mute-toggle'], ['XF86AudioMicMute', 'volume mic-mute'],
+    ['SHIFT+XF86AudioMute', 'audio-device cycle'],
     ['ALT+XF86AudioRaiseVolume', 'volume +1', true], ['ALT+XF86AudioLowerVolume', 'volume -1', true],
     ['XF86MonBrightnessUp', 'brightness +5%', true], ['XF86MonBrightnessDown', 'brightness 5%-', true],
     ['SHIFT+XF86MonBrightnessUp', 'brightness max', true], ['SHIFT+XF86MonBrightnessDown', 'brightness min', true],
@@ -187,7 +189,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 141);
+  assert.equal(replaced.stdout.trim().split('\n').length, 155);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -198,13 +200,15 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
   const required = [
     'SUPER+SPACE', 'SHIFT+SUPER+CODE:201', 'SUPER+D', 'ALT+SUPER+SPACE', 'SUPER+ESCAPE', 'XF86POWEROFF', 'SUPER+K', 'CTRL+SUPER+SPACE',
     'SUPER+I', 'SHIFT+SUPER+I', 'SUPER+COMMA', 'SHIFT+SUPER+COMMA', 'CTRL+SUPER+COMMA', 'ALT+SUPER+COMMA',
-    'ALT+SHIFT+SUPER+COMMA', 'SUPER+APOSTROPHE', 'ALT+SUPER+APOSTROPHE', 'CTRL+SUPER+L', 'SUPER+RETURN',
+    'ALT+SHIFT+SUPER+COMMA', 'ALT+CTRL+SUPER+COMMA', 'SUPER+APOSTROPHE', 'ALT+SUPER+APOSTROPHE', 'CTRL+SUPER+L', 'SUPER+RETURN',
     'ALT+SUPER+RETURN', 'SUPER+W', 'SUPER+Q', 'SUPER+J', 'SUPER+P', 'SUPER+T', 'SUPER+F', 'ALT+SUPER+F', 'SUPER+TAB',
     'SUPER+S', 'SUPER+GRAVE', 'ALT+SUPER+S', 'SHIFT+SUPER+GRAVE', 'SUPER+G', 'ALT+SUPER+G', 'ALT+SUPER+TAB',
     'ALT+SHIFT+SUPER+TAB', 'CTRL+SUPER+LEFT', 'CTRL+SUPER+RIGHT', 'ALT+TAB', 'ALT+SHIFT+TAB', 'ALT+CTRL+TAB',
     'ALT+CTRL+SHIFT+TAB', 'CTRL+SUPER+Z', 'ALT+CTRL+SUPER+Z', 'SUPER+MOUSE:272', 'SUPER+MOUSE:273',
     'SUPER+MOUSE_DOWN', 'SUPER+MOUSE_UP', 'ALT+SUPER+MOUSE_DOWN', 'ALT+SUPER+MOUSE_UP',
+    'CTRL+SUPER+A', 'CTRL+SUPER+D', 'CTRL+SUPER+P',
   ];
+  for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
     required.push(`SUPER+${direction}`, `SHIFT+SUPER+${direction}`, `ALT+SHIFT+SUPER+${direction}`,
       `CTRL+SHIFT+SUPER+${direction}`, `ALT+SUPER+${direction}`);
@@ -228,9 +232,9 @@ test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
     'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
     'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V', 'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
-    'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+F', 'SHIFT+SUPER+N', 'CTRL+SUPER+A', 'CTRL+SUPER+B',
-    'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P', 'SUPER+O',
-    'SHIFT+XF86AUDIOMUTE', 'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
+    'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+F', 'SHIFT+SUPER+N', 'CTRL+SUPER+B',
+    'CTRL+SUPER+N', 'CTRL+SUPER+W', 'CTRL+SUPER+CODE:19', 'SUPER+O',
+    'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
     'XF86TOUCHPADTOGGLE', 'XF86TOUCHPADON', 'XF86TOUCHPADOFF', 'XF86KBDBRIGHTNESSUP', 'XF86KBDBRIGHTNESSDOWN', 'XF86KBDLIGHTONOFF',
     'SUPER+M', 'ALT+CTRL+DELETE',
   ];
@@ -254,13 +258,33 @@ test('shell actions call existing IPC functions of the installed shell', { skip:
     assert.match(binding.action, /^uwsm app -- foot( |$)/);
 });
 
+test('global shortcut bindings name shortcuts the shell registers', { skip: !lua && 'no Lua interpreter' }, () => {
+  const globals = bindings.map(binding => binding.action).filter(action => action.startsWith('global '));
+  assert.ok(globals.includes('global mirroros:panel.notifications'));
+  for (const name of ['audio', 'display', 'power']) assert.ok(globals.includes(`global mirroros:panel.${name}`), name);
+  const source = fs.readFileSync(path.join(shell, 'shell.qml'), 'utf8');
+  const positional = [];
+  for (const action of globals) {
+    const indexed = action.match(/^global mirroros:panel-at-([1-9])$/);
+    if (indexed) {
+      positional.push(Number(indexed[1]));
+      continue;
+    }
+    const match = action.match(/^global mirroros:(panel\.[a-z]+)$/);
+    assert.ok(match, action);
+    assert.match(source, new RegExp(`appid: "mirroros"\\n\\s+name: "${match[1].replace('.', '\\.')}"`), action);
+  }
+  assert.deepEqual(positional.sort(), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.match(source, /model: \[1, 2, 3, 4, 5, 6, 7, 8, 9\]\n\s+GlobalShortcut \{\n\s+required property var modelData\n\s+appid: "mirroros"\n\s+name: "panel-at-" \+ modelData/);
+});
+
 test('the registry lists launchable entries for the current instance and leaves no temporary file', { skip: !lua && 'no Lua interpreter' }, () => {
   const lines = loaded.registry.trimEnd().split('\n');
   assert.equal(lines[0], '# instance test-instance');
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 133);
+  assert.equal(rows.length, 147);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));
