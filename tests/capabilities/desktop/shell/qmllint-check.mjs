@@ -18,7 +18,7 @@ const copied = new Set([
   ...['BarIconContent', 'BarWidget',
     'BorderOverlay', 'BorderSurface', 'Button', 'CursorSurface', 'IconContentBounds',
     'KeyboardPanel', 'OpticalGlyph', 'PanelActionButton', 'PanelController', 'PanelHero',
-    'PanelKeyCatcher', 'PanelSectionHeader', 'PanelSeparator', 'PanelToolTip',
+    'PanelKeyCatcher', 'PanelSlider', 'PanelSectionHeader', 'PanelSeparator', 'PanelToolTip',
     'PopupCard', 'ToggleSwitch'].map(name => `Ui/${name}.qml`),
   'bar/widgets/Tray.qml',
   ...['Toast', 'DeedButton', 'NotificationPanel', 'Picker'].map(name => `notifications/${name}.qml`),

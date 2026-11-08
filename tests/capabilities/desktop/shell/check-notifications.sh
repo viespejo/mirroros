@@ -22,6 +22,10 @@ trap cleanup EXIT
 run_dir="$tmp/shell"
 cp -r "$shell_dir" "$run_dir"
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/data/applications" "$tmp/state"
+# Synthetic theme and background selection as configure initializes them, so the isolated shell starts quietly.
+mkdir -p "$tmp/home/.local/state/mirroros/current"
+ln -s /usr/share/mirroros/themes/default "$tmp/home/.local/state/mirroros/current/theme"
+ln -s /usr/share/mirroros/themes/default/backgrounds/2-mirroros-jade.png "$tmp/home/.local/state/mirroros/current/background"
 node --input-type=module - "$run_dir/shell.qml" <<'JS'
 import fs from 'node:fs';
 const file = process.argv[2];
@@ -74,7 +78,7 @@ start() {
     owner=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.freedesktop.Notifications)
     [[ "$owner" == 'b false' ]] || { printf 'BLOCKED Notifications already owned; no replacement attempted\n'; exit 2; }
     HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_DATA_HOME="$tmp/data" \
-        MIRROROS_SHELL_STATE_DIR="$tmp/state" qs -p "$run_dir" > "$tmp/shell.log" 2>&1 &
+        XDG_STATE_HOME="$tmp/home/.local/state" MIRROROS_SHELL_STATE_DIR="$tmp/state" qs -p "$run_dir" > "$tmp/shell.log" 2>&1 &
     pid=$!
     for ((i = 0; i < 100; i++)); do
         if state > "$tmp/ready.json" 2>/dev/null && node -e 'const s=JSON.parse(require("fs").readFileSync(process.argv[1]));if(!s.ready||!s.configLoaded)process.exit(1)' "$tmp/ready.json"; then

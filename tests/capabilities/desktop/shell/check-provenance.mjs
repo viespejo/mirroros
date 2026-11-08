@@ -13,8 +13,23 @@ if (!upstream || upstream.startsWith('--')) {
   process.exit(2);
 }
 const revision = '7075b61c6aaa5d8589f6e816867508fc96dc49d9';
-if (execFileSync('git', ['-C', upstream, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() !== revision)
-  throw new Error('Upstream revision mismatch');
+// Allowed Source-column revision prefixes and the commits they must resolve to; unprefixed = revision.
+const revisions = {
+  [revision]: revision,
+  'v4.0.6': '237f1b4071a0bff2296c6d740ba2b9fd695ebfa0',
+  'v4.5.0': 'ac2690cd7be4f47e4a255f5e2e78d904d436b068',
+};
+for (const [rev, commit] of Object.entries(revisions))
+  if (execFileSync('git', ['-C', upstream, 'rev-parse', '--verify', `${rev}^{commit}`], { encoding: 'utf8' }).trim() !== commit)
+    throw new Error('Upstream revision mismatch: ' + rev);
+const show = (rev, file) => execFileSync('git', ['-C', upstream, 'show', `${rev}:${file}`],
+  { maxBuffer: 64 * 1024 * 1024 });
+const parseSource = source => {
+  const match = /^([^\s/:]+):(\S+)$/.exec(source);
+  if (!match) return { rev: revision, file: source };
+  if (!(match[1] in revisions)) throw new Error('Unknown source revision: ' + source);
+  return { rev: match[1], file: match[2] };
+};
 const rows = fs.readFileSync(path.join(root, 'UPSTREAM.md'), 'utf8').split('\n')
   .filter(line => /^\| `/.test(line)).map(line => {
     const parts = line.split('|').slice(1, -1).map(value => value.trim());
@@ -29,10 +44,13 @@ for (const file of files) if (!recorded.has(file)) throw new Error('Missing prov
 for (const row of rows) {
   if (!files.includes(row.file)) throw new Error('Stale provenance: ' + row.file);
   if (!['New', 'Adapted', 'Copied'].includes(row.method)) throw new Error('Unknown method: ' + row.file);
-  if (row.method === 'Copied' && !fs.readFileSync(path.join(root, row.file))
-    .equals(fs.readFileSync(path.join(upstream, row.source)))) throw new Error('Copy differs: ' + row.file);
+  if (row.method === 'Copied') {
+    const { rev, file } = parseSource(row.source);
+    if (!fs.readFileSync(path.join(root, row.file)).equals(show(rev, file)))
+      throw new Error('Copy differs: ' + row.file);
+  }
 }
-const notice = fs.readFileSync(path.join(upstream, 'shell/plugins/notifications/Service.qml'), 'utf8')
+const notice = show(revision, 'shell/plugins/notifications/Service.qml').toString('utf8')
   .split('\n').slice(0, 5).join('\n');
 if (!fs.readFileSync(path.join(root, 'notifications/Service.qml'), 'utf8').startsWith(notice))
   throw new Error('Omapager notice changed');
@@ -50,7 +68,9 @@ if (!process.argv.includes('--report')) {
     'services/ShellConfig.qml': ['config/omarchy/shell.json'],
   };
   let report = '# Brief 3 reuse record — current implementation snapshot\n\n'
-    + `Source: Omarchy at \`${revision}\`, MIT. Copyright holders: David Heinemeier Hansson and Neil Jagdish Patel (Omapager notification engine). The complete original Omapager MIT text is retained in LICENSE.omapager (host-verified license evidence only; not a code revision or a full license audit). Destination root: \`capabilities/desktop/shell/\`.\n\n`
+    + `Source: Omarchy at \`${revision}\` unless a row names a \`v4.0.6:\` or \`v4.5.0:\` revision, MIT.`
+    + ' Sources that are installed-package references rather than repository paths have no comparison envelope.'
+    + ` Copyright holders: David Heinemeier Hansson and Neil Jagdish Patel (Omapager notification engine). The complete original Omapager MIT text is retained in LICENSE.omapager (host-verified license evidence only; not a code revision or a full license audit). Destination root: \`capabilities/desktop/shell/\`.\n\n`
     + 'Covers Briefs 1-3; fixed Brief 1 and Brief 2 evidence is unchanged. Per-file provenance is in UPSTREAM.md; LICENSE.omarchy is an unchanged upstream copy and LICENSE.omapager is the host-provided original text. All declared copies were byte-compared; no MirrorOS headers were added.\n\n'
     + 'Source ranges below are whole-file comparison envelopes, NOT claims that all lines were incorporated into adaptations. Copied files incorporate the full range. Selected fragment ranges and reasons are recorded in brief-1-reuse.md, brief-2-log.md (01:16, 01:21, 01:31 and notification/OSD entries) and brief-3-log.md (menu extraction). Reuse preserves the upstream appearance, data handling and subtle interaction fixes. The Changes column describes each adaptation boundary.\n\n'
     + 'Metrics: From source = non-blank destination lines whose trimmed text appears verbatim in the listed origin(s), including trivial braces. This is approximate textual reuse, not a semantic percentage. Catalog values are unchanged but flattened JSON keys/layout may not line-match. New lines within adaptations are counted separately. Documentation/license/baseline outputs are excluded from code totals, but have provenance. Tests/tooling live under tests/capabilities/desktop/shell/ and are not counted.\n\n'
@@ -61,15 +81,16 @@ if (!process.argv.includes('--report')) {
     if (!/\.(qml|js|mjs|sh|py|json)$/.test(row.file) && !row.file.endsWith('/qmldir')) continue;
     const dest = fs.readFileSync(path.join(root, row.file), 'utf8');
     const nonblank = lines(dest).filter(line => line.trim()).length;
-    const sources = row.source === '—' ? [] : [row.source, ...(extras[row.file] || [])];
-    const originals = sources.map(source => fs.readFileSync(path.join(upstream, source), 'utf8'));
+    const origin = row.source === '—' ? null : parseSource(row.source);
+    const sources = !origin || /\s/.test(origin.file) ? [] : [origin.file, ...(extras[row.file] || [])];
+    const originals = sources.map(source => show(origin.rev, source).toString('utf8'));
     const originalLines = new Set(originals.flatMap(text => lines(text).map(line => line.trim()).filter(Boolean)));
     const from = row.method === 'Copied' ? nonblank
       : lines(dest).filter(line => line.trim() && originalLines.has(line.trim())).length;
     const values = [lines(dest).length, nonblank, from, nonblank - from];
     for (const key of ['all', row.file.startsWith('tests/') ? 'tooling' : 'product'])
       values.forEach((value, index) => totals[key][index] += value);
-    const envelope = sources.map((source, index) => `\`${source}\` 1-${lines(originals[index]).length}`).join('; ') || '—';
+    const envelope = sources.map((source, index) => `\`${origin.rev === revision ? '' : origin.rev + ':'}${source}\` 1-${lines(originals[index]).length}`).join('; ') || '—';
     report += `| \`${row.file}\` | ${row.method} | ${envelope} | ${values.join(' | ')} | ${row.note} |\n`;
   }
   report += '\n## Totals\n\n| Scope | Lines | Non-blank | From source | New |\n|---|---:|---:|---:|---:|\n';

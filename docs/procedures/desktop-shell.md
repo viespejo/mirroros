@@ -284,12 +284,15 @@ node --test tests/capabilities/desktop/shell/config-overrides.test.mjs \
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs
 node tests/capabilities/desktop/shell/i18n-subset.mjs <omarchy-src> --check
-node tests/capabilities/desktop/shell/check-provenance.mjs <omarchy-src>
+node tests/capabilities/desktop/shell/check-provenance.mjs <omarchy-clone>
 shellcheck tests/capabilities/desktop/shell/*.sh capabilities/desktop/shell/services/hidden-entries.sh
 ```
 
-`<omarchy-src>` is a read-only Omarchy checkout at the revision in `UPSTREAM.md`; the provenance check
-refuses any other revision.
+`<omarchy-src>` is a read-only Omarchy tree at the general revision in `UPSTREAM.md` (for example a
+temporary detached worktree of `<omarchy-clone>`). `<omarchy-clone>` is a read-only Omarchy clone with
+history; the provenance check reads each row at its stated revision with `git show` (unprefixed rows use the
+general revision), byte-compares copied files and refuses when a tag does not resolve to its recorded commit.
+The clone is never checked out or modified.
 
 Configure delivery, bindings and lock contracts (host, test doubles, no session):
 

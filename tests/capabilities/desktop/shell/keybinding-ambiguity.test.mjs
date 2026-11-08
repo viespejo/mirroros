@@ -33,3 +33,32 @@ test('duplicate keyless matches are not launchable; unique matches remain launch
   const rows = build([{ key: '', description: 'Workspace' }, { key: '', description: 'Workspace' }, { key: 'D', description: 'Apps' }]);
   assert.deepEqual(rows.map(row => [row.id, row.launchable]), [['', false], ['', false], ['menu.apps', true]]);
 });
+
+function qmlFunction(name) {
+  const begin = source.indexOf(`  function ${name}(`);
+  const finish = source.indexOf('\n  }\n', begin);
+  assert.ok(begin >= 0 && finish > begin, name);
+  return source.slice(begin, finish + 4).trim();
+}
+
+test('keyless bar panel chords resolve to their own entry beside workspace digits', () => {
+  const root = {};
+  runInNewContext(['canonicalKeys', 'canonicalModifiers', 'matchWithoutKey']
+    .map(name => `root.${name} = ${qmlFunction(name).replace(/^function \w+/, 'function')};`).join('\n'), { root });
+  const entries = [];
+  for (let n = 1; n <= 9; n++) {
+    for (const [id, keys, description] of [
+      [`panel.at-${n}`, `SUPER + CTRL + code:${n + 9}`, `Bar panel ${n}`],
+      [`workspace.${n}`, `SUPER + code:${n + 9}`, 'Switch to workspace'],
+    ]) {
+      const canonical = root.canonicalKeys(keys);
+      entries.push({ id, keys, description, modifiers: root.canonicalModifiers(canonical) });
+    }
+  }
+  for (let n = 1; n <= 9; n++) {
+    root.keysFor = () => 'SUPER + CTRL + ';
+    assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: `Bar panel ${n}` } }).id, `panel.at-${n}`);
+  }
+  root.keysFor = () => 'SUPER + ';
+  assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: 'Bar panel 1' } }), null);
+});

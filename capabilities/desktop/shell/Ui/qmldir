@@ -13,12 +13,14 @@ IconContentBounds 1.0 IconContentBounds.qml
 KeyboardPanel 1.0 KeyboardPanel.qml
 OpticalGlyph 1.0 OpticalGlyph.qml
 OverlayWindow 1.0 OverlayWindow.qml
+Panel 1.0 Panel.qml
 PanelActionButton 1.0 PanelActionButton.qml
 PanelController 1.0 PanelController.qml
 PanelHero 1.0 PanelHero.qml
 PanelKeyCatcher 1.0 PanelKeyCatcher.qml
 PanelSectionHeader 1.0 PanelSectionHeader.qml
 PanelSeparator 1.0 PanelSeparator.qml
+PanelSlider 1.0 PanelSlider.qml
 PanelToolTip 1.0 PanelToolTip.qml
 PointerMoveGate 1.0 PointerMoveGate.qml
 PopupCard 1.0 PopupCard.qml

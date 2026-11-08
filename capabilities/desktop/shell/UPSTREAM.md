@@ -4,6 +4,11 @@
 
 - **Project:** [Omarchy](https://github.com/omacom/omarchy).
 - **Revision:** `7075b61c6aaa5d8589f6e816867508fc96dc49d9` (read-only reference).
+- **Additional tagged revisions:** `v4.5.0` → `ac2690cd7be4f47e4a255f5e2e78d904d436b068` and `v4.0.6` →
+  `237f1b4071a0bff2296c6d740ba2b9fd695ebfa0`, read from a read-only Omarchy clone with history. All 873 files of
+  package `omarchy 4.5.0-3` under `usr/share/omarchy/`, taken from the signature-verified Omarchy 4.5.0 ISO
+  ([shell panels prototype procedure](../../../docs/procedures/shell-panels-prototype.md)), are byte-identical to
+  `v4.5.0`. Rows name these revisions explicitly; the general pin above is not claimed for them.
 - **License (SPDX):** `MIT`; upstream text copied unchanged to [LICENSE.omarchy](LICENSE.omarchy).
 - **Copyright holders:** David Heinemeier Hansson; Neil Jagdish Patel (Copyright (c) 2026,
   Omapager notification-engine origin). The original notice remains unchanged in `notifications/Service.qml`.
@@ -24,7 +29,8 @@
 - Original MirrorOS code remains `GPL-3.0-only`; upstream material retains its MIT terms.
 
 Paths in the destination column are relative to this directory. Source paths are relative to the upstream
-repository. `Copied` means byte-for-byte, with no added headers; `Adapted` includes new integration code.
+repository; a `<rev>:` prefix (`v4.0.6:` or `v4.5.0:`) names the revision, and unprefixed paths use the
+general revision above. `Copied` means byte-for-byte, with no added headers; `Adapted` includes new integration code.
 This record covers Briefs 1 and 2 and the current Brief 3 implementation. Prototype evidence remains outside
 source control. Full-source paths identify the origin, not a claim that the entire source file is imported.
 MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated from this directory's former
@@ -46,10 +52,10 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Commons/InputDevices.qml` | Copied | `shell/Commons/InputDevices.qml` | Native device-change watcher, unchanged. |
 | `Commons/Numbers.js` | Copied | `shell/Commons/Numbers.js` | Number formatting, unchanged. |
 | `Commons/Plural.js` | Copied | `shell/Commons/Plural.js` | Plural rules, unchanged. |
-| `Commons/Style.qml` | Adapted | `shell/Commons/Style.qml` | Default tokens only; provisional local Nerd Font; no theme/fontconfig/Hyprland style loading. |
+| `Commons/Style.qml` | Adapted | `shell/Commons/Style.qml` | Default tokens only; provisional local Nerd Font; no theme/fontconfig/Hyprland style loading. Adds only `easeOut` from `v4.5.0:shell/Commons/Style.qml` for the shared panel container. |
 | `Commons/Util.qml` | Adapted | `shell/Commons/Util.qml` | Used helpers only; no RTL key reversal; identity widget-id normalization. |
 | `Commons/qmldir` | New | — | Explicit included singleton declarations. |
-| `Ui/ScreenMoveRemap.qml` | Copied | Installed Omarchy `4.0.6-1` reference `shell/Ui/ScreenMoveRemap.qml`, SHA-256 `ae09782672877502015e517c6f58565cf79b82e0aa1dc56ee5655989863ad8a7` | Unchanged output-position remap guard; registered in Ui/qmldir and used by the bar and background. Package Git revision unverified; not assigned the general source pin. |
+| `Ui/ScreenMoveRemap.qml` | Copied | `v4.0.6:shell/Ui/ScreenMoveRemap.qml` | Unchanged output-position remap guard; registered in Ui/qmldir and used by the bar and background. Re-pinned from the installed Omarchy `4.0.6-1` reference (SHA-256 `ae09782672877502015e517c6f58565cf79b82e0aa1dc56ee5655989863ad8a7`, identical at `v4.0.6`); not assigned the general source pin. |
 | `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs retain upstream unscaled rendering. Labels omit the upstream figure-centering offset, as in `Ui/WidgetButton.qml`. |
 | `Ui/BarIconContent.qml` | Copied | `shell/Ui/BarIconContent.qml` | Unchanged. |
 | `Ui/BarIndicator.qml` | Adapted | `shell/Ui/BarIndicator.qml` | Uses the upstream caption font size for indicator glyphs. |
@@ -60,15 +66,17 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Ui/CursorSurface.qml` | Copied | `shell/Ui/CursorSurface.qml` | Unchanged. |
 | `Ui/FilterInput.qml` | Copied | `shell/Ui/FilterInput.qml` | Unchanged; Brief 1. |
 | `Ui/IconContentBounds.qml` | Copied | `shell/Ui/IconContentBounds.qml` | Unchanged. |
-| `Ui/KeyboardPanel.qml` | Copied | `shell/Ui/KeyboardPanel.qml` | Unchanged; notification panel containment. |
+| `Ui/KeyboardPanel.qml` | Copied | `v4.5.0:shell/Ui/KeyboardPanel.qml` | Unchanged Omarchy 4.5 shared panel container; notification panel and bar panels. |
 | `Ui/OpticalGlyph.qml` | Copied | `shell/Ui/OpticalGlyph.qml` | Unchanged. |
 | `Ui/OverlayWindow.qml` | Adapted | `shell/Ui/OverlayWindow.qml` | Brief 1: removed RTL import/bindings; focused-output overlay retained. |
+| `Ui/Panel.qml` | Adapted | `v4.5.0:shell/Ui/Panel.qml` | Shared panel lifecycle base. ShellIpc block removed (panel IPC is declared once in the bar); `ipcTarget`/`manageIpc` kept inert for API compatibility, `manageIpc` defaults to false. |
 | `Ui/PanelActionButton.qml` | Copied | `shell/Ui/PanelActionButton.qml` | Unchanged. |
 | `Ui/PanelController.qml` | Copied | `shell/Ui/PanelController.qml` | Unchanged. |
 | `Ui/PanelHero.qml` | Copied | `shell/Ui/PanelHero.qml` | Unchanged. |
 | `Ui/PanelKeyCatcher.qml` | Copied | `shell/Ui/PanelKeyCatcher.qml` | Unchanged. |
 | `Ui/PanelSectionHeader.qml` | Copied | `shell/Ui/PanelSectionHeader.qml` | Unchanged. |
 | `Ui/PanelSeparator.qml` | Copied | `shell/Ui/PanelSeparator.qml` | Unchanged. |
+| `Ui/PanelSlider.qml` | Copied | `v4.5.0:shell/Ui/PanelSlider.qml` | Unchanged; panel level sliders. |
 | `Ui/PanelToolTip.qml` | Copied | `shell/Ui/PanelToolTip.qml` | Unchanged. |
 | `Ui/PointerMoveGate.qml` | Copied | `shell/Ui/PointerMoveGate.qml` | Unchanged; Brief 1. |
 | `Ui/PopupCard.qml` | Copied | `shell/Ui/PopupCard.qml` | Unchanged; tray popups. |
@@ -91,27 +99,29 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `menu/Menu.qml` | Adapted | `shell/plugins/menu/Menu.qml` | Brief 3 shared menu replacing the Brief 1 launcher: tree, navigation stack/back, root search/drilldown, native Apps provider, dmenu select/multiple/onChange/input, card/delegate/scrims kept. Removed JSONC/user/language files, Bash providers and guard batch, uninstall/ConfirmDialog, plugin lifecycle and Omarchy IPC. Closed action table, unavailable rows with pinned reasons (no checkmark, kept in search), fixed-argv dmenu results, in-process selector handler for keyboard help, native IPC, Brief 1 Apps unavailable state, ComponentBehavior Bound. Navigation freezes only the card top (upstream also caps rows to the starting menu's height, which clipped the three-row MirrorOS root's submenus). Selection by stable row identity (`selectedId`, `settleCursor`, `activateSelected`): bounded MirrorOS repair of an upstream defect, see Boundaries and open items; no upstream fix is claimed. DEC-027: replacing an active selector with another selector or a regular menu first completes the old request as cancelled, once, with its own paths; result deliveries are queued so none is lost. |
 | `menu/MenuModel.js` | Adapted | `shell/plugins/menu/MenuModel.js` | Unchanged except header and removal of the generated Bash guard batch (GUARD_READERS through guardScript) and summonAction; dmenu, parsing and translation helpers retained. Boundary verified by tests/capabilities/desktop/shell/menu-model.test.mjs. |
 | `menu/MirrorMenu.js` | Adapted | `default/omarchy/omarchy-menu.jsonc` | Owned model with the upstream ids, labels, aliases, icons and order for Apps, Learn > Keybindings and System; closed action ids instead of commands; Apps is a submenu (upstream root Apps row opens the dock app grid); no screensaver or other Learn rows. Adds Style > Background and Install > Style > Background from installed Omarchy `4.0.6-1` `default/omarchy/omarchy-menu.jsonc`, SHA-256 `8c791cfc457d6c50b90a6636a6f28c9415a2fa6e4edf84826906457b75649689` (package Git revision unverified); original ids, icons, labels and aliases, closed wallpaper actions. |
-| `bar/Bar.qml` | Adapted | `shell/plugins/bar/Bar.qml` | Top opaque horizontal bar, five regions, tooltip/popout/click contracts; closed component map replaces plugin/pool/drag discovery; no notch, glass, hide toggle or tray-region module host. |
-| `bar/BarModel.js` | Adapted | `shell/plugins/bar/BarModel.js` | entryId/entrySettings, slotEdge, barSizeFor subset only. |
+| `bar/Bar.qml` | Adapted | `shell/plugins/bar/Bar.qml` | Top opaque horizontal bar, five regions, tooltip/popout/click contracts; closed component map replaces plugin/pool/drag discovery; no notch, glass, hide toggle or tray-region module host. Panel coordination from `v4.5.0:shell/plugins/bar/Bar.qml`: popout card and morph section, Tab switching, focused-monitor routing (`findPanelWidget`, `summonBarWidget`, `panelWidgetIdAt` on the focused monitor's bar) and `togglePanelAt`. Divergences: "focused monitor wins" routing (DEC-045) instead of open copy first; native `IpcHandler` targets `audio`, `display`, `power` declared once outside `Variants` with `open`/`close`/`toggle` only, instead of per-panel ShellIpc; no plugin registry, widget hosts, drag or dock code. |
+| `bar/BarModel.js` | Adapted | `shell/plugins/bar/BarModel.js` | entryId/entrySettings, slotEdge, barSizeFor subset; `centerSections`, `navigationRegions`, `isDrawnSlot` and `pickDrawnSlot` from `v4.5.0:shell/plugins/bar/BarModel.js`. New `panelAction` replaces upstream `pickPanelSlot` with "focused monitor wins" (DEC-045); new pure `panelSlots` backs the bar's panel navigation. |
 | `bar/BluetoothState.qml` | Adapted | `shell/plugins/panels/bluetooth/Panel.qml` | Native Bluetooth reader from 25, 33; fixed-URL loading deferred until acquired org.bluez appears. |
 | `bar/ClockModel.js` | Adapted | `shell/plugins/panels/clock/Model.js` | Clock-format subset only. |
 | `bar/NetworkModel.js` | Adapted | `shell/plugins/panels/network/Model.js` | Signal, connectivity and icon subset only. |
-| `bar/PowerModel.js` | Adapted | `shell/plugins/panels/power/Model.js` | Battery fraction/threshold/icon subset only. |
 | `bar/ProviderState.qml` | New | — | Startup-only bus-name/package inventory; no direct BlueZ/UPower probe or periodic activation. |
 | `bar/indicators/Dnd.qml` | Adapted | `shell/plugins/bar/indicators/Dnd.qml` | Real directly composed notification service. MirrorOS addition (DEC-021/022): the indicator is also active while a while-away count is pending, showing the bell glyph with the count as a small superscript at its top-right corner inside the fixed status slot (capped at 9+, the first digit at a fixed position) and the existing `notifications.showHistory` tooltip; its unchanged click opens the panel. |
-| `bar/widgets/Audio.qml` | Adapted | `shell/plugins/panels/audio/Panel.qml` | Bar-only state/actions; default sink, typed source, ready grace and distinct unavailable glyph/reason; mixer excluded. Headphone detection from audio/Model.js 86-88, 100-119. MirrorOS rejects WirePlumber's `auto_null` fallback as unavailable and prevents its volume writes; other virtual sinks remain supported. |
+| `bar/widgets/Audio.qml` | Adapted | `v4.5.0:shell/plugins/panels/audio/Panel.qml` | Audio panel on the shared `Panel` base (bar glyphs, wheel, OSD and mute-all from 7075b61 kept). Panel IPC lives in the bar (`manageIpc: false`); default selection is native `preferredDefaultAudioSink/Source` plus `audio-device default output/input <node-name>`, shown pending until it exits; port availability from `audio-device availability output/input` every 5 s while open, applied to outputs and inputs; volume sink is the default sink. Removed: `omarchy-audio-*` helpers, DSP/EasyEffects resolution and its FileView, tuning filter, `AudioNodes`, `UntypedInput`, `omarchy.media` and active-player highlighting. MPRIS player names label mixer rows and an "Advanced…" action launches `uwsm app -- pavucontrol` (ADR 0026). MirrorOS rejects WirePlumber's `auto_null` fallback (never listed, no volume writes, unavailable state without slider or level); other virtual sinks remain supported. |
 | `bar/widgets/Bluetooth.qml` | Adapted | `shell/plugins/panels/bluetooth/Panel.qml` | Bar glyph/tooltips only, deferred reader, distinct missing/stopped-provider state; controls/panel are integration points. Glyph/name filtering also from bluetooth/Model.js 1-4, 17-29, 35-38. |
 | `bar/widgets/Clock.qml` | Adapted | `shell/plugins/panels/clock/BarWidget.qml` | Bar label and persisted format cycle; calendar/timezone are integration points. |
 | `bar/widgets/Indicators.qml` | Adapted | `shell/plugins/bar/widgets/Indicators.qml` | Static Dnd-only component map, no ShellIpc. |
 | `bar/widgets/KeyboardLayout.qml` | Adapted | `shell/plugins/bar/widgets/KeyboardLayout.qml` | Native Hyprland layouts and device watcher; removed fcitx InputMethodState and cycle path. |
 | `bar/widgets/KeyboardLayoutModel.js` | Copied | `shell/plugins/bar/widgets/KeyboardLayoutModel.js` | Unchanged. |
 | `bar/widgets/MenuButton.qml` | Adapted | `shell/plugins/menu/BarWidget.qml` | Shared MirrorOS symbol path in the theme accent, drawn in whole physical-pixel blocks on the pixel grid; direct menu-root toggle; terminal click is an integration point. |
-| `bar/widgets/Monitor.qml` | Adapted | `shell/plugins/panels/monitor/Panel.qml` | Screen-count bar glyph; brightness controls/panel are integration points. |
+| `bar/widgets/Monitor.qml` | Adapted | `v4.5.0:shell/plugins/panels/monitor/Panel.qml` | Display panel on the shared `Panel` base (screen-count bar glyph from 7075b61 kept). Panel IPC lives in the bar (`manageIpc: false`; no `brightness`/`state` IPC); state from the owned Hyprland `display state`; the slider and bar wheel set the internal backlight with `brightness --no-osd N%` (wheel shows the shell OSD) and an external focused display shows the fixed-brightness state; outputs toggle with `display output <name> on/off` and scale presets apply at runtime with `display scale <value>`, both with the last-independent-output guard in the UI too; pending output and scale actions are shown distinctly; the open panel polls `display state` every second instead of every 5 s, so a scale changed outside it (no Hyprland event exists) is shown promptly. Added (ADR 0027): a "Mirror laptop display" toggle row running `display mirror`, shown only with an internal and an enabled external output, pending state shown and repeats ignored. Removed: text size, DDC/Apple and per-monitor brightness paths, `omarchy-monitor-state`, `omarchy-brightness-display`, `omarchy-hyprland-monitor-scaling` and direct `hyprctl eval`. |
 | `bar/widgets/Network.qml` | Adapted | `shell/plugins/panels/network/Panel.qml` | Bar-only native NM state/signal; provider-unavailable glyph/reason; panel integration point. |
-| `bar/widgets/Power.qml` | Adapted | `shell/plugins/panels/power/Panel.qml` | Bar-only battery state and persisted percentage toggle; provider inventory, unavailable glyph/reason; panel integration point. |
+| `bar/widgets/Power.qml` | Adapted | `v4.5.0:shell/plugins/panels/power/Panel.qml` | Power panel on the shared `Panel` base (bar glyph, persisted percentage toggle, provider inventory and unavailable glyph/reason from 7075b61 kept). Panel IPC lives in the bar (`manageIpc: false`; no `togglePercentage` IPC); details from the owned `battery-status`; profiles read through native `PowerProfiles` and written with `power-profile set <ac/battery> <profile>`; a pending profile is shown distinctly; without a battery the panel does not open. Removed: `omarchy-battery-status`, `omarchy-powerprofiles-*` and `omarchy-system-stats`. |
 | `bar/widgets/Tray.qml` | Copied | `shell/plugins/bar/widgets/Tray.qml` | Unchanged, including LocalSend/Dropbox filtering. |
 | `bar/widgets/TrayModel.js` | Copied | `shell/plugins/bar/widgets/TrayModel.js` | Unchanged. |
 | `bar/widgets/Workspaces.qml` | Adapted | `shell/plugins/bar/widgets/Workspaces.qml` | Native workspace state; Lua focus dispatch and tiledLayout instead of Omarchy scripts/state; layout cycling is an integration point; active glyph uses text rendering as in Omarchy. |
+| `panels/audio/Model.js` | Copied | `v4.5.0:shell/plugins/panels/audio/Model.js` | Unchanged; `isUntypedSource` and `streamRepresentsPlayer` are not called by the panel. |
+| `panels/display/Model.js` | Adapted | `v4.5.0:shell/plugins/panels/monitor/Model.js` | Upstream functions unchanged; adds `parseState` for the owned `display state` JSON (brightness only for the focused internal panel) and `canToggle`/`independentEnabledCount` mirroring the command's last-independent-output guard, and `mirrorState` for the ADR 0027 mirror toggle. |
+| `panels/power/Model.js` | Adapted | `v4.5.0:shell/plugins/panels/power/Model.js` | Upstream functions unchanged (also back the bar glyph and percentage); adds `formatDuration` (English `battery.duration*` forms from v4.5.0 `default/i18n/en/cli.json`) and `withUnits` for the unit-free `battery-status` output; `parseProfiles` is not called because profiles come from native `PowerProfiles`. |
 | `notifications/DeedButton.qml` | Copied | `shell/plugins/notifications/DeedButton.qml` | Unchanged. |
 | `notifications/Delivery.js` | Copied | `shell/plugins/notifications/Delivery.js` | Unchanged quiet/delivery rules. |
 | `notifications/Detect.js` | Copied | `shell/plugins/notifications/Detect.js` | Unchanged heuristics, not a privacy guarantee. |
@@ -128,7 +138,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `notifications/WhileAway.js` | New | — | While-away count model (DEC-021/022), wired through `notifications/Service.qml` after the guest proof of the hypridle lock signals and restart reconciliation. Stores no notification content. |
 | `osd/Osd.qml` | Adapted | `shell/plugins/osd/Osd.qml` | Native IPC, MirrorOS namespace; new read-only source/showSource for PipeWire volume and sysfs brightness; unavailable is not a fabricated level. MirrorOS treats WirePlumber's `auto_null` fallback as no audio output, without rejecting other virtual sinks. |
 | `osd/OsdModel.js` | Copied | `shell/plugins/osd/OsdModel.js` | Unchanged payload/state/icon model. |
-| `shell.qml` | New | — | Explicit surface composition/service injection (including menu, session actions and keyboard help), closed direct routing; no plugin host. |
+| `shell.qml` | New | — | Explicit surface composition/service injection (including menu, session actions and keyboard help), closed direct routing; no plugin host. Panel `GlobalShortcut` entries (`appid: "mirroros"`) modeled on `v4.5.0:shell/shell.qml` usage without its shortcuts file, socket or `OMARCHY_PATH`. |
 | `defaults.json` | Adapted | `config/omarchy/shell.json` | Versioned common shell defaults (DEC-024/025): the reduced bar defaults formerly embedded in `services/ShellConfig.qml`, unchanged in value. |
 | `LICENSE.omarchy` | Copied | `LICENSE` | Unchanged upstream license text. |
 | `LICENSE.omapager` | New | — | Complete original Omapager MIT license text, byte-identical to the host-provided copy of omacom/omapager `LICENSE` at `c389e73516828d18f26e8efec2127c0c3dc3cb97` (license evidence only, not a code revision); retained with the incorporated notification code. Pinned by SHA-256 in `tests/capabilities/desktop/shell/check-provenance.mjs`. |

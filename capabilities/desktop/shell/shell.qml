@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Hyprland
 import qs.Commons
 
 import "services"
@@ -65,6 +66,46 @@ ShellRoot {
     if (id !== "omarchy.osd" || !osdService) return false
     osdService.open(json)
     return true
+  }
+
+  // Panel keys reach the shell through Hyprland's global dispatcher
+  // (hl.dsp.global("mirroros:<name>")), so a keypress spawns no process. Modeled
+  // on Omarchy v4.5.0 shell/shell.qml GlobalShortcut usage, without its
+  // shortcuts file. The panel chords toggle with the bar's focused-monitor
+  // routing; panel-at-N toggles the Nth panel of the right section.
+  GlobalShortcut {
+    appid: "mirroros"
+    name: "panel.audio"
+    description: "Toggle the audio panel"
+    onPressed: desktopShell.bar.requestPanel("omarchy.audio", "toggle")
+  }
+  GlobalShortcut {
+    appid: "mirroros"
+    name: "panel.display"
+    description: "Toggle the display panel"
+    onPressed: desktopShell.bar.requestPanel("omarchy.monitor", "toggle")
+  }
+  GlobalShortcut {
+    appid: "mirroros"
+    name: "panel.power"
+    description: "Toggle the power panel"
+    onPressed: desktopShell.bar.requestPanel("omarchy.power", "toggle")
+  }
+  GlobalShortcut {
+    appid: "mirroros"
+    name: "panel.notifications"
+    description: "Toggle the notification panel"
+    onPressed: desktopShell.notificationService.requestPanel("toggle")
+  }
+  Variants {
+    model: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    GlobalShortcut {
+      required property var modelData
+      appid: "mirroros"
+      name: "panel-at-" + modelData
+      description: "Toggle bar panel " + modelData
+      onPressed: desktopShell.bar.togglePanelAt("right", modelData)
+    }
   }
 
   Menu {

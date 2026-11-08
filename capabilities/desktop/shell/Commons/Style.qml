@@ -8,7 +8,8 @@ import qs.Commons as Commons
 // duration(). Theme, shell.toml, fontconfig and hyprctl loading are not
 // carried over: the override dictionaries stay empty and cornerRadius,
 // gapsOut and reduceMotion keep Omarchy's built-in defaults, so the shell
-// works without any theme state.
+// works without any theme state. easeOut is adapted from the same file at
+// v4.5.0 (ac2690cd7be4f47e4a255f5e2e78d904d436b068) for the shared panel container.
 QtObject {
   id: root
 
@@ -324,4 +325,8 @@ QtObject {
   function duration(ms) {
     return reduceMotion ? 0 : ms
   }
+
+  // A strong ease-out, for anything appearing or moving in answer to the
+  // pointer: it starts at once and settles without a bounce.
+  readonly property var easeOut: [0.23, 1.0, 0.32, 1.0, 1.0, 1.0]
 }

@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
@@ -12,6 +13,12 @@ import "BarModel.js" as BarModel
 // 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, Copyright (c) David Heinemeier
 // Hansson). Fixed top/opaque subset with static widget components. No plugin
 // host, drag/pool, notch, transparency, hide flag or tray-section module host.
+// Panel coordination (popout card and morph, Tab switching, focused-monitor
+// routing and positional panels) is adapted from the same file at v4.5.0
+// (ac2690cd7be4f47e4a255f5e2e78d904d436b068). MirrorOS divergences: routing
+// follows "focused monitor wins" (BarModel.panelAction) instead of the open
+// copy first, and panel IPC is declared here once with native IpcHandler
+// targets instead of per-panel ShellIpc.
 Item {
   id: root
 
@@ -32,6 +39,9 @@ Item {
   property var clickTargets: []
   property var moduleSlots: []
   property var activePopout: null
+  // Where the open panel's card stands, and in which section of the bar, so
+  // a panel taking over in the same section can start its card from there.
+  property var popoutCard: null
   property int barHoverCount: 0
   readonly property bool barHovered: barHoverCount > 0
   property bool centerSectionRevealHeld: false
@@ -127,6 +137,173 @@ Item {
 
   function releasePopout(owner) {
     if (activePopout === owner) activePopout = null
+  }
+
+  // The section a panel's widget sits in, the center's pieces counted as one,
+  // as keyboard switching between panels counts them.
+  function popoutSectionOf(owner) {
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (slot && slot.activeItem === owner) return BarModel.navigationRegions(slot.region).join(" ")
+    }
+    return ""
+  }
+
+  // Reported by the open panel. Only a screen name and four numbers are kept,
+  // whoever reports them; the section comes from the bar's own layout.
+  function notePopoutCard(card) {
+    popoutCard = card ? { screen: String(card.screen || ""), section: popoutSectionOf(activePopout),
+                          x: Number(card.x) || 0, y: Number(card.y) || 0,
+                          width: Number(card.width) || 0, height: Number(card.height) || 0 } : null
+  }
+
+  // The last card, copied, for a panel taking over in the same section: one
+  // switching across the bar opens fresh instead of flying the card over it.
+  function popoutCardFor(owner) {
+    var card = popoutCard
+    if (!card || !card.section || card.section !== popoutSectionOf(owner)) return null
+    return { screen: card.screen, x: card.x, y: card.y, width: card.width, height: card.height }
+  }
+
+  function slotWindow(slot) {
+    if (!slot) return null
+    return targetWindow(slot.activeItem) || targetWindow(slot)
+  }
+
+  function slotScreenName(slot) {
+    var window = slotWindow(slot)
+    return window && window.screen ? String(window.screen.name || "") : ""
+  }
+
+  // The output Hyprland has focused, which is where a keyboard-summoned panel
+  // belongs. Empty until Hyprland reports one.
+  function focusedScreenName() {
+    var monitor = Hyprland.focusedMonitor
+    return monitor ? String(monitor.name || "") : ""
+  }
+
+  // Only widgets that expose popup open/close methods are panels; plain
+  // indicators (clock, workspaces, tray) are not.
+  function isPanelItem(item) {
+    return !!item && typeof item.open === "function" && typeof item.close === "function" && item.opened !== undefined
+  }
+
+  // Tab order for the panels in one bar region, with the three center
+  // sections taken as one. A screen name scopes it to that monitor's bar.
+  function panelNavigationSlots(region, screenName) {
+    var records = moduleSlots.filter(function(slot) { return !!slot }).map(function(slot) {
+      var item = slot.activeItem
+      return { ref: slot, region: slot.region, moduleName: slot.moduleName, screenName: slotScreenName(slot),
+               drawn: !!item && item.visible === true && BarModel.isDrawnSlot(slot), panel: isPanelItem(item) }
+    })
+    return BarModel.panelSlots(BarModel.navigationRegions(region), layoutConfig, records, screenName)
+      .map(function(record) { return record.ref })
+  }
+
+  // The Nth panel (one-based) of a region on the focused monitor's bar,
+  // counting only the panel icons on screen; any bar when Hyprland reports no
+  // focused monitor with a bar.
+  function panelWidgetIdAt(region, index) {
+    var focused = focusedScreenName()
+    var hasBar = !!focused && moduleSlots.some(function(slot) { return slotScreenName(slot) === focused })
+    var slots = panelNavigationSlots(String(region || ""), hasBar ? focused : "")
+    var slot = slots[Math.round(Number(index)) - 1]
+    return slot ? String(slot.moduleName || "") : ""
+  }
+
+  function switchPanelFrom(owner, direction) {
+    if (!owner) return false
+
+    var currentSlot = null
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (slot && slot.activeItem === owner) {
+        currentSlot = slot
+        break
+      }
+    }
+    if (!currentSlot) return false
+
+    var slots = panelNavigationSlots(currentSlot.region, slotScreenName(currentSlot))
+    if (slots.length < 2) return false
+
+    var currentIndex = slots.indexOf(currentSlot)
+    if (currentIndex < 0) return false
+
+    var step = direction < 0 ? -1 : 1
+    var nextSlot = slots[(currentIndex + step + slots.length) % slots.length]
+    if (!nextSlot || !nextSlot.activeItem || nextSlot.activeItem === owner) return false
+
+    nextSlot.activeItem.open()
+    return true
+  }
+
+  // Every live panel copy of a widget id, one per monitor bar.
+  function panelCandidates(pluginId) {
+    var id = String(pluginId || "")
+    var candidates = []
+    for (var i = 0; i < moduleSlots.length; i++) {
+      var slot = moduleSlots[i]
+      if (!slot || slot.moduleName !== id || !isPanelItem(slot.activeItem)) continue
+      candidates.push({ slot: slot, screenName: slotScreenName(slot), opened: slot.activeItem.opened === true })
+    }
+    return candidates
+  }
+
+  // The copy an open request for a widget id (e.g. "omarchy.audio") acts on.
+  function findPanelWidget(pluginId) {
+    var step = BarModel.panelAction(panelCandidates(pluginId), focusedScreenName(), "open")
+    return step ? step.slot.activeItem : null
+  }
+
+  // One panel request (open, close or toggle) routed by BarModel.panelAction.
+  // Returns "opened", "closed" or "unavailable" when no panel copy exists.
+  function requestPanel(pluginId, action) {
+    var candidates = panelCandidates(pluginId)
+    if (candidates.length === 0) return "unavailable"
+    var step = BarModel.panelAction(candidates, focusedScreenName(), action)
+    if (!step) return "closed"
+    if (step.method === "close") {
+      step.slot.activeItem.close()
+      return "closed"
+    }
+    step.slot.activeItem.open()
+    return "opened"
+  }
+
+  function summonBarWidget(pluginId) {
+    return requestPanel(pluginId, "open") === "opened"
+  }
+
+  // Toggle the Nth panel of a region on the focused monitor; "unknown" when
+  // the region holds no panel at that position.
+  function togglePanelAt(region, index) {
+    var id = panelWidgetIdAt(region, index)
+    return id ? requestPanel(id, "toggle") : "unknown"
+  }
+
+  // Panel IPC, declared once for the whole bar (never per bar instance) and
+  // routed like the keyboard shortcuts. Targets use plain names; network
+  // (plan 02-28) and bluetooth (plan 02-29) follow the same convention.
+  IpcHandler {
+    target: "audio"
+    function open(): string { return root.requestPanel("omarchy.audio", "open") }
+    function close(): string { return root.requestPanel("omarchy.audio", "close") }
+    function toggle(): string { return root.requestPanel("omarchy.audio", "toggle") }
+  }
+
+  IpcHandler {
+    target: "display"
+    function open(): string { return root.requestPanel("omarchy.monitor", "open") }
+    function close(): string { return root.requestPanel("omarchy.monitor", "close") }
+    function toggle(): string { return root.requestPanel("omarchy.monitor", "toggle") }
+  }
+
+  IpcHandler {
+    target: "power"
+    function open(): string { return root.requestPanel("omarchy.power", "open") }
+    function close(): string { return root.requestPanel("omarchy.power", "close") }
+    function toggle(): string { return root.requestPanel("omarchy.power", "toggle") }
   }
 
   function moduleWidgets(moduleName) {

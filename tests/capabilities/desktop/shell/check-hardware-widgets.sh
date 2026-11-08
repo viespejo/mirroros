@@ -12,7 +12,7 @@ done
 
 node "$tests_dir/qmllint-check.mjs"
 
-node - "$shell_dir/bar/PowerModel.js" <<'JS'
+node - "$shell_dir/panels/power/Model.js" <<'JS'
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
@@ -29,7 +29,7 @@ assert.notEqual(m.batteryIcon(device, true, states), m.batteryIcon({ ...device, 
 assert.notEqual(m.batteryIcon(device, true, states), m.batteryIcon({ ...device, state: states.Charging, changeRate: 5 }, false, states));
 assert.equal(m.chargeThresholdActive({ ...device, state: states.PendingCharge }, false, states), true);
 assert.equal(m.chargeThresholdActive(device, true, states), false);
-console.log('PASS synthetic PowerModel fraction, glyph ladder and charge threshold');
+console.log('PASS synthetic power Model fraction, glyph ladder and charge threshold');
 JS
 
 if [[ -z "${WAYLAND_DISPLAY:-}" || ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYLAND_DISPLAY:-}" ]]; then
