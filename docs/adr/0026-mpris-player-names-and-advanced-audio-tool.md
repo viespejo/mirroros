@@ -7,7 +7,10 @@
 
 ## Status
 
-`Proposed`
+`Accepted`
+
+The maintainer accepted this architectural decision on 2026-11-07 at the plan 02-27 decision checkpoint.
+Implementation and validation remain with plan 02-27.
 
 ## Date
 

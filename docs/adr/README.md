@@ -47,7 +47,7 @@ and service boundaries, as [ADR 0020](0020-wallpaper-selection.md) did for wallp
 exclusions and authentication rules stay in force; per-panel hardware validation belongs to the production plans.
 
 [ADR 0026: MPRIS Player Names and Advanced Audio Tool](0026-mpris-player-names-and-advanced-audio-tool.md) is
-Proposed. It narrowly supersedes ADR 0025's deferral of MPRIS labels with native player names in the audio mixer and
+Accepted. It narrowly supersedes ADR 0025's deferral of MPRIS labels with native player names in the audio mixer and
 adds `pavucontrol` with an "Advanced…" panel button; no shell media service is added and the `playerctl` boundary
 stays.
 
