@@ -178,3 +178,7 @@ Before deployment of each panel, in its production plan:
 Partially superseded by [ADR 0026](0026-mpris-player-names-and-advanced-audio-tool.md), which supersedes only the
 media service item's deferral of MPRIS labels and the matching consequence that the mixer shows PipeWire stream names,
 and records `pavucontrol` with an audio panel button. The rest of this decision is unchanged.
+
+Partially superseded by [ADR 0027](0027-display-panel-mirror-toggle.md), which supersedes only the "Display"
+panel-content item, extending it with a runtime-only mirror toggle over the existing `display mirror` command. The rest
+of this decision is unchanged.

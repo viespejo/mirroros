@@ -51,6 +51,11 @@ Accepted. It narrowly supersedes ADR 0025's deferral of MPRIS labels with native
 adds `pavucontrol` with an "Advanced…" panel button; no shell media service is added and the `playerctl` boundary
 stays.
 
+[ADR 0027: Display Panel Mirror Toggle](0027-display-panel-mirror-toggle.md) is Accepted. It narrowly supersedes
+ADR 0025's display panel content with a runtime-only mirror toggle over the existing `display mirror` command, which
+restores the external output's runtime layout when mirroring ends; no monitor arrangement editor or display
+configuration write is added.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.
