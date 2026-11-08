@@ -57,6 +57,32 @@ locked remains untested: its packaged control-group kill mode could end its hypr
 claimed. Task 3 inspected the real packaged unit and verified `Terminal=true` through uwsm, Foot and a real TTY
 without foot-server; a maintainer-attended synthetic window confirmed the launch.
 
+Observed in plan 02-27 (laboratory and T14s): after configure published a shell whose `bar/widgets/Audio.qml`
+gained inline components, the running shell's reload failed with "`StreamRow` is not a type" (or `SourceRow`),
+while a clean start loaded the same tree. After such a delivery, restart `mirroros-shell.service` or log out and
+in. The cause is not established (TODO-018 in the
+[panel infrastructure log](../technical-interviews/story-4-4-panel-infrastructure_log.md)).
+
+## Shell panels
+
+[ADR 0025](../adr/0025-shell-panels.md) panels (audio, display, power) open from their bar icon. Keyboard and
+scripted requests use native Quickshell interfaces only; there is no own socket or CLI:
+
+```bash
+qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets audio, display, power
+hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
+```
+
+Global shortcuts are `mirroros:panel.audio`, `panel.display`, `panel.power`, `panel.notifications` and
+`panel-at-1` to `panel-at-9` (the Nth panel of the focused monitor's right bar section). The IPC result is
+`opened`, `closed` or `unavailable` (no panel instance, for example the power panel without a battery). Requests
+follow "focused monitor wins": `open` shows the panel on the focused monitor, moving it there if needed; `close`
+closes it wherever it is; `toggle` closes it only when open on the focused monitor; a focus change alone moves
+nothing. Inside an open panel, Tab and Shift+Tab move to the next or previous panel of the same bar section.
+Later panels follow the same convention (`network` in plan 02-28, `bluetooth` in plan 02-29). Panel actions run
+owned commands in `/usr/share/mirroros/hardware/` as the session user; see the
+[hardware procedure](hardware.md).
+
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`
@@ -281,6 +307,11 @@ Host, no graphical session:
 ```bash
 node --test tests/capabilities/desktop/shell/config-overrides.test.mjs \
     tests/capabilities/desktop/shell/while-away.test.mjs
+node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
+    tests/capabilities/desktop/shell/audio-panel-model.test.mjs \
+    tests/capabilities/desktop/shell/display-panel-model.test.mjs \
+    tests/capabilities/desktop/shell/power-panel-model.test.mjs \
+    tests/capabilities/desktop/shell/no-omarchy-coupling.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs
 node tests/capabilities/desktop/shell/i18n-subset.mjs <omarchy-src> --check
@@ -315,6 +346,7 @@ tests/capabilities/desktop/shell/check-bar.sh
 tests/capabilities/desktop/shell/check-notifications.sh
 tests/capabilities/desktop/shell/check-osd.sh
 tests/capabilities/desktop/shell/check-while-away.sh
+tests/capabilities/desktop/shell/check-panels.sh
 ```
 
 `check-bar.sh`, `check-notifications.sh` and `check-while-away.sh` refuse to run while another
