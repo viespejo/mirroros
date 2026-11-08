@@ -60,7 +60,11 @@ fixed-harness qualification). V2 is the 2026-11-06 runner-based clean installati
 console-driven, with no separate reboot-persistence check. T14s acceptance A1 spans 2026-11-05 to 2026-11-06 on
 candidates `5e93654`, `f075cf1` (microphone OSD IPC correction) and `e3c3228` (ALSA microphone state); the rows
 name the commit where it matters. A2 is the final 2026-11-06 deployment of `179f288`: real DNS migration, reboot
-persistence and a no-change rerun with 19 of 19 steps unchanged.
+persistence and a no-change rerun with 19 of 19 steps unchanged. Shell panel identities (plan 02-27, 2026-11-08):
+V3 is the laboratory guest (QEMU, one `Virtual-1` output, no battery or backlight, with and without `--audio`),
+not fixed-harness qualification, on candidates `2b5a6cd`, `608dda3`, `3857f79` and `8ec08b4`. A3 is the supervised
+T14s delivery of candidates `3857f79`, `03696b5`, `8ec08b4`, `8c21d40` and `e9b9b6d` (final; its tree is the
+committed plan 02-27 tree).
 
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
 |---|---|---|---|
@@ -79,9 +83,13 @@ persistence and a no-change rerun with 19 of 19 steps unchanged.
 | Corporate VPN | V2: plugin registration only; no corporate profile or connection | A1 (`f075cf1`, 2026-11-05/06): a private acceptance script outside the product authenticated and activated an existing profile through NetworkManager, and a corporate resource was reached. An earlier unexplained VPN loss was not resolved. The authentication dialog under Hyprland remains unvalidated, and DNS transport-timeout behavior with the corporate resolver was not tested (documented unverified limit) | pending target-laptop validation |
 | Automatic power profiles | V1, V2: power-profiles-daemon active | A1 (`5e93654`, `f075cf1`): default AC performance and battery balanced round trip; remembered custom choices (AC balanced, battery power-saver) were restored across source transitions in the same session and then removed. Persistence across re-login or reboot was not tested. A polkit denial of switching over SSH is expected | pending target-laptop validation |
 | Per-domain DNS integration | V2 (`179f288`, 2026-11-06, uncounted runner): target configure 19 of 19 changed and running rerun 19 of 19 unchanged; stub link, resolved enabled and active, NetworkManager in systemd-resolved mode and a public lookup passed on first boot without manual repair | A2 (`179f288`, 2026-11-06): real migration from the external prototype (only `system/network` changed) with per-profile public DNS preserved, reboot persistence confirmed and a no-change rerun. Prototype on `f075cf1`: dynamic VPN scope and positive/NXDOMAIN lookups. Transport-timeout isolation not tested | pending target-laptop validation |
+| Audio panel | V3 (`2b5a6cd`, `3857f79`): with `--audio`, outputs and inputs listed without the dummy sink, input peak meter, mixer row with slider and mute for a playing stream, "Advanced…" opens `pavucontrol`, `SUPER+CTRL+A`, numbered chords and Tab/Shift+Tab pass; without `--audio`, unavailable state without slider or level and `audio-device cycle` exits 4. Not exercised: MPRIS name, stream following and default persistence between devices (single sink and source) | A3 (`3857f79`, 2026-11-08): Bluetooth headset (A2DP) as output, a playing stream follows a newly chosen output, MPRIS player name with slider and mute, `SHIFT+XF86AudioMute` cycles outputs preserving mute, "Advanced…" opens `pavucontrol`, the unplugged jack microphone is hidden; a shortcut-chosen output persists across reboot and headset reconnection returns to the chosen default without taking over; no panel-side device state. Panel choice across logout/login: one unreproduced report of the headset selected, then kept on repetition with `default-nodes` snapshots. Not exercised: wired headphones (C2); Bluetooth microphone level (A2DP only) | pending target-laptop validation |
+| Display panel | V3 (`2b5a6cd`, `608dda3`, `3857f79`, `8ec08b4`): fixed brightness state without backlight, runtime scale from the panel (selection immediate after the settle fix), chord scale changes shown within 1 s, the single output protected (outputs section hidden; command refusal in `check-panels.sh`), mirror toggle not offered with one output. External monitor not applicable | A3 (`03696b5`, `8ec08b4`, `8c21d40`, `e9b9b6d`, 2026-11-08), one external monitor: output on/off with the last-display guard, mirror-source disable, runtime scale, internal brightness slider without jumps, external fixed brightness, focused-monitor routing and numbered chords (DEC-045); ADR 0027 mirror toggle from the panel and the chord restores layout and cursor setting, and mirror-source disable from the panel passes on `e9b9b6d`. Observation: a brief Hyprland transient when re-enabling a mirrored external | pending target-laptop validation |
+| Power panel | V3 (`2b5a6cd`): no battery; `SUPER+CTRL+P` and IPC do not open the panel and `battery-status` exits 4 without fabricated values | A3 (`03696b5`, 2026-11-08): size, cycles, charge limit and Holding state shown after two `battery-status` fixes (kernel thresholds over UPower policy values, C-locale parsing); a profile chosen on AC and on battery is kept per source across unplug/replug, matching the state files and the watcher journal. The maintainer set the thresholds to 75/80 by hand, outside the product | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
-`evidence/hardware/task-3/verification.md`. Task 2–4 source/contract test results are recorded in the local plan
+`evidence/hardware/task-3/verification.md`; shell panels: `evidence/shell-panels/lab-02-27/checkpoint-t8.md` and
+`evidence/shell-panels/t14s-02-27/checkpoint-partial.md`. Task 2–4 source/contract test results are recorded in the local plan
 execution log; mocked tests do not establish clean installation or physical acceptance. Future acceptance records
 must identify date, clean candidate commit, execution context and limitations for every row.
 
@@ -90,10 +98,15 @@ must identify date, clean candidate commit, execution context and limitations fo
 Open a terminal with `SUPER+Return`. Wi-Fi and Bluetooth terminal paths are permanent recovery interfaces,
 not temporary replacements for later panels. No impala, iwd, bluetui or wiremix is added.
 
+The audio, display and power panels ([ADR 0025](../adr/0025-shell-panels.md)) open from their bar icon, with
+`SUPER+CTRL+A`, `SUPER+CTRL+D` and `SUPER+CTRL+P`, or with `SUPER+CTRL+1..9` for the Nth panel of the focused
+monitor's right bar section; the owned terminal commands below remain available beside them.
+
 | Action | Keyboard path | Owned terminal command |
 |---|---|---|
 | Volume ±5 / ±1 | Volume keys / ALT+volume keys | `volume raise`, `volume lower`, `volume +1`, `volume -1` |
 | Output mute / microphone mute | XF86AudioMute / XF86AudioMicMute | `volume mute-toggle`, `volume mic-mute` |
+| Switch audio output | SHIFT+XF86AudioMute | `audio-device cycle` |
 | Brightness ±5% / ±1% | Brightness keys / ALT+brightness keys | `brightness +5%`, `brightness 5%-`, `brightness +1%`, `brightness 1%-` |
 | Brightness max / min | SHIFT+brightness up / down | `brightness max`, `brightness min` |
 | Media play-pause | XF86AudioPlay or XF86AudioPause | `media play-pause` |
@@ -111,7 +124,11 @@ Invalid arguments are rejected before provider effects; unavailable hardware/pla
 
 `display laptop` toggles the internal panel only when another usable display exists; with the external display
 remaining active this selects external-only or restores the laptop alongside it. `display mirror` toggles
-mirroring. For laptop-only, disconnect the external display or use the existing personal native monitor layer;
+mirroring; ending it returns the external display to the mode, position and scale it had before mirroring,
+including runtime changes, from a session-only record. While mirroring, the cursor is drawn in software to
+avoid a stale cursor image on the mirror output (Hyprland 0.57.0); ending the mirror restores the previous cursor
+setting. The display panel offers the same toggle
+([ADR 0027](../adr/0027-display-panel-mirror-toggle.md)). For laptop-only, disconnect the external display or use the existing personal native monitor layer;
 these helpers do not introduce a persistent layout editor. Lid close with an external monitor disables only the
 internal panel; lid open restores it explicitly. Without an external monitor, logind's suspend behavior remains.
 Runtime layout/scale changes disappear on configuration reload or a new session and never rewrite `monitors.lua`

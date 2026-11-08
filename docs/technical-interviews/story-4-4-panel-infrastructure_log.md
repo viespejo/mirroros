@@ -172,3 +172,49 @@ Continues the [shell panels log](story-4-4-shell-panels_log.md); IDs continue fr
 - **User Response**: Accepted the "focused monitor wins" recommendation after reviewing the trade-off.
 - **Decision**: Keyboard and IPC requests follow "focused monitor wins": `open` opens on the focused monitor, moving the panel there if it is open elsewhere, and does nothing if already open there; `close` closes the open copy wherever it is; `toggle` (chords and `panel-at N`) closes when open on the focused monitor and otherwise opens on the focused monitor, moving it if open elsewhere. A focus change does not move an open panel by itself. A click on a bar icon acts on that instance. `SUPER+CTRL+1..9` count the right section of the focused monitor's bar. If the focused monitor does not draw the widget, a drawn copy elsewhere is used (`pickDrawnSlot`). The adapted selection replaces upstream's opened-first priority and is documented as a divergence in the header and `UPSTREAM.md`; tests cover every case, including a focus change with a panel open. Trade-off accepted: closing a panel open on another monitor from the focused one takes a second press (or Escape/outside click).
 - **Status**: Accepted
+
+## DEC-046
+- **Question**: May the display panel offer the existing mirror toggle? (plan 02-27 execution, T14s checkpoint, amends DEC-034)
+- **Context/Nuances**: During the supervised T14s checkpoint (2026-11-08) the maintainer validated the display panel and asked for mirroring in the panel, because the `SUPER+CTRL+ALT+Delete` chord is hard to discover. ADR 0025 lists the display panel content without mirroring, and the Omarchy `v4.5.0` monitor panel has none. Ending a mirror left the external output at Hyprland's default placement instead of its previous layout. With the mirror active on the T14s (Hyprland 0.57.0, amdgpu), the mirror output showed a stale hardware cursor image; switching to software cursors only cleared it when set before mirroring.
+- **User Response**: Approved the scope expansion, accepted ADR 0027 including layout restore, and chose the cursor workaround (option a).
+- **Decision**: [ADR 0027](../adr/0027-display-panel-mirror-toggle.md) supersedes only ADR 0025's display panel-content item. The panel offers a mirror toggle over the existing runtime-only `display mirror`. `display mirror` records the external output's mode, position, scale and the current `cursor:no_hardware_cursors` value in a 0600 session runtime record, sets software cursors before mirroring, and restores the recorded values on every detach (toggle, chord, mirror-source disable, `laptop`). The panel guard for disabling an output follows the command rule (mirrors of the target are detached first). No persistent display configuration is written. A monitor arrangement editor is not admitted (TODO-020).
+- **Status**: Accepted
+
+## DEC-047
+- **Question**: How do `display` and the display panel deal with Hyprland applying monitor changes asynchronously? (plan 02-27 execution, laboratory checkpoint, amends DEC-042)
+- **Context/Nuances**: Right after `display scale 1.6`, `display state` still reported the previous scale for about 0.5 s, so a following locked action could read stale state and the panel's selection lagged until its poll. Hyprland emits no monitor event for a runtime scale change, and Qt's `Screen.devicePixelRatio` follows only the integer Wayland scale, so a refresh on that property did not work.
+- **User Response**: Approved both fixes after laboratory verification.
+- **Decision**: Every queued `display` change registers its expected state; after a successful eval the helper keeps the lock and polls `hyprctl monitors all -j` (up to 40 x 50 ms), exiting 5 ("not confirmed") on timeout. The display panel polls `display state` every 1 s, only while open (upstream: 5 s); the divergence is documented in the panel header and the shell `UPSTREAM.md`.
+- **Status**: Accepted
+
+## DEC-048
+- **Question**: Which source does `battery-status` trust for the charge limit, and how does it parse UPower output? (plan 02-27 execution, T14s checkpoint, amends DEC-035)
+- **Context/Nuances**: UPower 1.91.5 publishes its own policy values (end threshold 80%) with `ChargeThresholdEnabled=false`, so the upstream UPower-first order showed a fabricated `95-80` limit while the firmware applied 95/100 through `thinkpad_acpi` sysfs. The session's `LC_NUMERIC=es_ES.UTF-8` made `upower -i` print decimal commas, which dropped the battery size and the energy-based time.
+- **User Response**: Approved.
+- **Decision**: The kernel `charge_control_{start,end}_threshold` of the resolved battery wins; UPower is only a fallback. `upower` is invoked with `LC_ALL=C`. Bats cases cover both; `system/power/sources.md` records the divergence from upstream.
+- **Status**: Accepted
+
+## TODO-018
+- **Question**: Why does the shell's hot reload after `configure` fail with "`StreamRow`/`SourceRow` is not a type"?
+- **Context/Nuances**: Seen in the laboratory and on the T14s when a running shell had compiled the previous `Audio.qml` without inline components; a clean shell start loads the same tree, and later reloads between versions that both have the components succeed. Hypothesis: Quickshell's process-global QML type registry keyed by file URL. Workaround during plan 02-27: restart `mirroros-shell.service`. Not fixed in plan 02-27.
+- **Status**: Pending
+
+## TODO-019
+- **Question**: Should MirrorOS manage battery charge thresholds (for example a travel mode)?
+- **Context/Nuances**: The T14s thresholds were 95/100 from firmware; the maintainer set 75/80 by hand outside the product (EC-persistent). Writing thresholds needs privilege and an ownership decision; it requires an ADR.
+- **Status**: Pending
+
+## TODO-020
+- **Question**: Is a monitor arrangement editor needed?
+- **Context/Nuances**: Requested by the maintainer at the T14s checkpoint. Persisting a layout writes user display configuration, which the plan 02-25 boundary excludes; ADR 0027 does not admit it. Related to TODO-015.
+- **Status**: Pending
+
+## TODO-021
+- **Question**: Does `power-watch` parse a decimal battery percentage under a decimal-comma `LC_NUMERIC`?
+- **Context/Nuances**: Observed while fixing DEC-048: `power-watch` parses the busctl `d <n>` percentage, integer today (`d 94`) under `es_ES`; decimal behaviour is unverified. `power-watch` was a do-not-change boundary of plan 02-27.
+- **Status**: Pending
+
+## TODO-022
+- **Question**: Which audio panel checks remain unexercised or unreproduced after plan 02-27?
+- **Context/Nuances**: Not exercised: wired headphones port availability (C2) on the T14s; MPRIS name, stream following and default persistence between devices in the laboratory (single sink and source). WirePlumber persistence (DEC-039, DEC-043) passed on the T14s for a shortcut-chosen output across reboot and for headset reconnection; for a panel-chosen output across logout/login, one report showed the headset selected after login and was not reproduced on repetition with `default-nodes` snapshots (WirePlumber is not restarted by logout).
+- **Status**: Pending
