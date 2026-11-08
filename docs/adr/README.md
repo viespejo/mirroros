@@ -46,6 +46,11 @@ with bar-anchored audio, network/Wi-Fi, Bluetooth, display and power panels and 
 and service boundaries, as [ADR 0020](0020-wallpaper-selection.md) did for wallpaper. ADR 0012's remaining
 exclusions and authentication rules stay in force; per-panel hardware validation belongs to the production plans.
 
+[ADR 0026: MPRIS Player Names and Advanced Audio Tool](0026-mpris-player-names-and-advanced-audio-tool.md) is
+Proposed. It narrowly supersedes ADR 0025's deferral of MPRIS labels with native player names in the audio mixer and
+adds `pavucontrol` with an "Advanced…" panel button; no shell media service is added and the `playerctl` boundary
+stays.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

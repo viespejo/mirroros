@@ -175,4 +175,6 @@ Before deployment of each panel, in its production plan:
 
 ## Superseded by
 
-`None`
+Partially superseded by [ADR 0026](0026-mpris-player-names-and-advanced-audio-tool.md), which supersedes only the
+media service item's deferral of MPRIS labels and the matching consequence that the mixer shows PipeWire stream names,
+and records `pavucontrol` with an audio panel button. The rest of this decision is unchanged.
