@@ -693,7 +693,7 @@ adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\"
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","onLoaded: if (!root.writer.busy) root.applyUserText(text(), true)"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","GlobalShortcut {"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","Variants {"]
-adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","onSelectorRequested: function(output) { desktopShell.wallpaperActions.openPicker(output) }"]
+adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","picker: desktopShell.wallpaperPicker"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]

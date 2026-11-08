@@ -197,7 +197,7 @@ Continues the [shell panels log](story-4-4-shell-panels_log.md); IDs continue fr
 ## TODO-018
 - **Question**: Why does the shell's hot reload after `configure` fail with "`StreamRow`/`SourceRow` is not a type"?
 - **Context/Nuances**: Seen in the laboratory and on the T14s when a running shell had compiled the previous `Audio.qml` without inline components; a clean shell start loads the same tree, and later reloads between versions that both have the components succeed. Hypothesis: Quickshell's process-global QML type registry keyed by file URL. Workaround during plan 02-27: restart `mirroros-shell.service`. Not fixed in plan 02-27.
-- **Status**: Pending
+- **Status**: Resolved by DEC-049
 
 ## TODO-019
 - **Question**: Should MirrorOS manage battery charge thresholds (for example a travel mode)?
@@ -218,3 +218,10 @@ Continues the [shell panels log](story-4-4-shell-panels_log.md); IDs continue fr
 - **Question**: Which audio panel checks remain unexercised or unreproduced after plan 02-27?
 - **Context/Nuances**: Not exercised: wired headphones port availability (C2) on the T14s; MPRIS name, stream following and default persistence between devices in the laboratory (single sink and source). WirePlumber persistence (DEC-039, DEC-043) passed on the T14s for a shortcut-chosen output across reboot and for headset reconnection; for a panel-chosen output across logout/login, one report showed the headset selected after login and was not reproduced on repetition with `default-nodes` snapshots (WirePlumber is not restarted by logout).
 - **Status**: Pending
+
+## DEC-049
+- **Question**: How does a configure publication reach a running shell without the hot reload failure of TODO-018?
+- **Context/Nuances**: Isolated `qs -p` reproductions in the laboratory guest (Quickshell 0.3.2, qt6-declarative 6.12.0) show the in-process reload fails with "`X` is not a type" whenever a file gains an inline component name it lacked at first load, including a file that already had others; changing an existing component's body or removing components reloads, and a fresh process always loads. Each reload creates a new `QQmlEngine` under the same `qs:@/qs/…` URLs, so process-global Qt type state keyed by URL survives. After `install-runtime`'s `mv --exchange` the reload often did not fire at all, so the outcome after configure was nondeterministic. Restarting the shell from configure would cross the rule that configure never starts or restarts anything; forbidding new inline components would be a fragile authoring rule.
+- **User Response**: Approved the recommendation.
+- **Decision**: `shell.qml` sets `settings.watchFiles: false`; a published runtime takes effect at the next `mirroros-shell.service` restart or session. Configure behaviour is unchanged and needs no ADR (ADR 0012 sets no lifecycle rule). `shell-lifecycle.test.mjs` pins the setting; `docs/procedures/desktop-shell.md` documents the behaviour. An upstream Quickshell report is drafted for the maintainer to file.
+- **Status**: Accepted

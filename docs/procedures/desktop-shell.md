@@ -51,17 +51,18 @@ The historical laboratory recipe and results remain in
   [Hyprland bindings record](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md): bar toggle,
   idle-lock toggle, TUI system monitor, layout cycling, monitor scaling and later-story keys.
 
-Open risks: Quickshell reloads its configuration when its files change, so publishing a new runtime under a
-running shell may reload that shell (untested; configure itself never restarts it). Failure of hypridle while
+Open risks: Failure of hypridle while
 locked remains untested: its packaged control-group kill mode could end its hyprlock child; no safe outcome is
 claimed. Task 3 inspected the real packaged unit and verified `Terminal=true` through uwsm, Foot and a real TTY
 without foot-server; a maintainer-attended synthetic window confirmed the launch.
 
-Observed in plan 02-27 (laboratory and T14s): after configure published a shell whose `bar/widgets/Audio.qml`
-gained inline components, the running shell's reload failed with "`StreamRow` is not a type" (or `SourceRow`),
-while a clean start loaded the same tree. After such a delivery, restart `mirroros-shell.service` or log out and
-in. The cause is not established (TODO-018 in the
-[panel infrastructure log](../technical-interviews/story-4-4-panel-infrastructure_log.md)).
+The shell does not hot reload (`settings.watchFiles: false` in `shell.qml`, DEC-049 in the
+[panel infrastructure log](../technical-interviews/story-4-4-panel-infrastructure_log.md)): a running shell keeps
+its loaded runtime after configure publishes a new one, and the new runtime takes effect at the next restart of
+`mirroros-shell.service` or the next session. Quickshell's in-process reload keeps the inline component names a
+file had when it was first loaded, so a reload after a file gained one failed with "`StreamRow` is not a type" in
+plan 02-27 (laboratory and T14s), while a clean start loaded the same tree. A file the running shell first loads after
+a publication may come from the new runtime (untested).
 
 ## Shell panels
 
@@ -311,7 +312,8 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/audio-panel-model.test.mjs \
     tests/capabilities/desktop/shell/display-panel-model.test.mjs \
     tests/capabilities/desktop/shell/power-panel-model.test.mjs \
-    tests/capabilities/desktop/shell/no-omarchy-coupling.test.mjs
+    tests/capabilities/desktop/shell/no-omarchy-coupling.test.mjs \
+    tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs
 node tests/capabilities/desktop/shell/i18n-subset.mjs <omarchy-src> --check

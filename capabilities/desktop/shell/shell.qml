@@ -15,6 +15,12 @@ import "osd"
 ShellRoot {
   id: desktopShell
 
+  // No hot reload (DEC-049): Quickshell's in-process reload keeps the inline
+  // component names a file had when first loaded, so a published tree that adds
+  // one fails ("X is not a type"). A new runtime takes effect when
+  // mirroros-shell.service restarts or the session starts again.
+  settings.watchFiles: false
+
   property AppLibrary appLibrary: AppLibrary { }
   property SessionActions sessionActions: SessionActions { }
   property KeybindingHelp keybindingHelp: KeybindingHelp { }
