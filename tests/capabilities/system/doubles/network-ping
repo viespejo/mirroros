@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# ping double: one reply with a fixed time per host; $HW_PING_LOST names a host that never answers.
+set -Eeuo pipefail
+printf 'ping %s\n' "$*" >> "$CFG_TEST_CALLS"
+host=${*: -1}
+[[ "$host" != "${HW_PING_LOST:-}" ]] || exit 1
+case "$host" in
+  1.1.1.1) time=14.2 ;;
+  *) time=2.1 ;;
+esac
+printf 'PING %s (%s) 56(84) bytes of data.\n64 bytes from %s: icmp_seq=1 ttl=57 time=%s ms\n' "$host" "$host" "$host" "$time"

@@ -1,0 +1,224 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Per-profile DNS provider for the shell network panel, adapted from Omarchy v4.5.0 bin/omarchy-dns
+# (MIT, Copyright (c) David Heinemeier Hansson); license at /usr/share/mirroros/hardware/licenses/omarchy-network.
+#
+# Usage:
+#   network-dns get <connection-uuid>
+#     Prints DHCP, Cloudflare, Google or Custom for that profile.
+#   network-dns set <connection-uuid> <DHCP|Cloudflare|Google|Custom>
+#     Changes the DNS of that one active Wi-Fi or Ethernet profile and reapplies only its device. Custom reads
+#     space- or comma-separated servers from stdin; empty input changes nothing.
+# Exit codes: 0 success; 1 NetworkManager rejected the change or could not reapply it; 2 usage; 3 <uuid> is not an
+#   active connection; 4 NetworkManager unavailable; 5 <uuid> is not a Wi-Fi or Ethernet profile; 6 Custom
+#   cancelled (no servers entered).
+#
+# MirrorOS divergences (ADR 0024, ADR 0025): only the named active profile is changed, never every saved profile;
+# no global layer (no NetworkManager [global-dns] drop-in, no resolved.conf DNS=, FallbackDNS= or DNSOverTLS=); DNS
+# over TLS is set per connection with the v4.5.0 values; no sudo or pkexec re-execution; no NetworkManager or
+# systemd-resolved reloads; the provider is read from the named profile; distinct exit codes.
+
+set -euo pipefail
+
+provider_from_arg() {
+  case "${1:-}" in
+  Cloudflare | cloudflare)
+    echo "Cloudflare"
+    ;;
+  Google | google)
+    echo "Google"
+    ;;
+  DHCP | dhcp)
+    echo "DHCP"
+    ;;
+  Custom | custom)
+    echo "Custom"
+    ;;
+  *)
+    return 1
+    ;;
+  esac
+}
+
+# nmcli translates values under a non-English session and escapes ':' with -g unless -e no.
+nm_get() {
+  LC_ALL=C nmcli -e no -g "$@" 2>/dev/null
+}
+
+networkmanager_dns_connection() {
+  case "$1" in
+    802-11-wireless|802-3-ethernet) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Validates the target and sets $target_device. Exits with the documented code and changes nothing otherwise.
+resolve_target() {
+  local want=$1 active uuid type device
+
+  if ! active=$(nm_get UUID,TYPE,DEVICE connection show --active); then
+    echo "Error: NetworkManager is not available." >&2
+    exit 4
+  fi
+
+  while IFS=: read -r uuid type device; do
+    [[ $uuid == "$want" ]] || continue
+    if ! networkmanager_dns_connection "$type"; then
+      echo "Error: the profile is not a Wi-Fi or Ethernet connection; nothing changed." >&2
+      exit 5
+    fi
+    if [[ -z $device ]]; then
+      break
+    fi
+    target_device=$device
+    return 0
+  done <<<"$active"
+
+  echo "Error: the profile is not an active connection; nothing changed." >&2
+  exit 3
+}
+
+current_dns_provider() {
+  local uuid=$1 auto dns
+
+  auto=$(nm_get ipv4.ignore-auto-dns connection show "$uuid")
+  dns=$(nm_get ipv4.dns,ipv6.dns connection show "$uuid" | tr '\n' ' ')
+
+  if [[ $auto != yes || -z $(printf '%s' "$dns" | tr -d '[:space:],') ]]; then
+    echo "DHCP"
+  elif [[ $dns == *"1.1.1.1"* || $dns == *"2606:4700:4700::1111"* ]]; then
+    echo "Cloudflare"
+  elif [[ $dns == *"8.8.8.8"* || $dns == *"2001:4860:4860::8888"* ]]; then
+    echo "Google"
+  else
+    echo "Custom"
+  fi
+}
+
+normalize_servers() {
+  printf '%s\n' "$*" | tr ',\t\n' ' ' | xargs | tr ' ' ','
+}
+
+split_dns_servers() {
+  local servers="$1"
+  local server clean
+  ipv4_dns=""
+  ipv6_dns=""
+
+  for server in ${servers//,/ }; do
+    clean=${server#dns+tls://}
+    clean=${clean#dns+udp://}
+    clean=${clean%%#*}
+    clean=${clean#[}
+    clean=${clean%]}
+
+    [[ -n $clean ]] || continue
+    if [[ $clean == *:* ]]; then
+      ipv6_dns+="${ipv6_dns:+ }$clean"
+    else
+      ipv4_dns+="${ipv4_dns:+ }$clean"
+    fi
+  done
+}
+
+modify_connection() {
+  if ! LC_ALL=C nmcli connection modify uuid "$@" >/dev/null; then
+    echo "Error: NetworkManager rejected the DNS change." >&2
+    exit 1
+  fi
+}
+
+set_connection_dns() {
+  local uuid=$1
+  local ipv4_dns="${2:-}"
+  local ipv6_dns="${3:-}"
+  local dot="${4:-default}"
+
+  modify_connection "$uuid" \
+    ipv4.ignore-auto-dns yes \
+    ipv4.dns "$ipv4_dns" \
+    ipv6.ignore-auto-dns yes \
+    ipv6.dns "$ipv6_dns" \
+    connection.dns-over-tls "$dot"
+}
+
+clear_connection_dns() {
+  local uuid=$1
+
+  modify_connection "$uuid" \
+    ipv4.ignore-auto-dns no \
+    ipv4.dns "" \
+    ipv6.ignore-auto-dns no \
+    ipv6.dns "" \
+    connection.dns-over-tls default
+}
+
+# Reapplying the profile's device makes NetworkManager publish the new per-link DNS to systemd-resolved; no
+# global reload is needed.
+reapply_target_device() {
+  if ! LC_ALL=C nmcli device reapply "$target_device" >/dev/null 2>&1; then
+    echo "Error: the DNS change was saved but could not be applied to $target_device." >&2
+    exit 1
+  fi
+}
+
+usage() {
+  echo "Usage: network-dns get <connection-uuid> | network-dns set <connection-uuid> <DHCP|Cloudflare|Google|Custom>" >&2
+  exit 2
+}
+
+target_device=""
+
+case "${1:-}" in
+  get)
+    (($# == 2)) && [[ -n $2 ]] || usage
+    resolve_target "$2"
+    current_dns_provider "$2"
+    exit 0
+    ;;
+  set)
+    (($# == 3)) && [[ -n $2 ]] || usage
+    provider=$(provider_from_arg "$3") || usage
+    uuid=$2
+    ;;
+  *)
+    usage
+    ;;
+esac
+
+resolve_target "$uuid"
+
+case "$provider" in
+Cloudflare)
+  set_connection_dns "$uuid" "1.1.1.1 1.0.0.1" "2606:4700:4700::1111 2606:4700:4700::1001" opportunistic
+  ;;
+
+Google)
+  set_connection_dns "$uuid" "8.8.8.8 8.8.4.4" "2001:4860:4860::8888 2001:4860:4860::8844" opportunistic
+  ;;
+
+DHCP)
+  clear_connection_dns "$uuid"
+  ;;
+
+Custom)
+  name=$(nm_get connection.id connection show "$uuid")
+  echo "Enter DNS servers for ${name:-the active connection} (space-separated, e.g. '192.168.1.1 1.1.1.1'):"
+  if ! read -r dns_servers; then
+    dns_servers=""
+  fi
+
+  dns_servers=$(normalize_servers "$dns_servers")
+  if [[ -z $dns_servers ]]; then
+    echo "No DNS servers provided; nothing changed." >&2
+    exit 6
+  fi
+
+  # The profile may have changed while the servers were typed.
+  resolve_target "$uuid"
+  split_dns_servers "$dns_servers"
+  set_connection_dns "$uuid" "$ipv4_dns" "$ipv6_dns" default
+  ;;
+esac
+
+reapply_target_device

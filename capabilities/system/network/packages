@@ -2,3 +2,4 @@ systemd core
 networkmanager extra
 jq extra
 e2fsprogs core
+iw core

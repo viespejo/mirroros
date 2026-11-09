@@ -1,0 +1,63 @@
+#!/usr/bin/bash
+# nmcli double for the network panel commands. State lives under $CFG_TEST_DIR/nm:
+#   active            UUID:TYPE:DEVICE lines (connection show --active)
+#   devices           DEVICE:TYPE:STATE lines (device status)
+#   device-<dev>      GENERAL.STATE and GENERAL.CONNECTION lines (device show)
+#   wifi-<dev>        FREQ:SSID lines; signal-<dev> IN-USE:SIGNAL lines (dev wifi list)
+#   conn/<uuid>       key=value settings (connection show <uuid>, connection modify)
+set -Eeuo pipefail
+printf 'nmcli %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${LC_ALL:-}" == C ]] || printf 'nmcli-locale %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_NM_DOWN:-0}" == 0 ]] || exit 8
+state=$CFG_TEST_DIR/nm
+fields=''
+while (($#)); do
+  case "$1" in
+    -e) shift 2 ;;
+    -g) fields=$2; shift 2 ;;
+    --wait) shift 2 ;;
+    *) break ;;
+  esac
+done
+
+print_fields() {
+  local file=$1 field
+  [[ -f "$file" ]] || exit 10
+  for field in ${fields//,/ }; do
+    /usr/bin/awk -v key="$field" 'index($0, key "=") == 1 { print substr($0, length(key) + 2); found = 1 } END { if (!found) print "" }' "$file"
+  done
+}
+
+case "$1 ${2:-}" in
+  'connection show')
+    if [[ "${3:-}" == --active ]]; then
+      /usr/bin/cat "$state/active"
+    else
+      print_fields "$state/conn/$3"
+    fi ;;
+  'device status') /usr/bin/cat "$state/devices" ;;
+  'device show') /usr/bin/cat "$state/device-$3" ;;
+  'dev wifi')
+    case "$fields" in
+      FREQ,SSID) /usr/bin/cat "$state/wifi-$5" 2> /dev/null || true ;;
+      IN-USE,SIGNAL) /usr/bin/cat "$state/signal-$5" 2> /dev/null || true ;;
+      *) exit 97 ;;
+    esac ;;
+  'connection modify')
+    [[ "$3" == uuid ]] || exit 97
+    [[ "${HW_NM_MODIFY_FAIL:-0}" == 0 ]] || exit 1
+    file=$state/conn/$4
+    [[ -f "$file" ]] || exit 10
+    shift 4
+    while (($# >= 2)); do
+      /usr/bin/awk -v key="$1" -v value="$2" 'index($0, key "=") != 1 { print } END { print key "=" value }' "$file" > "$file.new"
+      /usr/bin/mv "$file.new" "$file"
+      shift 2
+    done ;;
+  'connection up')
+    [[ "$3" == uuid ]] || exit 97
+    band=$(/usr/bin/awk 'index($0, "802-11-wireless.band=") == 1 { print substr($0, 22) }' "$state/conn/$4")
+    [[ -z "${HW_NM_UP_FAIL_BAND:-}" || "$band" != "$HW_NM_UP_FAIL_BAND" ]] || exit 4 ;;
+  'device reapply') [[ "${HW_NM_REAPPLY_FAIL:-0}" == 0 ]] || exit 1 ;;
+  *) printf 'Unexpected nmcli invocation\n' >&2; exit 97 ;;
+esac

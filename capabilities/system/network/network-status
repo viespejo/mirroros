@@ -1,0 +1,184 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Network status for the shell network panel, adapted from Omarchy v4.5.0 bin/omarchy-network-status
+# (MIT, Copyright (c) David Heinemeier Hansson); license at
+# /usr/share/mirroros/hardware/licenses/omarchy-network.
+#
+# Usage: network-status [--verbose]
+#   Without arguments: one tab-separated line "<type>\t<name>\t<signal>\t<freq>" (type wifi, ethernet or
+#   disconnected), as in v4.5.0.
+#   --verbose: key<TAB>value lines for the default-route interface, as in v4.5.0, plus the active profile on that
+#   interface (uuid, connection, connection_type) and gateway and internet ping samples (ADR 0028).
+# Exit codes: 0 success (no output when there is no route), 2 usage.
+#
+# MirrorOS divergences: command -v instead of omarchy-cmd-present; nmcli values read with LC_ALL=C and -e no -g;
+# profile identity in --verbose; ping timeout 2 s instead of 1 s (ADR 0028); sysfs root overridable for tests.
+
+verbose=false
+# The only internet host this command ever contacts (ADR 0028). Changing it needs a new ADR.
+INTERNET_PROBE=1.1.1.1
+net_class_path=${MIRROROS_NET_CLASS_PATH:-/sys/class/net}
+
+case "${1:-}" in
+  "")
+    ;;
+  --verbose)
+    verbose=true
+    ;;
+  *)
+    echo "Usage: network-status [--verbose]" >&2
+    exit 2
+    ;;
+esac
+if (($# > 1)); then
+  echo "Usage: network-status [--verbose]" >&2
+  exit 2
+fi
+
+# nmcli translates state words under a non-English session, and -g escapes ':' and '\' in values unless -e no.
+nm_get() {
+  LC_ALL=C nmcli -e no -g "$@" 2>/dev/null
+}
+
+# `ip route get` is a routing-table lookup in the kernel; it sends no packet to the probe host.
+route_device() {
+  ip route get "$INTERNET_PROBE" 2>/dev/null | awk '{ for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }'
+}
+
+print_status() {
+  local device nm state ssid signal freq
+
+  device=$(route_device)
+
+  if [[ -z $device ]]; then
+    printf 'disconnected\t\t\t\n'
+    return
+  fi
+
+  if [[ ! -d $net_class_path/$device/wireless ]]; then
+    printf 'ethernet\t%s\t\t\n' "$device"
+    return
+  fi
+
+  nm=$(nm_get GENERAL.STATE,GENERAL.CONNECTION device show "$device")
+  state=$(sed -n 1p <<<"$nm")
+  ssid=$(sed -n 2p <<<"$nm")
+  signal=$(nm_get IN-USE,SIGNAL dev wifi list ifname "$device" --rescan no | awk -F: '$1 == "*" { print $2; exit }')
+  freq=$(iw dev "$device" link 2>/dev/null | awk '/freq:/ { print $2; exit }')
+
+  if [[ $state != 100* ]]; then
+    printf 'disconnected\t\t\t\n'
+    return
+  fi
+
+  printf 'wifi\t%s\t%s\t%s\n' "${ssid:-$device}" "$signal" "$freq"
+}
+
+# The profile the panel header describes: the Wi-Fi or Ethernet connection active on the default-route
+# interface. A VPN active over the same interface is never reported here.
+print_profile() {
+  local iface=$1 uuid type device name
+
+  while IFS=: read -r uuid type device; do
+    [[ $device == "$iface" ]] || continue
+    case "$type" in
+      802-11-wireless | 802-3-ethernet) ;;
+      *) continue ;;
+    esac
+    name=$(nm_get connection.id connection show "$uuid")
+    printf 'uuid\t%s\n' "$uuid"
+    printf 'connection\t%s\n' "$name"
+    printf 'connection_type\t%s\n' "$type"
+    return
+  done < <(nm_get UUID,TYPE,DEVICE connection show --active)
+}
+
+ping_latency_ms() {
+  local host=$1
+
+  LC_ALL=C ping -n -c 1 -W 2 "$host" 2>/dev/null | awk -F'time[=<]' '/time[=<]/ { split($2, parts, " "); print parts[1]; exit }'
+}
+
+print_ping_samples() {
+  local gateway=$1
+  local tmpdir router_file internet_file
+  local router_pid="" internet_pid=""
+
+  command -v ping >/dev/null || return
+  tmpdir=$(mktemp -d) || return
+  router_file="$tmpdir/router"
+  internet_file="$tmpdir/internet"
+
+  if [[ -n $gateway ]]; then
+    ping_latency_ms "$gateway" >"$router_file" &
+    router_pid=$!
+  fi
+
+  ping_latency_ms "$INTERNET_PROBE" >"$internet_file" &
+  internet_pid=$!
+
+  if [[ -n $router_pid ]]; then
+    wait "$router_pid"
+    printf 'router_ping_ms\t%s\n' "$(cat "$router_file")"
+  fi
+
+  wait "$internet_pid"
+  printf 'internet_ping_ms\t%s\n' "$(cat "$internet_file")"
+  rm -rf "$tmpdir"
+}
+
+print_verbose() {
+  local route_json iface gw src prefix link
+
+  route_json=$(ip -j route get "$INTERNET_PROBE" 2>/dev/null)
+  [[ -z $route_json ]] && return
+
+  iface=$(jq -r '.[0].dev // ""' <<<"$route_json" 2>/dev/null)
+  gw=$(jq -r '.[0].gateway // ""' <<<"$route_json" 2>/dev/null)
+  src=$(jq -r '.[0].prefsrc // ""' <<<"$route_json" 2>/dev/null)
+
+  [[ -z $iface ]] && return
+
+  prefix=$(ip -j addr show "$iface" 2>/dev/null | jq -r '.[0].addr_info[]? | select(.family == "inet") | .prefixlen // ""' 2>/dev/null | head -n 1)
+
+  printf 'iface\t%s\n' "$iface"
+  printf 'ip\t%s\n' "$src"
+  printf 'prefix\t%s\n' "$prefix"
+  printf 'gateway\t%s\n' "$gw"
+  print_profile "$iface"
+
+  if [[ -r $net_class_path/$iface/statistics/rx_bytes ]]; then
+    printf 'rx_bytes\t%s\n' "$(cat "$net_class_path/$iface/statistics/rx_bytes")"
+  fi
+  if [[ -r $net_class_path/$iface/statistics/tx_bytes ]]; then
+    printf 'tx_bytes\t%s\n' "$(cat "$net_class_path/$iface/statistics/tx_bytes")"
+  fi
+
+  if [[ -d $net_class_path/$iface/wireless ]]; then
+    printf 'type\twifi\n'
+
+    if command -v iw >/dev/null; then
+      link=$(iw dev "$iface" link 2>/dev/null)
+
+      if [[ -n $link ]]; then
+        printf 'ssid\t%s\n' "$(awk '/SSID:/ { sub(/.*SSID: /, ""); print; exit }' <<<"$link")"
+        printf 'signal_dbm\t%s\n' "$(awk '/signal:/ { print $2; exit }' <<<"$link")"
+        printf 'freq\t%s\n' "$(awk '/freq:/ { print $2; exit }' <<<"$link")"
+        printf 'bitrate\t%s %s\n' "$(awk '/tx bitrate:/ { print $3; exit }' <<<"$link")" "$(awk '/tx bitrate:/ { print $4; exit }' <<<"$link")"
+      fi
+    fi
+  else
+    printf 'type\tethernet\n'
+    [[ -r $net_class_path/$iface/speed ]] && printf 'speed\t%s\n' "$(cat "$net_class_path/$iface/speed")"
+    [[ -r $net_class_path/$iface/duplex ]] && printf 'duplex\t%s\n' "$(cat "$net_class_path/$iface/duplex")"
+  fi
+
+  print_ping_samples "$gw"
+}
+
+if [[ $verbose == "true" ]]; then
+  print_verbose
+else
+  print_status
+fi
+exit 0

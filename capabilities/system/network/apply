@@ -2,9 +2,16 @@
 # Prerequisites: installer-owned NetworkManager; no VPN or corporate profile is required.
 # Context differences and effects belong to the reviewed mechanism, not this step.
 # Postconditions: declared target integration or effective running DNS; no provider/profile edits.
+# The delivered panel commands change one profile only at runtime, on explicit user action; this step never does.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_network_dns_apply "$STEP_DIR/20-mirroros-dns.conf"
+for command in network-status network-band network-dns; do
+  cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
+  cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
+done
+cfg_tracked_file "$STEP_DIR/OMARCHY-LICENSE" /usr/share/mirroros/hardware/licenses/omarchy-network 0644
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hardware/licenses/omarchy-network
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_network_dns_present

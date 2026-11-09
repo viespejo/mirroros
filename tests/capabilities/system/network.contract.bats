@@ -4,6 +4,19 @@ load network-support
 setup() { network_setup; }
 teardown() { cfg_test_teardown; }
 
+# Network panel commands and their license are delivered as tracked files; iw is installed (plan 02-28).
+network_assert_panel_commands() {
+  local command
+  [ -f "$CFG_TEST_INSTALLED/iw" ]
+  for command in network-status network-band network-dns; do
+    cmp "$CFG_SOURCE_ROOT/capabilities/system/network/$command" "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command"
+    [ "$(stat -c %a "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command")" = 755 ]
+  done
+  cmp "$CFG_SOURCE_ROOT/capabilities/system/network/OMARCHY-LICENSE" "$HW_TEST_ROOT/usr/share/mirroros/hardware/licenses/omarchy-network"
+  [ "$(stat -c %a "$HW_TEST_ROOT/usr/share/mirroros/hardware/licenses/omarchy-network")" = 644 ]
+  ! grep -Eq '^nmcli .*connection (modify|up|down)|device reapply' "$CFG_TEST_CALLS" || false
+}
+
 @test "DNS running migration preserves policy, enables resolved and reruns without activation" {
   run network_run --output "$CFG_TEST_DIR/first"
   [ "$status" -eq 0 ]
@@ -12,6 +25,7 @@ teardown() { cfg_test_teardown; }
   [ -e "$CFG_TEST_DIR/network-state/enabled" ]
   [ "$(< "$HW_TEST_ROOT/var/lib/mirroros/configure/network-dns/current/state")" = committed ]
   ! grep -E 'connection (modify|add|up|down)|restart|device reapply' "$CFG_TEST_CALLS"
+  network_assert_panel_commands
   : > "$CFG_TEST_CALLS"
   run network_run --output "$CFG_TEST_DIR/second"
   [ "$status" -eq 0 ]
@@ -26,6 +40,7 @@ teardown() { cfg_test_teardown; }
   run network_run --output "$CFG_TEST_DIR/first"
   [ "$status" -eq 0 ]
   [ -L "$HW_TEST_ROOT/etc/resolv.conf" ]
+  network_assert_panel_commands
   grep -q '^unshare --mount --propagation private' "$CFG_TEST_CALLS"
   ! grep -E 'systemctl (is-active|start|reload|stop)|^nmcli|busctl|^timeout' "$CFG_TEST_CALLS"
   : > "$CFG_TEST_CALLS"

@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# iw double: `iw dev <device> link` reports $HW_IW_SSID on $HW_IW_FREQ; an empty SSID means not connected.
+set -Eeuo pipefail
+printf 'iw %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "$1 ${3:-}" == 'dev link' ]] || exit 97
+if [[ -z "${HW_IW_SSID:-}" ]]; then
+  printf 'Not connected.\n'
+  exit 0
+fi
+printf 'Connected to 02:00:00:00:00:01 (on %s)\n\tSSID: %s\n\tfreq: %s\n\tsignal: -52 dBm\n\ttx bitrate: 866.7 MBit/s VHT-MCS 9\n' \
+  "$2" "$HW_IW_SSID" "${HW_IW_FREQ:-5180.0}"

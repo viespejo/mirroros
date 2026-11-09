@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+# ip double: the default route uses $HW_ROUTE_DEV through $HW_ROUTE_GW; an empty device means no route.
+set -Eeuo pipefail
+printf 'ip %s\n' "$*" >> "$CFG_TEST_CALLS"
+device=${HW_ROUTE_DEV:-}
+gateway=${HW_ROUTE_GW-192.0.2.1}
+case "$*" in
+  'route get '*)
+    [[ -n "$device" ]] || exit 2
+    printf '%s %sdev %s src 192.0.2.10 uid 1000\n' "$3" "${gateway:+via $gateway }" "$device" ;;
+  '-j route get '*)
+    [[ -n "$device" ]] || exit 2
+    printf '[{"dst":"%s",%s"dev":"%s","prefsrc":"192.0.2.10"}]\n' "$4" "${gateway:+\"gateway\":\"$gateway\",}" "$device" ;;
+  '-j addr show '*)
+    printf '[{"ifname":"%s","addr_info":[{"family":"inet","local":"192.0.2.10","prefixlen":24}]}]\n' "$4" ;;
+  *) printf 'Unexpected ip invocation\n' >&2; exit 97 ;;
+esac
