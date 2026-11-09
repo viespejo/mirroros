@@ -56,6 +56,10 @@ ADR 0025's display panel content with a runtime-only mirror toggle over the exis
 restores the external output's runtime layout when mirroring ends; no monitor arrangement editor or display
 configuration write is added.
 
+[ADR 0028: Network Panel Internet Latency Probe](0028-network-panel-internet-latency-probe.md) is Proposed. It would
+narrowly supersede ADR 0025's "Diagnostics" item for the network panel with a ping to `1.1.1.1` only while that panel
+is open, with a relaxed packet-loss indicator; no probe runs while the panel is closed.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

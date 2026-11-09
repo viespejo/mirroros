@@ -182,3 +182,7 @@ and records `pavucontrol` with an audio panel button. The rest of this decision 
 Partially superseded by [ADR 0027](0027-display-panel-mirror-toggle.md), which supersedes only the "Display"
 panel-content item, extending it with a runtime-only mirror toggle over the existing `display mirror` command. The rest
 of this decision is unchanged.
+
+Partially superseded by [ADR 0028](0028-network-panel-internet-latency-probe.md), which supersedes only the
+"Diagnostics" item for the network panel, admitting a ping to `1.1.1.1` only while that panel is open. The rest of
+this decision is unchanged.
