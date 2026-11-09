@@ -322,3 +322,39 @@ Technical interview for plan 02-28 (network/Wi-Fi panel). IDs continue from the
   `qmllint` baseline with no new category (guest), and `check-panels.sh`. ShellCheck on the three commands,
   `git diff --check`, Gitleaks and relative links.
 - **Status**: Accepted
+
+## Execution findings — 2026-11-09 (plan 02-28 Task 6)
+
+These findings supplement, and do not rewrite, DEC-049 to DEC-066.
+
+- ADR 0028 was accepted at the explicit checkpoint before implementation (local governance commits `ca8246f`,
+  `058c0c8`). Its open-panel-only probe ships; ADR 0025's decision/consequence text was not rewritten.
+- Laboratory checkpoint approved on `a629c36`: configure and unchanged rerun (19 steps), command/license delivery,
+  qmllint, four session suites (54 PASS), probe lifecycle, unavailable/recovery, DNS single-profile boundary,
+  confirmation/Custom and Advanced passed. A temporary guest-only portal simulation exercised the 10 s recheck and
+  missing-browser failure, then was removed. Final-fix panel/qmllint regression passed. Records:
+  `evidence/shell-panels/lab-02-28/checkpoint.md` (ignored).
+- Supervised T14s checkpoint approved, non-qualifying, final candidate `e350075`: scan, access/navigation,
+  disconnect/reconnect, forget/PSK including two wrong-passphrase paths with re-prompt, 2.4/5/Auto states and repeat
+  protection, all DNS presets and restoration, stable unrelated/VPN/global DNS state, ping/loss, Advanced and
+  session-user journal audit passed. No sudo/polkit prompt and no PSK in shell journal. Records:
+  `evidence/shell-panels/t14s-02-28/checkpoint.md` (ignored). Real portal/browser sign-in, enterprise, open/OWE,
+  6 GHz and live band rollback were not exercised; Framework Laptop 13 Pro remains pending target-laptop validation.
+- With about 95 nearby networks, closing candidate `a629c36` blocked the shell for about 1.1 s: stopping the scanner
+  removed networks individually and rebuilt the list 56–62 times. Candidate `00fe3bc` deferred scanner shutdown,
+  merely moving the stall, and was rejected. Final `e350075` coalesces updates with
+  `Qt.callLater(syncWifiNetworks)` (one 17–24 ms sync; close 74–91 ms). Static regression and provenance record added;
+  laboratory and maintainer T14s checks passed. Preserve coalescing when updating upstream.
+- Newly delivered Hyprland binding files require an explicitly authorized `hyprctl reload` or a new login; restarting
+  the shell alone is insufficient. The shell itself still needs a service restart after publication (TODO-018).
+- Running configure as root left the candidate checkout's `.git/index` root-owned; a later user checkout failed,
+  and configure re-applied the previous candidate. A fresh verified checkout worked around it; configure was not
+  changed. Check the candidate commit before every delivery. A T14s reboot cleared `/tmp`, losing early logs and the
+  first profile snapshot; band evidence for that interval relies on the NetworkManager journal.
+- Source deviations: `iw` is declared from Arch `core`, not the plan's `extra`; catalog regeneration moved to Task 4
+  because the scanner reads QML; bar click uses the existing panel `toggle()` pattern. Tasks 2–5 commits were deferred
+  to Task 6. The Tailscale package guard is present, but its failure path was not mutation-tested; the complementary
+  local todo was not confirmed created. TODO-023 remains pending, with the manual exit-node step documented.
+- `docs/architecture.md:486` still states the general no-control-panel boundary without local ADR 0025 alignment;
+  that documentation alignment is outside this plan. No global DNS layer, provider configuration, accepted decision
+  text, personal configuration or unrelated panel was changed by Task 6.

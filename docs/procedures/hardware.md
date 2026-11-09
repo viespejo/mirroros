@@ -28,7 +28,9 @@ A successful configure is not proof of hardware usability.
   configure, and begins at the next graphical login.
 - [Network sources](../../capabilities/system/network/sources.md): generic NetworkManager/systemd-resolved
   backend and stub integration under [ADR 0024](../adr/0024-networkmanager-resolved-dns-integration.md).
-  Profiles and public DNS choices are preserved; VPN DNS/domains arrive dynamically. See migration below.
+  Profiles and public DNS choices are preserved; VPN DNS/domains arrive dynamically. The step also delivers
+  `network-status`, `network-band` and `network-dns`, their license and `iw`, without editing profiles. Panel actions
+  change a profile only at runtime on explicit user action. See the network panel and migration sections below.
 - [VPN sources](../../capabilities/system/vpn/sources.md): networkmanager-openconnect, including OpenConnect;
   configure checks plugin registration offline, without creating a profile or authenticating.
 - [Hyprland provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md): hardware bindings
@@ -37,9 +39,9 @@ A successful configure is not proof of hardware usability.
 
 Configure never starts, restarts or reloads the shell, hypridle or desktop. Review configure evidence before
 re-login or reboot; do not restart a graphical session remotely without the maintainer's explicit authorization.
-Panels, graphical VPN access and audio output/source switching belong to later plans 02-27 to 02-30 under
-[ADR 0025](../adr/0025-shell-panels.md), which amends ADR 0012 and admits no shell media service; this plan adds no
-QML or shell service.
+Audio, display and power panels were delivered by plan 02-27; plan 02-28 adds the network panel under
+[ADR 0025](../adr/0025-shell-panels.md). Bluetooth and graphical VPN access remain with plans 02-29 and 02-30.
+No resident shell media service is added.
 
 ## Validation matrix
 
@@ -64,7 +66,10 @@ persistence and a no-change rerun with 19 of 19 steps unchanged. Shell panel ide
 V3 is the laboratory guest (QEMU, one `Virtual-1` output, no battery or backlight, with and without `--audio`),
 not fixed-harness qualification, on candidates `2b5a6cd`, `608dda3`, `3857f79` and `8ec08b4`. A3 is the supervised
 T14s delivery of candidates `3857f79`, `03696b5`, `8ec08b4`, `8c21d40` and `e9b9b6d` (final; its tree is the
-committed plan 02-27 tree).
+committed plan 02-27 tree). Network panel identities (plan 02-28, 2026-11-09): V4 is the laboratory guest on
+`a629c36`, with final-fix regression checks on `e350075`; A4 is the supervised, non-qualifying T14s session on
+`a629c36` and final candidate `e350075`. These temporary candidate commits identify the tested trees, not a release
+ISO or fixed-harness qualification.
 
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
 |---|---|---|---|
@@ -86,10 +91,15 @@ committed plan 02-27 tree).
 | Audio panel | V3 (`2b5a6cd`, `3857f79`): with `--audio`, outputs and inputs listed without the dummy sink, input peak meter, mixer row with slider and mute for a playing stream, "Advanced…" opens `pavucontrol`, `SUPER+CTRL+A`, numbered chords and Tab/Shift+Tab pass; without `--audio`, unavailable state without slider or level and `audio-device cycle` exits 4. Not exercised: MPRIS name, stream following and default persistence between devices (single sink and source) | A3 (`3857f79`, 2026-11-08): Bluetooth headset (A2DP) as output, a playing stream follows a newly chosen output, MPRIS player name with slider and mute, `SHIFT+XF86AudioMute` cycles outputs preserving mute, "Advanced…" opens `pavucontrol`, the unplugged jack microphone is hidden; a shortcut-chosen output persists across reboot and headset reconnection returns to the chosen default without taking over; no panel-side device state. Panel choice across logout/login: one unreproduced report of the headset selected, then kept on repetition with `default-nodes` snapshots. Not exercised: wired headphones (C2); Bluetooth microphone level (A2DP only) | pending target-laptop validation |
 | Display panel | V3 (`2b5a6cd`, `608dda3`, `3857f79`, `8ec08b4`): fixed brightness state without backlight, runtime scale from the panel (selection immediate after the settle fix), chord scale changes shown within 1 s, the single output protected (outputs section hidden; command refusal in `check-panels.sh`), mirror toggle not offered with one output. External monitor not applicable | A3 (`03696b5`, `8ec08b4`, `8c21d40`, `e9b9b6d`, 2026-11-08), one external monitor: output on/off with the last-display guard, mirror-source disable, runtime scale, internal brightness slider without jumps, external fixed brightness, focused-monitor routing and numbered chords (DEC-045); ADR 0027 mirror toggle from the panel and the chord restores layout and cursor setting, and mirror-source disable from the panel passes on `e9b9b6d`. Observation: a brief Hyprland transient when re-enabling a mirrored external | pending target-laptop validation |
 | Power panel | V3 (`2b5a6cd`): no battery; `SUPER+CTRL+P` and IPC do not open the panel and `battery-status` exits 4 without fabricated values | A3 (`03696b5`, 2026-11-08): size, cycles, charge limit and Holding state shown after two `battery-status` fixes (kernel thresholds over UPower policy values, C-locale parsing); a profile chosen on AC and on battery is kept per source across unplug/replug, matching the state files and the watcher journal. The maintainer set the thresholds to 75/80 by hand, outside the product | pending target-laptop validation |
+| Network panel: wired, diagnostics, unavailable state and access | V4 (`a629c36`, 2026-11-09): configure and unchanged rerun, 19 steps; commands/license delivered; wired metrics, probes only while open with no process after close, NetworkManager stopped/restarted recovery, no Wi-Fi/band without hardware, Advanced opens nmtui; session suites pass. Final `e350075`: panel regression and qmllint pass | A4 (`e350075`, 2026-11-09, non-qualifying): chords, numbered panels, Tab, icon and outside click pass; several minutes of ping/loss without false red; Advanced opens nmtui. Coalesced list updates remove the close stall observed on `a629c36` | pending target-laptop validation |
+| Network panel: Wi-Fi and band | V4: not applicable, no Wi-Fi device | A4 (`e350075`, 2026-11-09, non-qualifying): scan/list updates, disconnect/reconnect, forget and PSK reconnect, wrong-passphrase re-prompt, 2.4/5/Auto chosen/current/focus/pending states and ignored double click pass; journal records session-user operations. Not exercised: open/OWE, enterprise, 6 GHz and band rollback on failure | pending target-laptop validation |
+| Network panel: per-profile DNS and portal | V4 (`a629c36`, 2026-11-09): confirmation with Cancel focused, Escape/other-pill dismissal, Custom empty cancel and apply pass; only active Ethernet changed, dummy Ethernet/VPN and global DNS unchanged, DHCP restores profile. Simulated portal recheck and browser-launch failure pass; real browser/portal not exercised | A4 (`e350075`, 2026-11-09, non-qualifying): Cloudflare/Google/Custom/DHCP pass on Wi-Fi only; VPN/Ethernet/loopback and global DNS unchanged, DHCP restores profile; no sudo/polkit prompt. Real portal and enterprise not exercised | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
 `evidence/hardware/task-3/verification.md`; shell panels: `evidence/shell-panels/lab-02-27/checkpoint-t8.md` and
-`evidence/shell-panels/t14s-02-27/checkpoint-partial.md`. Task 2–4 source/contract test results are recorded in the local plan
+`evidence/shell-panels/t14s-02-27/checkpoint-partial.md`; network panel:
+`evidence/shell-panels/lab-02-28/checkpoint.md` and `evidence/shell-panels/t14s-02-28/checkpoint.md`.
+Task 2–4 source/contract test results are recorded in the local plan
 execution log; mocked tests do not establish clean installation or physical acceptance. Future acceptance records
 must identify date, clean candidate commit, execution context and limitations for every row.
 
@@ -98,9 +108,10 @@ must identify date, clean candidate commit, execution context and limitations fo
 Open a terminal with `SUPER+Return`. Wi-Fi and Bluetooth terminal paths are permanent recovery interfaces,
 not temporary replacements for later panels. No impala, iwd, bluetui or wiremix is added.
 
-The audio, display and power panels ([ADR 0025](../adr/0025-shell-panels.md)) open from their bar icon, with
-`SUPER+CTRL+A`, `SUPER+CTRL+D` and `SUPER+CTRL+P`, or with `SUPER+CTRL+1..9` for the Nth panel of the focused
-monitor's right bar section; the owned terminal commands below remain available beside them.
+The network, audio, display and power panels ([ADR 0025](../adr/0025-shell-panels.md)) open from their bar icon,
+with `SUPER+CTRL+N`, `SUPER+CTRL+A`, `SUPER+CTRL+D` and `SUPER+CTRL+P`, or with `SUPER+CTRL+1..9` for the Nth
+panel of the focused monitor's right bar section (defaults: network 1, audio 2, display 3, power 4). The owned terminal
+commands below remain available beside them.
 
 | Action | Keyboard path | Owned terminal command |
 |---|---|---|
@@ -148,6 +159,49 @@ silently rewritten. Defaults are performance on AC when available, otherwise bal
 The watcher reapplies on power-source changes and sends one critical 30-second notification per discharging
 battery episode at or below 10%, rearming after leaving that state. Do not discharge the laptop unsupervised to
 prove this behavior. Keyboard-backlight keys are not bound: the T14s handles Fn+Space in firmware.
+
+## Network panel
+
+Open the network icon or use `SUPER+CTRL+N`; "Advanced…" opens `uwsm app -- foot -e nmtui` and closes the panel.
+NetworkManager remains the connection owner. No VPN section is delivered yet (plan 02-30). PSKs go only through the
+native NetworkManager API, never command arguments or shell logs. Scanning runs only while the panel is open.
+Band selection requires `iw` and band data; the filled pill is the profile choice, the small marker is the current
+radio band, and the outline is keyboard focus. A switch is pending and ignores repeats; failed activation attempts
+restore the previous band. Live rollback on a failed band was not exercised.
+
+DNS presets target only the explicit active Wi-Fi/Ethernet profile shown in the header. DHCP, Cloudflare and Google
+first ask "Set DNS to <provider> for <profile>?", with Cancel focused. Escape, closing, changing the profile or choosing
+another pill dismisses it. Custom opens Foot naming the profile; empty input cancels. Pending actions ignore repeats.
+Cloudflare and Google set IPv4/IPv6 servers with opportunistic per-connection DNS over TLS; Custom uses default DoT.
+Non-DHCP presets set `ignore-auto-dns` for both families: this also drops DHCP search domains and may break corporate
+short names. The choice is per profile, not a default for later profiles. DHCP clears the manual servers and restores
+automatic DNS. No global NetworkManager/resolved setting, `FallbackDNS` or global DNS over TLS is added; VPN profiles
+are untouched. Review the trade-off before changing a corporate connection.
+
+For enterprise (802.1X) networks use Advanced and configure through `nmtui`/`nmcli`, using the site's EAP method,
+phase-2 settings, CA certificate and expected server domain. Use `nmcli` if the required certificate/domain fields are
+not exposed in `nmtui`; never disable certificate verification to connect. Enter credentials only at protected prompts,
+not argv or recorded commands. Unsaved enterprise rows open Advanced; saved profiles use the native connection path
+and show the same hint when secrets are missing. There is no enterprise identity/password entry path in QML. Real
+enterprise authentication remains unverified.
+
+[ADR 0028](../adr/0028-network-panel-internet-latency-probe.md) permits gateway and `1.1.1.1` probes only while the
+panel is open: 1.5 s polling, one packet per host, 2 s timeout, no overlapping runs. Ping and Packet loss describe the
+internet samples; loss is red only with at least 10 samples and at least 10% loss in the 24-sample window. ICMP filtering
+can make loss meaningless; NetworkManager's header remains the reachability signal. Portal/Limited/None show `--`.
+
+Under Portal, "Open Captive Portal" explicitly launches `http://neverssl.com/` through `uwsm app -- xdg-open`.
+A default browser must already be installed/configured; browser delivery/selection belongs to Story 4.5. Launch failure
+keeps the panel open with "Could not open a web browser". Portal connectivity rechecks every 10 s even after the panel
+closes. The laboratory exercised a simulated portal and missing-browser failure, not real browser sign-in or a real
+portal. There is no web-app/window rule or automatic browser close.
+
+If a manually installed Tailscale uses an exit node, privately note the current selection, disable it with
+`tailscale set --exit-node=` before portal sign-in, then re-enable that same node afterwards through the local Tailscale
+interface. This is a manual, separately authorized network operation, not performed by the panel. Automatic exit-node
+pause/restore and its operator privileges remain TODO-023 in the
+[network interview log](../technical-interviews/story-4-4-network-panel_log.md#todo-023); a test guard blocks adding
+Tailscale to product packages without revisiting that integration. No Tailscale handling was validated here.
 
 ## Permanent connectivity fallback
 
@@ -275,8 +329,14 @@ A root snapshot does not replace a home backup. Keep both private and record onl
 Do not assume exploration snapshot numbers exist on another machine.
 
 Transfer a checksummed Git bundle of a clean candidate over SSH, verify it, and extract it into the candidate
-checkout. Record its commit. Run `sudo operations/configure` there, not `/usr/local/bin/mirroros-configure`,
+checkout. Record its commit and verify that checkout succeeded before configuring. Plan 02-28 observed that running
+configure as root left `.git/index` root-owned, preventing a later user checkout; configure then re-applied the old
+candidate. Use a fresh verified checkout for the next candidate rather than assuming the switch succeeded; this finding
+was not fixed in configure. Run `sudo operations/configure` there, not `/usr/local/bin/mirroros-configure`,
 which is pinned to the installed ISO's code snapshot. No agent is installed on the T14s or reference VM.
+Newly delivered Hyprland binding files are not picked up automatically by the running compositor: use a new login
+or, only with explicit authorization, `hyprctl reload`. Restart the shell service separately after publication
+(TODO-018), as described in the [desktop shell procedure](desktop-shell.md#session-delivery-and-lifecycle).
 After the maintainer-approved re-login/reboot, perform the physical checks and a second no-change configure run.
 Clean VM installation must independently exercise installer target context and installed running context.
 

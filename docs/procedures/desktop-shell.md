@@ -64,25 +64,38 @@ file had when it was first loaded, so a reload after a file gained one failed wi
 plan 02-27 (laboratory and T14s), while a clean start loaded the same tree. A file the running shell first loads after
 a publication may come from the new runtime (untested).
 
+New Hyprland bindings delivered under `/usr/share/mirroros/hypr/` also require a new login or an explicitly
+maintainer-authorized `hyprctl reload`; configure does not reload the compositor. Plan 02-28 verified this for
+`SUPER+CTRL+N`. A shell restart alone does not load the compositor's new bindings.
+
 ## Shell panels
 
-[ADR 0025](../adr/0025-shell-panels.md) panels (audio, display, power) open from their bar icon. Keyboard and
+[ADR 0025](../adr/0025-shell-panels.md) panels (network, audio, display, power) open from their bar icon. Keyboard and
 scripted requests use native Quickshell interfaces only; there is no own socket or CLI:
 
 ```bash
-qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets audio, display, power
+qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets network, audio, display, power
 hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
 ```
 
-Global shortcuts are `mirroros:panel.audio`, `panel.display`, `panel.power`, `panel.notifications` and
+Global shortcuts are `mirroros:panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.notifications` and
 `panel-at-1` to `panel-at-9` (the Nth panel of the focused monitor's right bar section). The IPC result is
 `opened`, `closed` or `unavailable` (no panel instance, for example the power panel without a battery). Requests
 follow "focused monitor wins": `open` shows the panel on the focused monitor, moving it there if needed; `close`
 closes it wherever it is; `toggle` closes it only when open on the focused monitor; a focus change alone moves
 nothing. Inside an open panel, Tab and Shift+Tab move to the next or previous panel of the same bar section.
-Later panels follow the same convention (`network` in plan 02-28, `bluetooth` in plan 02-29). Panel actions run
+The panel chords are `SUPER+CTRL+N` (network), `SUPER+CTRL+A` (audio), `SUPER+CTRL+D` (display) and `SUPER+CTRL+P`
+(power). Default positional numbering is network 1, audio 2, display 3, power 4; Bluetooth is not a panel yet and
+`SUPER+CTRL+B` stays reserved for plan 02-29. The `network` IPC target exposes only `open`, `close` and `toggle`.
+Later panels follow the same convention. Panel actions run
 owned commands in `/usr/share/mirroros/hardware/` as the session user; see the
 [hardware procedure](hardware.md).
+
+The network panel's "Advanced…" action opens `uwsm app -- foot -e nmtui` and closes the panel. Enterprise setup
+stays in that terminal path; PSKs use the native API. See the hardware procedure for DNS confirmation/trade-offs,
+band states, diagnostics and the browser requirement for captive portals. The plan 02-26 network prototype
+`053e7c3` was a design reference, not promoted code or copied tests; production was re-reviewed against Omarchy
+`v4.5.0` (DEC-050 in the [network interview log](../technical-interviews/story-4-4-network-panel_log.md)).
 
 ## Fixed palette
 
@@ -312,6 +325,7 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/audio-panel-model.test.mjs \
     tests/capabilities/desktop/shell/display-panel-model.test.mjs \
     tests/capabilities/desktop/shell/power-panel-model.test.mjs \
+    tests/capabilities/desktop/shell/network-panel-model.test.mjs \
     tests/capabilities/desktop/shell/no-omarchy-coupling.test.mjs \
     tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
