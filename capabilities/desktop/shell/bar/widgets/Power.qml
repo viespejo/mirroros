@@ -291,8 +291,7 @@ Panel {
       : (root.unavailable ? "Power unavailable: UPower has no bus service; install upower and check its D-Bus service registration." : "")
     onPressed: function(b) {
       if (root.unavailable || root.inventoryUnknown || !root.batteryPresent) return
-      if (b === Qt.RightButton) root.togglePercentage()
-      else root.toggle()
+      root.toggle()
     }
   }
 

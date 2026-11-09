@@ -82,6 +82,33 @@ test('a profile is written per power source through power-profile and repeats ar
   assert.deepEqual([...proc.command], ['/usr/share/mirroros/hardware/power-profile', 'set', 'ac', 'balanced']);
 });
 
+test('both bar buttons toggle the power panel without changing the percentage setting', () => {
+  const match = power.match(/onPressed: function\(b\) \{([\s\S]*?)\n    \}/);
+  assert.ok(match);
+  const root = {
+    unavailable: false, inventoryUnknown: false, batteryPresent: true, opened: false,
+    showPercentage: false,
+    toggle() { this.opened = !this.opened },
+    togglePercentage() { this.showPercentage = !this.showPercentage },
+  };
+  const Qt = { LeftButton: 1, RightButton: 2 };
+  const press = vm.runInNewContext(`(function(b) {${match[1]}})`, { root, Qt });
+  for (const button of [Qt.LeftButton, Qt.RightButton]) {
+    press(button);
+    assert.equal(root.opened, true);
+    press(button);
+    assert.equal(root.opened, false);
+    assert.equal(root.showPercentage, false);
+    for (const [key, value] of [['unavailable', true], ['inventoryUnknown', true], ['batteryPresent', false]]) {
+      const previous = root[key];
+      root[key] = value;
+      press(button);
+      assert.equal(root.opened, false, key);
+      root[key] = previous;
+    }
+  }
+});
+
 test('battery details come from battery-status; no system statistics or Omarchy helpers remain', () => {
   assert.match(power, /batteryStatusCommand: "\/usr\/share\/mirroros\/hardware\/battery-status"/);
   const code = power.replace(/^\s*\/\/.*$/gm, '');
