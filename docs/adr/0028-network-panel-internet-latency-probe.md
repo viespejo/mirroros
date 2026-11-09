@@ -7,10 +7,10 @@
 
 ## Status
 
-`Proposed`
+`Accepted`
 
-Drafted from the plan 02-28 technical interview (DEC-055 to DEC-057) and awaiting the maintainer's acceptance at the
-plan 02-28 checkpoint. No internet probe code ships unless this ADR is Accepted.
+The maintainer accepted this architectural decision on 2026-11-08 at the plan 02-28 acceptance checkpoint, after the
+plan 02-28 technical interview (DEC-055 to DEC-057). Implementation and validation remain with plan 02-28.
 
 ## Date
 
