@@ -75,9 +75,22 @@ test('positional panels count drawn panel icons of one monitor and skip non-pane
   assert.equal(names('').length, 4);
 });
 
+test('the default right section numbers network 1, audio 2, display 3 and power 4', () => {
+  const defaults = JSON.parse(readFileSync(new URL('defaults.json', shell), 'utf8'));
+  const right = defaults.bar.layout.right.map(entry => entry.id);
+  const isPanel = id => {
+    const component = bar.match(new RegExp(`"${id.replace('.', '\\.')}": (\\w+)`))[1];
+    const widget = bar.match(new RegExp(`id: ${component}; Widgets\\.(\\w+) \\{`))[1];
+    return /^Panel \{/m.test(readFileSync(new URL(`bar/widgets/${widget}.qml`, shell), 'utf8'));
+  };
+  const slots = right.map(id => ({ region: 'right', moduleName: id, screenName: 'A', panel: isPanel(id), drawn: true }));
+  assert.deepEqual([...model.panelSlots(['right'], { right: right.map(id => ({ id })) }, slots, 'A')].map(s => s.moduleName),
+    ['omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
+});
+
 test('panel IPC targets are declared once, outside the per-screen bar, with open/close/toggle only', () => {
   const variants = bar.indexOf('  Variants {');
-  for (const target of ['audio', 'display', 'power']) {
+  for (const target of ['network', 'audio', 'display', 'power']) {
     const matches = [...bar.matchAll(new RegExp(`target: "${target}"`, 'g'))];
     assert.equal(matches.length, 1, target);
     assert.ok(matches[0].index < variants, target);
@@ -89,7 +102,7 @@ test('panel IPC targets are declared once, outside the per-screen bar, with open
 });
 
 test('the shell registers the panel global shortcuts under the mirroros application id', () => {
-  for (const name of ['panel.audio', 'panel.display', 'panel.power', 'panel.notifications'])
+  for (const name of ['panel.network', 'panel.audio', 'panel.display', 'panel.power', 'panel.notifications'])
     assert.match(shellQml, new RegExp(`appid: "mirroros"\\n\\s+name: "${name.replace('.', '\\.')}"`), name);
   assert.match(shellQml, /model: \[1, 2, 3, 4, 5, 6, 7, 8, 9\][\s\S]*name: "panel-at-" \+ modelData[\s\S]*togglePanelAt\("right", modelData\)/);
   assert.doesNotMatch(shellQml, /appid: "omarchy"|SocketServer|OMARCHY_PATH/);

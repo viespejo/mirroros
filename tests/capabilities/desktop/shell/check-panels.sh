@@ -72,6 +72,12 @@ qml = qml.trimEnd().slice(0, -1) + `
         displays: item.displays.map(function(d) { return d.name }),
         toggleable: item.displays.filter(function(d) { return item.canToggle(d) }).map(function(d) { return d.name }) })
     }
+    function networkState(): string {
+      var item = panelItem("omarchy.network")
+      if (!item) return JSON.stringify({ present: false })
+      return JSON.stringify({ present: true, opened: item.opened, networkManagerAvailable: item.networkManagerAvailable,
+        wifiStationAvailable: item.wifiStationAvailable, canSelectBand: item.canSelectBand })
+    }
     function powerState(): string {
       var item = panelItem("omarchy.power")
       if (!item) return JSON.stringify({ present: false })
@@ -114,11 +120,11 @@ done
 
 # Panel targets are declared once for the whole shell, never per bar instance.
 qs ipc -p "$run_dir" show > "$tmp/targets.txt"
-for target in audio display power; do
+for target in network audio display power; do
     count=$(grep -c "^target $target\$" "$tmp/targets.txt" || true)
     [[ "$count" == 1 ]] || { printf 'FAIL target %s declared %s times\n' "$target" "$count"; exit 1; }
 done
-printf 'PASS panel IPC targets audio, display and power declared once\n'
+printf 'PASS panel IPC targets network, audio, display and power declared once\n'
 
 # An absent panel answers unavailable without opening anything.
 [[ "$(call panelTest request omarchy.absent open)" == unavailable ]] || { printf 'FAIL absent panel not unavailable\n'; exit 1; }
@@ -135,17 +141,17 @@ printf 'PASS mirroros:panel.notifications toggles the notification panel\n'
 panel_field() { call panelTest "$1" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s)[process.argv[1]];console.log(Array.isArray(v)?v.join(" "):String(v))})' "$2"; }
 
 # Power panel: without a battery it never opens (and no statistics process exists to run).
-targets=(audio display power)
+targets=(network audio display power)
 if [[ "$(panel_field powerState present)" == true && "$(panel_field powerState batteryPresent)" == false ]]; then
     call power open >/dev/null
     sleep 0.5
     [[ "$(panel_field powerState opened)" == false ]] || { printf 'FAIL power panel opened without a battery\n'; exit 1; }
     await_field active ""
     printf 'PASS power panel does not open without a battery\n'
-    targets=(audio display)
+    targets=(network audio display)
 fi
 
-declare -A ids=([audio]=omarchy.audio [display]=omarchy.monitor [power]=omarchy.power)
+declare -A ids=([network]=omarchy.network [audio]=omarchy.audio [display]=omarchy.monitor [power]=omarchy.power)
 available=()
 for target in "${targets[@]}"; do
     result=$(call "$target" open)
@@ -165,6 +171,31 @@ for target in "${targets[@]}"; do
     available+=("$target")
     printf 'PASS %s open/close/toggle by IPC and mirroros:panel.%s on the focused monitor\n' "$target" "$target"
 done
+
+# Network panel: the unavailable state follows NetworkManager's bus name; without a Wi-Fi device no band section.
+# NetworkManager is never stopped here (root); the stopped case is a manual laboratory step.
+if [[ " ${available[*]} " == *" network "* ]]; then
+    [[ "$(call network open)" == opened ]] && await_field active omarchy.network
+    sleep 0.5
+    nm=$(busctl --system call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.freedesktop.NetworkManager)
+    if [[ "$nm" == 'b true' ]]; then
+        [[ "$(panel_field networkState networkManagerAvailable)" == true ]] ||
+            { printf 'FAIL network panel unavailable while NetworkManager runs\n'; exit 1; }
+        printf 'PASS network panel available with NetworkManager running\n'
+        printf 'NOT EXERCISED network panel unavailable state (NetworkManager running; manual step)\n'
+        if ! nmcli -t -f TYPE device 2>/dev/null | grep -qx wifi; then
+            [[ "$(panel_field networkState wifiStationAvailable)" == false &&
+               "$(panel_field networkState canSelectBand)" == false ]] ||
+                { printf 'FAIL Wi-Fi or band section without a Wi-Fi device\n'; exit 1; }
+            printf 'PASS no Wi-Fi or band section without a Wi-Fi device\n'
+        fi
+    else
+        [[ "$(panel_field networkState networkManagerAvailable)" == false ]] ||
+            { printf 'FAIL network panel available without NetworkManager\n'; exit 1; }
+        printf 'PASS network panel opens unavailable without NetworkManager\n'
+    fi
+    [[ "$(call network toggle)" == closed ]] && await_field active ""
+fi
 
 # Audio panel: the WirePlumber dummy sink is never listed; without an output the panel opens unavailable with no rows.
 audio_field() { call panelTest audioState | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s)[process.argv[1]];console.log(Array.isArray(v)?v.join(" "):String(v))})' "$1"; }

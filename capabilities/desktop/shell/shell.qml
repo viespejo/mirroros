@@ -81,6 +81,12 @@ ShellRoot {
   // routing; panel-at-N toggles the Nth panel of the right section.
   GlobalShortcut {
     appid: "mirroros"
+    name: "panel.network"
+    description: "Toggle the network panel"
+    onPressed: desktopShell.bar.requestPanel("omarchy.network", "toggle")
+  }
+  GlobalShortcut {
+    appid: "mirroros"
     name: "panel.audio"
     description: "Toggle the audio panel"
     onPressed: desktopShell.bar.requestPanel("omarchy.audio", "toggle")
