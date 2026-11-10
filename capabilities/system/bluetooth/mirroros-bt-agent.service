@@ -1,0 +1,37 @@
+# managed by MirrorOS configure
+# Adapted from Omarchy v4.5.0 default/systemd/user/bt-agent.service (MIT, Copyright (c) David Heinemeier Hansson);
+# license at /usr/share/mirroros/hardware/licenses/omarchy-bluetooth.
+[Unit]
+Description=MirrorOS Bluetooth pairing agent (NoInputNoOutput)
+Documentation=man:bt-agent(1)
+ConditionPathIsDirectory=/sys/class/bluetooth
+# BlueZ must be reachable on the system bus before the agent can register.
+After=dbus.socket
+Requires=dbus.socket
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+# If bluetoothd is unavailable (for example in VMs or machines without a
+# usable adapter), skip cleanly instead of entering a restart loop.
+ExecCondition=/usr/bin/systemctl is-active --quiet bluetooth.service
+# Default agent for pairing started from the shell panel (Just Works). It
+# accepts service authorization for paired devices only. MirrorOS never makes
+# the adapter pairable or discoverable; device-initiated pairing and devices
+# that need a code use bluetoothctl with its own agent instead.
+ExecStart=/usr/bin/bt-agent -c NoInputNoOutput
+# In the foreground bt-agent prints device names and addresses; keep them out
+# of the journal. Standard error is kept for diagnostics.
+StandardOutput=null
+# bt-agent catches SIGTERM without exiting, so stopping it with the session
+# held every logout until the default 90 s stop timeout. It does not catch
+# SIGHUP, which systemd counts as a clean exit; the short timeout covers a
+# version that would.
+KillSignal=SIGHUP
+TimeoutStopSec=2s
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

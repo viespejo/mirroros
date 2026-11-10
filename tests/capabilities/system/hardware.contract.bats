@@ -21,6 +21,17 @@ hardware_assert_delivery() {
   [ -f "$HW_TEST_ROOT/usr/share/mirroros/hardware/licenses/omarchy-audio" ]
   [ -f "$CFG_TEST_DIR/units/bluetooth.service.enabled" ]
   [ -f "$CFG_TEST_DIR/units/power-profiles-daemon.service.enabled" ]
+  [ -f "$CFG_TEST_INSTALLED/bluez-tools" ]
+  for command in bluetooth-device bluetooth-power; do
+    [ "$(stat -c %a "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command")" = 755 ]
+  done
+  [ "$(stat -c %a "$HW_TEST_ROOT/usr/share/mirroros/hardware/licenses/omarchy-bluetooth")" = 644 ]
+  unit=$HW_TEST_ROOT/etc/systemd/user/mirroros-bt-agent.service
+  cmp "$CFG_SOURCE_ROOT/capabilities/system/bluetooth/mirroros-bt-agent.service" "$unit"
+  grep -qxF 'KillSignal=SIGHUP' "$unit"
+  grep -qxF 'TimeoutStopSec=2s' "$unit"
+  [ "$(stat -c %a "$unit")" = 644 ]
+  [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-bt-agent.service")" = /etc/systemd/user/mirroros-bt-agent.service ]
 }
 
 hardware_assert_rerun() {
@@ -63,6 +74,17 @@ hardware_assert_rerun() {
   hardware_assert_delivery
   ! grep -q 'systemctl start bluetooth.service' "$CFG_TEST_CALLS"
   grep -q 'Bluetooth hardware unavailable: kernel subsystem absent' "$CFG_TEST_DIR/first/configure.log"
+  hardware_assert_rerun
+}
+
+@test "a user-owned Bluetooth agent unit is left untouched and logged" {
+  mkdir -p "$CFG_TEST_HOME/.config/systemd/user"
+  printf '[Service]\nExecStart=/usr/bin/true\n' > "$CFG_TEST_HOME/.config/systemd/user/mirroros-bt-agent.service"
+  run hardware_run --output "$CFG_TEST_DIR/first"
+  [ "$status" -eq 0 ]
+  grep -q 'user-owned: .config/systemd/user/mirroros-bt-agent.service; left untouched' "$CFG_TEST_DIR/first/configure.log"
+  [ ! -e "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-bt-agent.service" ]
+  grep -qxF 'ExecStart=/usr/bin/true' "$CFG_TEST_HOME/.config/systemd/user/mirroros-bt-agent.service"
   hardware_assert_rerun
 }
 

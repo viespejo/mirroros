@@ -1,0 +1,76 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Bluetooth device actions for the shell Bluetooth panel. Independently written; it follows the action sequence of
+# Omarchy v4.5.0 bin/omarchy-bluetooth-device (MIT, Copyright (c) David Heinemeier Hansson; license at
+# /usr/share/mirroros/hardware/licenses/omarchy-bluetooth).
+#
+# Usage:
+#   bluetooth-device pair <address>        Pair, then trust, then connect; stops at the first failed step.
+#   bluetooth-device connect <address>     Connect without changing the device's trust.
+#   bluetooth-device disconnect <address>
+#   bluetooth-device forget <address>      Disconnect (tolerated when not connected), then remove.
+# <address> is XX:XX:XX:XX:XX:XX. pair, connect and forget power the adapter on first through bluetooth-power.
+# Exit codes: 0 success; 2 usage; 3 the adapter could not be powered on; 4 pair failed; 5 trust failed;
+#   6 connect failed; 7 disconnect failed; 8 remove failed. A step that exceeds its time bound counts as failed.
+#
+# Trust is granted only by pair (DEC-067), never by connect, so devices paired through the bluetoothctl terminal
+# fallback keep their trust state. No step failure is swallowed: a failed pair leaves the device untrusted.
+# bluetoothctl output is discarded and messages never name the address or the device. Runs as the session user
+# only, never through sudo or pkexec.
+
+set -Eeuo pipefail
+
+POWER=${BASH_SOURCE[0]%/*}/bluetooth-power
+
+usage() {
+  echo "Usage: bluetooth-device <pair|connect|disconnect|forget> <address>" >&2
+  exit 2
+}
+
+(($# == 2)) || usage
+action=$1
+address=$2
+
+[[ $action == pair || $action == connect || $action == disconnect || $action == forget ]] || usage
+[[ $address =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] || usage
+
+fail() {
+  echo "bluetooth-device: $1 failed" >&2
+  exit "$2"
+}
+
+power_on() {
+  [[ $(timeout 2s bluetoothctl show 2>/dev/null || true) == *"Powered: yes"* ]] && return 0
+  # Not bluetoothctl directly: Bluetooth is turned off by an rfkill soft block,
+  # and BlueZ refuses to power an adapter up while one is set.
+  /usr/bin/bash "$POWER" on >/dev/null 2>&1 || fail "power on" 3
+}
+
+# Runs one bounded bluetoothctl step with its output discarded.
+step() {
+  local limit=$1
+  shift
+  timeout "$limit" bluetoothctl "$@" >/dev/null 2>&1
+}
+
+case "$action" in
+  pair)
+    power_on
+    step 20s pair "$address" || fail pair 4
+    step 10s trust "$address" || fail trust 5
+    step 20s connect "$address" || fail connect 6
+    ;;
+  connect)
+    power_on
+    step 20s connect "$address" || fail connect 6
+    ;;
+  disconnect)
+    step 10s disconnect "$address" || fail disconnect 7
+    ;;
+  forget)
+    power_on
+    # A device that is not connected cannot be disconnected; removal is the step that must succeed.
+    step 10s disconnect "$address" || true
+    step 10s remove "$address" || fail remove 8
+    ;;
+esac

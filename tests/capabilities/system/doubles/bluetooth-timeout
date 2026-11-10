@@ -1,0 +1,6 @@
+#!/usr/bin/bash
+# timeout double for the Bluetooth panel commands: records the bound and runs the command unbounded.
+set -Eeuo pipefail
+printf 'timeout %s\n' "$*" >> "$CFG_TEST_CALLS"
+shift
+HW_BT_TIMED=1 exec "$@"

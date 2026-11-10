@@ -1,0 +1,36 @@
+#!/usr/bin/bash
+# bluetoothctl double for the Bluetooth panel commands. State lives under $CFG_TEST_DIR/bt:
+#   blocked, powered   shared with the rfkill double
+#   paired, trusted, connected   present after the matching action
+# HW_BT_FAIL names the action that fails (pair, trust, connect, disconnect, remove, power).
+# HW_BT_CONTROLLERS sets the number of listed controllers (default 1). Every call outside timeout is recorded as
+# bluetoothctl-untimed. Device output names the device and its address so tests can prove it is discarded.
+set -Eeuo pipefail
+printf 'bluetoothctl %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_BT_TIMED:-0}" == 1 ]] || printf 'bluetoothctl-untimed %s\n' "$*" >> "$CFG_TEST_CALLS"
+state=$CFG_TEST_DIR/bt
+mkdir -p "$state"
+action=${1:-}
+[[ "${HW_BT_FAIL:-}" != "$action" ]] || { printf 'Failed to %s Secret Headset %s\n' "$action" "${2:-}"; exit 1; }
+case "$action" in
+  list)
+    for ((i = 0; i < ${HW_BT_CONTROLLERS:-1}; i++)); do printf 'Controller AA:BB:CC:DD:EE:0%d host-%d [default]\n' "$i" "$i"; done ;;
+  show)
+    printf 'Controller AA:BB:CC:DD:EE:00 (public)\n\tName: host-0\n'
+    if [[ -e "$state/powered" ]]; then printf '\tPowered: yes\n'; else printf '\tPowered: no\n'; fi ;;
+  power)
+    [[ "${2:-}" == on && ! -e "$state/blocked" ]] || exit 1
+    : > "$state/powered" ;;
+  pair|trust|connect)
+    printf 'Attempting to %s Secret Headset %s\n' "$action" "$2"
+    case "$action" in
+      pair) : > "$state/paired" ;;
+      trust) : > "$state/trusted" ;;
+      connect) : > "$state/connected" ;;
+    esac ;;
+  disconnect)
+    [[ -e "$state/connected" ]] || { printf 'Secret Headset %s not connected\n' "$2"; exit 1; }
+    /usr/bin/rm -f "$state/connected" ;;
+  remove) /usr/bin/rm -f "$state/paired" "$state/trusted" "$state/connected" ;;
+  *) printf 'Unexpected bluetoothctl invocation\n' >&2; exit 97 ;;
+esac

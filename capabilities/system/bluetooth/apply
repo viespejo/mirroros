@@ -1,13 +1,26 @@
 #!/usr/bin/bash
 # Prerequisites: validated packages; no Bluetooth adapter is required.
-# Context: CONFIGURE_CONTEXT, STEP_DIR and shared helpers.
-# Postconditions: BlueZ is installed and enabled; running service is active when the Bluetooth subsystem exists.
+# Context: CONFIGURE_CONTEXT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: BlueZ is installed and enabled; running service is active when the Bluetooth subsystem exists;
+# panel commands, license and the pairing-agent user unit are delivered and the unit is enabled.
+# The agent unit is enable-only and begins at the next graphical login; the panel commands run only at runtime.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
 cfg_unit_enable bluetooth.service
 # BlueZ's ConditionPathIsDirectory skips activation without the kernel Bluetooth subsystem.
 if [[ -d "$(cfg_path /sys/class/bluetooth)" ]]; then cfg_unit_start bluetooth.service; fi
+for command in bluetooth-device bluetooth-power; do
+  cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
+  cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
+done
+cfg_tracked_file "$STEP_DIR/OMARCHY-LICENSE" /usr/share/mirroros/hardware/licenses/omarchy-bluetooth 0644
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hardware/licenses/omarchy-bluetooth
+unit=/etc/systemd/user/mirroros-bt-agent.service
+cfg_tracked_file "$STEP_DIR/mirroros-bt-agent.service" "$unit" 0644
+cfg_user_unit_enable mirroros-bt-agent.service "$unit" graphical-session.target
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_unit_enabled bluetooth.service
+cfg_require cfg_tracked_file_present "$unit"
+cfg_require cfg_user_unit_enabled mirroros-bt-agent.service graphical-session.target
 cfg_require cfg_exec bash -s -- "$CONFIGURE_CONTEXT" < "$STEP_DIR/check"

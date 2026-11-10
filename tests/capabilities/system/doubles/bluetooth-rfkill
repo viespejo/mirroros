@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+# rfkill double for the Bluetooth panel commands. State lives under $CFG_TEST_DIR/bt:
+#   blocked   present while the soft block is set
+#   powered   present while the adapter reports Powered: yes
+# HW_BT_AUTOENABLE=0 keeps the adapter down after unblocking; HW_RFKILL_FAIL=1 fails every change.
+set -Eeuo pipefail
+printf 'rfkill %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_RFKILL_FAIL:-0}" == 0 ]] || exit 1
+state=$CFG_TEST_DIR/bt
+mkdir -p "$state"
+case "$*" in
+  'block bluetooth') : > "$state/blocked"; /usr/bin/rm -f "$state/powered" ;;
+  'unblock bluetooth')
+    /usr/bin/rm -f "$state/blocked"
+    [[ "${HW_BT_AUTOENABLE:-1}" == 0 ]] || : > "$state/powered" ;;
+  *) printf 'Unexpected rfkill invocation\n' >&2; exit 97 ;;
+esac
