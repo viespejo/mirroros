@@ -17,7 +17,7 @@
 
 | Destination | Method | Source | Changes / scope |
 |---|---|---|---|
-| `shell-bindings.lua` | Adapted | `default/hypr/bindings/utilities.lua` 1-2, 7-10, 24-28, 130; `default/hypr/bindings/input-method.lua` 19-20 | Keys and descriptions for menus, help, notifications and lock; MirrorOS registry helper, native `qs ipc` targets on the installed shell, XKB layout switching instead of fcitx, `loginctl lock-session`. SUPER+D (Apps) and the SUPER+apostrophe / SUPER+Alt+apostrophe Ferris Sweep forms are MirrorOS additions. Panel chords SUPER+Ctrl+A/D/N/P and SUPER+Ctrl+1..9 follow Omarchy v4.5.0 (`ac2690c`) `default/hypr/bindings/utilities.lua` 113, 115, 118, 119, 122-131, dispatched through `hl.dsp.global("mirroros:<name>")` to the shell's GlobalShortcut set instead of `omarchy-shell`; SUPER+Ctrl+Alt+comma (notification panel) is a MirrorOS assignment (Omarchy 4.5 uses it for silencing). |
+| `shell-bindings.lua` | Adapted | `default/hypr/bindings/utilities.lua` 1-2, 7-10, 24-28, 130; `default/hypr/bindings/input-method.lua` 19-20 | Keys and descriptions for menus, help, notifications and lock; MirrorOS registry helper, native `qs ipc` targets on the installed shell, XKB layout switching instead of fcitx, `loginctl lock-session`. SUPER+D (Apps) and the SUPER+apostrophe / SUPER+Alt+apostrophe Ferris Sweep forms are MirrorOS additions. Panel chords SUPER+Ctrl+A/B/D/N/P and SUPER+Ctrl+1..9 follow Omarchy v4.5.0 (`ac2690c`) `default/hypr/bindings/utilities.lua` 113-115, 118, 119, 122-131, dispatched through `hl.dsp.global("mirroros:<name>")` to the shell's GlobalShortcut set instead of `omarchy-shell`; SUPER+Ctrl+Alt+comma (notification panel) is a MirrorOS assignment (Omarchy 4.5 uses it for silencing). |
 | `window-bindings.lua` | Adapted | `default/hypr/bindings/tiling.lua` 1-2, 5-8, 10, 17-20, 23-27, 30-34, 40-61, 63-76, 78-99, 101-103; `default/hypr/bindings/utilities.lua` 121-128; `default/hypr/bindings/applications.lua` 2, 12; `bin/omarchy-launch-terminal-tmux` | Keys, descriptions and dispatcher shapes; workspaces are global with native dispatchers instead of the per-monitor helper; monitor moves use a direction selector; SUPER+Tab is back-and-forth (`previous`); SUPER+Shift+Tab and SUPER+Ctrl+Tab are not bound; terminals run Foot through `uwsm app`; Alt+Tab and Alt+Shift+Tab are one Lua function each (cycle, then bring to top). |
 
 `hyprland.lua`, `defaults.lua` and `personal-loader.lua` are original MirrorOS configuration. The provider's `dwindle.preserve_split = true` follows the observed need of
@@ -163,8 +163,8 @@ only by the separately authorized session test, not by these sources.
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
 SUPER+L / SUPER+Alt+L (workspace layout cycling), and the Story 4.5
-browser, file manager, editor, clipboard and capture keys. Story 4.4 panel chord reserved for a later plan:
-SUPER+Ctrl+B (Bluetooth panel, plan 02-29). SUPER+Ctrl+N is bound to the network panel (plan 02-28; DEC-038 replaces
+browser, file manager, editor, clipboard and capture keys. SUPER+Ctrl+B is bound to the Bluetooth panel (plan 02-29,
+last reserved Story 4.4 panel chord). SUPER+Ctrl+N is bound to the network panel (plan 02-28; DEC-038 replaces
 DEC-006's W with N, as in Omarchy 4.5); SUPER+Ctrl+W stays unbound. Hardware exclusions remain unbound:
 SHIFT+XF86AudioPause / SHIFT+XF86AudioPlay (media source switching, TODO-013),
 XF86TouchpadToggle / XF86TouchpadOn / XF86TouchpadOff (outside the slice), XF86Eject (outside the slice), and

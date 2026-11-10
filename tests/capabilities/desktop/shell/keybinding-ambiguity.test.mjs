@@ -45,7 +45,8 @@ test('keyless bar panel chords resolve to their own entry beside workspace digit
   const root = {};
   runInNewContext(['canonicalKeys', 'canonicalModifiers', 'matchWithoutKey']
     .map(name => `root.${name} = ${qmlFunction(name).replace(/^function \w+/, 'function')};`).join('\n'), { root });
-  const entries = [];
+  const entries = [{ id: 'panel.bluetooth', keys: 'SUPER + CTRL + B', description: 'Bluetooth',
+    modifiers: root.canonicalModifiers(root.canonicalKeys('SUPER + CTRL + B')) }];
   for (let n = 1; n <= 9; n++) {
     for (const [id, keys, description] of [
       [`panel.at-${n}`, `SUPER + CTRL + code:${n + 9}`, `Bar panel ${n}`],
@@ -59,6 +60,7 @@ test('keyless bar panel chords resolve to their own entry beside workspace digit
     root.keysFor = () => 'SUPER + CTRL + ';
     assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: `Bar panel ${n}` } }).id, `panel.at-${n}`);
   }
+  assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: 'Bluetooth' } }).id, 'panel.bluetooth');
   root.keysFor = () => 'SUPER + ';
   assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: 'Bar panel 1' } }), null);
 });

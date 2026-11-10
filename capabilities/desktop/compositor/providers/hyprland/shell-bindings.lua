@@ -160,7 +160,7 @@ MirrorOSKeys.bind("notifications.panel", "SUPER + CTRL + ALT + comma", "Toggle n
   hl.dsp.global("mirroros:panel.notifications"))
 
 -- Panel chords (Omarchy v4.5.0 default/hypr/bindings/utilities.lua:113-131, MIT, adapted to global shortcuts).
--- SUPER+CTRL+B stays reserved for the Bluetooth panel (02-29).
+MirrorOSKeys.bind("panel.bluetooth", "SUPER + CTRL + B", "Bluetooth", hl.dsp.global("mirroros:panel.bluetooth"))
 MirrorOSKeys.bind("panel.network", "SUPER + CTRL + N", "Network", hl.dsp.global("mirroros:panel.network"))
 MirrorOSKeys.bind("panel.audio", "SUPER + CTRL + A", "Audio", hl.dsp.global("mirroros:panel.audio"))
 MirrorOSKeys.bind("panel.display", "SUPER + CTRL + D", "Display", hl.dsp.global("mirroros:panel.display"))
