@@ -453,6 +453,60 @@ function shouldRepromptPassphrase(reason, needsCredentials, reasons) {
   return reason === r.NoSecrets || reason === r.WifiAuthTimeout
 }
 
+// MirrorOS-owned VPN section helpers (ADR 0025 G8, plan 02-30); no upstream
+// source. They read `vpn-profile list` output and drive the row actions. No
+// credential passes through them: Connect only opens vpn-connect in Foot.
+var vpnStates = ["inactive", "activating", "active", "deactivating"]
+var vpnUuidPattern = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/
+
+// One "<uuid>\t<state>\t<name>" line per profile; vpn-profile already turns
+// control characters in names into '?', so a valid line has exactly 3 fields.
+// Malformed lines and unknown states are dropped, keeping the listed order.
+function parseVpnProfiles(text) {
+  var rows = []
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i] === "") continue
+    var fields = lines[i].split("\t")
+    if (fields.length !== 3) continue
+    if (!vpnUuidPattern.test(fields[0])) continue
+    if (vpnStates.indexOf(fields[1]) < 0) continue
+    if (fields[2] === "") continue
+    rows.push({ uuid: fields[0], state: fields[1], name: fields[2] })
+  }
+  return rows
+}
+
+// One VPN at a time (DEC-083). anyBusy: some profile is active or activating.
+// pendingUuid: the profile with a Disconnect in flight ("" when none); while
+// it runs every row is inert and repeats are ignored.
+function vpnRowAction(state, anyBusy, pendingUuid, uuid) {
+  if (pendingUuid) return "none"
+  if (state === "active") return "disconnect"
+  if (state === "inactive") return anyBusy ? "none" : "connect"
+  return "none"
+}
+
+function vpnStateLabel(state) {
+  if (state === "active") return "Connected"
+  if (state === "activating") return "Connecting\u2026"
+  if (state === "deactivating") return "Disconnecting\u2026"
+  return ""
+}
+
+// vpn-profile disconnect exit codes: 5 still active after the wait, 4
+// NetworkManager unavailable.
+function vpnDisconnectFailure(exitCode) {
+  if (exitCode === 5) return "Still connected: disconnect not authorized"
+  if (exitCode === 4) return "NetworkManager unavailable"
+  return "Disconnect failed"
+}
+
+// Foot wrapper for `bash -c <script> vpn-connect <command> <uuid>`: $1 is the
+// vpn-connect path and $2 the profile UUID; 6 is a cancelled authentication.
+var vpnConnectScript = "\"$1\" \"$2\"; code=$?; echo; "
+  + "if (( code == 0 )); then echo Connected; elif (( code == 6 )); then echo Cancelled; else echo Failed; fi; read -rsn1"
+
 if (typeof module !== "undefined") {
   module.exports = {
     parseNetworkStatus: parseNetworkStatus,
@@ -489,6 +543,11 @@ if (typeof module !== "undefined") {
     dnsNeedsConfirmation: dnsNeedsConfirmation,
     dnsConfirmationValid: dnsConfirmationValid,
     networkFailureReason: networkFailureReason,
-    shouldRepromptPassphrase: shouldRepromptPassphrase
+    shouldRepromptPassphrase: shouldRepromptPassphrase,
+    parseVpnProfiles: parseVpnProfiles,
+    vpnRowAction: vpnRowAction,
+    vpnStateLabel: vpnStateLabel,
+    vpnDisconnectFailure: vpnDisconnectFailure,
+    vpnConnectScript: vpnConnectScript
   }
 }

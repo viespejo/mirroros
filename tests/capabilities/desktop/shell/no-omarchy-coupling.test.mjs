@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 // service or OMARCHY_PATH. Comments are ignored; legacy data identifiers kept from upstream are allowlisted.
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const roots = ['capabilities/desktop/shell', 'capabilities/system/audio', 'capabilities/system/bluetooth',
-  'capabilities/system/network', 'capabilities/system/power'];
+  'capabilities/system/network', 'capabilities/system/power', 'capabilities/system/vpn'];
 const singles = ['capabilities/desktop/compositor/providers/hyprland/display'];
 
 const allowed = new Map([

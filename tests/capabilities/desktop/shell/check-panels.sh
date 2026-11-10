@@ -13,7 +13,11 @@ if [[ -z "${WAYLAND_DISPLAY:-}" || ! -S "${XDG_RUNTIME_DIR:-/nonexistent}/${WAYL
 fi
 tmp=$(mktemp -d)
 pid=""
+vpn_uuid=""
+foot_pid=""
 cleanup() {
+    if [[ -n "$foot_pid" ]]; then kill "$foot_pid" 2>/dev/null || true; fi
+    if [[ -n "$vpn_uuid" ]]; then nmcli connection delete uuid "$vpn_uuid" >/dev/null 2>&1 || true; fi
     if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
     rm -rf "$tmp"
 }
@@ -82,7 +86,14 @@ qml = qml.trimEnd().slice(0, -1) + `
       var item = panelItem("omarchy.network")
       if (!item) return JSON.stringify({ present: false })
       return JSON.stringify({ present: true, opened: item.opened, networkManagerAvailable: item.networkManagerAvailable,
-        wifiStationAvailable: item.wifiStationAvailable, canSelectBand: item.canSelectBand })
+        wifiStationAvailable: item.wifiStationAvailable, canSelectBand: item.canSelectBand, vpnShown: item.vpnShown,
+        vpnProfiles: item.vpnProfiles.map(function(p) { return p.uuid + ":" + p.state }) })
+    }
+    function networkVpnConnect(uuid: string): string {
+      var item = panelItem("omarchy.network")
+      if (!item) return "absent"
+      item.connectVpn(uuid)
+      return "ok"
     }
     function powerState(): string {
       var item = panelItem("omarchy.power")
@@ -145,6 +156,16 @@ await_field notificationPanel false
 printf 'PASS mirroros:panel.notifications toggles the notification panel\n'
 
 panel_field() { call panelTest "$1" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s)[process.argv[1]];console.log(Array.isArray(v)?v.join(" "):String(v))})' "$2"; }
+await_panel_field() {
+    local actual=""
+    for ((i = 0; i < 50; i++)); do
+        actual=$(panel_field "$1" "$2")
+        [[ "$actual" == "$3" ]] && return
+        sleep 0.1
+    done
+    printf 'FAIL %s.%s expected "%s", got "%s"\n' "$1" "$2" "$3" "$actual"; exit 1
+}
+foot_pids() { hyprctl clients -j | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{for(const c of JSON.parse(s))if(c.class==="foot")console.log(c.pid)})'; }
 
 # Power panel: without a battery it never opens (and no statistics process exists to run).
 targets=(network audio display power)
@@ -203,10 +224,55 @@ if [[ " ${available[*]} " == *" network "* ]]; then
                 { printf 'FAIL Wi-Fi or band section without a Wi-Fi device\n'; exit 1; }
             printf 'PASS no Wi-Fi or band section without a Wi-Fi device\n'
         fi
+        # VPN section (plan 02-30): hidden without OpenConnect profiles and shown with a fictitious one; Connect opens
+        # Foot running vpn-connect and closes the panel. The fictitious profile has no secret flags, so vpn-connect
+        # refuses it (exit 4) before reading input and leaves it unchanged; the Foot window is then closed.
+        vpn_profile=/usr/share/mirroros/hardware/vpn-profile
+        if [[ ! -x "$vpn_profile" ]]; then
+            printf 'NOT EXERCISED network panel VPN section (vpn-profile not delivered)\n'
+        elif [[ -n "$("$vpn_profile" list)" ]]; then
+            printf 'NOT EXERCISED network panel VPN section (OpenConnect profiles already exist)\n'
+        else
+            sleep 2.5
+            await_panel_field networkState vpnShown false
+            printf 'PASS network panel VPN section hidden without OpenConnect profiles\n'
+            vpn_uuid=$(cat /proc/sys/kernel/random/uuid)
+            if ! nmcli connection add type vpn vpn-type openconnect con-name mirroros-check-vpn \
+                connection.uuid "$vpn_uuid" connection.autoconnect no connection.permissions "user:$USER" \
+                vpn.data 'gateway = vpn.example.invalid, protocol = anyconnect' >/dev/null 2>&1; then
+                vpn_uuid=""
+                printf 'NOT EXERCISED network panel VPN section with a profile (could not add a fictitious profile)\n'
+            else
+                await_panel_field networkState vpnShown true
+                await_panel_field networkState vpnProfiles "$vpn_uuid:inactive"
+                printf 'PASS network panel VPN section shown with a fictitious OpenConnect profile\n'
+                before=$(foot_pids)
+                [[ "$(call panelTest networkVpnConnect "$vpn_uuid")" == ok ]] ||
+                    { printf 'FAIL network panel VPN Connect not reachable\n'; exit 1; }
+                await_field active ""
+                for ((i = 0; i < 50; i++)); do
+                    foot_pid=$(comm -13 <(sort <<< "$before") <(foot_pids | sort) | head -n1)
+                    [[ -n "$foot_pid" ]] && break
+                    sleep 0.1
+                done
+                [[ -n "$foot_pid" ]] || { printf 'FAIL VPN Connect opened no Foot window\n'; exit 1; }
+                kill "$foot_pid" 2>/dev/null || true
+                foot_pid=""
+                printf 'PASS VPN Connect opens a Foot window and closes the panel\n'
+                [[ "$(call network open)" == opened ]] && await_field active omarchy.network
+                nmcli connection delete uuid "$vpn_uuid" >/dev/null
+                vpn_uuid=""
+                await_panel_field networkState vpnShown false
+                printf 'PASS network panel VPN section hidden again after the profile is deleted\n'
+            fi
+        fi
     else
         [[ "$(panel_field networkState networkManagerAvailable)" == false ]] ||
             { printf 'FAIL network panel available without NetworkManager\n'; exit 1; }
         printf 'PASS network panel opens unavailable without NetworkManager\n'
+        [[ "$(panel_field networkState vpnShown)" == false ]] ||
+            { printf 'FAIL network panel VPN section shown without NetworkManager\n'; exit 1; }
+        printf 'PASS network panel VPN section hidden without NetworkManager\n'
     fi
     [[ "$(call network toggle)" == closed ]] && await_field active ""
 fi

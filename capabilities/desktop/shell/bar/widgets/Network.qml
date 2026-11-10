@@ -22,7 +22,8 @@ import "../../panels/network/Model.js" as Model
 // opens a fixed plain-HTTP URL with xdg-open; clipboard copy passes the value
 // as argv. Removed: QR sharing, speed test, enterprise identity field and
 // credential script (an Advanced action opens nmtui instead). Kept from
-// MirrorOS: the missing-provider glyph and actionable tooltip.
+// MirrorOS: the missing-provider glyph and actionable tooltip. MirrorOS-owned
+// with no upstream source: the VPN section (ADR 0025 G8, plan 02-30).
 Panel {
   id: root
   moduleName: "omarchy.network"
@@ -114,6 +115,18 @@ Panel {
   property bool dnsConfirmApplyFocused: false
   property bool portalLaunchFailed: false
 
+  // MirrorOS-owned VPN section (ADR 0025 G8, plan 02-30), no upstream source.
+  // OpenConnect profiles come from `vpn-profile list`; Connect opens
+  // vpn-connect in foot, so no VPN credential passes through QML. Disconnect
+  // runs `vpn-profile disconnect`, which verifies the effective state.
+  readonly property string vpnProfileCommand: "/usr/share/mirroros/hardware/vpn-profile"
+  property var vpnProfiles: []  // [{ uuid, state, name }]
+  property string vpnPendingUuid: ""
+  property var vpnFailure: null  // { uuid, text }
+  property int vpnIndex: 0
+  readonly property bool vpnShown: networkManagerAvailable && vpnProfiles.length > 0
+  readonly property bool vpnAnyBusy: vpnProfiles.some(function(p) { return p.state === "active" || p.state === "activating" })
+
   // Per-row in-flight state. `actionSsid` flips on for the row whose action
   // is currently running so it can render "Connecting…" / "Disconnecting…" /
   // "Forgetting…". `passwordSsid` is the row currently expanded into
@@ -149,10 +162,10 @@ Panel {
   property bool cursorActive: false
 
   // Keyboard focus zone for the panel. j/k crosses row boundaries:
-  // header actions ⇄ portal ⇄ band ⇄ DNS row ⇄ DNS confirmation ⇄ Wi-Fi
-  // networks ⇄ Advanced. h/l move within header actions, band pills, DNS
+  // header actions ⇄ portal ⇄ band ⇄ DNS row ⇄ DNS confirmation ⇄ VPN rows ⇄
+  // Wi-Fi networks ⇄ Advanced. h/l move within header actions, band pills, DNS
   // providers or the confirmation buttons.
-  property string focusSection: "dns"  // "header" | "portal" | "band" | "dns" | "dnsConfirm" | "wifi" | "advanced"
+  property string focusSection: "dns"  // "header" | "portal" | "band" | "dns" | "dnsConfirm" | "vpn" | "wifi" | "advanced"
   property int headerIndex: 0
   readonly property bool canDisconnect: !!connectedWifiNetwork
   readonly property bool headerHasDisconnect: false
@@ -214,6 +227,14 @@ Panel {
 
   onDnsConfirmationShownChanged: {
     if (!dnsConfirmationShown && focusSection === "dnsConfirm") focusSection = "dns"
+  }
+
+  onVpnShownChanged: {
+    if (!vpnShown && focusSection === "vpn") focusSection = "dns"
+  }
+
+  onVpnProfilesChanged: {
+    if (vpnIndex > vpnProfiles.length - 1) vpnIndex = Math.max(0, vpnProfiles.length - 1)
   }
 
   function clampHeaderIndex() {
@@ -320,7 +341,13 @@ Panel {
       dismissDnsConfirmation()
       portalLaunchFailed = false
       cursorActive = hasCaptivePortal
+      refreshVpn()
     } else {
+      // MirrorOS: VPN reads stop with the panel; rows and failure literals
+      // are not carried over to the next open.
+      vpnListProc.running = false
+      vpnProfiles = []
+      vpnFailure = null
       // MirrorOS (ADR 0028): network-status pings, so nothing may outlive the
       // open panel; a run still in flight is stopped and its output ignored.
       detailsProc.running = false
@@ -829,6 +856,75 @@ Panel {
     if (focusSection === "dnsConfirm") focusSection = "dns"
   }
 
+  function vpnProfileFor(uuid) {
+    for (var i = 0; i < vpnProfiles.length; i++)
+      if (vpnProfiles[i].uuid === uuid) return vpnProfiles[i]
+    return null
+  }
+
+  function vpnActionFor(profile) {
+    return profile ? Model.vpnRowAction(profile.state, vpnAnyBusy, vpnPendingUuid, profile.uuid) : "none"
+  }
+
+  function vpnFailureFor(uuid) {
+    return vpnFailure && vpnFailure.uuid === uuid ? vpnFailure.text : ""
+  }
+
+  // Polling, not events: Quickshell.Networking (0.3.2) exposes no VPN or
+  // active-connection API. Revisit if a future Quickshell exposes VPN
+  // connections. A tick is skipped while a read is still running.
+  function refreshVpn() {
+    if (!opened || vpnListProc.running) return
+    vpnListProc.running = true
+  }
+
+  // A failed read hides the section rather than showing stale rows. A failure
+  // literal clears once its profile reads inactive (or is gone). Rows are only
+  // replaced when they change, so polling does not rebuild the list.
+  function updateVpn(exitCode, raw) {
+    if (!opened) return
+    var rows = exitCode === 0 ? Model.parseVpnProfiles(raw) : []
+    if (JSON.stringify(rows) !== JSON.stringify(vpnProfiles)) vpnProfiles = rows
+    if (vpnFailure) {
+      var failed = vpnProfileFor(vpnFailure.uuid)
+      if (!failed || failed.state === "inactive") vpnFailure = null
+    }
+  }
+
+  // Connect hands the whole authentication to vpn-connect in a terminal and
+  // closes the panel; the wrapper reports Connected, Cancelled or Failed.
+  function connectVpn(uuid) {
+    if (vpnActionFor(vpnProfileFor(uuid)) !== "connect") return
+    Quickshell.execDetached(["uwsm", "app", "--", "foot", "-e", "bash", "-c", Model.vpnConnectScript, "vpn-connect", "/usr/share/mirroros/hardware/vpn-connect", uuid])
+    root.close()
+  }
+
+  // The panel stays open to show the verified result on the acting row; one
+  // Disconnect at a time, repeats ignored.
+  function disconnectVpn(uuid) {
+    if (vpnDisconnectProc.running || vpnActionFor(vpnProfileFor(uuid)) !== "disconnect") return
+    vpnFailure = null
+    vpnPendingUuid = uuid
+    vpnDisconnectProc.command = [vpnProfileCommand, "disconnect", uuid]
+    vpnDisconnectProc.running = true
+  }
+
+  function finishVpnDisconnect(exitCode) {
+    var uuid = vpnPendingUuid
+    vpnPendingUuid = ""
+    if (exitCode !== 0 && opened) vpnFailure = { uuid: uuid, text: Model.vpnDisconnectFailure(exitCode) }
+    refreshVpn()
+  }
+
+  // Enter on a VPN row presses its only button; nothing without an action.
+  function activateVpn() {
+    if (vpnIndex < 0 || vpnIndex >= vpnProfiles.length) return
+    var profile = vpnProfiles[vpnIndex]
+    var action = vpnActionFor(profile)
+    if (action === "connect") connectVpn(profile.uuid)
+    else if (action === "disconnect") disconnectVpn(profile.uuid)
+  }
+
   function requiresCredentials(security) {
     return Model.requiresCredentials(security, WifiSecurityType.Open, WifiSecurityType.Owe)
   }
@@ -1008,6 +1104,27 @@ Panel {
     repeat: true
     running: root.opened
     onTriggered: root.refreshBand()
+  }
+
+  // MirrorOS: VPN profile reads, only while the panel is open (DEC-084).
+  Process {
+    id: vpnListProc
+    command: [root.vpnProfileCommand, "list"]
+    stdout: StdioCollector { id: vpnListStdout; waitForEnd: true }
+    onExited: function(exitCode) { root.updateVpn(exitCode, vpnListStdout.text) }
+  }
+
+  Timer {
+    id: vpnPoll
+    interval: 2000
+    repeat: true
+    running: root.opened
+    onTriggered: root.refreshVpn()
+  }
+
+  Process {
+    id: vpnDisconnectProc
+    onExited: function(exitCode) { root.finishVpnDisconnect(exitCode) }
   }
 
   // Action runner for DNS provider changes. Wi-Fi actions use the
@@ -1198,6 +1315,9 @@ Panel {
               }
             } else if (root.dnsConfirmationShown) {
               root.focusSection = "dnsConfirm"
+            } else if (root.vpnShown) {
+              root.focusSection = "vpn"
+              root.vpnIndex = 0
             } else if (root.wifiNetworks.length > 0) {
               root.focusSection = "wifi"
               if (root.selectedIndex < 0) root.selectedIndex = 0
@@ -1207,6 +1327,23 @@ Panel {
           } else if (root.focusSection === "dnsConfirm") {
             if (dy < 0) {
               root.focusSection = "dns"
+            } else if (root.vpnShown) {
+              root.focusSection = "vpn"
+              root.vpnIndex = 0
+            } else if (root.wifiNetworks.length > 0) {
+              root.focusSection = "wifi"
+              if (root.selectedIndex < 0) root.selectedIndex = 0
+            } else {
+              root.focusSection = "advanced"
+            }
+          } else if (root.focusSection === "vpn") {
+            // MirrorOS: vertical keys walk the VPN rows, then leave the section
+            // up to DNS (or its confirmation) and down to Wi-Fi or Advanced.
+            if (dy < 0) {
+              if (root.vpnIndex > 0) root.vpnIndex--
+              else root.focusSection = root.dnsConfirmationShown ? "dnsConfirm" : "dns"
+            } else if (root.vpnIndex < root.vpnProfiles.length - 1) {
+              root.vpnIndex++
             } else if (root.wifiNetworks.length > 0) {
               root.focusSection = "wifi"
               if (root.selectedIndex < 0) root.selectedIndex = 0
@@ -1219,6 +1356,9 @@ Panel {
                 root.focusSection = "wifi"
                 root.selectedIndex = root.wifiNetworks.length - 1
                 root.wifiActionFocused = false
+              } else if (root.vpnShown) {
+                root.focusSection = "vpn"
+                root.vpnIndex = root.vpnProfiles.length - 1
               } else {
                 root.focusSection = root.dnsConfirmationShown ? "dnsConfirm" : "dns"
               }
@@ -1228,7 +1368,12 @@ Panel {
             // wrapping around to the bottom of the list; j from the last row
             // reaches Advanced.
             if (dy < 0 && root.selectedIndex <= 0) {
-              root.focusSection = root.dnsConfirmationShown ? "dnsConfirm" : "dns"
+              if (root.vpnShown) {
+                root.focusSection = "vpn"
+                root.vpnIndex = root.vpnProfiles.length - 1
+              } else {
+                root.focusSection = root.dnsConfirmationShown ? "dnsConfirm" : "dns"
+              }
               root.wifiActionFocused = false
             } else if (dy > 0 && root.selectedIndex >= root.wifiNetworks.length - 1) {
               root.focusSection = "advanced"
@@ -1255,6 +1400,7 @@ Panel {
             if (root.dnsConfirmApplyFocused) root.applyDnsConfirmation()
             else root.dismissDnsConfirmation()
           }
+          else if (root.focusSection === "vpn") root.activateVpn()
           else if (root.focusSection === "advanced") root.openAdvanced()
           else root.activateSelected()
         }
@@ -1646,6 +1792,59 @@ Panel {
       }
 
 
+      // MirrorOS-owned VPN section (ADR 0025 G8, plan 02-30): OpenConnect
+      // profiles only, drawn when at least one exists. Its own cap keeps the
+      // card on screen next to the Wi-Fi list (RISK-001); the Wi-Fi list cap
+      // yields the section's height while it is shown (T14s overflow).
+      PanelSeparator {
+        id: vpnSeparator
+        visible: root.vpnShown
+        foreground: root.bar.foreground
+      }
+
+      Column {
+        id: vpnSection
+        visible: root.vpnShown
+        width: parent.width
+        spacing: Style.space(10)
+
+        PanelSectionHeader {
+          text: "VPN"
+          foreground: root.bar.foreground
+          fontFamily: root.bar.fontFamily
+        }
+
+        ListView {
+          id: vpnList
+          width: parent.width
+          height: Math.min(contentHeight, Style.space(96))
+          spacing: Style.space(4)
+          clip: true
+          boundsBehavior: Flickable.StopAtBounds
+          interactive: contentHeight > height
+
+          ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
+          model: root.vpnProfiles
+          currentIndex: root.focusSection === "vpn" ? root.vpnIndex : -1
+          onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
+
+          delegate: Item {
+            required property var modelData
+            required property int index
+            width: ListView.view.width
+            height: vpnRow.implicitHeight
+
+            VpnRow {
+              id: vpnRow
+              width: parent.width
+              profile: modelData
+              rowIndex: index
+            }
+          }
+        }
+      }
+
       // Wi-Fi networks (only if a Wi-Fi station is available).
       PanelSeparator {
         visible: root.wifiStationAvailable
@@ -1668,7 +1867,7 @@ Panel {
         id: networkList
         visible: root.wifiStationAvailable
         width: parent.width
-        height: Math.min(contentHeight, Style.space(240))
+        height: Math.min(contentHeight, Style.space(240) - (root.vpnShown ? vpnSeparator.height + vpnSection.height + 2 * column.spacing : 0))
         spacing: Style.space(4)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -2131,6 +2330,127 @@ Panel {
     }
   }
 
+
+  // One OpenConnect profile row (MirrorOS-owned, plan 02-30). The row body is
+  // not clickable: only its single button acts, so a stray click never opens
+  // a credential terminal. Activating and deactivating rows offer no button.
+  component VpnRow: CursorSurface {
+    id: vpnRow
+    required property var profile
+    required property int rowIndex
+
+    readonly property string uuid: profile ? profile.uuid : ""
+    readonly property string profileState: profile ? profile.state : ""
+    readonly property string action: root.vpnActionFor(profile)
+    readonly property bool pending: root.vpnPendingUuid !== "" && root.vpnPendingUuid === uuid
+    readonly property bool blocked: root.vpnPendingUuid !== "" && !pending
+    readonly property string failureText: root.vpnFailureFor(uuid)
+    readonly property string buttonKind: profileState === "active" ? "disconnect" : (profileState === "inactive" ? "connect" : "")
+    readonly property string statusText: {
+      if (pending) return "Disconnecting\u2026"
+      if (failureText !== "") return failureText
+      return Model.vpnStateLabel(profileState)
+    }
+    readonly property color statusColor: {
+      if (failureText !== "") return root.bar.urgent
+      if (pending || profileState !== "inactive") return root.bar.foreground
+      return Qt.darker(root.bar.foreground, 1.5)
+    }
+
+    hasCursor: root.cursorActive && root.focusSection === "vpn" && root.vpnIndex === rowIndex
+    current: profileState === "active"
+    opacity: blocked ? 0.5 : 1.0
+    foreground: root.bar.foreground
+    fill: root.hoverFill
+    currentFill: root.selectedFill
+    implicitHeight: vpnRowContent.implicitHeight + Style.spacing.rowPaddingX
+
+    // Hover only moves the cursor here; there is no click handler.
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      acceptedButtons: Qt.NoButton
+      onContainsMouseChanged: if (containsMouse) { root.cursorActive = true; root.focusSection = "vpn"; root.vpnIndex = vpnRow.rowIndex }
+    }
+
+    Item {
+      id: vpnRowContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(10)
+      implicitHeight: Math.max(vpnIcon.implicitHeight, vpnInfo.implicitHeight, vpnButton.implicitHeight)
+
+      Text {
+        id: vpnIcon
+        textFormat: Text.PlainText
+        text: "󰖂"
+        color: vpnRow.statusColor
+        font.family: root.bar.fontFamily
+        font.pixelSize: Style.font.title
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+      }
+
+      Column {
+        id: vpnInfo
+        spacing: Style.space(1)
+        anchors.left: vpnIcon.right
+        anchors.leftMargin: Style.space(10)
+        anchors.right: vpnButton.visible ? vpnButton.left : parent.right
+        anchors.rightMargin: vpnButton.visible ? Style.space(8) : 0
+        anchors.verticalCenter: parent.verticalCenter
+
+        Text {
+          textFormat: Text.PlainText
+          text: vpnRow.profile ? vpnRow.profile.name : ""
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.body
+          elide: Text.ElideRight
+          width: parent.width
+        }
+        Text {
+          textFormat: Text.PlainText
+          visible: vpnRow.statusText !== ""
+          text: vpnRow.statusText
+          color: vpnRow.statusColor
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
+          elide: vpnRow.failureText !== "" ? Text.ElideNone : Text.ElideRight
+          wrapMode: vpnRow.failureText !== "" ? Text.WordWrap : Text.NoWrap
+          width: parent.width
+        }
+      }
+
+      // Dimmed and inert while gated (one VPN at a time, one Disconnect in
+      // flight); the acting row shows Disconnecting… instead.
+      Button {
+        id: vpnButton
+        visible: vpnRow.buttonKind !== "" && !vpnRow.pending
+        text: vpnRow.buttonKind === "disconnect" ? "Disconnect" : "Connect"
+        bordered: true
+        fontSize: Style.font.bodySmall
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
+        enabled: vpnRow.action === vpnRow.buttonKind
+        opacity: enabled || vpnRow.blocked ? 1 : 0.5
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        onHovered: function(isHovered) {
+          if (!isHovered) return
+          root.cursorActive = true
+          root.focusSection = "vpn"
+          root.vpnIndex = vpnRow.rowIndex
+        }
+        onClicked: {
+          if (vpnRow.action === "connect") root.connectVpn(vpnRow.uuid)
+          else if (vpnRow.action === "disconnect") root.disconnectVpn(vpnRow.uuid)
+        }
+      }
+    }
+  }
 
   component DetailValue: InfoValue {
     property bool copyable: false
