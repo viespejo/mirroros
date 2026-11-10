@@ -1,0 +1,141 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# OpenConnect profile listing and verified disconnect for the shell network panel. MirrorOS-owned code
+# (GPL-3.0-only) with no upstream source; it reimplements the disconnect finding of the MirrorOS prototype
+# prototypes/vpn-openconnect-helper (ADR 0025 G8, plan 02-30).
+#
+# Usage:
+#   vpn-profile list
+#     One line "<uuid>\t<state>\t<name>" per NetworkManager profile of type vpn whose vpn.service-type is
+#     org.freedesktop.NetworkManager.openconnect; WireGuard and other plugin profiles are not listed. <state> is
+#     inactive, activating, active or deactivating. Active profiles come first, then the rest by name. Every
+#     control character in a name, including tab and newline, is printed as '?'; the profile stays listed.
+#     No profiles: empty output.
+#   vpn-profile disconnect <uuid>
+#     Brings that OpenConnect profile down and verifies the effective state. An inactive profile is left alone.
+#     Otherwise down is requested and its exit status ignored (it reports success under a polkit denial), then the
+#     state is polled every 0.5 s for up to 5 s; MIRROROS_VPN_DOWN_WAIT_SECONDS (whole seconds) overrides the wait
+#     in tests only.
+# Exit codes: 0 success; 2 usage or malformed UUID; 3 unknown UUID or not an OpenConnect profile;
+#   4 NetworkManager unavailable; 5 still active after the wait.
+#
+# Nothing from vpn.data or vpn.secrets is read or printed and --show-secrets is never used; list prints profile
+# names because the panel needs them. Runs as the session user only, never through sudo or pkexec.
+
+set -Eeuo pipefail
+
+OPENCONNECT=org.freedesktop.NetworkManager.openconnect
+
+usage() {
+  echo "Usage: vpn-profile list | vpn-profile disconnect <uuid>" >&2
+  exit 2
+}
+
+unavailable() {
+  echo "Error: NetworkManager is not available." >&2
+  exit 4
+}
+
+# nmcli translates values under a non-English session; -e no keeps ':' in -g values unescaped.
+nm() {
+  LC_ALL=C nmcli "$@" 2>/dev/null
+}
+
+# Sets $vpn_uuids to every OpenConnect profile. UUIDs and types never contain ':', so terse output is safe here;
+# names are read separately with -g.
+read_profiles() {
+  local profiles uuid type service
+  profiles=$(nm -t -f UUID,TYPE connection show) || unavailable
+  vpn_uuids=()
+  while IFS=: read -r uuid type; do
+    [[ $type == vpn ]] || continue
+    # The profile may disappear between the two reads; it is then skipped.
+    service=$(nm -e no -g vpn.service-type connection show uuid "$uuid") || continue
+    if [[ $service == "$OPENCONNECT" ]]; then
+      vpn_uuids+=("$uuid")
+    fi
+  done <<<"$profiles"
+}
+
+# Sets $states from the active connections; a profile absent from them is inactive.
+read_states() {
+  local active uuid state
+  active=$(nm -t -f UUID,STATE connection show --active) || unavailable
+  states=()
+  while IFS=: read -r uuid state; do
+    case "$state" in
+      activated) states[$uuid]=active ;;
+      activating | deactivating) states[$uuid]=$state ;;
+    esac
+  done <<<"$active"
+}
+
+list_profiles() {
+  local uuid name state rank
+  read_profiles
+  read_states
+  for uuid in "${vpn_uuids[@]}"; do
+    name=$(nm -e no -g connection.id connection show uuid "$uuid") || continue
+    name=${name//[[:cntrl:]]/?}
+    state=${states[$uuid]:-inactive}
+    rank=1
+    if [[ $state == active ]]; then
+      rank=0
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$rank" "$name" "$uuid" "$state"
+  done | LC_ALL=C sort -t $'\t' -k1,1 -k2,2 -k3,3 | awk -F '\t' -v OFS='\t' '{ print $3, $4, $2 }'
+}
+
+disconnect_profile() {
+  local want=$1 uuid found=0 tries
+  local wait=${MIRROROS_VPN_DOWN_WAIT_SECONDS:-5}
+  [[ $wait =~ ^[0-9]+$ ]] || usage
+
+  read_profiles
+  for uuid in "${vpn_uuids[@]}"; do
+    if [[ $uuid == "$want" ]]; then
+      found=1
+    fi
+  done
+  if ((!found)); then
+    echo "Error: the profile is not an OpenConnect VPN profile; nothing changed." >&2
+    exit 3
+  fi
+
+  read_states
+  if [[ ${states[$want]:-inactive} == inactive ]]; then
+    exit 0
+  fi
+
+  # The exit status is not trusted: nmcli reports success when polkit denies the request.
+  nm connection down uuid "$want" >/dev/null || true
+  for ((tries = wait * 2; ; tries--)); do
+    read_states
+    if [[ ${states[$want]:-inactive} == inactive ]]; then
+      exit 0
+    fi
+    ((tries > 0)) || break
+    sleep 0.5
+  done
+
+  echo "Error: the VPN is still connected; the disconnect was not authorized or did not complete." >&2
+  exit 5
+}
+
+declare -a vpn_uuids=()
+declare -A states=()
+
+case "${1:-}" in
+  list)
+    (($# == 1)) || usage
+    list_profiles
+    ;;
+  disconnect)
+    (($# == 2)) || usage
+    [[ $2 =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] || usage
+    disconnect_profile "$2"
+    ;;
+  *)
+    usage
+    ;;
+esac

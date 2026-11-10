@@ -1,0 +1,70 @@
+#!/usr/bin/bash
+# nmcli double for the owned VPN commands. State lives under $CFG_TEST_DIR/vpn:
+#   profiles            UUID:TYPE lines (connection show)
+#   active              UUID:STATE lines (connection show --active)
+#   conn/<uuid>/<key>   raw setting values, one file per key (connection show uuid <uuid> with -g)
+# HW_VPN_NM_DOWN=1 fails every call as when NetworkManager is unavailable. HW_VPN_DOWN selects the effect of
+# connection down: ok (default) deactivates; ignored exits 0 without a state change (polkit denial); failed exits 4
+# but deactivates; slow leaves the profile deactivating until the next active read. connection up copies its
+# passwd-file to $state/passwd-<uuid>; HW_VPN_UP selects its effect: ok (default) activates; failed exits 4 without
+# a state change; partial leaves the profile activating and exits 4.
+set -Eeuo pipefail
+printf 'nmcli %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${LC_ALL:-}" == C ]] || printf 'nmcli-locale %s\n' "$*" >> "$CFG_TEST_CALLS"
+[[ "${HW_VPN_NM_DOWN:-0}" == 0 ]] || exit 8
+state=$CFG_TEST_DIR/vpn
+fields=''
+while (($#)); do
+  case "$1" in
+    -e) shift 2 ;;
+    -t) shift ;;
+    -f | -g) fields=$2; shift 2 ;;
+    *) break ;;
+  esac
+done
+
+# Replaces the active state of <uuid>; an empty state removes it.
+set_state() {
+  /usr/bin/awk -F: -v uuid="$1" '$1 != uuid' "$state/active" > "$state/active.new"
+  [[ -z "$2" ]] || printf '%s:%s\n' "$1" "$2" >> "$state/active.new"
+  /usr/bin/mv "$state/active.new" "$state/active"
+}
+
+case "$1 ${2:-}" in
+  'connection show')
+    if [[ "${3:-}" == --active ]]; then
+      [[ "$fields" == UUID,STATE ]] || exit 97
+      /usr/bin/cat "$state/active"
+      for marker in "$state"/settle-*; do
+        [[ -e "$marker" ]] || continue
+        set_state "${marker##*/settle-}" ''
+        /usr/bin/rm "$marker"
+      done
+    elif [[ "${3:-}" == uuid ]]; then
+      dir=$state/conn/$4
+      [[ -d "$dir" ]] || exit 10
+      for field in ${fields//,/ }; do
+        printf '%s\n' "$(/usr/bin/cat "$dir/$field" 2> /dev/null || true)"
+      done
+    else
+      [[ "$fields" == UUID,TYPE ]] || exit 97
+      /usr/bin/cat "$state/profiles"
+    fi ;;
+  'connection down')
+    [[ "$3" == uuid ]] || exit 97
+    case "${HW_VPN_DOWN:-ok}" in
+      ok) set_state "$4" '' ;;
+      ignored) ;;
+      failed) set_state "$4" ''; exit 4 ;;
+      slow) set_state "$4" deactivating; : > "$state/settle-$4" ;;
+    esac ;;
+  'connection up')
+    [[ "$3" == uuid && "${5:-}" == passwd-file && $# -eq 6 ]] || exit 97
+    /usr/bin/cp -- "$6" "$state/passwd-$4"
+    case "${HW_VPN_UP:-ok}" in
+      ok) set_state "$4" activated ;;
+      failed) exit 4 ;;
+      partial) set_state "$4" activating; exit 4 ;;
+    esac ;;
+  *) printf 'Unexpected nmcli invocation\n' >&2; exit 97 ;;
+esac

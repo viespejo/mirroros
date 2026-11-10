@@ -1,0 +1,42 @@
+#!/usr/bin/bash
+# openconnect double for vpn-connect. Records argv in $CFG_TEST_CALLS, copies the --config file to
+# $CFG_TEST_DIR/openconnect.conf and its directory path to $CFG_TEST_DIR/openconnect.runtime. Prompts on stderr and
+# reads a password and a one-time code from stdin. HW_VPN_OC selects the result: ok (default) prints synthetic
+# --authenticate output; failed exits 1 like a rejected login; output prints $CFG_TEST_DIR/openconnect.output
+# verbatim; wait prompts for the password and blocks until interrupted.
+set -Eeuo pipefail
+printf 'openconnect %s\n' "$*" >> "$CFG_TEST_CALLS"
+config=''
+for argument in "$@"; do
+  [[ "$argument" != --config=* ]] || config=${argument#--config=}
+done
+for ((i = 1; i < $#; i++)); do
+  [[ "${!i}" != --config ]] || { next=$((i + 1)); config=${!next}; }
+done
+[[ -n "$config" ]] || exit 97
+/usr/bin/cp -- "$config" "$CFG_TEST_DIR/openconnect.conf"
+printf '%s\n' "${config%/*}" > "$CFG_TEST_DIR/openconnect.runtime"
+
+printf 'Password: ' >&2
+IFS= read -rs password
+printf '\n' >&2
+if [[ "${HW_VPN_OC:-ok}" == wait ]]; then
+  printf 'Response: ' >&2
+  /usr/bin/sleep 30
+  exit 1
+fi
+printf 'Response: ' >&2
+IFS= read -rs otp
+printf '\n' >&2
+printf '%s\n' "$password:$otp" > "$CFG_TEST_DIR/openconnect.answers"
+case "${HW_VPN_OC:-ok}" in
+  ok)
+    printf "COOKIE='synthetic-cookie-value'\n"
+    printf "HOST='192.0.2.10'\n"
+    printf "CONNECT_URL='https://vpn.example.invalid/group'\n"
+    printf "FINGERPRINT='pin-sha256:synthetic-fingerprint'\n"
+    printf "RESOLVE='vpn.example.invalid:192.0.2.10'\n" ;;
+  failed) printf 'Login failed.\n' >&2; exit 1 ;;
+  output) /usr/bin/cat "$CFG_TEST_DIR/openconnect.output" ;;
+  *) exit 97 ;;
+esac

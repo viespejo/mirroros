@@ -1,10 +1,16 @@
 #!/usr/bin/bash
 # Prerequisites: validated packages; NetworkManager owns connectivity and DNS.
 # Context: CONFIGURE_CONTEXT, STEP_DIR and shared helpers.
-# Postconditions: the OpenConnect plugin is installed and recognised by NetworkManager's client.
-# No corporate profile, authentication, connection or secret is required or created.
+# Postconditions: the OpenConnect plugin is installed and recognised by NetworkManager's client; the owned
+# vpn-connect and vpn-profile commands are delivered for the shell network panel.
+# No corporate profile, authentication, connection or secret is required or created; this step never runs the
+# delivered commands or openconnect.
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
+for command in vpn-connect vpn-profile; do
+  cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
+  cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
+done
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_exec bash -s < "$STEP_DIR/check"

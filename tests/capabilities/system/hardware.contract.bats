@@ -2,8 +2,17 @@
 load ../support
 load hardware-support
 
-setup() { hardware_setup; }
+setup() {
+  hardware_setup
+  # Sentinels: configure must never run the delivered VPN commands or OpenConnect itself (DEC-085, DEC-086).
+  for tool in vpn-connect vpn-profile openconnect; do
+    cp "$CFG_TEST_DIR/bin/hardware-tool" "$CFG_TEST_DIR/bin/$tool"
+  done
+}
 teardown() { cfg_test_teardown; }
+
+# A function, not an inline `! grep`, so a match fails the test under errexit.
+hardware_assert_no_vpn_run() { ! grep -Eq '^(vpn-connect|vpn-profile|openconnect) |/hardware/vpn-(connect|profile)( |$)' "$CFG_TEST_CALLS"; }
 
 hardware_assert_delivery() {
   local command unit
@@ -32,6 +41,12 @@ hardware_assert_delivery() {
   grep -qxF 'TimeoutStopSec=2s' "$unit"
   [ "$(stat -c %a "$unit")" = 644 ]
   [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-bt-agent.service")" = /etc/systemd/user/mirroros-bt-agent.service ]
+  for package in networkmanager-openconnect openconnect; do [ -f "$CFG_TEST_INSTALLED/$package" ]; done
+  for command in vpn-connect vpn-profile; do
+    cmp "$CFG_SOURCE_ROOT/capabilities/system/vpn/$command" "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command"
+    [ "$(stat -c %a "$HW_TEST_ROOT/usr/share/mirroros/hardware/$command")" = 755 ]
+  done
+  hardware_assert_no_vpn_run
 }
 
 hardware_assert_rerun() {
@@ -41,6 +56,7 @@ hardware_assert_rerun() {
   for step in audio bluetooth power vpn; do [[ "$output" == *"system/$step: unchanged"* ]]; done
   ! grep -Eq '^systemctl (start|restart|reload|enable) ' "$CFG_TEST_CALLS"
   ! grep -Eq '^pacman -S(yu)? ' "$CFG_TEST_CALLS"
+  hardware_assert_no_vpn_run
 }
 
 @test "hardware steps in running context activate only governed system services and rerun unchanged" {
@@ -132,4 +148,5 @@ hardware_assert_rerun() {
   run /usr/bin/bash -c 'source "$1"; printf "%s\n" "${CFG_STEPS[@]}"' bash "$CFG_SOURCE_ROOT/capabilities/configure-steps"
   [ "$status" -eq 0 ]
   [[ "$output" == *$'system/audio\nsystem/bluetooth\nsystem/power\nsystem/network\nsystem/vpn\ndesktop/compositor/providers/hyprland'* ]]
+  [ "${#lines[@]}" -eq 19 ]
 }

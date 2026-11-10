@@ -1,0 +1,260 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Interactive OpenConnect authentication handoff to NetworkManager for one existing profile. MirrorOS-owned code
+# (GPL-3.0-only) with no upstream source; it reimplements the approach validated by the MirrorOS prototype
+# prototypes/vpn-openconnect-helper (ADR 0025 G8, plan 02-30). The shell network panel launches it in Foot.
+#
+# Usage:
+#   vpn-connect <uuid>
+#     Runs only as the session user in a local terminal (no root, no SSH, a TTY on stdin, stdout and stderr) with a
+#     private tmpfs runtime directory /run/user/$EUID. The profile must be an inactive NetworkManager OpenConnect
+#     profile with cookie-flags, gwcert-flags, gateway-flags and resolve-flags set to 2 (not saved) and a gateway in
+#     vpn.data. Only gateway, protocol (allowlist: anyconnect; anyconnect when absent) and the optional useragent
+#     are read from vpn.data. The username is prompted, or reused from
+#     ${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/vpn/<uuid>.json: SAVE stores a typed username, FORGET deletes
+#     a saved one. Password and one-time code are entered only at OpenConnect's own prompts.
+#     OpenConnect authenticates with a private config file; a strict parser turns its output into a passwd-file and
+#     NetworkManager activates the profile with it.
+# Exit codes: 0 connected; 2 usage or malformed UUID; 3 environment (root, SSH, no TTY, runtime directory, missing
+#   tool, unsafe username preference); 4 invalid profile (missing, not OpenConnect, secret flags, gateway,
+#   protocol); 5 profile already active, activating or deactivating; 6 cancelled (Ctrl+C, end of input, hangup or
+#   termination); 7 authentication failed; 8 unsupported authentication output; 9 activation failed.
+#
+# No username, gateway, cookie or fingerprint is passed on any argv; secrets are never stored in the profile and
+# --show-secrets, --verbose and --gnutls-priority are never used; no profile, DNS or route setting is modified. The
+# private runtime directory is removed on every exit, and a partially activated profile is brought down and
+# verified with vpn-profile disconnect. Never runs sudo or pkexec.
+
+set +x
+set +v
+set -Eeuo pipefail
+umask 077
+
+OPENCONNECT=org.freedesktop.NetworkManager.openconnect
+UUID_PATTERN='^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+USERNAME_PATTERN='^[A-Za-z0-9_.@\\-]+$'
+PROCEDURE='See "Private corporate VPN procedure" in the MirrorOS hardware procedure (docs/procedures/hardware.md).'
+
+# fail <status> <message>
+fail() {
+  printf 'Error: %s\n' "$2" >&2
+  exit "$1"
+}
+
+invalid_profile() {
+  printf 'Error: %s No profile was changed.\n%s\n' "$1" "$PROCEDURE" >&2
+  exit 4
+}
+
+# nmcli translates values under a non-English session; -e no keeps ':' and ',' in -g values unescaped.
+nm() {
+  LC_ALL=C nmcli "$@" 2>/dev/null
+}
+
+check_environment() {
+  local tool runtime=${XDG_RUNTIME_DIR:-}
+  ((EUID != 0)) || fail 3 'run vpn-connect as the session user, not as root.'
+  [[ -z "${SSH_CONNECTION:-}" ]] || fail 3 'run vpn-connect in a local terminal, not over SSH.'
+  [[ -t 0 && -t 1 && -t 2 ]] || fail 3 'run vpn-connect in an interactive terminal.'
+  for tool in nmcli openconnect jq findmnt stat mktemp; do
+    command -v "$tool" >/dev/null || fail 3 "the required tool $tool is not installed."
+  done
+  [[ "$runtime" == "/run/user/$EUID" && -d "$runtime" && ! -L "$runtime" ]] ||
+    fail 3 'XDG_RUNTIME_DIR is not the private /run/user directory of this user.'
+  [[ "$(stat -c '%u %a' -- "$runtime")" == "$EUID 700" ]] || fail 3 'the user runtime directory is not private.'
+  [[ "$(findmnt -n -o FSTYPE --target "$runtime")" == tmpfs ]] || fail 3 'the user runtime directory is not on tmpfs.'
+}
+
+# Sets $gateway, $protocol and $useragent from the profile's vpn.data; refuses anything it cannot read strictly.
+read_profile() {
+  local service data item key value flag
+  local item_pattern='^([A-Za-z0-9_-]+)[[:space:]]*=[[:space:]]*(.*)$'
+  local -a items
+  local -A settings=()
+  service=$(nm -e no -g vpn.service-type connection show uuid "$uuid") ||
+    invalid_profile 'the profile does not exist or NetworkManager is not available.'
+  [[ "$service" == "$OPENCONNECT" ]] || invalid_profile 'the profile is not a NetworkManager OpenConnect profile.'
+  data=$(nm -e no -g vpn.data connection show uuid "$uuid") || invalid_profile 'the profile settings are unreadable.'
+  [[ ! "$data" =~ [[:cntrl:]] ]] || invalid_profile 'the profile settings contain control characters.'
+  [[ -z "$data" ]] || mapfile -t items < <(printf '%s\n' "${data//, /$'\n'}")
+  for item in "${items[@]}"; do
+    [[ "$item" =~ $item_pattern ]] || invalid_profile 'the profile settings are not in the expected format.'
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    [[ ! -v "settings[$key]" ]] || invalid_profile 'the profile settings repeat a key.'
+    settings[$key]=$value
+  done
+  for flag in cookie-flags gwcert-flags gateway-flags resolve-flags; do
+    [[ "${settings[$flag]:-}" == 2 ]] ||
+      invalid_profile 'the profile must set cookie-flags, gwcert-flags, gateway-flags and resolve-flags to 2.'
+  done
+  gateway=${settings[gateway]:-}
+  [[ -n "$gateway" ]] || invalid_profile 'the profile has no gateway.'
+  protocol=${settings[protocol]:-anyconnect}
+  [[ "$protocol" == anyconnect ]] || invalid_profile 'the profile protocol is not supported; only anyconnect is.'
+  useragent=${settings[useragent]:-}
+}
+
+check_inactive() {
+  local active line
+  active=$(nm -t -f UUID,STATE connection show --active) || invalid_profile 'NetworkManager is not available.'
+  while IFS= read -r line; do
+    if [[ "${line%%:*}" == "$uuid" ]]; then
+      fail 5 'the VPN profile is already active or changing state; disconnect it first.'
+    fi
+  done <<<"$active"
+}
+
+private_directory() {
+  [[ -d "$1" && ! -L "$1" && "$(stat -c '%u %a' -- "$1")" == "$EUID 700" ]] ||
+    fail 3 'the VPN preferences directory must be a directory owned by you with mode 0700.'
+}
+
+# Sets $username from a saved preference when present and valid.
+load_username() {
+  [[ -e "$preferences" || -L "$preferences" ]] || return 0
+  private_directory "$preferences_dir"
+  [[ -f "$preferences" && ! -L "$preferences" && "$(stat -c '%u %a %h' -- "$preferences")" == "$EUID 600 1" ]] ||
+    fail 3 'the saved VPN username must be a regular file owned by you with mode 0600 and one link.'
+  username=$(jq -er 'if type == "object" and keys == ["schema_version", "username"] and .schema_version == 1
+    and (.username | type == "string") then .username else error end' <"$preferences" 2>/dev/null) ||
+    fail 3 'the saved VPN username file is invalid; delete it to continue.'
+  [[ "$username" =~ $USERNAME_PATTERN ]] || fail 3 'the saved VPN username file is invalid; delete it to continue.'
+}
+
+save_username() {
+  local temporary
+  [[ ! -e "$preferences_dir" && ! -L "$preferences_dir" ]] || private_directory "$preferences_dir"
+  # umask 077 creates every missing level with mode 0700.
+  mkdir -p -- "$preferences_dir"
+  private_directory "$preferences_dir"
+  [[ ! -e "$preferences" && ! -L "$preferences" ]] || fail 3 'a saved VPN username already exists; it was not overwritten.'
+  temporary=$(mktemp "$preferences_dir/.new.XXXXXXXX")
+  # The username reaches jq through stdin, never through its arguments.
+  if ! printf '%s\n' "$username" | jq -cRn '{schema_version: 1, username: input}' >"$temporary" ||
+    ! mv -nT -- "$temporary" "$preferences" || [[ -e "$temporary" ]]; then
+    rm -f -- "$temporary"
+    fail 3 'the VPN username could not be saved; no existing file was overwritten.'
+  fi
+}
+
+choose_username() {
+  local answer
+  username=''
+  load_username
+  if [[ -n "$username" ]]; then
+    printf 'Using the VPN username saved for this profile.\n'
+    printf 'Press Enter to continue, or type FORGET to delete it and enter another: '
+    IFS= read -r answer || exit 6
+    [[ "$answer" == FORGET ]] || return 0
+    rm -f -- "$preferences"
+    username=''
+    printf 'Saved VPN username deleted.\n'
+  fi
+  while [[ -z "$username" ]]; do
+    printf 'VPN username (not the password): '
+    IFS= read -r username || exit 6
+    if [[ ! "$username" =~ $USERNAME_PATTERN ]]; then
+      printf 'Use letters, digits and . _ @ - only.\n' >&2
+      username=''
+    fi
+  done
+  printf 'Type SAVE to remember this username for this profile, or press Enter to use it once: '
+  IFS= read -r answer || exit 6
+  if [[ "$answer" == SAVE ]]; then
+    save_username
+    printf 'VPN username saved. No password, one-time code or cookie is stored.\n'
+  fi
+}
+
+# parse_auth <openconnect output> <passwd-file>: accepts only single-quoted COOKIE, HOST, FINGERPRINT, RESOLVE and
+# CONNECT_URL assignments, each at most once; never evaluates the output.
+parse_auth() {
+  local line key value assignment="^([A-Z_]+)='([^']*)'$"
+  local -A fields=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || continue
+    [[ "$line" =~ $assignment ]] || fail 8 'unsupported authentication output; nothing was activated.'
+    key=${BASH_REMATCH[1]}
+    value=${BASH_REMATCH[2]}
+    case "$key" in
+      COOKIE | HOST | FINGERPRINT | RESOLVE | CONNECT_URL) ;;
+      *) fail 8 'unexpected authentication field; nothing was activated.' ;;
+    esac
+    [[ ! -v "fields[$key]" ]] || fail 8 'duplicate authentication field; nothing was activated.'
+    [[ ! "$value" =~ [[:cntrl:]] ]] || fail 8 'invalid authentication field; nothing was activated.'
+    fields[$key]=$value
+  done <"$1"
+  for key in COOKIE HOST FINGERPRINT RESOLVE; do
+    [[ -n "${fields[$key]:-}" ]] || fail 8 'a required authentication field is missing; nothing was activated.'
+  done
+  {
+    printf 'vpn.secrets.cookie:%s\n' "${fields[COOKIE]}"
+    printf 'vpn.secrets.gwcert:%s\n' "${fields[FINGERPRINT]}"
+    printf 'vpn.secrets.gateway:%s\n' "${fields[HOST]}"
+    printf 'vpn.secrets.resolve:%s\n' "${fields[RESOLVE]}"
+  } >"$2"
+}
+
+cleanup() {
+  local status=$?
+  trap - EXIT HUP INT TERM
+  if ((activating && !connected)); then
+    if ! /usr/bin/bash "$HERE/vpn-profile" disconnect "$uuid" >/dev/null 2>&1; then
+      printf 'Warning: the VPN may still be connected; disconnect it from the network panel.\n' >&2
+    fi
+  fi
+  if [[ -n "$runtime" && -d "$runtime" ]]; then
+    rm -rf -- "$runtime"
+  fi
+  exit "$status"
+}
+
+main() {
+  local name status=0
+  (($# == 1)) && [[ $1 =~ $UUID_PATTERN ]] || fail 2 'usage: vpn-connect <uuid>'
+  uuid=$1
+  check_environment
+
+  runtime=''
+  activating=0
+  connected=0
+  trap cleanup EXIT
+  trap 'exit 6' HUP INT TERM
+
+  read_profile
+  check_inactive
+  name=$(nm -e no -g connection.id connection show uuid "$uuid") || invalid_profile 'the profile name is unreadable.'
+  printf 'VPN profile: %s\n' "${name//[[:cntrl:]]/?}"
+
+  preferences_dir=${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/vpn
+  preferences=$preferences_dir/$uuid.json
+  choose_username
+
+  printf 'Enter the password and one-time code at the OpenConnect prompts. Press Ctrl+C to cancel.\n'
+  runtime=$(mktemp -d "$XDG_RUNTIME_DIR/mirroros-vpn.XXXXXXXX")
+  {
+    printf 'server = %s\n' "$gateway"
+    printf 'user = %s\n' "$username"
+    [[ -z "$useragent" ]] || printf 'useragent = %s\n' "$useragent"
+  } >"$runtime/auth.conf"
+  unset gateway username useragent
+
+  openconnect --protocol="$protocol" --authenticate --config "$runtime/auth.conf" >"$runtime/auth.result" ||
+    status=$?
+  ((status != 130)) || exit 6
+  ((status == 0)) || fail 7 'authentication failed; nothing was activated.'
+  parse_auth "$runtime/auth.result" "$runtime/passwd"
+  rm -f -- "$runtime/auth.conf" "$runtime/auth.result"
+
+  activating=1
+  LC_ALL=C nmcli connection up uuid "$uuid" passwd-file "$runtime/passwd" >/dev/null ||
+    fail 9 'NetworkManager could not activate the VPN.'
+  connected=1
+  printf 'VPN connected.\n'
+}
+
+HERE=${BASH_SOURCE[0]%/*}
+declare uuid='' runtime='' preferences_dir='' preferences='' gateway='' protocol='' useragent='' username=''
+declare -i activating=0 connected=0
+main "$@"
