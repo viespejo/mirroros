@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 // Delivered shell code and owned hardware commands must not call Omarchy executables, Omarchy IPC, its media
 // service or OMARCHY_PATH. Comments are ignored; legacy data identifiers kept from upstream are allowlisted.
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const roots = ['capabilities/desktop/shell', 'capabilities/system/audio', 'capabilities/system/network',
-  'capabilities/system/power'];
+const roots = ['capabilities/desktop/shell', 'capabilities/system/audio', 'capabilities/system/bluetooth',
+  'capabilities/system/network', 'capabilities/system/power'];
 const singles = ['capabilities/desktop/compositor/providers/hyprland/display'];
 
 const allowed = new Map([

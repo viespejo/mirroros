@@ -283,8 +283,14 @@ Item {
   }
 
   // Panel IPC, declared once for the whole bar (never per bar instance) and
-  // routed like the keyboard shortcuts. Targets use plain names; bluetooth
-  // (plan 02-29) follows the same convention.
+  // routed like the keyboard shortcuts. Targets use plain names.
+  IpcHandler {
+    target: "bluetooth"
+    function open(): string { return root.requestPanel("omarchy.bluetooth", "open") }
+    function close(): string { return root.requestPanel("omarchy.bluetooth", "close") }
+    function toggle(): string { return root.requestPanel("omarchy.bluetooth", "toggle") }
+  }
+
   IpcHandler {
     target: "network"
     function open(): string { return root.requestPanel("omarchy.network", "open") }

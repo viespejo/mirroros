@@ -60,22 +60,24 @@ test('center sections navigate as one and other regions stay alone', () => {
 });
 
 test('positional panels count drawn panel icons of one monitor and skip non-panel widgets', () => {
-  const ids = ['omarchy.tray', 'omarchy.keyboard-layout', 'omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power'];
+  const ids = ['omarchy.tray', 'omarchy.keyboard-layout', 'omarchy.bluetooth', 'omarchy.network', 'omarchy.audio',
+    'omarchy.monitor', 'omarchy.power'];
   const layout = { right: ids.map(id => ({ id })) };
   const slots = [];
   for (const screenName of ['A', 'B'])
     for (const id of ids)
       slots.push({ region: 'right', moduleName: id, screenName,
         panel: !['omarchy.tray', 'omarchy.keyboard-layout'].includes(id),
-        drawn: !(screenName === 'B' && id === 'omarchy.network') });
+        drawn: !(screenName === 'B' && id === 'omarchy.bluetooth') });
   const names = screen => [...model.panelSlots(['right'], layout, slots, screen)].map(s => s.moduleName);
-  assert.deepEqual(names('A'), ['omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
-  assert.deepEqual(names('B'), ['omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
+  assert.deepEqual(names('A'), ['omarchy.bluetooth', 'omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
+  // No adapter: the hidden Bluetooth icon is not counted and the previous numbering holds.
+  assert.deepEqual(names('B'), ['omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
   assert.ok(model.panelSlots(['right'], layout, slots, 'A').every(s => s.screenName === 'A'));
-  assert.equal(names('').length, 4);
+  assert.equal(names('').length, 5);
 });
 
-test('the default right section numbers network 1, audio 2, display 3 and power 4', () => {
+test('the default right section numbers Bluetooth 1, network 2, audio 3, display 4 and power 5', () => {
   const defaults = JSON.parse(readFileSync(new URL('defaults.json', shell), 'utf8'));
   const right = defaults.bar.layout.right.map(entry => entry.id);
   const isPanel = id => {
@@ -85,12 +87,12 @@ test('the default right section numbers network 1, audio 2, display 3 and power 
   };
   const slots = right.map(id => ({ region: 'right', moduleName: id, screenName: 'A', panel: isPanel(id), drawn: true }));
   assert.deepEqual([...model.panelSlots(['right'], { right: right.map(id => ({ id })) }, slots, 'A')].map(s => s.moduleName),
-    ['omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
+    ['omarchy.bluetooth', 'omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
 });
 
 test('panel IPC targets are declared once, outside the per-screen bar, with open/close/toggle only', () => {
   const variants = bar.indexOf('  Variants {');
-  for (const target of ['network', 'audio', 'display', 'power']) {
+  for (const target of ['bluetooth', 'network', 'audio', 'display', 'power']) {
     const matches = [...bar.matchAll(new RegExp(`target: "${target}"`, 'g'))];
     assert.equal(matches.length, 1, target);
     assert.ok(matches[0].index < variants, target);
@@ -102,7 +104,7 @@ test('panel IPC targets are declared once, outside the per-screen bar, with open
 });
 
 test('the shell registers the panel global shortcuts under the mirroros application id', () => {
-  for (const name of ['panel.network', 'panel.audio', 'panel.display', 'panel.power', 'panel.notifications'])
+  for (const name of ['panel.bluetooth', 'panel.network', 'panel.audio', 'panel.display', 'panel.power', 'panel.notifications'])
     assert.match(shellQml, new RegExp(`appid: "mirroros"\\n\\s+name: "${name.replace('.', '\\.')}"`), name);
   assert.match(shellQml, /model: \[1, 2, 3, 4, 5, 6, 7, 8, 9\][\s\S]*name: "panel-at-" \+ modelData[\s\S]*togglePanelAt\("right", modelData\)/);
   assert.doesNotMatch(shellQml, /appid: "omarchy"|SocketServer|OMARCHY_PATH/);

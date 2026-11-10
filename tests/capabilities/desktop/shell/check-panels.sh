@@ -72,6 +72,12 @@ qml = qml.trimEnd().slice(0, -1) + `
         displays: item.displays.map(function(d) { return d.name }),
         toggleable: item.displays.filter(function(d) { return item.canToggle(d) }).map(function(d) { return d.name }) })
     }
+    function bluetoothState(): string {
+      var item = panelItem("omarchy.bluetooth")
+      if (!item) return JSON.stringify({ present: false })
+      return JSON.stringify({ present: true, opened: item.opened, visible: item.visible, unavailable: item.unavailable,
+        bluezAvailable: item.bluezAvailable, unavailableReason: item.unavailableReason, devices: item.devices.length })
+    }
     function networkState(): string {
       var item = panelItem("omarchy.network")
       if (!item) return JSON.stringify({ present: false })
@@ -120,11 +126,11 @@ done
 
 # Panel targets are declared once for the whole shell, never per bar instance.
 qs ipc -p "$run_dir" show > "$tmp/targets.txt"
-for target in network audio display power; do
+for target in bluetooth network audio display power; do
     count=$(grep -c "^target $target\$" "$tmp/targets.txt" || true)
     [[ "$count" == 1 ]] || { printf 'FAIL target %s declared %s times\n' "$target" "$count"; exit 1; }
 done
-printf 'PASS panel IPC targets network, audio, display and power declared once\n'
+printf 'PASS panel IPC targets bluetooth, network, audio, display and power declared once\n'
 
 # An absent panel answers unavailable without opening anything.
 [[ "$(call panelTest request omarchy.absent open)" == unavailable ]] || { printf 'FAIL absent panel not unavailable\n'; exit 1; }
@@ -151,7 +157,15 @@ if [[ "$(panel_field powerState present)" == true && "$(panel_field powerState b
     targets=(network audio display)
 fi
 
-declare -A ids=([network]=omarchy.network [audio]=omarchy.audio [display]=omarchy.monitor [power]=omarchy.power)
+# Bluetooth panel: hidden while BlueZ runs without an adapter (not counted, not opened); drawn otherwise, including
+# the unavailable state.
+if [[ "$(panel_field bluetoothState visible)" == true ]]; then
+    targets=(bluetooth "${targets[@]}")
+else
+    printf 'NOT EXERCISED bluetooth panel hidden (BlueZ running without an adapter)\n'
+fi
+
+declare -A ids=([bluetooth]=omarchy.bluetooth [network]=omarchy.network [audio]=omarchy.audio [display]=omarchy.monitor [power]=omarchy.power)
 available=()
 for target in "${targets[@]}"; do
     result=$(call "$target" open)
@@ -195,6 +209,27 @@ if [[ " ${available[*]} " == *" network "* ]]; then
         printf 'PASS network panel opens unavailable without NetworkManager\n'
     fi
     [[ "$(call network toggle)" == closed ]] && await_field active ""
+fi
+
+# Bluetooth panel: the unavailable state follows BlueZ's bus name and states the tooltip reason with no devices.
+# bluetooth.service is never stopped here (root); without a controller it is not started, which exercises the case.
+if [[ " ${available[*]} " == *" bluetooth "* ]]; then
+    [[ "$(call bluetooth open)" == opened ]] && await_field active omarchy.bluetooth
+    sleep 0.5
+    bluez=$(busctl --system call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.bluez)
+    if [[ "$bluez" == 'b true' ]]; then
+        [[ "$(panel_field bluetoothState bluezAvailable)" == true ]] ||
+            { printf 'FAIL bluetooth panel unavailable while BlueZ runs\n'; exit 1; }
+        printf 'PASS bluetooth panel available with BlueZ running and an adapter\n'
+        printf 'NOT EXERCISED bluetooth panel unavailable state (bluetooth.service running; manual step)\n'
+    else
+        [[ "$(panel_field bluetoothState unavailable)" == true &&
+           "$(panel_field bluetoothState unavailableReason)" == "Bluetooth unavailable: "* &&
+           "$(panel_field bluetoothState devices)" == 0 ]] ||
+            { printf 'FAIL bluetooth panel without BlueZ is not unavailable with a reason and no devices\n'; exit 1; }
+        printf 'PASS bluetooth panel opens unavailable without BlueZ: %s\n' "$(panel_field bluetoothState unavailableReason)"
+    fi
+    [[ "$(call bluetooth toggle)" == closed ]] && await_field active ""
 fi
 
 # Audio panel: the WirePlumber dummy sink is never listed; without an output the panel opens unavailable with no rows.
