@@ -99,6 +99,7 @@ stays in that terminal path; PSKs use the native API. See the hardware procedure
 band states, diagnostics and the browser requirement for captive portals. The plan 02-26 network prototype
 `053e7c3` was a design reference, not promoted code or copied tests; production was re-reviewed against Omarchy
 `v4.5.0` (DEC-050 in the [network interview log](../technical-interviews/story-4-4-network-panel_log.md)).
+Its VPN section (plan 02-30) opens `vpn-connect` in Foot; see [Connect and disconnect](hardware.md#connect-and-disconnect).
 
 ## Fixed palette
 

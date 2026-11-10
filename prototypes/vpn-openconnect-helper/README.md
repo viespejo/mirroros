@@ -2,10 +2,27 @@
 
 ## Status
 
-Executed during plan 02-25 Task 7 (Story 4.4 T14s supervised acceptance) as acceptance-only tooling. Preserved here
-as the starting point for the owned VPN wrapper deferred to plan 02-30. It is not a MirrorOS product command:
-configure does not deliver it, and production code never sources it. A product wrapper must be reimplemented
-through `capabilities/system/vpn` with its own review, not promoted by moving this directory.
+Executed during plan 02-25 Task 7 (Story 4.4 T14s supervised acceptance) as acceptance-only tooling. Superseded by
+the owned `capabilities/system/vpn` commands (plan 02-30); kept unchanged as the evidence behind that design. It is
+not a MirrorOS product command: configure does not deliver it, and production code never sources it.
+
+## Superseded by
+
+`vpn-connect` and `vpn-profile` in [`capabilities/system/vpn`](../../capabilities/system/vpn/sources.md), an
+independent reimplementation reviewed in the
+[VPN panel interview log](../../docs/technical-interviews/story-4-4-vpn-panel_log.md) (DEC-075..DEC-094) and launched
+from the shell network panel. Deliberate differences:
+
+- The gateway, protocol and optional user agent come from the profile's `vpn.data`; nothing about the server is
+  prompted or remembered.
+- Preferences live in `${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/vpn/<uuid>.json` and hold only the username;
+  `~/.mirroros-vpn-acceptance/` is never read and should be deleted.
+- The profile UUID is an argument; there is no typed `CONNECT` confirmation.
+- `FORGET` deletes a saved username and asks again.
+- Disconnect verifies the effective state after `down` (`vpn-profile disconnect`), and connect cleanup uses the same
+  check after a partial activation.
+- Distinct exit codes for usage, environment, profile, already active, cancelled, authentication, unsupported output
+  and activation failures.
 
 ## Question
 

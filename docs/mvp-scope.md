@@ -42,7 +42,7 @@ project-owned QML.
 | Administrative privilege | installation | sudo | Source: `install/plan/policy.json` |
 | Audio | configure | PipeWire, WirePlumber, pipewire-pulse and pipewire-alsa | Story 4.4 reviewed provider selection; owned volume command and A2DP preference; `pavucontrol` as the advanced audio tool, launched from the audio panel ([ADR 0026](adr/0026-mpris-player-names-and-advanced-audio-tool.md)); [hardware procedure](procedures/hardware.md) |
 | Bluetooth | configure | BlueZ (bluez and bluez-utils) | Story 4.4 reviewed provider selection; permanent bluetoothctl terminal path; [hardware procedure](procedures/hardware.md) |
-| Corporate Cisco OpenConnect VPN | configure | networkmanager-openconnect with OpenConnect authentication | Story 4.4 scope addition for daily corporate connectivity; NetworkManager owns routes and DNS; private terminal authentication and profile procedure in the [hardware procedure](procedures/hardware.md) |
+| Corporate Cisco OpenConnect VPN | configure | networkmanager-openconnect with OpenConnect authentication | Story 4.4 scope addition for daily corporate connectivity; NetworkManager owns routes and DNS; owned `vpn-connect`/`vpn-profile` commands for terminal authentication and verified disconnect, launched from the network panel under [ADR 0025](adr/0025-shell-panels.md); private profile procedure in the [hardware procedure](procedures/hardware.md#private-corporate-vpn-procedure) |
 | Package updates with AUR review | configure | yay | Story 4.7 |
 
 ### Hardware
