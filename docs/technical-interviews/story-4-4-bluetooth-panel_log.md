@@ -202,3 +202,66 @@ after DEC-066 ([network panel log](story-4-4-network-panel_log.md)). Settled inp
   as not exercised/pending. `docs/procedures/hardware.md` gains a "Bluetooth panel" matrix row with the Framework
   column "pending target-laptop validation".
 - **Status**: Accepted
+
+## Execution findings — 2026-11-09/10 (plan 02-29)
+
+These findings supplement, and do not rewrite, DEC-067 to DEC-074.
+
+- Laboratory checkpoint approved on `3748a64`: configure and unchanged rerun (19 steps); `bluez-tools`, commands,
+  license and unit delivered byte-identical; user link present; unit enabled, not started by configure, and skipped
+  at login by `ConditionPathIsDirectory` with `NRestarts=0`; four session suites passed (56 PASS) including the
+  Bluetooth IPC/shortcut cases and the unavailable state without BlueZ; maintainer checked chords, numbering 1–4
+  (no battery), Tab, any-button click and Advanced. qmllint reported only new entries in existing categories
+  (136 `bar/widgets/Bluetooth.qml`, 1 `shell.qml` GlobalShortcut); the baseline was updated after review (+137/−0).
+  Records: `evidence/shell-panels/lab-02-29/checkpoint.md` (ignored).
+- Supervised T14s checkpoint approved, non-qualifying, final candidate `1907d37` (earlier `7ef2959`, `f993a99`):
+  agent active with `NoInputNoOutput` and no device identity in its journal; radio switch and repeat protection;
+  `Discovering: no` after close; Just Works headset pairing from the panel left it trusted and connected and switched
+  the default output; connecting a terminal-paired untrusted mouse left trust unchanged; disconnect and forget
+  settled; the T14s is not visible to a phone and a phone-initiated attempt produced no connection; `Pairable: yes`
+  with the agent registered (baseline without it: `no`), `Discoverable: no` (DEC-071); chords, numbering 1–5, Tab and
+  any-button click; no sudo, polkit or pkexec. Records: `evidence/shell-panels/t14s-02-29/checkpoint.md` (ignored).
+- DEC-068 persistence failed on the T14s: the radio came back on after reboot. See TODO-f923b17a.
+- DEC-070 is only partly confirmed. A code request that is not accepted fails with the Advanced literal and leaves
+  the device untrusted under Available, and Advanced with `pair` pairs through numeric comparison without trust. But
+  a phone shows the Just Works request from the `NoInputNoOutput` agent as a consent dialog; accepting it paired and
+  trusted the phone from the panel without numeric comparison (no MITM protection). The hardware procedure documents
+  it; no code change was made.
+- `bt-agent` catches SIGTERM without exiting. With `PartOf=graphical-session.target` (DEC-069) every logout with an
+  adapter waited the default 90 s stop timeout on a black screen; upstream's unit has no `PartOf=`. The unit now sets
+  `KillSignal=SIGHUP` (not caught; a clean exit for systemd) and `TimeoutStopSec=2s`; the agent stops in about 20 ms.
+  The laboratory could not show it because the unit is skipped there. A changed `/etc/systemd/user` unit reaches a
+  running session only after `systemctl --user daemon-reload` or a new boot.
+- On the T14s (1920×1080 at scale 1.6) Advanced… overflowed the card bottom; the device list cap went from
+  `Style.space(400)` to `Style.space(240)`, as in the network panel. See TODO-644fa670.
+- After Advanced… closes the panel, discovery stops and BlueZ drops unpaired devices: `bluetoothctl` needs `scan on`
+  again before `pair` ("Device not available" otherwise). Pending labels appear only for panel actions and
+  "Connecting…" is brief for paired devices. A BLE mouse rejected host-initiated connects after a host disconnect
+  until moved, trusted or not; the bounded attempt reported "Connect failed".
+- Source deviations: test doubles are named `bluetooth-bluetoothctl`, `bluetooth-rfkill` and `bluetooth-timeout` and
+  copied under their real names only inside `hardware-bluetooth-commands.bats`, so other hardware suites keep the
+  real `timeout` and `rfkill`; `hardware-support.bash` is unchanged. The pair failure literal points to Advanced only
+  for a failed pair step (exit 4); trust, connect and power failures use their own literals. Device-list rebuilds were
+  not coalesced with `Qt.callLater` (an imperative list loses device property tracking) and no churn was observed on
+  the T14s. Row right-click keeps upstream disconnect/forget. `binding-replacement-prototype.test.mjs` changed its
+  binding count only. `docs/attribution.md` has no `bluez-tools` entry: the package is installed, not incorporated,
+  and is recorded in `capabilities/system/bluetooth/sources.md` as the index policy requires.
+- Legacy PIN, passkey entry, multi-monitor discovery handoff and the Framework Laptop 13 Pro were not exercised.
+
+## TODO-f923b17a
+- **Question**: How does the radio-off choice survive a reboot on platforms whose rfkill switch is `persistent`?
+- **Context/Nuances**: `bluetooth-power off` sets the rfkill soft block and systemd-rfkill saves `1` for both the
+  `thinkpad_acpi` and hci0 switches, but on the T14s both were `0` after reboot. `tpacpi_bluetooth_sw` reports
+  `persistent=1`, so systemd 262 leaves it to the firmware, which boots it unblocked; hci0 also ended unblocked
+  (reason not isolated). Upstream Omarchy uses the same mechanism. A fix (for example an owned boot-time restore, or
+  BlueZ `AutoEnable=false` with a persisted power state) crosses plan 02-29's no-BlueZ-policy boundary and may need an
+  ADR. The Framework Laptop 13 Pro result decides whether it is needed.
+- **Status**: Pending
+
+## TODO-644fa670
+- **Question**: How do shell panels keep their trailing actions inside the card on short screens?
+- **Context/Nuances**: The fixed list cap fixes the observed T14s case, but the uncapped Connected block (five or
+  six connected devices) can still push Advanced… out of the screen-capped card. A `ColumnLayout` whose scroll list
+  fills the remaining height, with a one-row minimum, would hold for every panel; it changes the upstream structure,
+  may move the qmllint baseline and needs `UPSTREAM.md` divergences.
+- **Status**: Pending

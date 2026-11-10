@@ -139,3 +139,13 @@ the code-requiring failure path and Advanced numeric-comparison pairing, inbound
 and the `Pairable` state, the shortcut, numbering and Tab, and the absence of privilege prompts. Legacy PIN pairing and
 the Framework Laptop 13 Pro stay explicitly pending, and the hardware procedure gains a "Bluetooth panel" matrix row
 [DEC-074, DEC-067, DEC-069, DEC-070, DEC-071].
+
+## Execution notes (2026-11-09/10)
+
+This section supplements the narrative above; the execution findings in the
+[interview log](story-4-4-bluetooth-panel_log.md#execution-findings--2026-11-0910-plan-02-29) hold the details.
+Both checkpoints were approved, and the T14s record is non-qualifying. Three outcomes differ from the expectations
+above. Radio-off persistence failed on the T14s, whose `persistent` `thinkpad_acpi` switch systemd-rfkill does not
+restore (TODO-f923b17a). A phone can pair from the panel through Just Works when its consent dialog is accepted, so
+numeric comparison needs Advanced…. The agent unit now stops with SIGHUP, after `bt-agent` held every logout for 90 s.
+The device list cap is lower so Advanced… fits short screens (TODO-644fa670 tracks a robust layout).

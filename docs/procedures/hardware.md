@@ -39,8 +39,8 @@ A successful configure is not proof of hardware usability.
 
 Configure never starts, restarts or reloads the shell, hypridle or desktop. Review configure evidence before
 re-login or reboot; do not restart a graphical session remotely without the maintainer's explicit authorization.
-Audio, display and power panels were delivered by plan 02-27; plan 02-28 adds the network panel under
-[ADR 0025](../adr/0025-shell-panels.md). Bluetooth and graphical VPN access remain with plans 02-29 and 02-30.
+Audio, display and power panels were delivered by plan 02-27, the network panel by plan 02-28 and the Bluetooth
+panel by plan 02-29, under [ADR 0025](../adr/0025-shell-panels.md). Graphical VPN access remains with plan 02-30.
 No resident shell media service is added.
 
 ## Validation matrix
@@ -68,8 +68,10 @@ not fixed-harness qualification, on candidates `2b5a6cd`, `608dda3`, `3857f79` a
 T14s delivery of candidates `3857f79`, `03696b5`, `8ec08b4`, `8c21d40` and `e9b9b6d` (final; its tree is the
 committed plan 02-27 tree). Network panel identities (plan 02-28, 2026-11-09): V4 is the laboratory guest on
 `a629c36`, with final-fix regression checks on `e350075`; A4 is the supervised, non-qualifying T14s session on
-`a629c36` and final candidate `e350075`. These temporary candidate commits identify the tested trees, not a release
-ISO or fixed-harness qualification.
+`a629c36` and final candidate `e350075`. Bluetooth panel identities (plan 02-29, 2026-11-09/10): V5 is the laboratory
+guest (no Bluetooth subsystem) on `3748a64`; A5 is the supervised, non-qualifying T14s session on `7ef2959`, `f993a99`
+and final `1907d37` (list-height and agent-stop fixes, not re-run in the guest). These temporary candidate commits
+identify the tested trees, not a release ISO or fixed-harness qualification.
 
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
 |---|---|---|---|
@@ -94,11 +96,13 @@ ISO or fixed-harness qualification.
 | Network panel: wired, diagnostics, unavailable state and access | V4 (`a629c36`, 2026-11-09): configure and unchanged rerun, 19 steps; commands/license delivered; wired metrics, probes only while open with no process after close, NetworkManager stopped/restarted recovery, no Wi-Fi/band without hardware, Advanced opens nmtui; session suites pass. Final `e350075`: panel regression and qmllint pass | A4 (`e350075`, 2026-11-09, non-qualifying): chords, numbered panels, Tab, icon and outside click pass; several minutes of ping/loss without false red; Advanced opens nmtui. Coalesced list updates remove the close stall observed on `a629c36` | pending target-laptop validation |
 | Network panel: Wi-Fi and band | V4: not applicable, no Wi-Fi device | A4 (`e350075`, 2026-11-09, non-qualifying): scan/list updates, disconnect/reconnect, forget and PSK reconnect, wrong-passphrase re-prompt, 2.4/5/Auto chosen/current/focus/pending states and ignored double click pass; journal records session-user operations. Not exercised: open/OWE, enterprise, 6 GHz and band rollback on failure | pending target-laptop validation |
 | Network panel: per-profile DNS and portal | V4 (`a629c36`, 2026-11-09): confirmation with Cancel focused, Escape/other-pill dismissal, Custom empty cancel and apply pass; only active Ethernet changed, dummy Ethernet/VPN and global DNS unchanged, DHCP restores profile. Simulated portal recheck and browser-launch failure pass; real browser/portal not exercised | A4 (`e350075`, 2026-11-09, non-qualifying): Cloudflare/Google/Custom/DHCP pass on Wi-Fi only; VPN/Ethernet/loopback and global DNS unchanged, DHCP restores profile; no sudo/polkit prompt. Real portal and enterprise not exercised | pending target-laptop validation |
+| Bluetooth panel | V5 (`3748a64`, 2026-11-09): configure and unchanged rerun (19 steps); `bluez-tools`, commands, license and agent unit delivered, unit enabled and skipped by its condition without a restart loop; panel opens unavailable with the tooltip reason and no devices; `SUPER+CTRL+B`, IPC, numbering and Tab pass; session suites and reviewed qmllint baseline pass | A5 (`7ef2959`, `f993a99`, `1907d37`, 2026-11-09/10, non-qualifying): agent active with no identities in its journal; radio switch with repeat protection; discovery stops after close; Just Works headset pairing trusts, connects and switches the default output; connecting a terminal-paired device leaves trust unchanged; disconnect/forget; unaccepted code requests fail with the Advanced literal and stay untrusted; Advanced numeric-comparison pairing leaves the device untrusted; not discoverable to a phone; chords, numbering 1–5, Tab, any-button click; no sudo/polkit; logout stops the agent at once. Failed: radio-off persistence across reboot. Phones can pair through Just Works when their consent dialog is accepted. Not exercised: legacy PIN, passkey entry, multi-monitor discovery handoff | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
 `evidence/hardware/task-3/verification.md`; shell panels: `evidence/shell-panels/lab-02-27/checkpoint-t8.md` and
 `evidence/shell-panels/t14s-02-27/checkpoint-partial.md`; network panel:
-`evidence/shell-panels/lab-02-28/checkpoint.md` and `evidence/shell-panels/t14s-02-28/checkpoint.md`.
+`evidence/shell-panels/lab-02-28/checkpoint.md` and `evidence/shell-panels/t14s-02-28/checkpoint.md`; Bluetooth panel:
+`evidence/shell-panels/lab-02-29/checkpoint.md` and `evidence/shell-panels/t14s-02-29/checkpoint.md`.
 Task 2–4 source/contract test results are recorded in the local plan
 execution log; mocked tests do not establish clean installation or physical acceptance. Future acceptance records
 must identify date, clean candidate commit, execution context and limitations for every row.
@@ -108,10 +112,11 @@ must identify date, clean candidate commit, execution context and limitations fo
 Open a terminal with `SUPER+Return`. Wi-Fi and Bluetooth terminal paths are permanent recovery interfaces,
 not temporary replacements for later panels. No impala, iwd, bluetui or wiremix is added.
 
-The network, audio, display and power panels ([ADR 0025](../adr/0025-shell-panels.md)) open from their bar icon,
-with `SUPER+CTRL+N`, `SUPER+CTRL+A`, `SUPER+CTRL+D` and `SUPER+CTRL+P`, or with `SUPER+CTRL+1..9` for the Nth
-panel of the focused monitor's right bar section (defaults: network 1, audio 2, display 3, power 4). The owned terminal
-commands below remain available beside them.
+The Bluetooth, network, audio, display and power panels ([ADR 0025](../adr/0025-shell-panels.md)) open from their bar
+icon, with `SUPER+CTRL+B`, `SUPER+CTRL+N`, `SUPER+CTRL+A`, `SUPER+CTRL+D` and `SUPER+CTRL+P`, or with
+`SUPER+CTRL+1..9` for the Nth panel of the focused monitor's right bar section (defaults: Bluetooth 1, network 2,
+audio 3, display 4, power 5; without an adapter the Bluetooth icon is hidden and the others move up one). The owned
+terminal commands below remain available beside them.
 
 | Action | Keyboard path | Owned terminal command |
 |---|---|---|
@@ -159,6 +164,34 @@ silently rewritten. Defaults are performance on AC when available, otherwise bal
 The watcher reapplies on power-source changes and sends one critical 30-second notification per discharging
 battery episode at or below 10%, rearming after leaving that state. Do not discharge the laptop unsupervised to
 prove this behavior. Keyboard-backlight keys are not bound: the T14s handles Fn+Space in firmware.
+
+## Bluetooth panel
+
+Open the Bluetooth icon with any mouse button or use `SUPER+CTRL+B`. Devices appear under Connected, Paired and
+Available; discovery runs only while the panel is open and is stopped after close. Pair, connect, disconnect and
+forget run the owned `/usr/share/mirroros/hardware/bluetooth-device` as the session user, one action at a time: the
+acting row shows its pending label, other rows are dimmed and ignore input, and a failed command shows a failure
+literal on that row. Pair trusts the device only after a successful pair, then connects; connect never changes trust.
+The radio switch runs `bluetooth-power on` or `off` (rfkill soft block). After a panel pair or connect that ends
+connected, the default output switches to the device's Bluetooth sink through `audio-device default output`. Pending
+labels appear only for panel actions; device-initiated reconnections go straight to Connected. With BlueZ missing or
+stopped the panel states the same reason as the bar tooltip; without an adapter the icon is hidden.
+
+The session agent `mirroros-bt-agent.service` (`bt-agent -c NoInputNoOutput`, a user unit under
+`graphical-session.target`) answers panel pairing with Just Works and authorizes services for paired devices only.
+Its standard output is discarded so device identities stay out of the journal, and it is stopped with SIGHUP because
+`bt-agent` ignores SIGTERM in effect. While it is registered the adapter reads `Pairable: yes`; MirrorOS never makes
+the adapter discoverable. Phones may show the Just Works request as a consent dialog without a code: accepting it
+pairs and trusts the phone without numeric comparison (no MITM protection). Use Advanced… when numeric comparison
+is wanted. A code request that is not accepted fails with "Pairing failed. Devices that need a code: use Advanced…"
+and the device stays untrusted under Available. The panel never shows or requests a code.
+
+Observed limits on the T14s (non-qualifying): the radio-off state did not survive a reboot, because the
+`thinkpad_acpi` switch reports `persistent` and its firmware boots unblocked, so systemd-rfkill does not restore it
+([TODO-f923b17a](../technical-interviews/story-4-4-bluetooth-panel_log.md#todo-f923b17a)). A BLE mouse rejected a
+host-initiated connect after a host disconnect until it was moved; the 20 s bounded attempt reported "Connect
+failed". With many connected devices the panel can still exceed a short screen
+([TODO-644fa670](../technical-interviews/story-4-4-bluetooth-panel_log.md#todo-644fa670)).
 
 ## Network panel
 
@@ -210,12 +243,15 @@ private interactive workflow. Enter credentials only at protected prompts; never
 Do not export SSID lists, device addresses or connection dumps to evidence. NetworkManager remains the owner;
 no alternate Wi-Fi daemon is introduced.
 
-For Bluetooth, use one private `bluetoothctl` session: `power on`, `agent on`, `default-agent`, `pairable on`,
-then `scan on`. Select the device locally, stop scanning, and use `pair`, `trust` and `connect` with its locally
-observed address. Confirm any device-side request, verify bonding and reconnect, then `pairable off` when done.
-Do not copy device addresses, PINs, passkeys or pairing keys to logs or source. PIN and passkey pairing stay on
-this terminal path; plan 02-29 adds the Bluetooth panel and its "Just Works" agent
-([ADR 0025](../adr/0025-shell-panels.md)). Audio reconnect should select A2DP; microphone capture may switch to HFP.
+For Bluetooth devices that need a code (numeric comparison, passkey or PIN), use the Bluetooth panel's "Advanced…"
+action, which opens `bluetoothctl --agent KeyboardDisplay` in Foot, or run that command from a terminal. Closing the
+panel stops discovery and BlueZ drops unpaired devices, so run `scan on` again, select the device locally, `scan off`,
+then `pair` with its locally observed address and confirm the code on both sides. Add `trust` or `connect` only
+deliberately; the terminal path does not trust. For device-initiated pairing, in the same session run
+`default-agent`, `pairable on` and `discoverable on`, pair from the device, then `discoverable off` and
+`pairable off`; the panel never changes these adapter properties. Do not copy device addresses, PINs, passkeys or
+pairing keys to logs or source. Legacy PIN and passkey entry were not exercised. Audio reconnect should select
+A2DP; microphone capture may switch to HFP.
 
 ## DNS integration and migration
 
@@ -337,6 +373,8 @@ which is pinned to the installed ISO's code snapshot. No agent is installed on t
 Newly delivered Hyprland binding files are not picked up automatically by the running compositor: use a new login
 or, only with explicit authorization, `hyprctl reload`. Restart the shell service separately after publication
 (TODO-018), as described in the [desktop shell procedure](desktop-shell.md#session-delivery-and-lifecycle).
+A changed unit in `/etc/systemd/user` applies to a running session only after `systemctl --user daemon-reload` or
+a new boot; plan 02-29 observed the old Bluetooth agent stop settings until the maintainer-approved reload.
 After the maintainer-approved re-login/reboot, perform the physical checks and a second no-change configure run.
 Clean VM installation must independently exercise installer target context and installed running context.
 
