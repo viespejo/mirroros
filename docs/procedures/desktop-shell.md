@@ -74,18 +74,18 @@ maintainer-authorized `hyprctl reload`; configure does not reload the compositor
 scripted requests use native Quickshell interfaces only; there is no own socket or CLI:
 
 ```bash
-qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets bluetooth, network, audio, display, power
+qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets bluetooth, network, audio, display, power, clock
 hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
 ```
 
-Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.notifications` and
+Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.notifications` and
 `panel-at-1` to `panel-at-9` (the Nth panel of the focused monitor's right bar section). The IPC result is
 `opened`, `closed` or `unavailable` (no panel instance, for example the power panel without a battery). Requests
 follow "focused monitor wins": `open` shows the panel on the focused monitor, moving it there if needed; `close`
 closes it wherever it is; `toggle` closes it only when open on the focused monitor; a focus change alone moves
 nothing. Inside an open panel, Tab and Shift+Tab move to the next or previous panel of the same bar section.
 The panel chords are `SUPER+CTRL+B` (Bluetooth), `SUPER+CTRL+N` (network), `SUPER+CTRL+A` (audio), `SUPER+CTRL+D`
-(display) and `SUPER+CTRL+P` (power). Default positional numbering is Bluetooth 1, network 2, audio 3, display 4,
+(display), `SUPER+CTRL+P` (power) and `SUPER+CTRL+ALT+D` (calendar). Default positional numbering is Bluetooth 1, network 2, audio 3, display 4,
 power 5; without a Bluetooth adapter its icon is not drawn and the numbering stays network 1, audio 2, display 3,
 power 4. The `bluetooth` and `network` IPC targets expose only `open`, `close` and `toggle`.
 Later panels follow the same convention. Panel actions run
@@ -135,6 +135,29 @@ approved substitute for a real call; wheel and middle click were not exercised t
 setting (here power `showPercentage`) stores the whole layout zone in `$XDG_CONFIG_HOME/mirroros/shell.json`, and
 since arrays replace defaults, later default widgets such as the microphone do not appear; removing a redundant
 `bar.layout` override restores them. Evidence: `evidence/bar-additions/t14s-02-31/checkpoint.md` (ignored).
+
+## Clock calendar
+
+Plan 02-32 adds Omarchy's calendar panel under [ADR 0029](../adr/0029-clock-calendar-weather-and-world-clock-panels.md):
+`panels/clock/{Panel.qml,Model.js,WallClock.qml}` are unchanged `v4.5.0` copies, hosted by the bar clock. Left
+click on the clock and `qs ipc -p /usr/share/mirroros/shell call clock open|close|toggle` open or close it in the
+shared panel container; Tab and Shift+Tab move between it and the other panels of the center section. Right click
+still cycles the label format; middle click has no action (the timezone picker is excluded). The panel runs no
+process.
+
+Inside the panel, the arrow keys, `[`/`]` and `{`/`}` step months and years, `t` returns to today and `w` (or
+a click on the "W" heading) toggles the week start. Double-clicking the year bar asks for a birth year and a life
+expectancy; only then does the memento-mori bar appear, and double-clicking it clears the birth year. These
+opt-in settings are stored per widget like any inline setting (see [Inline settings](#inline-settings)):
+
+```json
+{
+  "version": 1,
+  "bar": { "widgets": { "omarchy.clock": { "weekStartDay": "sunday", "birthYear": 1979, "lifeExpectancy": 85 } } }
+}
+```
+
+Without `weekStartDay` the week starts on the locale's first day. Deleting a key restores its default.
 
 ## Fixed palette
 
@@ -390,6 +413,8 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/network-panel-model.test.mjs \
     tests/capabilities/desktop/shell/no-omarchy-coupling.test.mjs \
     tests/capabilities/desktop/shell/bar-additions.test.mjs \
+    tests/capabilities/desktop/shell/clock-model.test.mjs \
+    tests/capabilities/desktop/shell/calendar-weather.test.mjs \
     tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs

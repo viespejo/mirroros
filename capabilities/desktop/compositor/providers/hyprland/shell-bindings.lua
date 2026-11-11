@@ -165,6 +165,8 @@ MirrorOSKeys.bind("panel.network", "SUPER + CTRL + N", "Network", hl.dsp.global(
 MirrorOSKeys.bind("panel.audio", "SUPER + CTRL + A", "Audio", hl.dsp.global("mirroros:panel.audio"))
 MirrorOSKeys.bind("panel.display", "SUPER + CTRL + D", "Display", hl.dsp.global("mirroros:panel.display"))
 MirrorOSKeys.bind("panel.power", "SUPER + CTRL + P", "Power", hl.dsp.global("mirroros:panel.power"))
+-- Calendar follows utilities.lua:116 (plan 02-32, ADR 0029).
+MirrorOSKeys.bind("panel.clock", "SUPER + CTRL + ALT + D", "Calendar", hl.dsp.global("mirroros:panel.clock"))
 
 -- The numbers count the panels of the focused monitor's right section; the tray is not counted. A bar with fewer
 -- panels leaves the tail of the range doing nothing.

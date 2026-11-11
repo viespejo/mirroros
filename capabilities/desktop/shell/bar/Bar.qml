@@ -194,7 +194,7 @@ Item {
   }
 
   // Only widgets that expose popup open/close methods are panels; plain
-  // indicators (clock, workspaces, tray) are not.
+  // indicators (workspaces, tray) are not.
   function isPanelItem(item) {
     return !!item && typeof item.open === "function" && typeof item.close === "function" && item.opened !== undefined
   }
@@ -328,6 +328,13 @@ Item {
     function open(): string { return root.requestPanel("omarchy.power", "open") }
     function close(): string { return root.requestPanel("omarchy.power", "close") }
     function toggle(): string { return root.requestPanel("omarchy.power", "toggle") }
+  }
+
+  IpcHandler {
+    target: "clock"
+    function open(): string { return root.requestPanel("omarchy.clock", "open") }
+    function close(): string { return root.requestPanel("omarchy.clock", "close") }
+    function toggle(): string { return root.requestPanel("omarchy.clock", "toggle") }
   }
 
   function moduleWidgets(moduleName) {

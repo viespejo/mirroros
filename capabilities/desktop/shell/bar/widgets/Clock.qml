@@ -2,16 +2,22 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Ui
-import "../ClockModel.js" as Model
+import "../../panels/clock" as Calendar
+import "../../panels/clock/Model.js" as Model
 
-// Adapted from Omarchy shell/plugins/panels/clock/BarWidget.qml at
-// 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, Copyright (c) David Heinemeier
-// Hansson). Changes: the calendar panel (left click) and the timezone picker
-// (middle click, omarchy-menu-timezone) are integration points with no action;
-// no ShellIpc target. The label, its formats and the right-click format cycle,
-// written through shell.updateEntryInline, are Omarchy's.
+// Adapted from Omarchy shell/plugins/panels/clock/BarWidget.qml at v4.5.0
+// (ac2690cd7be4f47e4a255f5e2e78d904d436b068) (MIT, Copyright (c) David
+// Heinemeier Hansson). Changes: the unchanged upstream calendar panel is loaded
+// from panels/clock/Panel.qml; panel IPC lives in the bar (native `clock`
+// target with open/close/toggle; no ShellIpc, refresh, cycleFormat or
+// toggleWeekStart IPC); WallClock comes from panels/clock through a qualified
+// import; middle click has no action (the timezone picker,
+// omarchy-menu-timezone, is excluded); no pressFeedbackButtons, which the
+// shared WidgetButton does not have. The label, its formats, the right-click
+// format cycle written through shell.updateEntryInline and the left-click
+// calendar are Omarchy's.
 //
-// Date/time label for the bar.
+// Date/time label for the bar, and the host for the calendar popup.
 BarWidget {
   id: root
   moduleName: "omarchy.clock"
@@ -39,6 +45,7 @@ BarWidget {
 
   function refresh() {
     displayDate = new Date()
+    if (panelLoader.item && panelLoader.item.refresh) panelLoader.item.refresh()
   }
 
   function cycleFormat() {
@@ -69,6 +76,23 @@ BarWidget {
     return date.toLocaleString(root.formatLocale, activeFormat.replace(/ww/g, week))
   }
 
+  // ---- Calendar popup. Shape contract for the bar's panel routing
+  //      (requestPanel, Tab switching): Bar.isPanelItem requires
+  //      open/close/opened on the bar-widget root.
+  readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
+
+  function open() {
+    if (panelLoader.item) panelLoader.item.open()
+  }
+
+  function close() {
+    if (panelLoader.item) panelLoader.item.close()
+  }
+
+  function togglePanel() {
+    if (panelLoader.item) panelLoader.item.toggle()
+  }
+
   // The clock fills more slot than it paints a mark for, at both
   // orientations: horizontally it is a text label in a padded slot, so the
   // dot takes the label width; vertically it is a stack of icon-sized lines,
@@ -77,13 +101,46 @@ BarWidget {
   readonly property real openPanelIndicatorWidth: button.labelWidth
   readonly property real openPanelIndicatorHeight: Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55))
 
+  // Forwarded so this widget can stand in for the panel as the bar's popout
+  // identity: Bar.requestPopout prefers closeForPopoutSwitch over close, and
+  // KeyboardPanel reads popoutSwitchClosing back off its owner.
+  readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
+
+  function closeForPopoutSwitch() {
+    if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()
+  }
+
+  function injectPanel() {
+    var target = panelLoader.item
+    if (!target) return
+    if ("bar" in target) target.bar = root.bar
+    if ("settings" in target) target.settings = root.settings
+    if ("moduleName" in target) target.moduleName = root.moduleName
+    if ("anchorItem" in target) target.anchorItem = button
+    if ("hostWidget" in target) target.hostWidget = root
+  }
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  SystemClock {
+  onBarChanged: injectPanel()
+  onSettingsChanged: injectPanel()
+
+  Calendar.WallClock {
     id: clock
-    precision: root.showsSeconds ? SystemClock.Seconds : SystemClock.Minutes
+    step: root.showsSeconds ? 1000 : 60000
     onDateChanged: root.displayDate = date
+  }
+
+  Loader {
+    id: panelLoader
+    active: true
+    source: Qt.resolvedUrl("../../panels/clock/Panel.qml")
+    visible: false
+    onLoaded: {
+      root.injectPanel()
+      Qt.callLater(root.injectPanel)
+    }
   }
 
   WidgetButton {
@@ -98,9 +155,10 @@ BarWidget {
     verticalPadding: 8.75
     tooltipText: I18n.t("clock.toggleFormat")
 
-    // Left (calendar panel) and middle (timezone picker): integration points.
+    // Middle click (timezone picker upstream) has no action.
     onPressed: function(b) {
       if (b === Qt.RightButton) root.cycleFormat()
+      else if (b === Qt.LeftButton) root.togglePanel()
     }
 
     Column {

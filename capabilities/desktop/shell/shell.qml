@@ -115,6 +115,12 @@ ShellRoot {
   }
   GlobalShortcut {
     appid: "mirroros"
+    name: "panel.clock"
+    description: "Toggle the calendar panel"
+    onPressed: desktopShell.bar.requestPanel("omarchy.clock", "toggle")
+  }
+  GlobalShortcut {
+    appid: "mirroros"
     name: "panel.notifications"
     description: "Toggle the notification panel"
     onPressed: desktopShell.notificationService.requestPanel("toggle")

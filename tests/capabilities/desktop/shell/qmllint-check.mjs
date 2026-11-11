@@ -21,6 +21,7 @@ const copied = new Set([
     'PanelKeyCatcher', 'PanelSlider', 'PanelSectionHeader', 'PanelSeparator', 'PanelToolTip',
     'PopupCard', 'ToggleSwitch'].map(name => `Ui/${name}.qml`),
   'bar/widgets/Tray.qml',
+  'panels/clock/Panel.qml', 'panels/clock/WallClock.qml',
   ...['Toast', 'DeedButton', 'NotificationPanel', 'Picker'].map(name => `notifications/${name}.qml`),
 ]);
 

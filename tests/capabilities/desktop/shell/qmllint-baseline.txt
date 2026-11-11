@@ -24,12 +24,10 @@
 # entries are untyped bar/Style/Pipewire.nodes members, as in bar/widgets/Audio.qml; the shell.qml PostReloadHook
 # key moved with the stayAwakeService lines; the bar/widgets/Network.qml list height entry is 02-30 drift (line
 # changed after that laboratory capture); no new category.
-# Calendar and weather (plan 02-32 laboratory checkpoint, maintainer-approved): panels/clock/Panel.qml (v4.5.0
-# copy) and panels/weather/Panel.qml entries follow the v4.5.0 inline-component pattern (root and Suggestions host
-# access from delegates) and untyped bar/Style/shell members; bar/widgets/Clock.qml and bar/widgets/Weather.qml
-# entries are untyped Loader.item panel members (injectPanel pattern) and Style.bar; the bar/Bar.qml entry is the
-# per-widget settings Binding; the weather saved-locations separator and section header and the weather list
-# keys follow the same pattern; shell.qml gains the panel.clock and panel.weather GlobalShortcut entries;
+# Calendar (plan 02-32 laboratory checkpoint, maintainer-approved): panels/clock/Panel.qml (v4.5.0
+# copy) entries follow the v4.5.0 inline-component pattern and untyped bar/Style/shell members;
+# bar/widgets/Clock.qml entries are untyped Loader.item panel members (injectPanel pattern); the bar/Bar.qml
+# entry is the per-widget settings Binding; shell.qml gains the panel.clock GlobalShortcut entry;
 # no new category.
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
@@ -472,12 +470,23 @@ adapt ["bar/widgets/Bluetooth.qml","Unqualified access [unqualified]","visible: 
 adapt ["bar/widgets/Bluetooth.qml","Unqualified access [unqualified]","visible: row.actionTooltip !== \"\" && rowMouse.containsMouse && !root.actionFocused"]
 adapt ["bar/widgets/Bluetooth.qml","Unqualified access [unqualified]","visible: sectionTitle !== \"\""]
 adapt ["bar/widgets/Bluetooth.qml","Unqualified access [unqualified]","width: connectedList.width"]
+adapt ["bar/widgets/Clock.qml","Member \"anchorItem\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"anchorItem\" in target) target.anchorItem = button"]
+adapt ["bar/widgets/Clock.qml","Member \"bar\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"bar\" in target) target.bar = root.bar"]
+adapt ["bar/widgets/Clock.qml","Member \"closeForPopoutSwitch\" not found on type \"QObject\" [missing-property]","if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()"]
+adapt ["bar/widgets/Clock.qml","Member \"close\" not found on type \"QObject\" [missing-property]","if (panelLoader.item) panelLoader.item.close()"]
+adapt ["bar/widgets/Clock.qml","Member \"hostWidget\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"hostWidget\" in target) target.hostWidget = root"]
 adapt ["bar/widgets/Clock.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","fixedHeight: root.vertical ? root.verticalLines.length * Style.bar.iconSlot : -1"]
 adapt ["bar/widgets/Clock.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","height: Style.bar.iconSlot"]
 adapt ["bar/widgets/Clock.qml","Member \"iconSlot\" not found on type \"QObject\" [missing-property]","readonly property real openPanelIndicatorHeight: Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55))"]
+adapt ["bar/widgets/Clock.qml","Member \"moduleName\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"moduleName\" in target) target.moduleName = root.moduleName"]
+adapt ["bar/widgets/Clock.qml","Member \"open\" not found on type \"QObject\" [missing-property]","if (panelLoader.item) panelLoader.item.open()"]
+adapt ["bar/widgets/Clock.qml","Member \"opened\" not found on type \"QObject\" [missing-property]","readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false"]
+adapt ["bar/widgets/Clock.qml","Member \"popoutSwitchClosing\" not found on type \"QObject\" [missing-property]","readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false"]
+adapt ["bar/widgets/Clock.qml","Member \"settings\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"settings\" in target) target.settings = root.settings"]
 adapt ["bar/widgets/Clock.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === \"function\")"]
 adapt ["bar/widgets/Clock.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === \"function\")"]
 adapt ["bar/widgets/Clock.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","root.bar.shell.updateEntryInline(root.moduleName, entry)"]
+adapt ["bar/widgets/Clock.qml","Member \"toggle\" not found on type \"QObject\" [missing-property]","if (panelLoader.item) panelLoader.item.toggle()"]
 adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]",": button.fontSize"]
 adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]","? button.fontSize * 0.9"]
 adapt ["bar/widgets/Clock.qml","Unqualified access [unqualified]","color: button.foreground"]
@@ -1350,6 +1359,7 @@ adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolv
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
+adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 copy Commons/InputDevices.qml:0:0
 copy Ui/BarIconContent.qml:11:17
 copy Ui/BarIconContent.qml:23:18
@@ -1942,3 +1952,136 @@ copy notifications/Toast.qml:674:24
 copy notifications/Toast.qml:707:29
 copy notifications/Toast.qml:745:55
 copy notifications/Toast.qml:752:16
+copy panels/clock/Panel.qml:169:30
+copy panels/clock/Panel.qml:169:55
+copy panels/clock/Panel.qml:170:16
+copy panels/clock/Panel.qml:184:31
+copy panels/clock/Panel.qml:185:37
+copy panels/clock/Panel.qml:225:29
+copy panels/clock/Panel.qml:226:35
+copy panels/clock/Panel.qml:272:16
+copy panels/clock/Panel.qml:274:23
+copy panels/clock/Panel.qml:275:23
+copy panels/clock/Panel.qml:277:28
+copy panels/clock/Panel.qml:278:25
+copy panels/clock/Panel.qml:279:45
+copy panels/clock/Panel.qml:281:24
+copy panels/clock/Panel.qml:282:29
+copy panels/clock/Panel.qml:283:29
+copy panels/clock/Panel.qml:284:29
+copy panels/clock/Panel.qml:285:42
+copy panels/clock/Panel.qml:286:42
+copy panels/clock/Panel.qml:325:43
+copy panels/clock/Panel.qml:326:21
+copy panels/clock/Panel.qml:327:30
+copy panels/clock/Panel.qml:338:23
+copy panels/clock/Panel.qml:338:53
+copy panels/clock/Panel.qml:340:43
+copy panels/clock/Panel.qml:341:21
+copy panels/clock/Panel.qml:342:30
+copy panels/clock/Panel.qml:354:25
+copy panels/clock/Panel.qml:357:26
+copy panels/clock/Panel.qml:362:29
+copy panels/clock/Panel.qml:382:27
+copy panels/clock/Panel.qml:383:33
+copy panels/clock/Panel.qml:387:26
+copy panels/clock/Panel.qml:396:36
+copy panels/clock/Panel.qml:397:32
+copy panels/clock/Panel.qml:398:46
+copy panels/clock/Panel.qml:407:31
+copy panels/clock/Panel.qml:408:32
+copy panels/clock/Panel.qml:411:53
+copy panels/clock/Panel.qml:420:36
+copy panels/clock/Panel.qml:421:32
+copy panels/clock/Panel.qml:422:46
+copy panels/clock/Panel.qml:431:31
+copy panels/clock/Panel.qml:432:32
+copy panels/clock/Panel.qml:435:53
+copy panels/clock/Panel.qml:442:27
+copy panels/clock/Panel.qml:445:49
+copy panels/clock/Panel.qml:446:34
+copy panels/clock/Panel.qml:447:30
+copy panels/clock/Panel.qml:448:44
+copy panels/clock/Panel.qml:455:27
+copy panels/clock/Panel.qml:458:49
+copy panels/clock/Panel.qml:459:24
+copy panels/clock/Panel.qml:460:30
+copy panels/clock/Panel.qml:461:44
+copy panels/clock/Panel.qml:466:27
+copy panels/clock/Panel.qml:474:32
+copy panels/clock/Panel.qml:474:58
+copy panels/clock/Panel.qml:474:84
+copy panels/clock/Panel.qml:477:52
+copy panels/clock/Panel.qml:480:51
+copy panels/clock/Panel.qml:492:22
+copy panels/clock/Panel.qml:508:34
+copy panels/clock/Panel.qml:509:30
+copy panels/clock/Panel.qml:510:44
+copy panels/clock/Panel.qml:519:49
+copy panels/clock/Panel.qml:520:24
+copy panels/clock/Panel.qml:521:30
+copy panels/clock/Panel.qml:522:44
+copy panels/clock/Panel.qml:533:32
+copy panels/clock/Panel.qml:533:58
+copy panels/clock/Panel.qml:533:84
+copy panels/clock/Panel.qml:536:52
+copy panels/clock/Panel.qml:539:51
+copy panels/clock/Panel.qml:546:33
+copy panels/clock/Panel.qml:558:31
+copy panels/clock/Panel.qml:576:17
+copy panels/clock/Panel.qml:590:26
+copy panels/clock/Panel.qml:597:26
+copy panels/clock/Panel.qml:601:42
+copy panels/clock/Panel.qml:609:47
+copy panels/clock/Panel.qml:610:35
+copy panels/clock/Panel.qml:611:34
+copy panels/clock/Panel.qml:612:48
+copy panels/clock/Panel.qml:622:32
+copy panels/clock/Panel.qml:627:68
+copy panels/clock/Panel.qml:628:33
+copy panels/clock/Panel.qml:633:26
+copy panels/clock/Panel.qml:638:26
+copy panels/clock/Panel.qml:643:28
+copy panels/clock/Panel.qml:647:27
+copy panels/clock/Panel.qml:648:38
+copy panels/clock/Panel.qml:649:34
+copy panels/clock/Panel.qml:650:48
+copy panels/clock/Panel.qml:658:24
+copy panels/clock/Panel.qml:662:28
+copy panels/clock/Panel.qml:666:28
+copy panels/clock/Panel.qml:667:29
+copy panels/clock/Panel.qml:670:53
+copy panels/clock/Panel.qml:671:38
+copy panels/clock/Panel.qml:672:34
+copy panels/clock/Panel.qml:673:48
+copy panels/clock/Panel.qml:677:28
+copy panels/clock/Panel.qml:678:29
+copy panels/clock/Panel.qml:682:28
+copy panels/clock/Panel.qml:687:30
+copy panels/clock/Panel.qml:688:31
+copy panels/clock/Panel.qml:693:69
+copy panels/clock/Panel.qml:694:59
+copy panels/clock/Panel.qml:699:57
+copy panels/clock/Panel.qml:700:32
+copy panels/clock/Panel.qml:701:30
+copy panels/clock/Panel.qml:701:60
+copy panels/clock/Panel.qml:701:92
+copy panels/clock/Panel.qml:702:39
+copy panels/clock/Panel.qml:703:38
+copy panels/clock/Panel.qml:704:52
+copy panels/clock/Panel.qml:705:36
+copy panels/clock/Panel.qml:717:106
+copy panels/clock/Panel.qml:717:52
+copy panels/clock/Panel.qml:717:75
+copy panels/clock/Panel.qml:722:36
+copy panels/clock/Panel.qml:724:22
+copy panels/clock/Panel.qml:754:23
+copy panels/clock/Panel.qml:755:34
+copy panels/clock/Panel.qml:756:30
+copy panels/clock/Panel.qml:757:44
+copy panels/clock/Panel.qml:770:29
+copy panels/clock/Panel.qml:771:29
+copy panels/clock/Panel.qml:772:28
+copy panels/clock/Panel.qml:781:29
+copy panels/clock/Panel.qml:782:29
+copy panels/clock/Panel.qml:783:28
