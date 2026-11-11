@@ -257,6 +257,41 @@ sibling types (directory import in the host), Tab being trapped in the search fi
 (`noto-fonts-cjk`), and aligned bar glyphs with Omarchy v4.5.0 (`OpticalGlyph.qml`, `paintedSize`). Evidence:
 `evidence/world-clock/lab-02-33/checkpoint.md` (ignored).
 
+## Reminders
+
+Plan 02-34 adds Omarchy's quick reminders as a scope change without an ADR (DEC-030): no daemon, privilege,
+network or provider. A reminder is relative and ephemeral ("in N minutes, remind me of X") and ends with the
+session. The owned command `/usr/share/mirroros/reminders/reminder` (capability `desktop/reminders`, see its
+[sources](../../capabilities/desktop/reminders/sources.md)) schedules a transient systemd user timer
+`mirroros-reminder-<minutes>m-<epoch>-<pid>`; a message is kept only in
+`$XDG_RUNTIME_DIR/mirroros/reminders/<unit>.message`, never on the unit's command line.
+
+- **Set:** the shell prompt asks for a positive whole number of minutes, then an optional message, and runs
+  `reminder <minutes> [message]` with an argument vector; `reminder <minutes> [message]` works from a terminal too.
+  Invalid minutes give a transient "Invalid reminder" notice and schedule nothing; an empty first step closes the
+  prompt. A transient confirmation states the due time.
+- **Indicator:** the bar's `Reminder` indicator (default indicators `Reminder`, `Dnd`, `StayAwake`) shows the
+  pending count in its tooltip on every bar. The shell's `mirroros.reminders` service runs `reminder show --json`
+  once at shell start and once per `reminders refresh` IPC call, which the command makes after it sets, delivers or
+  clears a reminder; nothing polls. A click runs `reminder show` when reminders are pending, otherwise it opens
+  the prompt.
+- **Show and clear:** `reminder show` sends one transient "Upcoming reminders" notification; `reminder clear`
+  stops every `mirroros-reminder-*` timer, removes their message files and shows a transient notice.
+- **IPC:** `qs ipc -p /usr/share/mirroros/shell call reminders open|refresh` (both return `ok`); `reminder -i`
+  calls `open`.
+- **Delivery:** a Critical, non-transient "Reminder" notification from app `reminder` that stays until dismissed
+  and remains in history, with the freedesktop `alarm-clock-elapsed` sound through `pw-play` (silenced only by
+  system mute; a sound failure does not block the notification).
+- **Do Not Disturb:** only the Critical delivery passes quiet mode and snoozes (`Delivery.bypassesQuiet`). The
+  confirmation, listing, clear and invalid-input notices are normal-urgency transient notifications: they are
+  silenced like any other and do not enter history, so they are invisible while Do Not Disturb is on.
+- **Session end:** timers, their services and `$XDG_RUNTIME_DIR` go away with the user manager at logout; no
+  reminder is delivered in a later session.
+
+Checks: `systemctl --user list-timers 'mirroros-reminder-*'` lists pending reminders, `systemctl --user cat
+<unit>.service` must not contain a message, and `reminder show --json` returns `{count, active, tooltip,
+reminders[]}`.
+
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`
@@ -515,6 +550,8 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/calendar-weather.test.mjs \
     tests/capabilities/desktop/shell/world-clock-model.test.mjs \
     tests/capabilities/desktop/shell/world-clock.test.mjs \
+    tests/capabilities/desktop/shell/reminders-flow-model.test.mjs \
+    tests/capabilities/desktop/shell/reminders.test.mjs \
     tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs

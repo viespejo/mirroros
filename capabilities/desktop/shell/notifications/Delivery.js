@@ -1,3 +1,7 @@
+// Adapted from Omarchy shell/plugins/notifications/Delivery.js at
+// 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, Copyright (c) David Heinemeier
+// Hansson). Only change: bypassesQuiet also passes a Critical notification
+// from the reminder app (a delivered reminder). Everything else is unchanged.
 // Whether a notification reaches the screen, and where the deck sits. Pure
 // functions over a snapshot row (Store.snapshot).
 .pragma library
@@ -10,6 +14,8 @@ var CRITICAL = 2
 function bypassesQuiet(row) {
   var app = String((row && row.app) || "")
   if (app === "omarchy-action") return true
+  // MirrorOS: a due reminder is Critical; its other notices stay quiet.
+  if (app === "reminder") return Number(row.urgency) === CRITICAL
   return app === "notify-send" && Number(row.urgency) === CRITICAL
 }
 

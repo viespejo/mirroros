@@ -63,6 +63,7 @@ project-owned QML.
 | Graphical login | configure | SDDM with its greeter on Hyprland and a small owned QML theme | Sessions always start through `uwsm start hyprland.desktop`; password login, no autologin; theme bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md) |
 | Desktop shell: bar, launcher, notifications, OSD, session menu, and bar panels for audio, network/Wi-Fi, Bluetooth, display, power, clock calendar, weather, and world clock | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); panels are a Story 4.4 scope change (Story 4.3 DEC-016) bounded by [ADR 0025](adr/0025-shell-panels.md), with the terminal paths as fallback; the audio mixer shows MPRIS player names without a shell media service ([ADR 0026](adr/0026-mpris-player-names-and-advanced-audio-tool.md)); the display panel offers the runtime mirror toggle ([ADR 0027](adr/0027-display-panel-mirror-toggle.md)); the clock calendar, weather and world clock panels are a scope change bounded by [ADR 0029](adr/0029-clock-calendar-weather-and-world-clock-panels.md), with open-meteo as the only weather provider and the world clock without people, globe or time-zone change; the bar also shows a microphone indicator while the default source is in use or muted, and the active window label; bounded to these surfaces; started by its own systemd user unit with the uwsm graphical session |
 | Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; the shell's runtime-only Stay Awake indicator suspends the idle lock while active, and lock before sleep is unchanged; no DPMS or automatic suspend policy; one password field over the blurred selected background in the selected theme's colors ([ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md)) |
+| Quick reminders | configure | Owned `reminder` command over transient systemd user timers and shell notifications | Scope change without an ADR (no daemon, privilege, network or provider); relative and ephemeral ("in N minutes"), ends with the session; set from the shell prompt or the command, shown by the bar's Reminder indicator; delivery is a Critical notification with a sound that passes Do Not Disturb; [desktop shell procedure](procedures/desktop-shell.md#reminders) |
 | Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
 | Desktop portals | configure | open — selected by Story 4.5 | |
 | Clipboard and history | configure | open — selected by Story 4.5 | |
@@ -162,6 +163,7 @@ Neovim, Pi, and the browser are owned by their own configuration and are not lis
 - Copy and paste in terminal and graphical applications
 - Open the clipboard history
 - Dismiss notifications and show their history
+- Set a reminder
 
 **Hardware controls**
 

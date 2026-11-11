@@ -38,6 +38,9 @@
 # Style.bar; shell.qml gains the panel.worldclock GlobalShortcut entry. New category id-shadows-member (2 keys):
 # Panel.qml's scrollContent alias and id share a name, unchanged from v4.5.0. Panel.qml's Keys.onTabPressed and
 # Keys.onBacktabPressed in both CitySearch instances (4 keys) are the same root access from a nested instance.
+# Quick reminders (plan 02-34 laboratory checkpoint, maintainer-approved): reminders/ReminderFlow.qml (adapted
+# v4.5.0) entries are untyped Style/Commons.Color.menu members and the upstream block-scoped var; shell.qml's
+# PostReloadHook [import] key moves its context line next to the new reminders service; no new category.
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -1671,11 +1674,22 @@ adapt ["panels/weather/Panel.qml","Unqualified access [unqualified]","visible: r
 adapt ["panels/weather/Panel.qml","Unqualified access [unqualified]","visible: root.hasLocation"]
 adapt ["panels/weather/Panel.qml","Unqualified access [unqualified]","visible: root.hasLocation"]
 adapt ["panels/weather/Panel.qml","Unqualified access [unqualified]","visible: root.otherLocations.length > 0"]
+adapt ["reminders/ReminderFlow.qml","Member \"background\" not found on type \"QObject\" [missing-property]","property color background: Commons.Color.menu.background"]
+adapt ["reminders/ReminderFlow.qml","Member \"border\" not found on type \"QObject\" [missing-property]","property color border: Commons.Color.menu.border"]
+adapt ["reminders/ReminderFlow.qml","Member \"controlPaddingY\" not found on type \"QObject\" [missing-property]","property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)"]
+adapt ["reminders/ReminderFlow.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["reminders/ReminderFlow.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","property string fontFamily: Style.font.menuFamily"]
+adapt ["reminders/ReminderFlow.qml","Member \"panelPadding\" not found on type \"QObject\" [missing-property]","property int contentMargin: Style.spacing.panelPadding"]
+adapt ["reminders/ReminderFlow.qml","Member \"scrim\" not found on type \"QObject\" [missing-property]","property color scrim: Commons.Color.menu.scrim"]
+adapt ["reminders/ReminderFlow.qml","Member \"text\" not found on type \"QObject\" [missing-property]","property color foreground: Commons.Color.menu.text"]
+adapt ["reminders/ReminderFlow.qml","Member \"title\" not found on type \"QObject\" [missing-property]","property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)"]
+adapt ["reminders/ReminderFlow.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var args = [\"/usr/share/mirroros/reminders/reminder\"].concat(ReminderFlowModel.reminderArgs(root.minutes, selection))"]
+adapt ["reminders/ReminderFlow.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var nextMinutes = ReminderFlowModel.validMinutes(selection)"]
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","if (root.writer.busy) return"]
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","onLoaded: if (!root.writer.busy) root.applyUserText(text(), true)"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","GlobalShortcut {"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","Variants {"]
-adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","}"]
+adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","property StayAwake stayAwakeService: StayAwake {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]

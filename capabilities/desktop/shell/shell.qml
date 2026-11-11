@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import qs.Commons
 
 import "services"
@@ -7,6 +8,7 @@ import "menu"
 import "bar"
 import "notifications" as Notifications
 import "osd"
+import "reminders"
 
 // MirrorOS desktop shell entry point. Composes the shell surfaces directly;
 // there is no plugin host. Shared services are created here and injected
@@ -33,6 +35,7 @@ ShellRoot {
   property StayAwake stayAwakeService: StayAwake {
     window: desktopShell.bar ? desktopShell.bar.liveWindow : null
   }
+  property Reminders remindersService: Reminders { }
   property WallpaperLibrary wallpaperLibrary: WallpaperLibrary { }
   property WallpaperActions wallpaperActions: WallpaperActions {
     picker: desktopShell.wallpaperPicker
@@ -63,7 +66,12 @@ ShellRoot {
 
   function firstPartyServiceFor(id) {
     if (id === "mirroros.stay-awake") return stayAwakeService
+    if (id === "mirroros.reminders") return remindersService
     return id === "omarchy.notifications" ? notificationService : null
+  }
+
+  function openReminders() {
+    reminderFlow.open()
   }
 
   function toggle(id) {
@@ -154,5 +162,26 @@ ShellRoot {
     sessionActions: desktopShell.sessionActions
     keybindingHelp: desktopShell.keybindingHelp
     wallpaperActions: desktopShell.wallpaperActions
+  }
+
+  ReminderFlow {
+    id: reminderFlow
+  }
+
+  // Native IPC for the reminder command: `reminder -i` opens the prompt, and
+  // the command asks for a refresh after it sets, delivers or clears a
+  // reminder, so the shared service runs `reminder show --json` again.
+  IpcHandler {
+    target: "reminders"
+
+    function open(): string {
+      desktopShell.openReminders()
+      return "ok"
+    }
+
+    function refresh(): string {
+      desktopShell.remindersService.refresh()
+      return "ok"
+    }
   }
 }

@@ -46,7 +46,7 @@ test('the Stay Awake indicator uses the shell service and starts no process', ()
 test('the indicators widget maps StayAwake and lists it after Dnd by default', () => {
   assert.match(indicators, /"StayAwake": stayAwakeIndicator/);
   assert.match(indicators, /Component \{ id: stayAwakeIndicator; StayAwake \{ \} \}/);
-  assert.match(indicators, /defaultIndicatorEntries: \[ "Dnd", "StayAwake" \]/);
+  assert.match(indicators, /defaultIndicatorEntries: \[ "Reminder", "Dnd", "StayAwake" \]/);
 });
 
 test('the shell resolves the Stay Awake service and binds it to a live bar window', () => {
