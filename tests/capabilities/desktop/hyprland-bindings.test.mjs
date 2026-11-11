@@ -109,7 +109,7 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 160);
+  assert.equal(bindings.length, 163);
   for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
@@ -189,7 +189,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 160);
+  assert.equal(replaced.stdout.trim().split('\n').length, 163);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -208,6 +208,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
     'SUPER+MOUSE_DOWN', 'SUPER+MOUSE_UP', 'ALT+SUPER+MOUSE_DOWN', 'ALT+SUPER+MOUSE_UP',
     'CTRL+SUPER+A', 'CTRL+SUPER+B', 'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P',
     'ALT+CTRL+SUPER+D', 'ALT+CTRL+SUPER+W', 'ALT+CTRL+SUPER+E',
+    'CTRL+SUPER+R', 'ALT+CTRL+SUPER+R', 'CTRL+SHIFT+SUPER+R',
   ];
   for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
@@ -249,14 +250,24 @@ test('shell actions call existing IPC functions of the installed shell', { skip:
     menu: fs.readFileSync(path.join(shell, 'menu/Menu.qml'), 'utf8'),
     notifications: fs.readFileSync(path.join(shell, 'notifications/Service.qml'), 'utf8'),
     wallpaper: fs.readFileSync(path.join(shell, 'services/WallpaperActions.qml'), 'utf8'),
+    reminders: fs.readFileSync(path.join(shell, 'shell.qml'), 'utf8'),
   };
   for (const action of ipc) {
-    const match = action.match(/^qs ipc -p \/usr\/share\/mirroros\/shell call (menu|notifications|wallpaper) (\w+)(?: (\w+))?$/);
+    const match = action.match(/^qs ipc -p \/usr\/share\/mirroros\/shell call (menu|notifications|wallpaper|reminders) (\w+)(?: (\w+))?$/);
     assert.ok(match, action);
     assert.match(sources[match[1]], new RegExp(`function ${match[2]}\\(`), action);
   }
   for (const binding of bindings.filter(b => b.action.startsWith('uwsm ')))
     assert.match(binding.action, /^uwsm app -- foot( |$)/);
+});
+
+test('reminder bindings open the prompt and run the owned reminder command', { skip: !lua && 'no Lua interpreter' }, () => {
+  assert.equal(byChord.get('CTRL+SUPER+R').action, 'qs ipc -p /usr/share/mirroros/shell call reminders open');
+  assert.equal(byChord.get('CTRL+SUPER+R').description, 'Set reminder');
+  assert.equal(byChord.get('ALT+CTRL+SUPER+R').action, '/usr/share/mirroros/reminders/reminder show');
+  assert.equal(byChord.get('ALT+CTRL+SUPER+R').description, 'Show reminders');
+  assert.equal(byChord.get('CTRL+SHIFT+SUPER+R').action, '/usr/share/mirroros/reminders/reminder clear');
+  assert.equal(byChord.get('CTRL+SHIFT+SUPER+R').description, 'Clear reminders');
 });
 
 test('global shortcut bindings name shortcuts the shell registers', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -289,7 +300,7 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 152);
+  assert.equal(rows.length, 155);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));

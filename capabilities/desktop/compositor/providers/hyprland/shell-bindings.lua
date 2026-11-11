@@ -180,6 +180,14 @@ for panel = 1, 9 do
     hl.dsp.global("mirroros:panel-at-" .. panel))
 end
 
+-- Quick reminders (Omarchy v4.5.0 default/hypr/bindings/utilities.lua:104-106, MIT; plan 02-34, DEC-052): the prompt
+-- opens through the shell's reminders IPC, and show/clear run the owned reminder command instead of omarchy-reminder.
+MirrorOSKeys.bind("reminders.set", "SUPER + CTRL + R", "Set reminder", shell_ipc("reminders", "open"))
+MirrorOSKeys.bind("reminders.show", "SUPER + CTRL + ALT + R", "Show reminders",
+  hl.dsp.exec_cmd("/usr/share/mirroros/reminders/reminder show"))
+MirrorOSKeys.bind("reminders.clear", "SUPER + SHIFT + CTRL + R", "Clear reminders",
+  hl.dsp.exec_cmd("/usr/share/mirroros/reminders/reminder clear"))
+
 -- Ferris Sweep: its ZMK mapping sends Shift+comma as an apostrophe without Shift, so SUPER+Shift+comma reaches
 -- Hyprland as SUPER+apostrophe. MirrorOS exception kept beside the Omarchy keys above, which stay for keyboards that
 -- send Shift+comma; SUPER+ALT+apostrophe is the expected form of SUPER+Shift+Alt+comma on that keyboard.

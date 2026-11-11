@@ -279,6 +279,9 @@ session. The owned command `/usr/share/mirroros/reminders/reminder` (capability 
   stops every `mirroros-reminder-*` timer, removes their message files and shows a transient notice.
 - **IPC:** `qs ipc -p /usr/share/mirroros/shell call reminders open|refresh` (both return `ok`); `reminder -i`
   calls `open`.
+- **Bindings:** `SUPER+CTRL+R` opens the prompt (`reminders open`), `SUPER+CTRL+ALT+R` runs `reminder show` and
+  `SUPER+SHIFT+CTRL+R` runs `reminder clear` (Omarchy `utilities.lua` 104-106). They are registry entries, so the
+  `SUPER+K` keybinding help lists "Set reminder", "Show reminders" and "Clear reminders".
 - **Delivery:** a Critical, non-transient "Reminder" notification from app `reminder` that stays until dismissed
   and remains in history, with the freedesktop `alarm-clock-elapsed` sound through `pw-play` (silenced only by
   system mute; a sound failure does not block the notification).
