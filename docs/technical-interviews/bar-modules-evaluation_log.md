@@ -815,3 +815,160 @@ and [ADR 0025](../adr/0025-shell-panels.md).
   becomes necessary, it is an extra `docs(adr)` commit before the first one. Candidate refs
   `refs/mirroros-candidates/02-33-lab-*` are deleted after explicit confirmation. No push.
 - **Status**: Accepted
+
+## DEC-048
+- **Question**: How does the shell keep the reminder indicator count up to date?
+- **Context/Nuances**: Plan 02-34 interview. Upstream `Reminder.qml` (v4.5.0) runs its own `Process`
+  (`omarchy-reminder show --json`) on start and on `refreshRequested`, which the command triggers through the
+  `omarchy.indicators refresh` `ShellIpc` target. MirrorOS `Indicators.qml` removed that target, and one
+  `Indicators` exists per monitor, so a per-indicator process would run once per bar. `services/StayAwake.qml` set
+  the first-party service pattern (`firstPartyServiceFor("mirroros.stay-awake")`) read by its indicator.
+- **User Response**: Approved.
+- **Decision**: A new first-party service `services/Reminders.qml` (`mirroros.reminders`) holds `count`, `tooltip`
+  and `refresh()`, running a single `reminder show --json` `Process` at shell start and on each `refresh()`, with no
+  polling. A native `reminders` `IpcHandler` in `shell.qml` exposes `open` (shows `ReminderFlow`) and `refresh`
+  (calls the service). The command calls `qs ipc -p /usr/share/mirroros/shell call reminders refresh` after create,
+  clear and delivery, never failing when the shell does not answer. `bar/indicators/Reminder.qml`, adapted from
+  v4.5.0, reads the service and joins `defaultIndicatorEntries` in upstream order (`Reminder`, `Dnd`, `StayAwake`).
+  Click keeps upstream behaviour: `reminder show` with pending reminders, otherwise the prompt opens.
+- **Status**: Accepted
+
+## DEC-049
+- **Question**: How does a reminder timer deliver the reminder?
+- **Context/Nuances**: Upstream runs `systemd-run … bash -c '<inline script>' bash "$message" "$message_file"`: the
+  message is an argument (DEC-031 holds) but shows in the unit's `ExecStart` (`systemctl --user status`), and the
+  delivery logic is an inline script that cannot be tested on its own. The unit name `…-<min>m-<epoch>` collides
+  when two reminders with the same minutes are set in the same second (upstream has the same flaw).
+- **User Response**: Approved.
+- **Decision**: An internal `reminder deliver <unit>` subcommand. The timer runs a fixed command:
+  `systemd-run --user --collect --on-active=<N>m --unit=<unit> /usr/share/mirroros/reminders/reminder deliver <unit>`.
+  `deliver` validates `<unit>` against `mirroros-reminder-<min>m-<epoch>-<pid>`, reads the message from
+  `$XDG_RUNTIME_DIR/mirroros/reminders/<unit>.message` (fallback "N minutes are up"), sends the Critical `-a reminder`
+  notification, runs `pw-play` without letting its failure block delivery, removes the file and asks for the refresh
+  (DEC-048). The message never appears in the unit command line or in script text, and `deliver` is Bats-testable.
+  Unit names gain a `-<pid>` suffix to avoid collisions, refining DEC-031's naming; `sources.md` records it.
+- **Status**: Accepted
+
+## DEC-050
+- **Question**: How do the command's non-delivery notifications behave under Do Not Disturb?
+- **Context/Nuances**: `Delivery.js` `bypassesQuiet(row)` passes `omarchy-action` and Critical `notify-send`. DEC-029
+  adds `reminder` so delivery passes Do Not Disturb; matching the app name alone would also let the confirmation,
+  the `show` listing and the `clear` notice through. `isEphemeral` drops rows with the `transient` hint from history.
+- **User Response**: Approved.
+- **Decision**: `bypassesQuiet` passes `reminder` only at Critical urgency, like the existing `notify-send` rule, so
+  only delivery passes Do Not Disturb and snoozes. Confirmation, `show` and `clear` are sent as `-a reminder`, normal
+  urgency, `-h boolean:transient:true`: they stay out of history and are silenced under Do Not Disturb like any other
+  notification, which is acceptable because the indicator tooltip still shows the state. Delivery is not transient
+  and stays in history. The `Delivery.js` Node test gains cases: Critical `reminder` passes, normal `reminder` does
+  not. Refines DEC-029.
+- **Status**: Accepted
+
+## DEC-051
+- **Question**: Do reminders get entries in the MirrorOS menu?
+- **Context/Nuances**: Omarchy's menu has `Trigger › Reminder` with "Set one", "Show all" and "Clear all". The
+  MirrorOS menu (`MirrorMenu.js`) has only Apps, Learn, Style, Install and System, no Trigger section, and typed
+  actions (`session:*`, `help:*`, `wallpaper:*`) rather than free commands; adding it needs a new root section, a new
+  `reminder:*` action type and menu tests. Without it, "Set a reminder" stays reachable through the three bindings,
+  the indicator click (prompt when nothing is pending) and `reminder -i`; the frequent-action list does not require
+  a menu path.
+- **User Response**: Approved.
+- **Decision**: Plan 02-34 does not change the menu. A reminder menu entry is a future follow-up candidate inside a
+  "Trigger" section, when other actions justify it.
+- **Status**: Accepted
+
+## DEC-052
+- **Question**: How are the three reminder bindings declared in `shell-bindings.lua`?
+- **Context/Nuances**: Two mechanisms exist: `shell_ipc(target, args)` running `qs ipc … call` (menu,
+  `style.background` → `wallpaper open`), and `hl.dsp.global("mirroros:…")` with a `GlobalShortcut` in `shell.qml`,
+  used only for bar panels because they need the focused monitor. Owned commands run through
+  `hl.dsp.exec_cmd(<absolute path>)`, as `hardware-bindings.lua` does for `/usr/share/mirroros/hardware/…`.
+- **User Response**: Approved.
+- **Decision**: `reminders.set` `SUPER + CTRL + R` "Set reminder" → `shell_ipc("reminders", "open")` (centred overlay
+  like the wallpaper switcher; no `GlobalShortcut` or `shell.qml` shortcut); `reminders.show`
+  `SUPER + CTRL + ALT + R` "Show reminders" → `exec_cmd("/usr/share/mirroros/reminders/reminder show")`;
+  `reminders.clear` `SUPER + SHIFT + CTRL + R` "Clear reminders" → `exec_cmd("/usr/share/mirroros/reminders/reminder
+  clear")`. Upstream English descriptions; the comment cites v4.5.0 `default/hypr/bindings/utilities.lua` 104-106.
+  The hyprland `UPSTREAM.md` `shell-bindings.lua` row and `hyprland-bindings.test.mjs` are updated, with registry
+  counts verified during execution as in 02-33; keybinding help is generated from the registry. The path coupling
+  from hyprland to `/usr/share/mirroros/reminders/reminder` is accepted like `hardware/`; a missing command makes the
+  binding fail silently.
+- **Status**: Accepted
+
+## DEC-053
+- **Question**: How is `ReminderFlow.qml` adapted?
+- **Context/Nuances**: Its dependencies exist in MirrorOS (`OverlayWindow`, `BorderSurface`, `Border.surfaceSpec`,
+  `Color.menu`, `Style.font.menuFamily`, `Util.editsFilter`/`editedFilter`); the four `reminders.*` i18n keys exist at
+  `7075b61` and only need adding to the subset. Omarchy coupling: `omarchyPath`, `shell.hide(manifest.id)`, the JSON
+  payload of `open()` (`fontFamily`), the invalid-minutes error through `omarchy-notification-send`, and
+  `omarchy-reminder`.
+- **User Response**: Approved.
+- **Decision**: The shell gains `reminders/ReminderFlow.qml` and `reminders/ReminderFlowModel.js`. The model is a
+  byte-identical v4.5.0 copy; its upstream test (`test/shell.d/reminders-test.sh`) is ported as
+  `reminders-flow-model.test.mjs` with the origin cited in the header, as in 02-33. `ReminderFlow.qml` is adapted: no
+  `omarchyPath`, `manifest` or `shell.hide`; `open()` takes no payload; `dismiss()` only closes; namespace
+  `mirroros-reminders`; submit runs `/usr/share/mirroros/reminders/reminder` with separate arguments from
+  `reminderArgs`; the invalid-minutes error is `notify-send -a reminder -h boolean:transient:true` with the same i18n
+  keys. It is instantiated once in `shell.qml` and the `reminders` `IpcHandler` (DEC-048) calls `open`. `UPSTREAM.md`
+  records both files and `no-omarchy-coupling` covers the directory.
+- **Status**: Accepted
+
+## DEC-054
+- **Question**: How is `capabilities/desktop/reminders/` packaged and tested?
+- **Context/Nuances**: `system/audio` is the precedent: `apply` installs owned commands with `cfg_tracked_file … 0755`
+  and `cfg_require`, and because `volume` is adapted from Omarchy it installs `OMARCHY-LICENSE` under
+  `/usr/share/mirroros/hardware/licenses/omarchy-audio`. `configure-steps` is an explicit ordered list; each
+  capability has a `configure.contract.bats` running `apply` against a test root; command tests use `PATH` doubles
+  (`lock-screen.bats`).
+- **User Response**: Approved.
+- **Decision**: Files: `reminder` (Bash, `# managed by MirrorOS configure`, adaptation note for v4.5.0
+  `omarchy-reminder`; English literal strings from `default/i18n/en/cli.json` `reminder.*`, no `omarchy-i18n`, simple
+  Bash plurals), `apply`, `packages` (`jq`, `sound-theme-freedesktop`), `sources.md`, `OMARCHY-LICENSE`. `apply`
+  installs `reminder` at `/usr/share/mirroros/reminders/reminder` (0755) and the license at
+  `/usr/share/mirroros/reminders/licenses/omarchy-reminders`, both with `cfg_require`. `configure-steps` lists
+  `desktop/reminders` right after `desktop/shell`. Tests: `tests/capabilities/desktop/reminders/configure.contract.bats`
+  (install, license, packages) and `reminder.bats` with `systemd-run`, `systemctl`, `notify-send`, `pw-play` and `qs`
+  doubles (arguments, unit name, quoted and metacharacter messages never on the `systemd-run` line, `show`,
+  `show --json`, `clear`, `deliver` including an invalid unit and a `pw-play` failure, IPC refresh failure not
+  failing the command). Implicit dependencies (`pw-play`, `systemd-run`, `notify-send`) are checked during execution;
+  `libnotify` is added if no capability declares `notify-send`.
+- **Status**: Accepted
+
+## DEC-055
+- **Question**: What do the shell static test, the laboratory checkpoint and the documentation cover for reminders?
+- **Context/Nuances**: DEC-031 set the laboratory scope only broadly. Plan 02-33 used candidate refs
+  `refs/mirroros-candidates/02-33-lab-*` and a guest checkpoint.
+- **User Response**: Approved.
+- **Decision**:
+  - Node static test `tests/capabilities/desktop/shell/reminders.test.mjs`: no `omarchy-*`, `OMARCHY_PATH` or
+    `bash -c` in `reminders/`, `services/Reminders.qml` and `indicators/Reminder.qml`; the service's only `Process`
+    runs `reminder show --json` and no polling `Timer` exists; `shell.qml` declares the `reminders` target with
+    `open` and `refresh`; `Indicators` lists `Reminder` before `Dnd` and `StayAwake`; `ReminderFlow` submits through
+    `reminderArgs` with separate arguments.
+  - Laboratory (guest VM, candidate refs `02-34-lab-*`): `configure` exit 0 and an unchanged rerun; a 1-minute
+    reminder with a message from `SUPER+CTRL+R` shows the confirmation, the indicator count and tooltip, the unit in
+    `systemctl --user list-timers`, and `systemctl --user cat` without the message; on expiry a Critical notification
+    stays until dismissed, the sound plays and the count returns to 0; the same under Do Not Disturb (delivery passes,
+    confirmation silenced); `show` and `clear` by binding and indicator click; invalid minutes give the transient
+    notice; logout with a pending reminder leaves no unit, no `$XDG_RUNTIME_DIR/mirroros/reminders/` and no delivery
+    after login; after a shell restart the count is restored at start. No T14s validation.
+  - Documentation: a "Reminders" section in `docs/procedures/desktop-shell.md` (use, IPC, checks); the
+    `docs/mvp-scope.md` "Quick reminders" row and "Set a reminder" frequent action (DEC-030); `docs/attribution.md`;
+    shell `UPSTREAM.md`; the capability `sources.md`; the hyprland `UPSTREAM.md` row.
+- **Status**: Accepted
+
+## DEC-056
+- **Question**: How does plan 02-34 commit its changes?
+- **Context/Nuances**: Plans 02-32 (DEC-040) and 02-33 (DEC-047) closed with a commit task after the laboratory
+  checkpoint: Conventional Commits by concern, shared files split by hunk with tests passing on each tree, candidate
+  refs deleted after explicit confirmation, no push.
+- **User Response**: Approved.
+- **Decision**: Plan 02-34 ends with a commit task after the laboratory checkpoint is approved. After reviewing
+  `git status`/`git diff --stat` (no `build/`, `dist/`, `evidence/`, `.agents/` or secrets) and showing the commit
+  list to the maintainer, four commits are made in order: `feat(reminders): add the reminder command` (capability,
+  `configure-steps`, Bats, `sources.md`, licence); `feat(shell): add the reminder prompt and indicator` (service,
+  `ReminderFlow`, indicator, IPC, `bypassesQuiet` and its test, i18n, shell `UPSTREAM.md`, `attribution.md`,
+  `mvp-scope.md`, procedure, shell tests); `feat(hyprland): add reminder shortcuts` (`shell-bindings.lua`, hyprland
+  `UPSTREAM.md`, bindings tests); `docs(shell): record reminders interview, validation and findings`. Shared files are
+  split by hunk with tests passing at each commit; refs `refs/mirroros-candidates/02-34-lab-*` are deleted after
+  explicit confirmation. No push.
+- **Status**: Accepted

@@ -295,6 +295,20 @@ Checks: `systemctl --user list-timers 'mirroros-reminder-*'` lists pending remin
 <unit>.service` must not contain a message, and `reminder show --json` returns `{count, active, tooltip,
 reminders[]}`.
 
+Laboratory checkpoint (plan 02-34, 2026-11-11, guest `mirroros-ref`, final candidate `b42c74e`, temporary refs
+`refs/mirroros-candidates/02-34-lab-{a,b}`): configure exit 0 with an unchanged rerun (20/20); qmllint passes with
+the reviewed baseline (2447 keys, no new category); `check-notifications` and `check-bar` pass. A reminder set
+from the prompt kept its message, quotes and `$(…)` included, verbatim in the 0600 message file and off the unit;
+delivery came from the user manager as a Critical notification that stayed until dismissed, stayed in history and
+played the alarm sound, also with Do Not Disturb on, where the confirmation was silenced and kept out of history.
+The indicator, the click (listing, or the prompt at zero), the three bindings, `clear`, the invalid-input notice and
+the `SUPER+K` help passed. Executions were counted with an `inotifywait` open watch on the command: one
+`show --json` per set, delivery, clear or shell start, none while idle. Logout stopped the user manager with a
+reminder pending; the next login had no unit, no message directory and no delivery. Delivery may lag the shown
+time by up to a minute (systemd's default timer accuracy). Logout only ends reminders when no other session of the
+user survives: in the guest, `inotifywait` processes leaked by the check scripts had kept old SSH sessions in
+`closing` and were removed first. Evidence: `evidence/reminders/lab-02-34/checkpoint.md` (ignored).
+
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`

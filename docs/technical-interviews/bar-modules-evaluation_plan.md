@@ -294,7 +294,7 @@ capability's `sources.md`. [DEC-030]
 A new `capabilities/desktop/reminders/` capability owns the Bash `reminder` command, installed at
 `/usr/share/mirroros/reminders/reminder` like other owned commands, with its `apply`, `packages`
 (`sound-theme-freedesktop`, `jq`) and `sources.md`. The command keeps upstream's interface (`<minutes> [message]`,
-`show [--json]`, `clear`, `-i`), schedules `mirroros-reminder-<min>m-<epoch>` units through `systemd-run --user
+`show [--json]`, `clear`, `-i`), schedules `mirroros-reminder-<min>m-<epoch>-<pid>` units through `systemd-run --user
 --on-active`, keeps messages under `$XDG_RUNTIME_DIR/mirroros/reminders/` and passes them only as arguments, and asks
 the shell through IPC to refresh the indicator after every change. The prompt adapts upstream `ReminderFlow.qml` in
 the shell behind a native `reminders` IPC target, and Omarchy's three bindings (`SUPER+CTRL+R` set,
@@ -307,10 +307,67 @@ test where one exists. The laboratory checks creating, listing and clearing remi
 Do Not Disturb, and that nothing survives logout. [DEC-031]
 
 A delivered reminder must be noticed. It is a Critical notification under the app name `reminder`, which the
-MirrorOS service keeps on screen until dismissed in the urgent colour, and `reminder` joins `bypassesQuiet` so a
+MirrorOS service keeps on screen until dismissed in the urgent colour, and `reminder` at Critical urgency joins `bypassesQuiet` so a
 self-set reminder passes Do Not Disturb and snoozes. The command also plays the freedesktop
 `alarm-clock-elapsed` sound with `pw-play`, even under Do Not Disturb and silenced only by system mute, with
 `sound-theme-freedesktop` declared; the shell gains no sound support and no resident process. [DEC-029]
+
+The indicator count comes from one first-party shell service, `mirroros.reminders`, rather than a process per
+indicator: MirrorOS has one `Indicators` per monitor and removed upstream's `ShellIpc` refresh target. The service
+runs a single `reminder show --json` at shell start and on each refresh, never polling, and a native `reminders`
+IPC target in `shell.qml` offers `open` for the prompt and `refresh` for the service. The command asks for a refresh
+after creating, clearing and delivering, without failing when the shell is absent. The adapted `Reminder` indicator
+reads the service, joins the default indicators in upstream order before Dnd and StayAwake, and keeps upstream's
+click: list pending reminders, or open the prompt when there are none. [DEC-048]
+
+Delivery is an internal `reminder deliver <unit>` subcommand that each transient timer runs as a fixed command, so
+the message never appears in the unit's command line or in script text, and delivery is testable on its own. It
+validates the unit name, reads the message from the runtime directory (falling back to "N minutes are up"), sends
+the Critical notification, plays the sound without letting a `pw-play` failure block delivery, removes the message
+file and asks the shell to refresh. Unit names carry a `-<pid>` suffix after the epoch so two reminders set in the
+same second do not collide, a small departure from upstream recorded in `sources.md`. [DEC-049, DEC-031]
+
+Only delivery passes Do Not Disturb: `bypassesQuiet` admits `reminder` at Critical urgency alone, mirroring the
+`notify-send` rule. The confirmation, the `show` listing and the `clear` notice go out under the same app name at
+normal urgency with the `transient` hint, so they never clutter history and are silenced under Do Not Disturb like
+any other notification, while the indicator tooltip keeps the state visible. Delivery itself stays in history.
+[DEC-050, DEC-029]
+
+The MirrorOS menu stays unchanged. Omarchy's `Trigger › Reminder` entries would need a new root section and a new
+typed action kind, while setting a reminder is already reachable through the bindings, the indicator click and
+`reminder -i`. A menu entry is left as a follow-up for a future "Trigger" section. [DEC-051]
+
+The three bindings keep Omarchy's chords and English descriptions and use existing MirrorOS mechanisms: "Set
+reminder" calls the shell's `reminders open` through the same `qs ipc` helper the wallpaper switcher uses, since a
+centred overlay needs no focused-monitor routing, while "Show reminders" and "Clear reminders" execute the installed
+command by absolute path, as the hardware bindings do. The hyprland `UPSTREAM.md` row and bindings test follow, with
+registry counts confirmed during execution, and the keybinding help picks the entries up from the registry. The
+path coupling from hyprland to the reminders capability is accepted like the existing `hardware/` one. [DEC-052]
+
+The prompt lives in the shell's `reminders/` directory. `ReminderFlowModel.js` is copied unchanged from v4.5.0 and
+its upstream test is ported to Node with the origin cited in the header. `ReminderFlow.qml` keeps its card, key
+handling and two steps but loses the Omarchy host plumbing: no install path, manifest or host hide, an `open()`
+without payload, a `mirroros-reminders` namespace, submission through the installed `reminder` command with separate
+arguments, and the invalid-minutes error as a transient `notify-send` under the `reminder` app name with the same
+i18n keys, which only need adding to the existing subset. The shell instantiates it once and the `reminders` IPC
+target opens it. [DEC-053, DEC-048]
+
+The capability follows the audio commands' packaging. Its Bash `reminder` carries English literal strings taken
+from upstream's English CLI catalogue instead of `omarchy-i18n`, and `apply` installs it with the Omarchy licence
+under `/usr/share/mirroros/reminders/`. The step runs right after the shell in `configure-steps`. A configure
+contract test covers installation, and a command test with doubles for systemd, notifications, sound and shell IPC
+covers arguments, unit names, hostile messages kept off the `systemd-run` line, listing, clearing and delivery,
+including an invalid unit, a sound failure and an absent shell. Implicit runtime dependencies are confirmed during
+execution, adding `libnotify` only if nothing declares `notify-send`. [DEC-054]
+
+On the shell side a static Node test guards the boundaries: no Omarchy coupling or inline shell scripts in the
+reminder files, one non-polling `reminder show --json` process in the service, the `reminders` IPC target with
+`open` and `refresh`, the indicator order and argument-vector submission. The laboratory checkpoint, on candidate
+refs as in 02-33, exercises configure idempotence, a one-minute reminder end to end (confirmation, count and
+tooltip, a unit whose definition holds no message, a Critical delivery with sound that resets the count), the same
+under Do Not Disturb, show and clear by binding and click, invalid input, nothing surviving logout, and the count
+restored after a shell restart; no T14s validation is needed. The procedure gains a "Reminders" section alongside
+the MVP scope, attribution and provenance records. [DEC-055, DEC-030, DEC-031]
 
 ## Active window
 
@@ -368,3 +425,8 @@ then its Hyprland shortcut on its own so it can be reviewed or reverted separate
 validation records. Shared files are split by hunk with tests passing at each commit, an ADR 0029 amendment, if one
 turns out to be needed, goes in a preceding `docs(adr)` commit, candidate refs are deleted after confirmation and
 nothing is pushed. [DEC-047]
+
+Plan 02-34 closes the same way once its laboratory checkpoint is approved, with four commits: the reminder command
+capability, then the shell prompt, indicator and notification policy with the scope and provenance records, then
+the Hyprland shortcuts on their own, then the interview and validation records. Shared files are split by hunk with
+tests passing at each commit, candidate refs are deleted after confirmation and nothing is pushed. [DEC-056]
