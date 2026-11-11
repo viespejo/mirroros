@@ -69,6 +69,7 @@ Item {
     "omarchy.active-window": activeWindowComponent,
     "omarchy.indicators": indicatorsComponent,
     "omarchy.clock": clockComponent,
+    "omarchy.weather": weatherComponent,
     "omarchy.tray": trayComponent,
     "omarchy.keyboard-layout": keyboardComponent,
     "omarchy.bluetooth": bluetoothComponent,
@@ -83,6 +84,7 @@ Item {
   Component { id: activeWindowComponent; Widgets.ActiveWindow { } }
   Component { id: indicatorsComponent; Widgets.Indicators { } }
   Component { id: clockComponent; Widgets.Clock { } }
+  Component { id: weatherComponent; Widgets.Weather { } }
   Component { id: trayComponent; Widgets.Tray { } }
   Component { id: keyboardComponent; Widgets.KeyboardLayout { } }
   Component { id: bluetoothComponent; Widgets.Bluetooth { } }
@@ -335,6 +337,13 @@ Item {
     function open(): string { return root.requestPanel("omarchy.clock", "open") }
     function close(): string { return root.requestPanel("omarchy.clock", "close") }
     function toggle(): string { return root.requestPanel("omarchy.clock", "toggle") }
+  }
+
+  IpcHandler {
+    target: "weather"
+    function open(): string { return root.requestPanel("omarchy.weather", "open") }
+    function close(): string { return root.requestPanel("omarchy.weather", "close") }
+    function toggle(): string { return root.requestPanel("omarchy.weather", "toggle") }
   }
 
   function moduleWidgets(moduleName) {

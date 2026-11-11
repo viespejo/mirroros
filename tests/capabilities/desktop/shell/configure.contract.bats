@@ -43,7 +43,7 @@ runtime_current() {
   cmp "$SHELL_CODE/systemd/mirroros-shell.service" "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/mirroros-shell.service"
   [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-shell.service")" = \
     /etc/systemd/user/mirroros-shell.service ]
-  for package in quickshell util-linux libvips inotify-tools libxkbcommon ttf-liberation wl-clipboard; do
+  for package in quickshell util-linux libvips inotify-tools libxkbcommon ttf-liberation wl-clipboard curl; do
     [ -e "$CFG_TEST_INSTALLED/$package" ]
   done
   grep -q "^mirroros-shell-runtime	capabilities/desktop/shell			manifest-sha256:$(bash "$SHELL_CODE/install-runtime" digest "$SHELL_CODE")$" \

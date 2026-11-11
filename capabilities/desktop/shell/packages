@@ -10,3 +10,5 @@ libxkbcommon extra
 ttf-liberation extra
 # Clearing a copied notification code (wl-paste, wl-copy).
 wl-clipboard extra
+# Weather pill and panel: fixed https:// open-meteo forecast and geocoder requests (ADR 0029).
+curl core

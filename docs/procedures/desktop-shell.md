@@ -74,18 +74,18 @@ maintainer-authorized `hyprctl reload`; configure does not reload the compositor
 scripted requests use native Quickshell interfaces only; there is no own socket or CLI:
 
 ```bash
-qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets bluetooth, network, audio, display, power, clock
+qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets bluetooth, network, audio, display, power, clock, weather
 hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
 ```
 
-Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.notifications` and
+Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.weather`, `panel.notifications` and
 `panel-at-1` to `panel-at-9` (the Nth panel of the focused monitor's right bar section). The IPC result is
 `opened`, `closed` or `unavailable` (no panel instance, for example the power panel without a battery). Requests
 follow "focused monitor wins": `open` shows the panel on the focused monitor, moving it there if needed; `close`
 closes it wherever it is; `toggle` closes it only when open on the focused monitor; a focus change alone moves
 nothing. Inside an open panel, Tab and Shift+Tab move to the next or previous panel of the same bar section.
 The panel chords are `SUPER+CTRL+B` (Bluetooth), `SUPER+CTRL+N` (network), `SUPER+CTRL+A` (audio), `SUPER+CTRL+D`
-(display), `SUPER+CTRL+P` (power) and `SUPER+CTRL+ALT+D` (calendar). Default positional numbering is Bluetooth 1, network 2, audio 3, display 4,
+(display), `SUPER+CTRL+P` (power), `SUPER+CTRL+ALT+D` (calendar) and `SUPER+CTRL+ALT+W` (weather). Default positional numbering is Bluetooth 1, network 2, audio 3, display 4,
 power 5; without a Bluetooth adapter its icon is not drawn and the numbering stays network 1, audio 2, display 3,
 power 4. The `bluetooth` and `network` IPC targets expose only `open`, `close` and `toggle`.
 Later panels follow the same convention. Panel actions run
@@ -158,6 +158,55 @@ opt-in settings are stored per widget like any inline setting (see [Inline setti
 ```
 
 Without `weekStartDay` the week starts on the locale's first day. Deleting a key restores its default.
+
+## Weather
+
+Plan 02-32 adds a weather pill and panel adapted from Omarchy under
+[ADR 0029](../adr/0029-clock-calendar-weather-and-world-clock-panels.md). The pill sits in `centerEnd`, after the
+clock; any click on it and `qs ipc -p /usr/share/mirroros/shell call weather open|close|toggle` open or close the
+panel, which joins Tab switching in the center section. No location ships: until one is saved the pill shows a
+neutral glyph without a reading, the panel shows a "No location" hero with the city search focused, and nothing
+is requested.
+
+The hero reports the active location (temperature, pinned name, feels, wind, humidity, three-day forecast).
+Clicking the pinned name opens the city search, which replaces the active location. The other saved locations
+follow under a "SAVED LOCATIONS" header as compact rows in saved order: clicking a row makes it active and the previous active one returns to the
+list; the circular "×" shown on hover removes a non-active row, so the active and the last location stay.
+"+ Add location" appends a location without changing the active one; the first location added becomes active.
+Keys follow Elsewhen's list: `j`/`k` or the arrows move a highlight over the hero, the rows and "+ Add location"
+(wrapping round); Return or Space activates the highlighted row, opens the add search on the button or the
+replace search on the hero; `x` or Delete removes a highlighted non-active row; `a` or `+` adds a location; Tab
+and Shift+Tab switch panels, also from a search field.
+The list is stored like any inline setting (see [Inline settings](#inline-settings)):
+
+```json
+{
+  "version": 1,
+  "bar": { "widgets": { "omarchy.weather": {
+    "locations": [{ "name": "Oslo", "latitude": 59.91273, "longitude": 10.74609 }], "active": 0 } } }
+}
+```
+
+Units follow an optional `"unit": "metric"` or `"imperial"` in the same object, otherwise the locale. Requests
+go only to fixed `https://api.open-meteo.com` and `https://geocoding-api.open-meteo.com` URLs, through `curl`
+(declared in the shell `packages` file) with argument vectors and a 5-second limit. While the panel is closed
+only the active location is fetched, every 30 minutes; opening the panel fetches every location in one combined
+request. Nothing is fetched while the session is locked (hypridle's lock marker, as for notifications), and
+unlocking refreshes. The city search runs only while typing in the open panel. A failed request keeps the
+previous values and is not retried before the next scheduled refresh.
+
+Laboratory checkpoint (plan 02-32, 2026-11-11, guest `mirroros-ref`, final candidate `11e2921`, temporary refs
+`refs/mirroros-candidates/02-32-lab-{a..h}`): configure exit 0 with unchanged reruns; qmllint passes with the
+reviewed baseline (2254 keys, no new category); `check-panels`, `check-notifications` and `check-bar` pass.
+Starting without `shell.json`, every inline setting (clock format, week start, birth year, weather locations) was
+written only under `bar.widgets.<id>`, never `bar.layout`. Calendar click, IPC, Tab switching and opt-in settings
+passed. Weather made no request without a location; the geocoder ran only while typing; a closed panel fetched
+only the active location; opening fetched all locations in one request; nothing ran while locked and unlocking
+refreshed the active location; offline, one failed request kept the previous values with no retry. The 30-minute
+tick was not observed at runtime (test-level only). The checkpoint fixed Tab being trapped in the weather search,
+and added Elsewhen's list keys, the "×" overhang and the "SAVED LOCATIONS" header to the weather panel, and the
+`SUPER+CTRL+ALT+D`/`SUPER+CTRL+ALT+W` panel shortcuts (after configure, a maintainer-authorized `hyprctl reload`
+loads them). Evidence: `evidence/calendar-weather/lab-02-32/checkpoint.md` (ignored).
 
 ## Fixed palette
 

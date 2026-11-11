@@ -109,7 +109,7 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 158);
+  assert.equal(bindings.length, 159);
   for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
@@ -189,7 +189,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 158);
+  assert.equal(replaced.stdout.trim().split('\n').length, 159);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -207,7 +207,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
     'ALT+CTRL+SHIFT+TAB', 'CTRL+SUPER+Z', 'ALT+CTRL+SUPER+Z', 'SUPER+MOUSE:272', 'SUPER+MOUSE:273',
     'SUPER+MOUSE_DOWN', 'SUPER+MOUSE_UP', 'ALT+SUPER+MOUSE_DOWN', 'ALT+SUPER+MOUSE_UP',
     'CTRL+SUPER+A', 'CTRL+SUPER+B', 'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P',
-    'ALT+CTRL+SUPER+D',
+    'ALT+CTRL+SUPER+D', 'ALT+CTRL+SUPER+W',
   ];
   for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
@@ -262,9 +262,10 @@ test('shell actions call existing IPC functions of the installed shell', { skip:
 test('global shortcut bindings name shortcuts the shell registers', { skip: !lua && 'no Lua interpreter' }, () => {
   const globals = bindings.map(binding => binding.action).filter(action => action.startsWith('global '));
   assert.ok(globals.includes('global mirroros:panel.notifications'));
-  for (const name of ['bluetooth', 'network', 'audio', 'display', 'power', 'clock']) assert.ok(globals.includes(`global mirroros:panel.${name}`), name);
+  for (const name of ['bluetooth', 'network', 'audio', 'display', 'power', 'clock', 'weather']) assert.ok(globals.includes(`global mirroros:panel.${name}`), name);
   assert.equal(byChord.get('CTRL+SUPER+B').action, 'global mirroros:panel.bluetooth');
   assert.equal(byChord.get('ALT+CTRL+SUPER+D').action, 'global mirroros:panel.clock');
+  assert.equal(byChord.get('ALT+CTRL+SUPER+W').action, 'global mirroros:panel.weather');
   const source = fs.readFileSync(path.join(shell, 'shell.qml'), 'utf8');
   const positional = [];
   for (const action of globals) {
@@ -287,7 +288,7 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 150);
+  assert.equal(rows.length, 151);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));

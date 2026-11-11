@@ -251,5 +251,10 @@
   "tray.show": "Show",
   "tray.title": "Tray icons",
   "tray.unknown": "Unknown",
-  "tray.unpin": "Unpin"
+  "tray.unpin": "Unpin",
+  "weather.feels": "FEELS",
+  "weather.fetching": "Fetching forecast…",
+  "weather.humid": "HUMID",
+  "weather.searchCity": "Search city",
+  "weather.wind": "WIND"
 }

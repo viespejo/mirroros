@@ -121,6 +121,12 @@ ShellRoot {
   }
   GlobalShortcut {
     appid: "mirroros"
+    name: "panel.weather"
+    description: "Toggle the weather panel"
+    onPressed: desktopShell.bar.requestPanel("omarchy.weather", "toggle")
+  }
+  GlobalShortcut {
+    appid: "mirroros"
     name: "panel.notifications"
     description: "Toggle the notification panel"
     onPressed: desktopShell.notificationService.requestPanel("toggle")

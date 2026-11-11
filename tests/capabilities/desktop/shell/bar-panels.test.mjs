@@ -104,7 +104,7 @@ test('panel IPC targets are declared once, outside the per-screen bar, with open
 });
 
 test('the shell registers the panel global shortcuts under the mirroros application id', () => {
-  for (const name of ['panel.bluetooth', 'panel.network', 'panel.audio', 'panel.display', 'panel.power', 'panel.clock', 'panel.notifications'])
+  for (const name of ['panel.bluetooth', 'panel.network', 'panel.audio', 'panel.display', 'panel.power', 'panel.clock', 'panel.weather', 'panel.notifications'])
     assert.match(shellQml, new RegExp(`appid: "mirroros"\\n\\s+name: "${name.replace('.', '\\.')}"`), name);
   assert.match(shellQml, /model: \[1, 2, 3, 4, 5, 6, 7, 8, 9\][\s\S]*name: "panel-at-" \+ modelData[\s\S]*togglePanelAt\("right", modelData\)/);
   assert.doesNotMatch(shellQml, /appid: "omarchy"|SocketServer|OMARCHY_PATH/);
