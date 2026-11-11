@@ -241,6 +241,22 @@ argument vectors. A failed lookup falls back to `/usr/share/zoneinfo/zone1970.ta
 in the shell `packages` file); a failed forecast keeps the previous temperatures and starts no retry. There are no
 people, GitHub avatars, big globe or panel-own IPC; clicking the hero mini globe opens nothing.
 
+Laboratory checkpoint (plan 02-33, 2026-11-11, guest `mirroros-ref`, final candidate `b229266`, temporary refs
+`refs/mirroros-candidates/02-33-lab-{a..g}`): configure exit 0 with unchanged reruns; qmllint passes with the
+reviewed baseline (2436 keys, new category `id-shadows-member` from upstream `Panel.qml`); `check-panels`,
+`check-notifications` and `check-bar` pass. With the panel closed after a shell restart, no `date` or `timedatectl`
+ran and no `cities` were written; the first open wrote the home city plus four destinations under
+`bar.widgets["omarchy.elsewhen"]`, never `bar.layout`, with read-only `timedatectl` probes, geocoder lookups for
+rows without coordinates and one batched forecast. Click, IPC, `SUPER+CTRL+ALT+E` (after a maintainer-authorized
+`hyprctl reload`), Tab and the `centerEnd` order passed; adding, removing, reordering, scrubbing, greetings and
+search passed; "Where are you?" offered only the machine's zone and no `sudo`, `set-timezone` or notification
+helper ran; no people button, and the mini globe opened nothing. Offline with fresh readings, the open panel kept
+its temperatures and made no request; a failing request and the `zone1970.tab` fallback were not exercised. Rows
+without stored coordinates are geocoded again on each open (upstream behaviour). The checkpoint fixed the panel's
+sibling types (directory import in the host), Tab being trapped in the search fields and missing CJK glyphs
+(`noto-fonts-cjk`), and aligned bar glyphs with Omarchy v4.5.0 (`OpticalGlyph.qml`, `paintedSize`). Evidence:
+`evidence/world-clock/lab-02-33/checkpoint.md` (ignored).
+
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`

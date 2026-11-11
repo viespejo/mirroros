@@ -205,6 +205,46 @@ upstream `globeEnabled` setting is fixed to `false`, `MiniGlobe` remains a stati
 the globe files and their `world.json` and `cities.json` data are not delivered, avoiding the panel's most complex
 rendering code and its per-frame repaint cost; `Sun.js` stays for the daylight strip. [DEC-024]
 
+The pieces kept outside the big globe still import globe helpers, so the delivered file set follows those imports.
+`GlobeModel.js`, `MoonDot.qml`, `Arc.js`, `ArcText.qml`, `HeroTitle.qml`, `Sun.js` and `DaylightStrip.qml` are
+copied byte-identical, and `MiniGlobe.qml` changes only its `world.json` path, with `world.json` (Natural Earth
+110m, public domain) delivered and attributed. The mini globe therefore keeps its short opening spin and its turn
+towards the focused city, and the daylight strip keeps its moon-phase night marker, while `globeEnabled` fixed off
+means the hero click opens nothing. Only `Globe.qml`, `GlobeFooter.qml`, `cities.json` and the people `Avatar.qml`
+are not delivered. This corrects DEC-024's file list without changing its intent. [DEC-041]
+
+The hero caption keeps Elsewhen's "Where are you?" search, so the user can name the city that represents them
+when the zone's representative city is not theirs, but only within the local zone: the search offers zones and
+places whose id is the machine's zone, and a pick elsewhere does nothing. The time-zone change path
+(`timezoneProc`, `timezoneCommand`), its `omarchy-notification-send` reports and their i18n keys are removed, and a
+stored `here` still resets on its own when the system zone changes by other means. The ported model test keeps the
+same-zone `hereAfterPick` cases and the static test asserts no `sudo` or `set-timezone`. [DEC-042]
+
+Upstream probes zones once when the shell starts, which would also seed the first-run cities before the panel ever
+opens. MirrorOS removes that start-up `refresh()`, so the `date` and `timedatectl` probe and the first-run seed run
+only while the panel is open, as ADR 0029 and DEC-025 require; opening the panel already probes, refreshes facts
+and loads the zone catalogue. A static test asserts the start-up call is gone, and the laboratory confirms no probe
+process and no `cities` write after a shell start until the first open. [DEC-043]
+
+The panel's only IPC is the native `worldclock` target in `Bar.qml` with open, close and toggle. Upstream's own IPC
+block, with its refresh, globe, times, add, remove, people and here functions, is removed, because several of them
+would probe or reach open-meteo with the panel closed and others belong to dropped features; cities are edited only
+in the panel. The static test asserts the upstream block and target are gone and `worldclock` is declared. [DEC-044]
+
+The world clock follows the host pattern weather established in plan 02-32. A new MirrorOS-owned
+`bar/widgets/WorldClock.qml`, modelled on `Weather.qml`, shows the upstream globe glyph, toggles on any click,
+provides the open, close and opened contract that panel routing, Tab and popout switching rely on, and loads
+`panels/elsewhen/Panel.qml`, which loses its own bar button and anchors to the injected one. Every delivered
+Elsewhen file lives in `panels/elsewhen/` under its upstream name, the widget id stays `omarchy.elsewhen`, and
+`Bar.qml` maps that id to the new component; the static test checks the mapping, the host contract and the absence
+of a bar button in the panel. [DEC-045]
+
+Like the calendar and weather, the world clock gets a global shortcut, `mirroros:panel.worldclock` on Omarchy's own
+`SUPER+CTRL+ALT+E` ("World clock"), declared in the Hyprland shell bindings and the shell's global shortcuts, with
+provenance, keybinding help and the shell procedure updated. Unlike plan 02-32, where these files were a deviation,
+plan 02-33 lists the binding files and their tests up front; exact registry counts are checked during execution.
+[DEC-046]
+
 Per-city temperature reuses Elsewhen's upstream path unchanged: one batched open-meteo forecast for all rows and a
 geocode per row without coordinates, only while the panel is open, cached in memory (geocodes for the session,
 weather for 20 minutes), with network input validated, the `zone1970.tab` coordinates as offline fallback and the
@@ -322,3 +362,9 @@ Plan 02-32 closes with a commit task once the laboratory checkpoint is approved:
 concern (per-widget persistence, ADR 0029, calendar, weather, and the interview and validation records), with shared
 files split by hunk so tests pass at each commit, candidate refs deleted afterwards and no push; `.agents/` and
 generated outputs are never committed. [DEC-040]
+
+Plan 02-33 closes the same way once its laboratory checkpoint is approved, with three commits: the world clock panel,
+then its Hyprland shortcut on its own so it can be reviewed or reverted separately, then the interview and
+validation records. Shared files are split by hunk with tests passing at each commit, an ADR 0029 amendment, if one
+turns out to be needed, goes in a preceding `docs(adr)` commit, candidate refs are deleted after confirmation and
+nothing is pushed. [DEC-047]

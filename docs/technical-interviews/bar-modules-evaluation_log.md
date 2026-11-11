@@ -699,3 +699,119 @@ and [ADR 0025](../adr/0025-shell-panels.md).
   interview, validation and findings`. Shared files are split with `git add -p` and tests pass at each commit.
   Candidate refs `refs/mirroros-candidates/02-32-lab-*` are deleted afterwards. No push.
 - **Status**: Accepted
+
+## DEC-041
+- **Question**: Which globe-related Elsewhen files are delivered, given that pieces DEC-024 keeps import pieces it
+  excludes?
+- **Context/Nuances**: Plan 02-33 interview. At `v4.5.0`, `Sun.js` imports `GlobeModel.js`; `DaylightStrip.qml`
+  uses `MoonDot.qml` (night marker with moon phase), which imports `GlobeModel.js`; `Panel.qml` reads
+  `Solar.moonPhase` for the strip; `HeroTitle.qml` uses `ArcText.qml` (which imports `Arc.js`), `GlobeModel.js` and
+  `MiniGlobe`; `MiniGlobe.qml` imports `GlobeModel.js` and reads `world.json` through `OMARCHY_PATH`. Only
+  `Globe.qml`, `GlobeFooter.qml` and `cities.json` serve the big globe alone; `Avatar.qml` serves people (DEC-021).
+  `world.json` is 14.8 KB, Natural Earth 110m, public domain. Options were (a) keep everything outside the big
+  globe unchanged, delivering `world.json`; (b) the same without `world.json`, graticule only; (c) a static glyph
+  instead of `MiniGlobe`.
+- **User Response**: Option (a).
+- **Decision**: `GlobeModel.js`, `MoonDot.qml`, `Arc.js`, `ArcText.qml`, `HeroTitle.qml`, `Sun.js` and
+  `DaylightStrip.qml` are copied byte-identical; `MiniGlobe.qml` is adapted only in the `world.json` path, and
+  `world.json` is delivered with its provenance. The mini globe keeps its short opening spin and its turn towards
+  the focused city; with `globeEnabled` fixed `false` clicking it opens nothing. `Globe.qml`, `GlobeFooter.qml`,
+  `cities.json` and `Avatar.qml` are not delivered. Corrects DEC-024's file list without changing its intent (the
+  big globe, interactive moon mode and the hero click stay out); ADR 0029 lists no files, so no amendment is needed.
+- **Status**: Accepted
+
+## DEC-042
+- **Question**: What happens to Elsewhen's "here" flow ("Where are you?") once the time-zone change is excluded?
+- **Context/Nuances**: Upstream, clicking the hero caption opens a "Where are you?" search that chooses which city
+  represents the user (stored as the `here` setting, used by `hereZone`, home offsets and the first-run seed). A pick
+  in another zone makes `hereAfterPick` return `zoneChange`, and the panel runs `sudo -n timedatectl set-timezone`
+  through `timezoneProc`, reporting through `omarchy-notification-send`. DEC-020 and ADR 0029 exclude the change but
+  did not settle the rest of the flow. Options were (a) keep "here" limited to the local zone, (b) drop it, (c) keep
+  an unfiltered search that refuses other zones.
+- **User Response**: Option (a).
+- **Decision**: "here" stays, limited to the local zone: the "Where are you?" search offers only zones and places
+  whose `id` is `localZone`, and a pick in another zone does nothing. `timezoneProc`, `Model.timezoneCommand`,
+  `notify`/`omarchy-notification-send` and the `elsewhen.timezone*` i18n keys are dropped, adapting `Panel.qml` and
+  `Model.js`. A stored `here` still resets on its own when the system zone changes by other means, as upstream
+  `resolveHere` does. The ported model test drops the `timezoneCommand` cases and keeps same-zone `hereAfterPick`
+  cases; the static test asserts no `set-timezone` or `sudo`.
+- **Status**: Accepted
+
+## DEC-043
+- **Question**: Does the world clock keep upstream's probe at shell start?
+- **Context/Nuances**: Upstream `Panel.qml` ends with `Component.onCompleted: refresh()`, which runs `probeProc`
+  (`TZ=<zone> date` probes plus `timedatectl show`) when the shell starts, with the panel closed; with no `zones` the
+  probe includes seed candidates and calls `seedFirstRun()`, writing `cities` to `shell.json` at startup. This
+  contradicts ADR 0029 (probes only while the panel is open) and DEC-025 (seed on first open). `onOpenedChanged`
+  already runs `tick()`, `refresh()`, `refreshFacts()` and `loadCatalog()` on open, and the bar icon is a fixed glyph
+  that needs no probe.
+- **User Response**: Option (a).
+- **Decision**: Remove `Component.onCompleted: refresh()`: the `date`/`timedatectl` probe and `seedFirstRun` run only
+  while the panel is open. A static test asserts no `Component.onCompleted` calling `refresh`; the laboratory checks
+  that after a shell start with the panel closed no `date` or `timedatectl` process runs and no `cities` key is
+  written until the first open.
+- **Status**: Accepted
+
+## DEC-044
+- **Question**: Which IPC surface does the world clock expose?
+- **Context/Nuances**: Upstream `ShellIpc` (target `omarchy.elsewhen`) exposes `open`, `close`, `show`, `hide`,
+  `toggle`, `refresh`, `globe`, `times`, `add(zone,label)`, `remove(zone)`, `who(city,people)` and `here(city)`.
+  DEC-026 fixes a native `worldclock` target with open, close and toggle. With the panel closed, `add`, `remove` and
+  `here` call `setZones`/`setHere`, which run `refresh()` and `refreshFacts()`, probing and contacting open-meteo
+  against ADR 0029 and DEC-043; `globe` and `who` belong to dropped features; `times` returns stale or empty rows
+  while closed.
+- **User Response**: Option (a).
+- **Decision**: IPC is only the native `worldclock` target (open, close, toggle) declared in `Bar.qml`, like the
+  other panels. The upstream `ShellIpc` block and its `show`, `hide`, `refresh`, `globe`, `times`, `add`, `remove`,
+  `who` and `here` functions are removed from `Panel.qml`; cities are edited only in the panel. The static test
+  asserts that `Panel.qml` has no `ShellIpc` or `omarchy.elsewhen` target and that `Bar.qml` declares `worldclock`.
+- **Status**: Accepted
+
+## DEC-045
+- **Question**: How are the world clock files laid out, and how does the bar host the panel?
+- **Context/Nuances**: Upstream Elsewhen `Panel.qml` is both the bar widget (its own `BarIconButton` with the globe
+  glyph and `elsewhen.worldClock` tooltip) and the panel (`KeyboardPanel` anchored to that button). In 02-32 weather
+  was integrated through an owned host, `bar/widgets/Weather.qml`, which loads the upstream `Panel.qml` as a hidden
+  `Loader` item, injects `bar`, `settings`, `moduleName`, `anchorItem` and `hostWidget`, and provides the
+  `open`/`close`/`opened` contract used by `requestPanel`, Tab switching and popout switching. Options were (a) the
+  same host pattern, (b) instantiating `Panel.qml` directly from `Bar.qml`, keeping its button.
+- **User Response**: Option (a).
+- **Decision**: A new MirrorOS-owned host `bar/widgets/WorldClock.qml`, modelled on `Weather.qml`, shows the upstream
+  globe glyph, toggles the panel on any click and loads `panels/elsewhen/Panel.qml`, adapted to drop its own
+  `BarIconButton` and anchor to the injected `anchorItem`. All delivered Elsewhen files live in `panels/elsewhen/`,
+  keeping the upstream name like `panels/clock/` and `panels/weather/`; the widget id stays `omarchy.elsewhen` and
+  `Bar.qml` maps it to the new component. The static test asserts the `Bar.qml` mapping, the host's
+  `open`/`close`/`opened` contract and no `BarIconButton` in `Panel.qml`.
+- **Status**: Accepted
+
+## DEC-046
+- **Question**: Does the world clock panel get a keyboard shortcut?
+- **Context/Nuances**: Plan 02-32 added `SUPER+CTRL+ALT+D` (`mirroros:panel.clock`) and `SUPER+CTRL+ALT+W`
+  (`mirroros:panel.weather`), touching `shell-bindings.lua`, `shell.qml` (GlobalShortcut), the hyprland
+  `UPSTREAM.md`, `hyprland-bindings.test.mjs` (counts 159/151/134 and chords), `bar-panels.test.mjs` and
+  `docs/procedures/desktop-shell.md`; its summary records this as a deviation outside the plan's file list. Omarchy
+  binds the world clock to `SUPER+CTRL+ALT+E` ("World clock", `default/hypr/bindings/utilities.lua`), free in
+  MirrorOS.
+- **User Response**: Option (a).
+- **Decision**: Add the global shortcut `mirroros:panel.worldclock` on `SUPER+CTRL+ALT+E` ("World clock"), declared in
+  `shell-bindings.lua` and `shell.qml`, with provenance in the hyprland `UPSTREAM.md`, listed in the keybinding help
+  and `docs/procedures/desktop-shell.md`. The binding files and their tests are listed explicitly in plan 02-33;
+  exact registry counts are verified during execution, not fixed in advance.
+- **Status**: Accepted
+
+## DEC-047
+- **Question**: How does plan 02-33 commit its changes?
+- **Context/Nuances**: Plan 02-32 (DEC-040) closed with a commit task after the laboratory checkpoint: Conventional
+  Commits split by concern, shared files split by hunk with tests passing on each exported commit tree, candidate
+  refs deleted after explicit confirmation, no push. Plan 02-33 has no ADR of its own (ADR 0029 is accepted).
+- **User Response**: Approved.
+- **Decision**: Plan 02-33 ends with a commit task after the laboratory checkpoint is approved. After reviewing
+  `git status`/`git diff --stat` (no `build/`, `dist/`, `evidence/`, `.agents/` or secrets), the maintainer is shown
+  the commit list, then three commits are made in order: `feat(shell): add the world clock panel` (host,
+  `panels/elsewhen/*`, `Bar.qml`, `defaults.json`, `packages`, i18n, provenance, attribution, MVP scope, procedure and
+  shell tests); `feat(hyprland): add the world clock panel shortcut` (`shell-bindings.lua`, the `shell.qml` global
+  shortcut, the hyprland `UPSTREAM.md` and the bindings tests); `docs(shell): record world clock interview,
+  validation and findings`. Shared files are split by hunk and tests pass at each commit. If an ADR 0029 amendment
+  becomes necessary, it is an extra `docs(adr)` commit before the first one. Candidate refs
+  `refs/mirroros-candidates/02-33-lab-*` are deleted after explicit confirmation. No push.
+- **Status**: Accepted
