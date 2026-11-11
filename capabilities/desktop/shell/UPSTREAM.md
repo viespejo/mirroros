@@ -58,7 +58,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Commons/Util.qml` | Adapted | `shell/Commons/Util.qml` | Used helpers only; no RTL key reversal; identity widget-id normalization. |
 | `Commons/qmldir` | New | — | Explicit included singleton declarations. |
 | `Ui/ScreenMoveRemap.qml` | Copied | `v4.0.6:shell/Ui/ScreenMoveRemap.qml` | Unchanged output-position remap guard; registered in Ui/qmldir and used by the bar and background. Re-pinned from the installed Omarchy `4.0.6-1` reference (SHA-256 `ae09782672877502015e517c6f58565cf79b82e0aa1dc56ee5655989863ad8a7`, identical at `v4.0.6`); not assigned the general source pin. |
-| `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs retain upstream unscaled rendering. Labels omit the upstream figure-centering offset, as in `Ui/WidgetButton.qml`. |
+| `Ui/BarIconButton.qml` | Adapted | `shell/Ui/BarIconButton.qml` | Supports labels and measured custom icon content; glyphs fit and centre on their ink through `paintedSize`, as in `v4.5.0:shell/Ui/BarIconButton.qml` line 78 (plan 02-33). Labels omit the upstream figure-centering offset, as in `Ui/WidgetButton.qml`. |
 | `Ui/BarIconContent.qml` | Copied | `shell/Ui/BarIconContent.qml` | Unchanged. |
 | `Ui/BarIndicator.qml` | Adapted | `shell/Ui/BarIndicator.qml` | Uses the upstream caption font size for indicator glyphs. |
 | `Ui/BarWidget.qml` | Copied | `shell/Ui/BarWidget.qml` | Unchanged. |
@@ -69,7 +69,7 @@ MirrorOS-owned tests and tooling (all `New`, no upstream source) were relocated 
 | `Ui/FilterInput.qml` | Copied | `shell/Ui/FilterInput.qml` | Unchanged; Brief 1. |
 | `Ui/IconContentBounds.qml` | Copied | `shell/Ui/IconContentBounds.qml` | Unchanged. |
 | `Ui/KeyboardPanel.qml` | Copied | `v4.5.0:shell/Ui/KeyboardPanel.qml` | Unchanged Omarchy 4.5 shared panel container; notification panel and bar panels. |
-| `Ui/OpticalGlyph.qml` | Copied | `shell/Ui/OpticalGlyph.qml` | Unchanged. |
+| `Ui/OpticalGlyph.qml` | Copied | `v4.5.0:shell/Ui/OpticalGlyph.qml` | Unchanged Omarchy 4.5 copy (plan 02-33): hundredfold ink metrics and distance-field rendering for scaled bar glyphs. |
 | `Ui/OverlayWindow.qml` | Adapted | `shell/Ui/OverlayWindow.qml` | Brief 1: removed RTL import/bindings; focused-output overlay retained. |
 | `Ui/Panel.qml` | Adapted | `v4.5.0:shell/Ui/Panel.qml` | Shared panel lifecycle base. ShellIpc block removed (panel IPC is declared once in the bar); `ipcTarget`/`manageIpc` kept inert for API compatibility, `manageIpc` defaults to false. |
 | `Ui/PanelActionButton.qml` | Copied | `shell/Ui/PanelActionButton.qml` | Unchanged. |
