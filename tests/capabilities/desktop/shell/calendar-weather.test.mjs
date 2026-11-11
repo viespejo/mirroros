@@ -175,7 +175,7 @@ test('a failed weather request keeps the previous values and starts no retry', (
 });
 
 test('the weather pill sits in centerEnd with no shipped location and toggles on any click', () => {
-  assert.deepEqual(defaults.bar.layout.centerEnd, [{ id: 'omarchy.weather' }]);
+  assert.deepEqual(defaults.bar.layout.centerEnd, [{ id: 'omarchy.elsewhen' }, { id: 'omarchy.weather' }]);
   assert.doesNotMatch(read('defaults.json'), /locations|latitude/);
   assert.match(bar, /"omarchy\.weather": weatherComponent/);
   assert.match(bar, /Component \{ id: weatherComponent; Widgets\.Weather \{ \} \}/);

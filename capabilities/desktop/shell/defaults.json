@@ -7,7 +7,7 @@
       "left": [{ "id": "omarchy.menu" }, { "id": "omarchy.workspaces" }, { "id": "omarchy.active-window" }],
       "centerBegin": [{ "id": "omarchy.indicators" }],
       "center": [{ "id": "omarchy.clock", "format": "dddd HH:mm", "formatAlt": "d MMMM 'W'ww yyyy", "verticalFormat": "HH\n—\nmm" }],
-      "centerEnd": [{ "id": "omarchy.weather" }],
+      "centerEnd": [{ "id": "omarchy.elsewhen" }, { "id": "omarchy.weather" }],
       "right": [
         { "id": "omarchy.tray" }, { "id": "omarchy.keyboard-layout" },
         { "id": "omarchy.bluetooth" }, { "id": "omarchy.network" },

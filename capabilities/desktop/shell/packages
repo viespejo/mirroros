@@ -10,5 +10,9 @@ libxkbcommon extra
 ttf-liberation extra
 # Clearing a copied notification code (wl-paste, wl-copy).
 wl-clipboard extra
-# Weather pill and panel: fixed https:// open-meteo forecast and geocoder requests (ADR 0029).
+# Weather pill and panel, and world-clock temperatures: fixed https:// open-meteo forecast and geocoder requests (ADR 0029).
 curl core
+# World clock: zone offsets from the `TZ=<zone> date` probe and the zone1970.tab coordinate fallback (ADR 0029).
+tzdata core
+# World clock greetings in Han, Kana and Hangul; noto-fonts covers the other scripts. Follows Omarchy v4.5.0 omarchy-base.packages.
+noto-fonts-cjk extra

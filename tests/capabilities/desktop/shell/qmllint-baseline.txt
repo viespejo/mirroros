@@ -31,6 +31,13 @@
 # per-widget settings Binding; the weather saved-locations separator and section header and the weather list
 # keys follow the same pattern; shell.qml gains the panel.clock and panel.weather GlobalShortcut entries;
 # no new category.
+# World clock (plan 02-33 laboratory checkpoint, maintainer-approved): the panels/elsewhen v4.5.0 copies (ArcText,
+# CityMatches, CitySearch, DaylightStrip, HeroTitle) and the adapted Panel.qml, CityRow.qml and MiniGlobe.qml
+# entries follow the v4.5.0 inline-component pattern (root access from delegates) and untyped Style/Commons
+# members; bar/widgets/WorldClock.qml entries are untyped Loader.item panel members (injectPanel pattern) and
+# Style.bar. New category id-shadows-member (2 keys):
+# Panel.qml's scrollContent alias and id share a name, unchanged from v4.5.0. Panel.qml's Keys.onTabPressed and
+# Keys.onBacktabPressed in both CitySearch instances (4 keys) are the same root access from a nested instance.
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -1302,6 +1309,21 @@ adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","readonly
 adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? \"0\" : String(slot))"]
 adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? \"0\" : String(slot))"]
 adapt ["bar/widgets/Workspaces.qml","Unqualified access [unqualified]","text: shown ? root.modeGlyph(root.activeMode) : (slot === root.slots ? \"0\" : String(slot))"]
+adapt ["bar/widgets/WorldClock.qml","Member \"anchorItem\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"anchorItem\" in target) target.anchorItem = button"]
+adapt ["bar/widgets/WorldClock.qml","Member \"bar\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"bar\" in target) target.bar = root.bar"]
+adapt ["bar/widgets/WorldClock.qml","Member \"closeForPopoutSwitch\" not found on type \"QObject\" [missing-property]","if (panelLoader.item) panelLoader.item.closeForPopoutSwitch()"]
+adapt ["bar/widgets/WorldClock.qml","Member \"close\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.close) panelLoader.item.close()"]
+adapt ["bar/widgets/WorldClock.qml","Member \"close\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.close) panelLoader.item.close()"]
+adapt ["bar/widgets/WorldClock.qml","Member \"hostWidget\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"hostWidget\" in target) target.hostWidget = root"]
+adapt ["bar/widgets/WorldClock.qml","Member \"moduleName\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"moduleName\" in target) target.moduleName = root.moduleName"]
+adapt ["bar/widgets/WorldClock.qml","Member \"openFromHotkey\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.openFromHotkey) panelLoader.item.openFromHotkey()"]
+adapt ["bar/widgets/WorldClock.qml","Member \"openFromHotkey\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.openFromHotkey) panelLoader.item.openFromHotkey()"]
+adapt ["bar/widgets/WorldClock.qml","Member \"opened\" not found on type \"QObject\" [missing-property]","readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false"]
+adapt ["bar/widgets/WorldClock.qml","Member \"popoutSwitchClosing\" not found on type \"QObject\" [missing-property]","readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false"]
+adapt ["bar/widgets/WorldClock.qml","Member \"settings\" not found on type QQuickLoader::item with type QObject [missing-property]","if (\"settings\" in target) target.settings = root.settings"]
+adapt ["bar/widgets/WorldClock.qml","Member \"statusSlot\" not found on type \"QObject\" [missing-property]","slotSize: Style.bar.statusSlot"]
+adapt ["bar/widgets/WorldClock.qml","Member \"toggle\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()"]
+adapt ["bar/widgets/WorldClock.qml","Member \"toggle\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()"]
 adapt ["menu/Menu.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.bodySmall"]
 adapt ["menu/Menu.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.bodySmall"]
 adapt ["menu/Menu.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
@@ -1365,6 +1387,109 @@ adapt ["osd/Osd.qml","Member \"text\" not found on type \"QObject\" [missing-pro
 adapt ["osd/Osd.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Util.alpha(Commons.Color.popups.text, 0.45)"]
 adapt ["osd/Osd.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
 adapt ["osd/Osd.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var p = JSON.parse(payloadJson || \"{}\")"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"background\" not found on type \"QObject\" [missing-property]","borderSpec: Border.flat(Model.mix(Commons.Color.popups.background, row.foreground, _hot ? 0.65 : 0.35), Style.space(1))"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: Model.mix(Commons.Color.popups.background, foreground,"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: Model.mix(Commons.Color.popups.background, row.foreground, _hot ? 0.24 : 0.14)"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.bodySmall"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","fontSize: Style.font.bodySmall"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.caption"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"rowPaddingX\" not found on type \"QObject\" [missing-property]","anchors.leftMargin: Style.spacing.rowPaddingX"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"rowPaddingX\" not found on type \"QObject\" [missing-property]","anchors.leftMargin: Style.spacing.rowPaddingX"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"rowPaddingX\" not found on type \"QObject\" [missing-property]","anchors.rightMargin: Style.spacing.rowPaddingX"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"rowPaddingX\" not found on type \"QObject\" [missing-property]","anchors.rightMargin: Style.spacing.rowPaddingX"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"sm\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.sm"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"spacing\" not found on type \"QQuickItem\" [missing-property]","row.panel.beginRowDrag(row.index, row.height + row.parent.spacing)"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"subtitle\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.subtitle"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"subtitle\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.subtitle"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"xl\" not found on type \"QObject\" [missing-property]","anchors.rightMargin: Style.spacing.xl"]
+adapt ["panels/elsewhen/CityRow.qml","Member \"xs\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.xs"]
+adapt ["panels/elsewhen/CityRow.qml","Unqualified access [unqualified]","color: row.dim"]
+adapt ["panels/elsewhen/CityRow.qml","Unqualified access [unqualified]","font.family: row.fontFamily"]
+adapt ["panels/elsewhen/MiniGlobe.qml","Member \"background\" not found on type \"QObject\" [missing-property]","ctx.fillStyle = Model.mix(Commons.Color.popups.background, c, root.bold ? 0.16 : 0.13)"]
+adapt ["panels/elsewhen/Panel.qml","Id for object Column shadows property \"scrollContent\". Rename one or the other. [id-shadows-member]","implicitHeight: scrollContent.implicitHeight"]
+adapt ["panels/elsewhen/Panel.qml","Member \"md\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.md"]
+adapt ["panels/elsewhen/Panel.qml","Member \"panelGap\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.panelGap"]
+adapt ["panels/elsewhen/Panel.qml","Member \"panelGap\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.panelGap"]
+adapt ["panels/elsewhen/Panel.qml","Note: Id defined here [id-shadows-member]","id: scrollContent"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","CityRow { panel: root }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","Keys.onBacktabPressed: root.switchPanel(-1)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","Keys.onBacktabPressed: root.switchPanel(-1)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","Keys.onTabPressed: root.switchPanel(1)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","Keys.onTabPressed: root.switchPanel(1)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","blocked: root.adding || root.choosingHere"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","blocked: root.adding || root.choosingHere"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","caption: root.hereLine"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","captionClickable: root.focusIndex >= 0 || root.localZone !== \"\""]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","captionClickable: root.focusIndex >= 0 || root.localZone !== \"\""]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","captionColor: root.scrubMinutes !== 0 ? Commons.Color.accent : root.dim"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","captionColor: root.scrubMinutes !== 0 ? Commons.Color.accent : root.dim"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","dim: root.dim"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","dim: root.dim"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","dim: root.dim"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else if (key === \"+\" || key === \"a\") root.startAdding()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else if (key === \"t\" && (modifiers & Qt.AltModifier)) root.toggleUnits()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else if (key === \"t\") root.toggleHour24()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else if (key === \"w\") root.startChoosingHere()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else if (root.choosingHere) hereSearch.stop()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else root.close()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else root.shiftHour(dx)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","else root.startChoosingHere()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","existing: root.zones"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","fainter: root.fainter"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","fainter: root.fainter"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","fontFamily: root.fontFamily"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","fontFamily: root.fontFamily"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","fontFamily: root.fontFamily"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","foreground: root.foreground"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","foreground: root.foreground"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","foreground: root.foreground"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","globeEnabled: root.globeEnabled"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","hasCursor: root.addSelected"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (dy !== 0) root.moveFocus(dy)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (key === \"r\") root.refresh()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.addSelected) root.startAdding()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.addSelected) root.startAdding()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.focusIndex >= 0) root.focusOn(-1)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.focusIndex >= 0) root.focusOn(-1)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.scrubMinutes !== 0) { scrubHold.stop(); root.scrubMinutes = 0 }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.scrubMinutes !== 0) { scrubHold.stop(); root.scrubMinutes = 0 }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","if (root.scrubMinutes !== 0) { scrubHold.stop(); root.scrubMinutes = 0 }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","loading: root.zoneCatalogText === \"\""]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","loading: root.zoneCatalogText === \"\""]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","markerLat: root.focusLat"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","markerLon: root.focusLon"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","markerShown: root.focusKnown"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","model: root.zones"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","offsetLabel: function(zoneId) { return root.utcLabelFor(zoneId) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","offsetLabel: function(zoneId) { return root.utcLabelFor(zoneId) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onActiveChanged: if (active) { root.loadCatalog(); if (citySearch.active) citySearch.stop() }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onActiveChanged: if (active) { root.loadCatalog(); if (hereSearch.active) hereSearch.stop() }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onDeleteRequested: root.deleteFocused()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onDismissed: root.takeKeyboardBack()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onDismissed: root.takeKeyboardBack()"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onMaxScrollChanged: if (root.adding) scrollTo(maxScroll)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onPicked: function(label, id, place) { root.addCity(id, label, place) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onQueryChanged: if (active) root.requestPlaces(query)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onQueryChanged: if (active) root.requestPlaces(query)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","onTabRequested: function(direction) { root.switchPanel(direction) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","options: root.hereOptions"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","options: root.zoneOptions"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","placesFor: function(text) { return root.herePlacesFor(text) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","placesFor: function(text) { return root.placesFor(text) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","placesPending: function(text) { return root.placesPending(text) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","placesPending: function(text) { return root.placesPending(text) }"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","restLon: root.focusLon"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","root.setHere(place ? Object.assign(pick, place) : pick)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","visible: active && root.zoom < 1"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","visible: root.zoom < 1"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","visible: root.zoom < 1"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","x: Model.knockX(root.zones.length, root.zoom, Style.space(95))"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","x: Model.knockX(root.zones.length, root.zoom, Style.space(95))"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","y: Model.knockY(root.zones.length, root.zoom, root.knockFall)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","y: Model.knockY(root.zones.length, root.zoom, root.knockFall)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","y: Model.knockY(root.zones.length, root.zoom, root.knockFall)"]
+adapt ["panels/elsewhen/Panel.qml","Unqualified access [unqualified]","zoom: root.zoom"]
 adapt ["panels/weather/Panel.qml","Member \"background\" not found on type \"QObject\" [missing-property]","borderSpec: Border.flat(root.mix(Commons.Color.popups.background, root.bar.foreground, _hot ? 0.65 : 0.35), Style.space(1))"]
 adapt ["panels/weather/Panel.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: root.mix(Commons.Color.popups.background, root.bar.foreground, _hot ? 0.24 : 0.14)"]
 adapt ["panels/weather/Panel.qml","Member \"background\" not found on type \"QObject\" [missing-property]","color: root.mix(Commons.Color.popups.background, root.bar.foreground, rowHover.hovered || root.focusIndex === locationRow.index ? 0.15 : 0.10)"]
@@ -2285,3 +2410,66 @@ copy panels/clock/Panel.qml:772:28
 copy panels/clock/Panel.qml:781:29
 copy panels/clock/Panel.qml:782:29
 copy panels/clock/Panel.qml:783:28
+copy panels/elsewhen/ArcText.qml:66:39
+copy panels/elsewhen/ArcText.qml:67:35
+copy panels/elsewhen/ArcText.qml:70:14
+copy panels/elsewhen/ArcText.qml:71:15
+copy panels/elsewhen/ArcText.qml:75:10
+copy panels/elsewhen/ArcText.qml:82:14
+copy panels/elsewhen/ArcText.qml:83:20
+copy panels/elsewhen/ArcText.qml:84:23
+copy panels/elsewhen/CityMatches.qml:103:31
+copy panels/elsewhen/CityMatches.qml:111:12
+copy panels/elsewhen/CityMatches.qml:112:18
+copy panels/elsewhen/CityMatches.qml:113:32
+copy panels/elsewhen/CityMatches.qml:22:37
+copy panels/elsewhen/CityMatches.qml:23:19
+copy panels/elsewhen/CityMatches.qml:24:18
+copy panels/elsewhen/CityMatches.qml:30:43
+copy panels/elsewhen/CityMatches.qml:32:44
+copy panels/elsewhen/CityMatches.qml:34:32
+copy panels/elsewhen/CityMatches.qml:50:18
+copy panels/elsewhen/CityMatches.qml:51:24
+copy panels/elsewhen/CityMatches.qml:52:27
+copy panels/elsewhen/CityMatches.qml:61:18
+copy panels/elsewhen/CityMatches.qml:71:44
+copy panels/elsewhen/CityMatches.qml:73:32
+copy panels/elsewhen/CityMatches.qml:78:18
+copy panels/elsewhen/CityMatches.qml:82:17
+copy panels/elsewhen/CityMatches.qml:93:28
+copy panels/elsewhen/CityMatches.qml:94:20
+copy panels/elsewhen/CitySearch.qml:34:38
+copy panels/elsewhen/CitySearch.qml:38:42
+copy panels/elsewhen/CitySearch.qml:86:26
+copy panels/elsewhen/DaylightStrip.qml:102:28
+copy panels/elsewhen/DaylightStrip.qml:105:24
+copy panels/elsewhen/DaylightStrip.qml:106:27
+copy panels/elsewhen/DaylightStrip.qml:181:25
+copy panels/elsewhen/DaylightStrip.qml:181:65
+copy panels/elsewhen/DaylightStrip.qml:182:25
+copy panels/elsewhen/DaylightStrip.qml:187:23
+copy panels/elsewhen/DaylightStrip.qml:188:14
+copy panels/elsewhen/DaylightStrip.qml:189:67
+copy panels/elsewhen/DaylightStrip.qml:190:35
+copy panels/elsewhen/DaylightStrip.qml:194:16
+copy panels/elsewhen/DaylightStrip.qml:201:46
+copy panels/elsewhen/DaylightStrip.qml:201:79
+copy panels/elsewhen/DaylightStrip.qml:207:38
+copy panels/elsewhen/DaylightStrip.qml:207:72
+copy panels/elsewhen/DaylightStrip.qml:207:91
+copy panels/elsewhen/DaylightStrip.qml:208:22
+copy panels/elsewhen/DaylightStrip.qml:209:36
+copy panels/elsewhen/DaylightStrip.qml:221:50
+copy panels/elsewhen/DaylightStrip.qml:222:19
+copy panels/elsewhen/DaylightStrip.qml:226:18
+copy panels/elsewhen/DaylightStrip.qml:230:65
+copy panels/elsewhen/DaylightStrip.qml:230:79
+copy panels/elsewhen/DaylightStrip.qml:231:21
+copy panels/elsewhen/DaylightStrip.qml:30:42
+copy panels/elsewhen/HeroTitle.qml:160:12
+copy panels/elsewhen/HeroTitle.qml:161:18
+copy panels/elsewhen/HeroTitle.qml:162:32
+copy panels/elsewhen/HeroTitle.qml:16:42
+copy panels/elsewhen/HeroTitle.qml:62:27
+copy panels/elsewhen/HeroTitle.qml:81:44
+copy panels/elsewhen/HeroTitle.qml:82:45

@@ -22,6 +22,7 @@ const copied = new Set([
     'PopupCard', 'ToggleSwitch'].map(name => `Ui/${name}.qml`),
   'bar/widgets/Tray.qml',
   'panels/clock/Panel.qml', 'panels/clock/WallClock.qml',
+  ...['ArcText', 'CityMatches', 'CitySearch', 'DaylightStrip', 'HeroTitle', 'MoonDot'].map(name => `panels/elsewhen/${name}.qml`),
   ...['Toast', 'DeedButton', 'NotificationPanel', 'Picker'].map(name => `notifications/${name}.qml`),
 ]);
 

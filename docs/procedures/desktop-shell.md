@@ -74,7 +74,7 @@ maintainer-authorized `hyprctl reload`; configure does not reload the compositor
 scripted requests use native Quickshell interfaces only; there is no own socket or CLI:
 
 ```bash
-qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets bluetooth, network, audio, display, power, clock, weather
+qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; targets bluetooth, network, audio, display, power, clock, weather, worldclock
 hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
 ```
 
@@ -212,6 +212,35 @@ and added Elsewhen's list keys, the "×" overhang and the "SAVED LOCATIONS" head
 `SUPER+CTRL+ALT+D`/`SUPER+CTRL+ALT+W` panel shortcuts (after configure, a maintainer-authorized `hyprctl reload`
 loads them). Evidence: `evidence/calendar-weather/lab-02-32/checkpoint.md` (ignored).
 
+## World clock
+
+Plan 02-33 adds Omarchy's Elsewhen world clock (MIT, Jason Fried) under
+[ADR 0029](../adr/0029-clock-calendar-weather-and-world-clock-panels.md). Its globe icon sits in `centerEnd`,
+before the weather pill; any mouse button on it and `qs ipc -p /usr/share/mirroros/shell call worldclock
+open|close|toggle` open or close the panel, which joins Tab switching in the center section. Tab and Shift+Tab
+also switch panels while typing in a search field.
+
+Each row shows a city's time, date, UTC or home offset, daylight strip and open-meteo temperature; hovering shows
+a local greeting (Han, Kana and Hangul greetings use `noto-fonts-cjk`, declared in the shell `packages` file). Dragging a row reorders it, the hover "×" removes it (the last city stays), "+ Add a city"
+searches zones and geocoder places, and dragging along a daylight strip (or the left and right arrows) shifts every
+row's time; a drag returns to now shortly after release, the arrows hold until Escape or close. Clicking a time toggles 24-hour time, an offset toggles UTC and home offsets,
+and a temperature toggles Celsius and Fahrenheit. No city ships: on the first open the panel writes the home city
+(from the system zone) plus four computed destinations. The list and toggles are stored like any inline setting
+(see [Inline settings](#inline-settings)) under `bar.widgets["omarchy.elsewhen"]`, for example
+`"cities"`, `"here"`, `"hour24"`, `"offsetMode"` and `"units"`.
+
+Clicking the hero caption opens "Where are you?", which names the city that represents the machine. It offers only
+zones and places in the machine's own zone; the system time zone is never changed, and a stored choice resets on
+its own when the zone changes by other means.
+
+Nothing runs while the panel is closed. Opening it probes zone offsets with `TZ=<zone> date` and
+`timedatectl show` (repeated every five minutes while open), loads `timedatectl list-timezones` for the search and
+requests temperatures: one batched `https://api.open-meteo.com` forecast for the rows whose reading is older than
+20 minutes (checked on open and every 15 minutes while open) and `https://geocoding-api.open-meteo.com` lookups only for rows without coordinates, through `curl` with
+argument vectors. A failed lookup falls back to `/usr/share/zoneinfo/zone1970.tab` coordinates (`tzdata`, declared
+in the shell `packages` file); a failed forecast keeps the previous temperatures and starts no retry. There are no
+people, GitHub avatars, big globe or panel-own IPC; clicking the hero mini globe opens nothing.
+
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`
@@ -344,7 +373,7 @@ Its files are private (directory `0700`, files `0600`); never copy them into evi
 
 ## Inline settings
 
-Settings changed from a bar widget or its panel (clock format, tray pins, power percentage, weather locations) are stored per widget
+Settings changed from a bar widget or its panel (clock format, tray pins, power percentage, weather locations, world-clock cities) are stored per widget
 id under `bar.widgets` in `shell.json`, holding only the keys that differ from the widget's layout entry
 (DEC-035/039). Saving never writes `bar.layout`, so later default layout changes still reach the device:
 
@@ -468,6 +497,8 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/bar-additions.test.mjs \
     tests/capabilities/desktop/shell/clock-model.test.mjs \
     tests/capabilities/desktop/shell/calendar-weather.test.mjs \
+    tests/capabilities/desktop/shell/world-clock-model.test.mjs \
+    tests/capabilities/desktop/shell/world-clock.test.mjs \
     tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs
