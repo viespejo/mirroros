@@ -60,6 +60,11 @@ configuration write is added.
 narrowly supersedes ADR 0025's "Diagnostics" item for the network panel with a ping to `1.1.1.1` only while that panel
 is open, with a relaxed packet-loss indicator; no probe runs while the panel is closed.
 
+[ADR 0029: Clock Calendar, Weather and World Clock Panels](0029-clock-calendar-weather-and-world-clock-panels.md) is
+Accepted. It partially supersedes ADR 0025's panel list with the clock calendar, weather and world clock panels and
+its "Diagnostics" item for open-meteo traffic only, through `curl` with fixed `https://` URLs; wttr.in, IP-based
+location, GitHub and `sudo` stay excluded, and world-clock implementation remains with plan 02-33.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

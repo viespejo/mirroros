@@ -186,3 +186,7 @@ of this decision is unchanged.
 Partially superseded by [ADR 0028](0028-network-panel-internet-latency-probe.md), which supersedes only the
 "Diagnostics" item for the network panel, admitting a ping to `1.1.1.1` only while that panel is open. The rest of
 this decision is unchanged.
+
+Partially superseded by [ADR 0029](0029-clock-calendar-weather-and-world-clock-panels.md), which supersedes only the
+panel list, for the clock calendar, weather and world clock panels, and the "Diagnostics" item, for open-meteo
+traffic only. The rest of this decision is unchanged.
