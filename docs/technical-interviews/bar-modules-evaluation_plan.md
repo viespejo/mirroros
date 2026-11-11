@@ -27,12 +27,33 @@ supersedes ADR 0025's panel list for them and its "Diagnostics" item for the ope
 reversal boundary states that removing one panel does not reopen the others. The MVP scope's "Desktop shell" row lists the new panels as a scope change
 citing the ADR, as ADR 0012 requires for a new surface. [DEC-015]
 
+The shared record is ADR 0029, "Clock Calendar, Weather and World Clock Panels", drafted in plan 02-32 and accepted
+at a maintainer checkpoint before the calendar and weather are implemented, as plan 02-28 did with ADR 0028. Besides
+the panel list and the open-meteo exception, it admits `curl` through `Process` with fixed `https://` URLs and the
+world clock's read-only, open-only `date` and `timedatectl` probes, excludes `sudo`/`set-timezone`, wttr.in, IP
+auto-detection and GitHub, and records the calendar's opt-in persisted settings. World-clock implementation and
+validation remain with plan 02-33, which needs an amendment if it finds a contradiction. ADR 0025 gains only a
+forward link, and the ADR index, MVP scope and architecture are updated in the same task. [DEC-037]
+
 Verification tests only what MirrorOS changes. `Panel.qml` and `WallClock.qml` stay byte-identical to upstream,
 which the provenance check asserts, and upstream's `clock-test.sh` is copied as `clock-model.test.mjs` minus the
 timezone-picker cases, with no new tests for upstream date logic. A static test asserts no `Process` or
 `omarchy-*`, the `clock` IPC target, left click opening the panel and middle click doing nothing. The laboratory
 checks integration only (click, IPC, Tab switching and the unchanged right-click format cycle), with month
 navigation and the marked current day as a visual smoke check. No T14s validation is needed. [DEC-019]
+
+Keeping `Panel.qml` unchanged brings the rest of the upstream panel along: a read-only year progress bar, a
+week-start toggle on the grid's "W" heading and an optional memento-mori bar that asks for a birth year and a life
+expectancy. The grid itself stays a read-out, but the panel thereby has opt-in settings (`weekStartDay`,
+`birthYear`, `lifeExpectancy`) persisted for the clock in `shell.json` through `updateEntryInline`. No personal
+data enters the repository, and with per-widget persistence these saves no longer freeze the `center` zone. The
+ADR and `UPSTREAM.md` record these features. [DEC-034, DEC-035]
+
+The calendar lives in `panels/clock/`, where `Panel.qml`, `Model.js` and `WallClock.qml` are copied unchanged from
+`v4.5.0`, identical to the clone's current head for these files. The bar's `Clock.qml` imports that `Model.js`,
+switches to `WallClock` and opens the panel on left click, so the former `bar/ClockModel.js` subset becomes
+redundant and is removed with its provenance row and tests updated. The i18n subset is regenerated from `7075b61`,
+which already holds every `clock.*` key, and weather follows the same `panels/weather/` layout. [DEC-038]
 
 ## Stay awake
 
@@ -120,7 +141,8 @@ locations live only in user state. Elsewhen stays a separate candidate, so the r
 Locations are stored as settings of the weather bar entry in the user's `shell.json` (a `locations` list of name,
 latitude and longitude plus an `active` index), written through the existing sparse-override preference mechanism
 the clock format already uses, with its resolver and validation. `defaults.json` ships none, and no helper or
-separate state file is added. [DEC-012]
+separate state file is added. With per-widget persistence they live in `bar.widgets["omarchy.weather"]`, so
+saving them never freezes `centerEnd`. [DEC-012, DEC-035]
 
 With no saved location, as on a new installation, the pill stays visible with a neutral weather glyph and no
 temperature, and clicking it opens the panel with an empty "No location" hero and the search ready; the first
@@ -265,10 +287,38 @@ bar cannot discard unsaved work. Admission is routine inside ADR 0012's bar surf
 indicator, with provenance in the shell `UPSTREAM.md` and `docs/attribution.md` and a mention in the MVP scope's
 "Desktop shell" row. [DEC-032]
 
+## Inline setting persistence
+
+Inline widget settings stop freezing whole bar zones. Today `updateEntryInline` rewrites the widget's entry inside
+its `bar.layout` zone array, and because arrays are single override leaves, the first saved setting copies the
+whole zone into `shell.json`; later default changes to that zone, such as new widgets, never reach the user, and
+`configure` cannot repair user state. Settings are therefore stored per widget id in a `bar.widgets.<id>` object
+that merges key by key, so only changed keys are recorded. `updateEntryInline` keeps its API, which keeps the
+upstream clock panel byte-identical; widgets receive their layout entry's settings merged with `bar.widgets[id]`,
+and validation accepts the new object. `bar.layout` overrides remain only for layouts the user writes by hand.
+Existing frozen zone overrides stay valid and are removed manually as the shell procedure documents, with no
+automatic migration. The `shell.json` format comes from plan 02-27, not from an ADR, so no ADR is needed.
+[DEC-035]
+
+Precedence runs from the defaults entry, through an entry in a hand-written `bar.layout`, to `bar.widgets[id]`.
+`updateEntryInline` always writes `bar.widgets[id]`, even when the user wrote a layout by hand, records only keys
+that differ from the value without the override, and resets a key that is no longer sent; the unused `plugins[]`
+path stays as it is. Node tests in `config-overrides.test.mjs` cover sparse per-widget writes, a later default
+layout change still reaching the user, the precedence, honoured legacy zone overrides, key reset and rejection of a
+non-object `bar.widgets`; a static test asserts that no widget writes `bar.layout`. The laboratory checkpoint
+inspects `shell.json` after the format cycle, the week-start toggle and a saved weather location, and the shell
+procedure documents manual cleanup of legacy zone overrides; no T14s validation is needed. [DEC-039]
+
 ## Plan sequence
 
 The accepted scope is delivered in four plans. Plan 02-31 delivers the routine bar pieces (StayAwake, the
 microphone indicator and ActiveWindow, the latter verified like the microphone with a static test and laboratory
-checks). Plan 02-32 drafts and accepts the shared ADR and delivers the clock calendar and weather. Plan 02-33
+checks). Plan 02-32 first changes inline setting persistence, then drafts and accepts the shared ADR and delivers
+the clock calendar and weather [DEC-036]. Plan 02-33
 delivers the world clock under that ADR. Plan 02-34 delivers reminders. Plans 02-31 and 02-34 are independent,
 02-33 depends on 02-32, and none depends on Story 4.5. [DEC-033]
+
+Plan 02-32 closes with a commit task once the laboratory checkpoint is approved: five Conventional Commits split by
+concern (per-widget persistence, ADR 0029, calendar, weather, and the interview and validation records), with shared
+files split by hunk so tests pass at each commit, candidate refs deleted afterwards and no push; `.agents/` and
+generated outputs are never committed. [DEC-040]

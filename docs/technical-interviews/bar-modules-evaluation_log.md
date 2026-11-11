@@ -580,3 +580,122 @@ and [ADR 0025](../adr/0025-shell-panels.md).
   calendar and weather; 02-33 world clock under the ADR accepted in 02-32; 02-34 reminders. 02-31 and 02-34 are
   independent, 02-33 depends on 02-32, and none depends on Story 4.5. This `/plan:save` run materializes 02-31 only.
 - **Status**: Accepted
+
+## DEC-034
+- **Question**: Which upstream clock panel features ship, given that `v4.5.0` `Panel.qml` contains more than the
+  read-only month grid DEC-001 described and DEC-019 requires it byte-identical?
+- **Context/Nuances**: Plan 02-32 interview. Besides the month grid, upstream `Panel.qml` (791 lines) has a
+  read-only year progress bar, a week-start toggle (clicking the grid's "W" heading persists `weekStartDay`) and an
+  optional memento-mori bar (double-click on the year bar asks for birth year and life expectancy, persisted as
+  `birthYear` and `lifeExpectancy`; hidden when unset). Both writes use `updateEntryInline`; because
+  `Preferences.diff` replaces arrays whole, saving freezes the `center` zone in `shell.json` (02-31 concern).
+  MirrorOS already provides everything the unchanged file needs (`Ui/Panel.setting()`,
+  `Bar.setCenterHoverRevealSuppressed`, `I18n.formatLocale/formatNumber/rightToLeft`, `shell.updateEntryInline`).
+  Options: (a) keep byte-identical with all three features; (b) adapt to drop the memento-mori bar and the toggle;
+  (c) drop only the memento-mori bar.
+- **User Response**: Option (a).
+- **Decision**: The calendar ships upstream `Panel.qml` unchanged, including the year progress bar, the week-start
+  toggle and the optional memento-mori bar, which persist `weekStartDay`, `birthYear` and `lifeExpectancy` in the
+  clock entry of `shell.json` through `updateEntryInline`. This refines DEC-001: the grid stays a read-out, but the
+  panel has opt-in persisted settings. No personal data enters the repository; freezing `center` is accepted because
+  it only holds the clock and the right-click format cycle already freezes it. The ADR and `UPSTREAM.md` record it.
+- **Status**: Accepted
+
+## DEC-035
+- **Question**: Should inline widget settings stop freezing whole bar layout zones in the user's `shell.json`?
+- **Context/Nuances**: `ShellConfig.updateEntryInline` rewrites the widget's entry inside its `bar.layout.<zone>`
+  array; `Preferences.diff` treats arrays as single leaves, so the first saved inline setting copies the whole zone
+  into `shell.json`, and later default changes to that zone never reach the user (seen in 02-31 with the T14s
+  microphone; would hit weather locations in `centerEnd` and the world clock in 02-33, and DEC-034 in `center`).
+  `configure` never edits user state, so updates do not repair it. The `shell.json` format comes from plan 02-27
+  DEC-024/025, not from an ADR. Consumers of `updateEntryInline`: `Clock`, `Tray`, `Power`, upstream clock
+  `Panel.qml` (byte-identical, DEC-034); settings reach widgets through `BarModel.entrySettings` and
+  `Indicators.entrySettings`. Estimated 100–150 lines plus tests, no process or privilege.
+- **User Response**: Change it now.
+- **Decision**: Inline widget settings are stored per widget id in a `bar.widgets.<id>` object, which merges key by
+  key, instead of rewriting the zone array. `updateEntryInline` keeps its API and records only the changed keys;
+  effective settings are the layout entry's settings merged with `bar.widgets[id]`; `ShellPreferences.validate`
+  accepts `bar.widgets` as an object. `bar.layout` overrides remain only for explicit hand-made layouts. Existing
+  frozen zone overrides stay valid and are removed manually as documented in the shell procedure (no automatic
+  migration). Refines DEC-012 (weather locations live in `bar.widgets["omarchy.weather"]`) and DEC-034 (clock panel
+  settings no longer freeze `center`). No ADR is required.
+- **Status**: Accepted
+
+## DEC-036
+- **Question**: Where is the DEC-035 change delivered?
+- **Context/Nuances**: Options were a separate plan before the calendar and weather (renumbering the series) or a
+  first task inside 02-32. Weather and the calendar are the first new consumers, so the mechanism must land first.
+- **User Response**: First task of 02-32.
+- **Decision**: Plan 02-32 starts with the inline-setting persistence change, then the shared ADR, the clock
+  calendar and weather. The series numbering of DEC-033 is unchanged (02-33 world clock, 02-34 reminders).
+- **Status**: Accepted
+
+## DEC-037
+- **Question**: What does the shared ADR cover, and when is it accepted?
+- **Context/Nuances**: DEC-015 and DEC-020 define one ADR for the calendar, weather and world clock; 02-32 delivers
+  the first two and 02-33 the world clock. Plan 02-28 set the pattern of drafting an ADR inside the plan and
+  accepting it at a maintainer checkpoint, with "implementation and validation remain with plan …". Next free
+  number is 0029.
+- **User Response**: Approved.
+- **Decision**: ADR 0029 "Clock Calendar, Weather and World Clock Panels" is drafted in 02-32 and accepted at a
+  maintainer acceptance checkpoint that blocks the calendar and weather tasks. It partially supersedes ADR 0025's
+  panel list for the three panels and its "Diagnostics" item for open-meteo traffic only (weather and world-clock
+  temperatures); admits `curl` through `Process` with fixed `https://` URLs and the world clock's read-only,
+  open-only probes (`TZ=… date`, `timedatectl show`, `timedatectl list-timezones`); excludes `sudo`/`set-timezone`,
+  wttr.in, IP auto-detection and GitHub; records the calendar's opt-in persisted settings (DEC-034); and its
+  reversal boundary states that removing one panel does not reopen the others. It states that world-clock
+  implementation and validation remain with 02-33. ADR 0025 gains only a "Superseded by" link; `docs/adr/README.md`,
+  the `docs/mvp-scope.md` "Desktop shell" row and `docs/architecture.md` (where it lists panels) are updated in the
+  same task. Plan 02-32 order: per-widget persistence, ADR plus acceptance checkpoint, calendar, weather, laboratory
+  checkpoint. If 02-33 finds a contradiction with the ADR, it needs an amendment.
+- **Status**: Accepted
+
+## DEC-038
+- **Question**: Where do the calendar files live, and what happens to `bar/ClockModel.js`?
+- **Context/Nuances**: Upstream `Panel.qml` imports `"Model.js"` from its own directory, so a byte-identical panel
+  needs the full upstream clock `Model.js` (325 lines, no timezone-picker code) beside it. `bar/ClockModel.js` is an
+  adapted clock-format subset of that same file. The nine clock and weather files are identical at `v4.5.0` and the
+  clone's HEAD. All `clock.*` keys the panel uses exist at `7075b61`, the i18n subset source.
+- **User Response**: Approved.
+- **Decision**: `capabilities/desktop/shell/panels/clock/` holds `Panel.qml`, `Model.js` and `WallClock.qml`, copied
+  unchanged from `v4.5.0`. The adapted `bar/widgets/Clock.qml` imports that `Model.js`, replaces `SystemClock` with
+  `WallClock`, loads the panel on left click and keeps middle click without action. `bar/ClockModel.js` is removed
+  as a redundant subset, with its `UPSTREAM.md` row and tests updated. The i18n subset is regenerated from `7075b61`.
+  Weather lives in `panels/weather/` following the existing panel pattern. The removal is a consolidation caused by
+  this change; the provenance check asserts the three copied files are byte-identical.
+- **Status**: Accepted
+
+## DEC-039
+- **Question**: What are the per-widget persistence semantics, and how are they verified?
+- **Context/Nuances**: DEC-035 moves inline settings to `bar.widgets.<id>`. Consumers are `Clock`, `Tray`, `Power`
+  and the byte-identical clock `Panel.qml`; `updateEntryInline` also has an unused `plugins[]` path.
+- **User Response**: Approved.
+- **Decision**:
+  - Precedence: defaults entry settings < user hand-written `bar.layout` entry settings < `bar.widgets[id]`.
+  - `updateEntryInline` always writes `bar.widgets[id]`, never `bar.layout`, even with a hand-written layout; it
+    records only keys that differ from the effective value without the override, and a key no longer sent removes
+    its override and restores the default. The `plugins[]` path for widgets outside any layout stays unchanged.
+  - Node (`config-overrides.test.mjs`): an inline write yields only `bar.widgets.<id>.<key>`; a later default layout
+    change still reaches the user; the precedence above; a legacy zone override is still honoured; removed keys
+    reset; validation rejects a non-object `bar.widgets`.
+  - Static: no widget writes `bar.layout`; `Clock`, `Tray`, `Power` and the calendar panel keep `updateEntryInline`.
+  - Laboratory, inside the final checkpoint: right-click format cycle, week-start toggle and a saved weather
+    location, checking `shell.json` after each step for no `bar.layout`.
+  - No T14s validation; `docs/procedures/desktop-shell.md` documents manual cleanup of a legacy zone override.
+- **Status**: Accepted
+
+## DEC-040
+- **Question**: How does plan 02-32 commit its changes?
+- **Context/Nuances**: The first 02-32 draft left changes uncommitted, as 02-31 did until `d3945dc`. The repository
+  uses Conventional Commits split by concern (`feat(<scope>)` for code, `docs(<scope>)` for interview and validation
+  records, e.g. 02-29/02-30). `.agents/` is outside authoritative source control. Several files (`Bar.qml`,
+  `UPSTREAM.md`, `i18n-en.json`, `desktop-shell.md`) are touched by more than one task.
+- **User Response**: Approved.
+- **Decision**: Plan 02-32 ends with a commit task after the laboratory checkpoint is approved. After reviewing
+  `git status`/`git diff --stat` (no `build/`, `dist/`, `evidence/`, `.agents/` or secrets), the maintainer is shown
+  the commit list, then five commits are made in order: `feat(shell): store inline widget settings per widget id`;
+  `docs(adr): accept ADR 0029 for the clock calendar, weather and world clock panels`; `feat(shell): add the clock
+  calendar panel`; `feat(shell): add the weather pill and panel`; `docs(shell): record calendar and weather
+  interview, validation and findings`. Shared files are split with `git add -p` and tests pass at each commit.
+  Candidate refs `refs/mirroros-candidates/02-32-lab-*` are deleted afterwards. No push.
+- **Status**: Accepted
