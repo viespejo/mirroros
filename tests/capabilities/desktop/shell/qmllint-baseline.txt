@@ -35,7 +35,7 @@
 # CityMatches, CitySearch, DaylightStrip, HeroTitle) and the adapted Panel.qml, CityRow.qml and MiniGlobe.qml
 # entries follow the v4.5.0 inline-component pattern (root access from delegates) and untyped Style/Commons
 # members; bar/widgets/WorldClock.qml entries are untyped Loader.item panel members (injectPanel pattern) and
-# Style.bar. New category id-shadows-member (2 keys):
+# Style.bar; shell.qml gains the panel.worldclock GlobalShortcut entry. New category id-shadows-member (2 keys):
 # Panel.qml's scrollContent alias and id share a name, unchanged from v4.5.0. Panel.qml's Keys.onTabPressed and
 # Keys.onBacktabPressed in both CitySearch instances (4 keys) are the same root access from a nested instance.
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -1676,6 +1676,7 @@ adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\"
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","GlobalShortcut {"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","Variants {"]
 adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","}"]
+adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]

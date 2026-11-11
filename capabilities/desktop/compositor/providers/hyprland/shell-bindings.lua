@@ -166,9 +166,12 @@ MirrorOSKeys.bind("panel.audio", "SUPER + CTRL + A", "Audio", hl.dsp.global("mir
 MirrorOSKeys.bind("panel.display", "SUPER + CTRL + D", "Display", hl.dsp.global("mirroros:panel.display"))
 MirrorOSKeys.bind("panel.power", "SUPER + CTRL + P", "Power", hl.dsp.global("mirroros:panel.power"))
 -- Calendar follows utilities.lua:116 (plan 02-32, ADR 0029). Omarchy's SUPER+CTRL+ALT+W sends a weather notification
--- through omarchy-* commands (utilities.lua:110); MirrorOS assigns it to the weather panel instead.
+-- through omarchy-* commands (utilities.lua:110); MirrorOS assigns it to the weather panel instead. The world clock
+-- follows utilities.lua:117 (plan 02-33, ADR 0029).
 MirrorOSKeys.bind("panel.clock", "SUPER + CTRL + ALT + D", "Calendar", hl.dsp.global("mirroros:panel.clock"))
 MirrorOSKeys.bind("panel.weather", "SUPER + CTRL + ALT + W", "Weather", hl.dsp.global("mirroros:panel.weather"))
+MirrorOSKeys.bind("panel.worldclock", "SUPER + CTRL + ALT + E", "World clock",
+  hl.dsp.global("mirroros:panel.worldclock"))
 
 -- The numbers count the panels of the focused monitor's right section; the tray is not counted. A bar with fewer
 -- panels leaves the tail of the range doing nothing.

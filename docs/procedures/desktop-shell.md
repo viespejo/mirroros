@@ -78,7 +78,7 @@ qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; ta
 hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
 ```
 
-Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.weather`, `panel.notifications` and
+Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.weather`, `panel.worldclock`, `panel.notifications` and
 `panel-at-1` to `panel-at-9` (the Nth panel of the focused monitor's right bar section). The IPC result is
 `opened`, `closed` or `unavailable` (no panel instance, for example the power panel without a battery). Requests
 follow "focused monitor wins": `open` shows the panel on the focused monitor, moving it there if needed; `close`
