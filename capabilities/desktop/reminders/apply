@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and a non-root target user.
+# Context: CONFIGURE_CONTEXT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: reminder packages, the owned reminder command and its Omarchy licence exist.
+# No unit, daemon or user state is created; reminders are transient user timers set at runtime.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_tracked_file "$STEP_DIR/reminder" /usr/share/mirroros/reminders/reminder 0755
+cfg_tracked_file "$STEP_DIR/OMARCHY-LICENSE" /usr/share/mirroros/reminders/licenses/omarchy-reminders 0644
+cfg_require cfg_tracked_file_present /usr/share/mirroros/reminders/reminder
+cfg_require cfg_tracked_file_present /usr/share/mirroros/reminders/licenses/omarchy-reminders
+cfg_require cfg_packages_present "$STEP_DIR/packages"

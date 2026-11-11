@@ -533,7 +533,8 @@ Configure delivery, bindings and lock contracts (host, test doubles, no session)
 
 ```bash
 bats --jobs "$(nproc)" tests/capabilities/desktop/shell/install-runtime.contract.bats \
-    tests/capabilities/desktop/shell/configure.contract.bats tests/capabilities/desktop/lock/configure.contract.bats
+    tests/capabilities/desktop/shell/configure.contract.bats tests/capabilities/desktop/lock/configure.contract.bats \
+    tests/capabilities/desktop/reminders/
 node --test tests/capabilities/desktop/hyprland-bindings.test.mjs
 ```
 

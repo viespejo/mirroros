@@ -131,7 +131,7 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The nineteen steps run in this order:
+The twenty steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -150,6 +150,7 @@ The nineteen steps run in this order:
 | `system/vpn` | NetworkManager OpenConnect plugin, with an offline registration check; no corporate profile or connection |
 | `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 and hardware bindings, runtime-only display helper, the greeter layout indicator, Wayland greeter, and one uwsm session entry |
 | `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell`, and its user unit enabled for the selected user |
+| `desktop/reminders` | jq and sound-theme-freedesktop, and the owned `reminder` command with its Omarchy licence under `/usr/share/mirroros/reminders`; no unit, daemon or user state ([sources](../../capabilities/desktop/reminders/sources.md)) |
 | `desktop/lock` | hyprlock and hypridle, native lock and idle configuration, a hypridle drop-in, and hypridle enabled for the selected user |
 | `visual/branding` | librsvg, the shared MirrorOS wordmark SVG and the PNG rendered from it by the installed `rsvg-convert` |
 | `system/boot-splash` | Plymouth, the static MirrorOS theme and its selection, the `plymouth` hook drop-in, `quiet splash` on the normal boot entry, and boot images regenerated only when these inputs change |

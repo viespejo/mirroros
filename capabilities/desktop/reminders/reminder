@@ -1,0 +1,156 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Adapted from Omarchy v4.5.0 bin/omarchy-reminder (MIT, Copyright (c) David Heinemeier Hansson); see sources.md.
+# Reminders are transient systemd user timers; the message is kept only in a per-session runtime file.
+set -Eeuo pipefail
+
+dir="${XDG_RUNTIME_DIR:?}/mirroros/reminders"
+self=/usr/share/mirroros/reminders/reminder
+shell=/usr/share/mirroros/shell
+unit_pattern='^mirroros-reminder-([0-9]+)m-[0-9]+-[0-9]+$'
+
+usage() {
+  printf 'Usage: reminder [-i|--interactive]\n' >&2
+  printf '       reminder <minutes> [message]\n' >&2
+  printf '       reminder show [-j|--json]\n' >&2
+  printf '       reminder clear\n' >&2
+  exit 2
+}
+
+# plural <count> <one> <other>
+plural() { if (( $1 == 1 )); then printf '%s' "$2"; else printf '%s' "$3"; fi; }
+
+notify_transient() { notify-send -a reminder -h boolean:transient:true -- "$@"; }
+
+refresh() { qs ipc -p "$shell" call reminders refresh > /dev/null 2>&1 || true; }
+
+format_remaining() {
+  local minutes=$(( $1 / 60 )) seconds=$(( $1 % 60 ))
+  if (( minutes > 0 && seconds > 0 )); then
+    printf '%sm %ss' "$minutes" "$seconds"
+  elif (( minutes > 0 )); then
+    printf '%sm' "$minutes"
+  else
+    printf '%ss' "$seconds"
+  fi
+}
+
+# Pending reminder timers as "<timer>\t<due epoch>", skipping past entries and foreign names.
+active_timers() {
+  local now="$1" timer next
+  while IFS=$'\t' read -r timer next; do
+    [[ "${timer%.timer}" =~ $unit_pattern && "$timer" == *.timer && "$next" =~ ^[0-9]+$ ]] || continue
+    next=$(( next / 1000000 ))
+    (( next > now )) || continue
+    printf '%s\t%s\n' "$timer" "$next"
+  done < <(systemctl --user list-timers --all --output=json 'mirroros-reminder-*.timer' 2> /dev/null \
+    | jq -r '.[] | [.unit, (.next // 0)] | @tsv' 2> /dev/null || true)
+}
+
+message_of() {
+  local file="$dir/$1.message"
+  if [[ -f "$file" ]]; then printf '%s' "$(< "$file")"; fi
+}
+
+minutes_of() { [[ "$1" =~ $unit_pattern ]]; printf '%s' "$(( 10#${BASH_REMATCH[1]} ))"; }
+
+show_list() {
+  local now timer next unit message body=""
+  now="$(date +%s)"
+  while IFS=$'\t' read -r timer next; do
+    unit="${timer%.timer}"
+    message="$(message_of "$unit")"
+    [[ -n "$message" ]] || message="$(minutes_of "$unit")-min reminder"
+    body+="$message in $(format_remaining $(( next - now ))) ($(date -d "@$next" +%-H:%M))"$'\n'
+  done < <(active_timers "$now")
+  if [[ -z "$body" ]]; then
+    notify_transient 'Upcoming reminders' 'No outstanding reminders'
+  else
+    notify_transient 'Upcoming reminders' "${body%$'\n'}"
+  fi
+}
+
+show_json() {
+  local now timer next unit minutes message label count tooltip='Set Reminder' items=()
+  now="$(date +%s)"
+  while IFS=$'\t' read -r timer next; do
+    unit="${timer%.timer}"
+    minutes="$(minutes_of "$unit")"
+    message="$(message_of "$unit")"
+    label="${message:-$minutes-min reminder}"
+    items+=("$(jq -cn --arg unit "$unit" --arg timer "$timer" --arg label "$label" --arg message "$message" \
+      --arg remaining "$(format_remaining $(( next - now )))" --arg atTime "$(date -d "@$next" +%-H:%M)" \
+      --argjson minutes "$minutes" --argjson at "$next" --argjson remainingSeconds $(( next - now )) \
+      '{unit:$unit,timer:$timer,minutes:$minutes,message:$message,label:$label,remaining:$remaining,remainingSeconds:$remainingSeconds,at:$at,atTime:$atTime}')")
+  done < <(active_timers "$now")
+  count=${#items[@]}
+  (( count == 0 )) || tooltip="$count $(plural "$count" reminder reminders)"
+  printf '%s\n' "${items[@]}" | jq -cs --arg tooltip "$tooltip" \
+    '{count:length,active:(length > 0),tooltip:$tooltip,reminders:.}'
+}
+
+clear_reminders() {
+  systemctl --user stop -- 'mirroros-reminder-*.timer' 'mirroros-reminder-*.service' > /dev/null 2>&1 || true
+  rm -f -- "$dir"/mirroros-reminder-*.message
+  refresh
+  notify_transient 'All reminders have been cleared'
+}
+
+set_reminder() {
+  local minutes=$(( 10#$1 )) message="$2" now unit at title
+  now="$(date +%s)"
+  unit="mirroros-reminder-${minutes}m-$now-$$"
+  at="$(date -d "@$(( now + minutes * 60 ))" +%H:%M)"
+  title="Reminder set for $minutes $(plural "$minutes" minute minutes)"
+  if [[ -n "$message" ]]; then
+    umask 077
+    mkdir -p -- "$dir"
+    printf '%s' "$message" > "$dir/$unit.message"
+    title="$message in $minutes $(plural "$minutes" minute minutes)"
+  fi
+  if ! systemd-run --user --quiet --collect --on-active="${minutes}m" --unit="$unit" "$self" deliver "$unit"; then
+    rm -f -- "$dir/$unit.message"
+    printf 'Reminder could not be scheduled.\n' >&2
+    exit 1
+  fi
+  refresh
+  notify_transient "$title" "You'll be reminded at $at"
+}
+
+# Run by the transient service when the timer elapses; the unit name is the only argument it receives.
+deliver() {
+  [[ "$1" =~ $unit_pattern ]] || usage
+  local unit="$1" minutes message status=0
+  minutes="$(minutes_of "$unit")"
+  message="$(message_of "$unit")"
+  [[ -n "$message" ]] || message="Your $minutes $(plural "$minutes" 'minute is' 'minutes are') up"
+  notify-send -a reminder -u critical -- 'Reminder' "$message" || status=$?
+  pw-play /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga > /dev/null 2>&1 || true
+  rm -f -- "$dir/$unit.message"
+  refresh
+  return "$status"
+}
+
+case "${1:-}" in
+  -i|--interactive)
+    (( $# == 1 )) || usage
+    qs ipc -p "$shell" call reminders open > /dev/null ;;
+  show|list)
+    (( $# <= 2 )) || usage
+    case "${2:-}" in
+      -j|--json) show_json ;;
+      '') show_list ;;
+      *) usage ;;
+    esac ;;
+  clear)
+    (( $# == 1 )) || usage
+    clear_reminders ;;
+  deliver)
+    (( $# == 2 )) || usage
+    deliver "$2" ;;
+  *)
+    if [[ ! "${1:-}" =~ ^[0-9]+$ ]] || (( 10#$1 == 0 )); then usage; fi
+    minutes="$1"
+    shift
+    set_reminder "$minutes" "$*" ;;
+esac

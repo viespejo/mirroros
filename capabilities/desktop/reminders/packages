@@ -1,0 +1,4 @@
+# Pending-timer listing: parses systemctl's JSON output.
+jq extra
+# Delivery sound: the freedesktop alarm-clock-elapsed theme sound played with pw-play.
+sound-theme-freedesktop extra

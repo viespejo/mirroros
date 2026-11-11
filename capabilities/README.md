@@ -25,11 +25,12 @@ dependency graph, or resume state. The current order is:
 13. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
 14. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, and session selection.
 15. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
-16. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
-17. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
-18. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
+16. `desktop/reminders`: jq, the freedesktop sound theme and the owned `reminder` command over transient user timers.
+17. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
+18. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
+19. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
     overlay of the recognized boot configuration, and the regenerated boot images ([ADR 0014](../docs/adr/0014-native-login-and-boot-presentation.md)).
-19. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+20. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
 
 The [hardware procedure](../docs/procedures/hardware.md) records terminal paths, effects, recovery and the
 three-environment validation matrix. The system steps precede their Hyprland bindings. Running checks

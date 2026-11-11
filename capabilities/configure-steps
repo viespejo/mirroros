@@ -15,6 +15,7 @@ CFG_STEPS=(
   system/vpn
   desktop/compositor/providers/hyprland
   desktop/shell
+  desktop/reminders
   desktop/lock
   visual/branding
   system/boot-splash
