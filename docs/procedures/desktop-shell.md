@@ -187,7 +187,11 @@ The list is stored like any inline setting (see [Inline settings](#inline-settin
 }
 ```
 
-Units follow an optional `"unit": "metric"` or `"imperial"` in the same object, otherwise the locale. Requests
+Units follow an optional `"unit": "metric"` or `"imperial"` in the same object, otherwise the POSIX measurement
+locale: `LC_ALL` overrides `LC_MEASUREMENT`, which overrides `LANG` (fallback: `C`). For example, `LANG=en_US.UTF-8`
+with `LC_MEASUREMENT=es_ES.UTF-8` shows Celsius and km/h without changing the English UI. This applies to the
+pill, current and feels-like temperatures, saved-location rows, forecast and wind; it changes no stored settings
+or requests. `LC_TIME` and `LC_NUMERIC` alone do not select measurement units. Requests
 go only to fixed `https://api.open-meteo.com` and `https://geocoding-api.open-meteo.com` URLs, through `curl`
 (declared in the shell `packages` file) with argument vectors and a 5-second limit. While the panel is closed
 only the active location is fetched, every 30 minutes; opening the panel fetches every location in one combined

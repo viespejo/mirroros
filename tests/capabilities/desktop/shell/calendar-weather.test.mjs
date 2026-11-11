@@ -99,6 +99,27 @@ const weatherFiles = ['bar/widgets/Weather.qml', 'panels/weather/Panel.qml', 'pa
 const weatherWidget = read('bar/widgets/Weather.qml');
 const weatherPanel = read('panels/weather/Panel.qml');
 
+test('weather units follow the measurement locale, not the UI language, unless explicitly set', () => {
+  const expression = weatherPanel.match(/readonly property bool useImperial: (.*)/);
+  assert.ok(expression, 'the panel unit binding remains testable');
+  const Model = require('../../../../capabilities/desktop/shell/panels/weather/Model.js');
+  const resolve = (env, unit = '') => vm.runInNewContext(expression[1], {
+    Model,
+    setting: (name, fallback) => name === 'unit' ? unit : fallback,
+    Quickshell: { env: name => env[name] || '' },
+  });
+  const spanishFormats = { LANG: 'en_US.UTF-8', LC_MESSAGES: 'en_US.UTF-8', LC_MEASUREMENT: 'es_ES.UTF-8' };
+  assert.equal(resolve(spanishFormats), false, 'Spanish measurement formats win over the English UI');
+  assert.equal(resolve({ LANG: 'es_ES.UTF-8', LC_MEASUREMENT: 'en_US.UTF-8' }), true, 'US measurement formats select imperial');
+  assert.equal(resolve({ ...spanishFormats, LC_ALL: 'en_US.UTF-8' }), true, 'LC_ALL overrides LC_MEASUREMENT');
+  assert.equal(resolve({ LANG: 'en_US.UTF-8', LC_MEASUREMENT: 'en_US.UTF-8', LC_ALL: 'es_ES.UTF-8' }), false);
+  assert.equal(resolve({ LANG: 'en_US.UTF-8' }), true, 'LANG is the fallback without a measurement override');
+  assert.equal(resolve({ LANG: 'es_ES.UTF-8' }), false);
+  assert.equal(resolve({}), false, 'an unset locale uses the metric C fallback');
+  assert.equal(resolve(spanishFormats, 'imperial'), true, 'the explicit imperial setting still wins');
+  assert.equal(resolve({ ...spanishFormats, LC_ALL: 'en_US.UTF-8' }, 'metric'), false, 'the explicit metric setting still wins');
+});
+
 test('the weather files call no omarchy-* command and hold no wttr.in, IP lookup or state file', () => {
   const files = readdirSync(new URL('panels/weather/', shell)).map(name => `panels/weather/${name}`);
   assert.deepEqual(files.sort(), ['panels/weather/Locations.js', 'panels/weather/Model.js', 'panels/weather/Panel.qml']);

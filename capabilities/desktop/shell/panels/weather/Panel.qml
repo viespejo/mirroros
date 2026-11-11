@@ -23,7 +23,8 @@ import "Locations.js" as Locations
 // failed request keeps the previous values and is not retried; panel IPC
 // lives in the bar (no ShellIpc, edit IPC or refreshMinutes setting); empty
 // "No location" hero with the search focused. Unit choice keeps the `unit`
-// setting, otherwise the locale (no reported country without wttr.in).
+// setting, otherwise LC_ALL / LC_MEASUREMENT / LANG (the measurement locale,
+// not the UI language; no reported country without wttr.in).
 Panel {
   id: root
   moduleName: "omarchy.weather"
@@ -150,7 +151,7 @@ Panel {
   readonly property var current: Model.openMeteoCurrentCondition(dailyForecastReport)
   readonly property var forecastDays: Model.openMeteoForecastDays(dailyForecastReport, Qt.formatDate(new Date(), "yyyy-MM-dd"))
 
-  readonly property bool useImperial: Model.shouldUseImperial(setting("unit", ""), Qt.locale().name, "")
+  readonly property bool useImperial: Model.shouldUseImperial(setting("unit", ""), Quickshell.env("LC_ALL") || Quickshell.env("LC_MEASUREMENT") || Quickshell.env("LANG") || "C", "")
 
   // Shared hero/bar icon: the neutral glyph until the active location reports.
   readonly property string label: (hasLocation && current) ? (Model.currentIcon(current, "") || Model.NEUTRAL_ICON) : Model.NEUTRAL_ICON
