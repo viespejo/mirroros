@@ -101,6 +101,41 @@ band states, diagnostics and the browser requirement for captive portals. The pl
 `v4.5.0` (DEC-050 in the [network interview log](../technical-interviews/story-4-4-network-panel_log.md)).
 Its VPN section (plan 02-30) opens `vpn-connect` in Foot; see [Connect and disconnect](hardware.md#connect-and-disconnect).
 
+## Bar additions
+
+Plan 02-31 adds three bar pieces adapted from Omarchy `v4.5.0` (see `UPSTREAM.md`); none starts a process.
+
+- **Stay Awake** (indicator next to Dnd): a native Wayland idle inhibitor on a live bar window suspends the idle
+  lock while active. It is runtime-only: off on every shell start, never written to disk. hypridle still owns idle
+  detection and locking; `loginctl lock-session` and lock before sleep are unchanged.
+- **Microphone** (before audio): visible only while an application captures the default source or the source is
+  muted; the shell's own level meters are ignored. Click toggles mute, the wheel changes input volume by 5 % within
+  0–100 %, middle click toggles the audio panel. Hidden, it leaves no gap.
+- **Active window** (after the workspaces): "<application name> · <title>", only the name when the title is empty
+  or equals it ignoring case, the raw app id without a desktop entry; full text in the tooltip. Left click focuses;
+  no click closes a window.
+
+Laboratory checkpoint (2026-11-10/11, guest `mirroros-ref`, final candidate `cf36bef`, temporary refs
+`refs/mirroros-candidates/02-31-lab-{a,b,c,d}`): configure exit 0 with an unchanged rerun; qmllint passes with the
+reviewed baseline (1910 keys, no new category); `check-panels`, `check-notifications` and `check-bar` pass. Stay
+Awake held off a 30 s test timeout, also with a fullscreen window; clearing it, `lock-session` and a shell restart
+restored locking, and no file or process appeared. Real suspend was not exercised (graphical resume fails in this
+VM); hypridle's logind sleep delay lock with Stay Awake active was the approved substitute. All microphone and
+active window states and clicks passed. The checkpoint fixed two defects that were also latent upstream (missing
+`tooltipHovered`, an `implicitWidth` binding loop) and made the title comparison case-insensitive. Hazard: restarting
+hypridle while locked kills hyprlock (it runs in the hypridle unit); recovery needed
+`hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`. Evidence: `evidence/bar-additions/lab-02-31/checkpoint.md`
+(ignored).
+
+Supervised T14s microphone checkpoint (2026-11-11, non-qualifying, candidate `cf36bef` in a fresh checkout):
+configure exit 0 with an unchanged rerun. The physical mic-mute key showed the muted glyph with the LED on, and the
+LED also followed mute from the bar; with a capture client the indicator was highlighted and muting from the bar
+silenced its recording. No call client was installed, so a `pw-record` capture with per-second levels was the
+approved substitute for a real call; wheel and middle click were not exercised there. Finding: a persisted inline
+setting (here power `showPercentage`) stores the whole layout zone in `$XDG_CONFIG_HOME/mirroros/shell.json`, and
+since arrays replace defaults, later default widgets such as the microphone do not appear; removing a redundant
+`bar.layout` override restores them. Evidence: `evidence/bar-additions/t14s-02-31/checkpoint.md` (ignored).
+
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`
@@ -331,6 +366,7 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/power-panel-model.test.mjs \
     tests/capabilities/desktop/shell/network-panel-model.test.mjs \
     tests/capabilities/desktop/shell/no-omarchy-coupling.test.mjs \
+    tests/capabilities/desktop/shell/bar-additions.test.mjs \
     tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
 node tests/capabilities/desktop/shell/check-i18n.mjs

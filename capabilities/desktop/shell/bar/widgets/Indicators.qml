@@ -7,20 +7,22 @@ import "../indicators"
 
 // Adapted from Omarchy shell/plugins/bar/widgets/Indicators.qml at
 // 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, Copyright (c) David Heinemeier
-// Hansson). Changes: the default list is Dnd only (the other indicators are
-// Omarchy features outside the shell surfaces); indicators come from a static
+// Hansson). Changes: the default list is Dnd and StayAwake, in upstream order
+// (the other indicators are Omarchy features outside the shell surfaces);
+// StayAwake is adapted from v4.5.0; indicators come from a static
 // id-to-component map instead of loading ../indicators/<id>.qml by URL; no
 // ShellIpc refresh target.
 BarWidget {
   id: root
   moduleName: "omarchy.indicators"
 
-  readonly property var defaultIndicatorEntries: [ "Dnd" ]
+  readonly property var defaultIndicatorEntries: [ "Dnd", "StayAwake" ]
 
   // Every indicator the prototype ships. An id that is not here is reported
   // as Omarchy reports an indicator file that does not load.
-  readonly property var indicatorComponents: ({ "Dnd": dndIndicator })
+  readonly property var indicatorComponents: ({ "Dnd": dndIndicator, "StayAwake": stayAwakeIndicator })
   Component { id: dndIndicator; Dnd { } }
+  Component { id: stayAwakeIndicator; StayAwake { } }
   readonly property var indicatorEntries: indicatorEntriesFromSettings(settings)
   property var activeIndicatorIds: []
   property var indicatorActiveStates: ({})

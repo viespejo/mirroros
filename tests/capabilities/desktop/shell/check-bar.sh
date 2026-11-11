@@ -127,8 +127,8 @@ const fs = require('node:fs'), assert = require('node:assert/strict');
 const s = JSON.parse(fs.readFileSync(process.argv[2]));
 assert.equal(s.position, 'top');
 assert.equal(s.config.version, 1);
-assert.deepEqual(s.config.bar.layout.left.map(e => e.id), ['omarchy.menu', 'omarchy.workspaces']);
-assert.deepEqual(s.config.bar.layout.right.map(e => e.id), ['omarchy.tray', 'omarchy.keyboard-layout', 'omarchy.bluetooth', 'omarchy.network', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
+assert.deepEqual(s.config.bar.layout.left.map(e => e.id), ['omarchy.menu', 'omarchy.workspaces', 'omarchy.active-window']);
+assert.deepEqual(s.config.bar.layout.right.map(e => e.id), ['omarchy.tray', 'omarchy.keyboard-layout', 'omarchy.bluetooth', 'omarchy.network', 'omarchy.microphone', 'omarchy.audio', 'omarchy.monitor', 'omarchy.power']);
 const clock = s.slots.find(e => e.id === 'omarchy.clock');
 assert.ok(clock.width > 0);
 assert.ok(Math.abs(clock.x + clock.width / 2 - clock.screenWidth / 2) <= 1, 'clock is centered');
@@ -228,7 +228,7 @@ node - "$tmp/invalid.json" <<'JS'
 const fs = require('node:fs'), assert = require('node:assert/strict');
 const s = JSON.parse(fs.readFileSync(process.argv[2]));
 assert.equal(s.userStatus, 'invalid');
-assert.deepEqual(s.config.bar.layout.left.map(e => e.id), ['omarchy.menu', 'omarchy.workspaces']);
+assert.deepEqual(s.config.bar.layout.left.map(e => e.id), ['omarchy.menu', 'omarchy.workspaces', 'omarchy.active-window']);
 JS
 [[ "$(ipc cycleClock)" == true ]]
 sleep 0.8

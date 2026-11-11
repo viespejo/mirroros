@@ -5,7 +5,10 @@
 hyprlock and hypridle from the Arch `extra` repository, selected for Story 4.3 after the guest prototype
 (DEC-019): hyprlock renders the lock surface (`ext-session-lock-v1`) and authenticates through the system PAM service
 `/etc/pam.d/hyprlock` shipped by its package; hypridle owns idle detection, logind Lock/sleep requests and idle
-inhibition. MirrorOS code never handles credentials and the desktop shell has no lock or PAM code
+inhibition, and honours Wayland idle inhibitors. The shell's runtime-only Stay Awake indicator (plan 02-31) is one
+more idle-inhibit client: while it is on, a native idle inhibitor suspends only the idle lock; lock before sleep, on
+lid close and through `loginctl lock-session` is unchanged, and the shell never becomes the idle manager. MirrorOS
+code never handles credentials and the desktop shell has no lock or PAM code
 ([ADR 0012](../../../docs/adr/0012-owned-quickshell-desktop-shell.md)). Package versions remain rolling; pacman
 supplies their licenses.
 

@@ -30,6 +30,9 @@ ShellRoot {
     shell: desktopShell
   }
   property Osd osdService: Osd { }
+  property StayAwake stayAwakeService: StayAwake {
+    window: desktopShell.bar ? desktopShell.bar.liveWindow : null
+  }
   property WallpaperLibrary wallpaperLibrary: WallpaperLibrary { }
   property WallpaperActions wallpaperActions: WallpaperActions {
     picker: desktopShell.wallpaperPicker
@@ -59,6 +62,7 @@ ShellRoot {
   }
 
   function firstPartyServiceFor(id) {
+    if (id === "mirroros.stay-awake") return stayAwakeService
     return id === "omarchy.notifications" ? notificationService : null
   }
 

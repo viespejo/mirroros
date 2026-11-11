@@ -14,7 +14,7 @@ const singles = ['capabilities/desktop/compositor/providers/hyprland/display'];
 const allowed = new Map([
   // Bar widget ids kept as legacy data names in defaults.json, Bar.qml and widget moduleName values.
   ...['menu', 'workspaces', 'indicators', 'clock', 'tray', 'keyboard-layout', 'bluetooth', 'network', 'audio',
-    'monitor', 'power', 'dropbox'].map(id => [`omarchy.${id}`, 'legacy bar widget id']),
+    'monitor', 'power', 'dropbox', 'microphone', 'active-window'].map(id => [`omarchy.${id}`, 'legacy bar widget id']),
   // First-party service ids resolved by shell.qml (notification panel and OSD).
   ['omarchy.notifications', 'legacy service id'],
   ['omarchy.osd', 'legacy service id'],

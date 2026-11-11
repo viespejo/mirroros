@@ -20,6 +20,10 @@
 # shell.qml gains one GlobalShortcut (panel.bluetooth); no new category.
 # VPN section (plan 02-30 laboratory checkpoint): bar/widgets/Network.qml VpnRow and vpn focus entries follow
 # the same inline-component pattern (root access from row delegates) and untyped bar/Style members; no new category.
+# Bar additions (plan 02-31 laboratory checkpoint): bar/widgets/ActiveWindow.qml and bar/widgets/Microphone.qml
+# entries are untyped bar/Style/Pipewire.nodes members, as in bar/widgets/Audio.qml; the shell.qml PostReloadHook
+# key moved with the stayAwakeService lines; the bar/widgets/Network.qml list height entry is 02-30 drift (line
+# changed after that laboratory capture); no new category.
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -108,6 +112,13 @@ adapt ["bar/indicators/Dnd.qml","Member \"openSettings\" not found on type \"QOb
 adapt ["bar/indicators/Dnd.qml","Member \"open\" not found on type \"QObject\" [missing-property]","else panel.open()"]
 adapt ["bar/indicators/Dnd.qml","Member \"screen\" not found on type \"QObject\" [missing-property]","return window && window.screen ? String(window.screen.name || \"\") : \"\""]
 adapt ["bar/indicators/Dnd.qml","Member \"screen\" not found on type \"QObject\" [missing-property]","return window && window.screen ? String(window.screen.name || \"\") : \"\""]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"barForeground\" not found on type \"QObject\" [missing-property]","color: root.bar ? root.bar.barForeground : Commons.Color.foreground"]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"controlPaddingX\" not found on type \"QObject\" [missing-property]","implicitWidth: visible ? Math.min(maxLabelWidth, Math.ceil(labelMetrics.advanceWidth)) + Style.spacing.controlPaddingX * 2 : 0"]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: root.bar ? root.bar.fontFamily : Style.font.family"]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"fontFamily\" not found on type \"QObject\" [missing-property]","font.family: root.bar ? root.bar.fontFamily : Style.font.family"]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"hideTooltip\" not found on type \"QObject\" [missing-property]","onExited: if (root.bar) root.bar.hideTooltip(root)"]
+adapt ["bar/widgets/ActiveWindow.qml","Member \"showTooltip\" not found on type \"QObject\" [missing-property]","onEntered: if (root.bar) root.bar.showTooltip(root, root.title)"]
 adapt ["bar/widgets/Audio.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/widgets/Audio.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/widgets/Audio.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
@@ -533,6 +544,8 @@ adapt ["bar/widgets/KeyboardLayout.qml","Member \"run\" not found on type \"QObj
 adapt ["bar/widgets/MenuButton.qml","Member \"iconSize\" not found on type \"QObject\" [missing-property]","readonly property int blockPx: Math.max(1, Math.ceil(Style.bar.iconSize * dpr / 8))"]
 adapt ["bar/widgets/MenuButton.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar.shell) root.bar.shell.toggle(\"menu\")"]
 adapt ["bar/widgets/MenuButton.qml","Member \"shell\" not found on type \"QObject\" [missing-property]","if (root.bar.shell) root.bar.shell.toggle(\"menu\")"]
+adapt ["bar/widgets/Microphone.qml","Member \"requestPanel\" not found on type \"QObject\" [missing-property]","if (b === Qt.MiddleButton) root.bar.requestPanel(\"omarchy.audio\", \"toggle\")"]
+adapt ["bar/widgets/Microphone.qml","Member \"values\" not found on type \"UntypedObjectModel\" [missing-property]","readonly property var nodes: Pipewire.nodes ? Pipewire.nodes.values : []"]
 adapt ["bar/widgets/Monitor.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/widgets/Monitor.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/widgets/Monitor.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.caption"]
@@ -867,6 +880,7 @@ adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","hasCursor: 
 adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","hasCursor: root.cursorActive && root.focusSection === \"vpn\" && root.vpnIndex === rowIndex"]
 adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","hasCursor: root.cursorActive && root.focusSection === \"vpn\" && root.vpnIndex === rowIndex"]
 adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","hasCursor: root.toggleHeaderHasCursor"]
+adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","height: Math.min(contentHeight, Style.space(240) - (root.vpnShown ? vpnSeparator.height + vpnSection.height + 2 * column.spacing : 0))"]
 adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","if (!net || root.busy || isEnterprise || root.passwordText.length === 0) return"]
 adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","if (!net || root.busy || isEnterprise || root.passwordText.length === 0) return"]
 adapt ["bar/widgets/Network.qml","Unqualified access [unqualified]","if (!root.cursorActive) {"]
@@ -1320,7 +1334,7 @@ adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\"
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","onLoaded: if (!root.writer.busy) root.applyUserText(text(), true)"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","GlobalShortcut {"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","Variants {"]
-adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","picker: desktopShell.wallpaperPicker"]
+adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","}"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]

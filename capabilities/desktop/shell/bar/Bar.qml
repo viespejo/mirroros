@@ -59,24 +59,28 @@ Item {
   readonly property var widgetComponents: ({
     "omarchy.menu": menuComponent,
     "omarchy.workspaces": workspacesComponent,
+    "omarchy.active-window": activeWindowComponent,
     "omarchy.indicators": indicatorsComponent,
     "omarchy.clock": clockComponent,
     "omarchy.tray": trayComponent,
     "omarchy.keyboard-layout": keyboardComponent,
     "omarchy.bluetooth": bluetoothComponent,
     "omarchy.network": networkComponent,
+    "omarchy.microphone": microphoneComponent,
     "omarchy.audio": audioComponent,
     "omarchy.monitor": monitorComponent,
     "omarchy.power": powerComponent
   })
   Component { id: menuComponent; Widgets.MenuButton { } }
   Component { id: workspacesComponent; Widgets.Workspaces { } }
+  Component { id: activeWindowComponent; Widgets.ActiveWindow { } }
   Component { id: indicatorsComponent; Widgets.Indicators { } }
   Component { id: clockComponent; Widgets.Clock { } }
   Component { id: trayComponent; Widgets.Tray { } }
   Component { id: keyboardComponent; Widgets.KeyboardLayout { } }
   Component { id: bluetoothComponent; Widgets.Bluetooth { } }
   Component { id: networkComponent; Widgets.Network { } }
+  Component { id: microphoneComponent; Widgets.Microphone { } }
   Component { id: audioComponent; Widgets.Audio { } }
   Component { id: monitorComponent; Widgets.Monitor { } }
   Component { id: powerComponent; Widgets.Power { } }
@@ -430,7 +434,17 @@ Item {
     onTriggered: if (!root.targetTooltipHovered(root.tooltipTarget)) root.hideTooltip(root.tooltipTarget)
   }
 
+  // A visible bar window for surface-bound shell clients (the Stay Awake
+  // idle inhibitor); re-evaluated when screens change or a window remaps.
+  readonly property var liveWindow: {
+    var windows = barPanels.instances
+    for (var i = 0; i < windows.length; i++)
+      if (windows[i] && windows[i].visible) return windows[i]
+    return null
+  }
+
   Variants {
+    id: barPanels
     model: Quickshell.screens
     BarPanel {
       required property var modelData
