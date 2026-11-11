@@ -75,8 +75,9 @@ qml = qml.trimEnd().slice(0, -1) + `
       return true
     }
     function noChange(): bool {
-      var entry = desktopShell.shellConfig.bar.layout.center[0]
-      return desktopShell.updateEntryInline(entry.id, entry)
+      var items = desktopShell.bar.moduleWidgets("omarchy.clock")
+      if (!items.length) return true
+      return desktopShell.updateEntryInline("omarchy.clock", items[0].settings)
     }
     function toggleMenu(): bool { return desktopShell.toggle("menu") }
   }
@@ -144,9 +145,10 @@ node - "$prefs" <<'JS'
 const fs = require('node:fs'), assert = require('node:assert/strict');
 const saved = JSON.parse(fs.readFileSync(process.argv[2]));
 assert.deepEqual(Object.keys(saved), ['version', 'bar']);
-assert.deepEqual(Object.keys(saved.bar), ['layout']);
-assert.deepEqual(Object.keys(saved.bar.layout), ['center']);
-console.log('PASS saving one option stores only that list, no unrelated defaults');
+assert.deepEqual(Object.keys(saved.bar), ['widgets']);
+assert.deepEqual(Object.keys(saved.bar.widgets), ['omarchy.clock']);
+assert.deepEqual(Object.keys(saved.bar.widgets['omarchy.clock']), ['format']);
+console.log('PASS saving one inline setting stores only that widget key, no layout');
 JS
 before=$(stat -c '%y' "$prefs")
 [[ "$(ipc noChange)" == false ]]
@@ -168,7 +170,7 @@ node - "$prefs" "$tmp/restart.json" <<'JS'
 const fs = require('node:fs'), assert = require('node:assert/strict');
 const config = JSON.parse(fs.readFileSync(process.argv[2]));
 const s = JSON.parse(fs.readFileSync(process.argv[3]));
-assert.equal(s.config.bar.layout.center[0].format, config.bar.layout.center[0].format);
+assert.equal(s.config.bar.widgets['omarchy.clock'].format, config.bar.widgets['omarchy.clock'].format);
 console.log('PASS clock format survives shell restart');
 config.bar.layout = {
   left: [{ id: 'omarchy.monitor' }, { id: 'synthetic.unknown' }],

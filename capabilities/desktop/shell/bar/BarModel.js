@@ -19,12 +19,21 @@ function normalizePosition(value) {
   return /^(top|bottom|left|right)$/.test(next) ? next : "top"
 }
 
-function entrySettings(entry) {
-  if (!isPlainObject(entry)) return {}
+// MirrorOS (DEC-035/039): override is the widget's bar.widgets.<id> entry,
+// which wins over the layout entry's own settings.
+function entrySettings(entry, override) {
   var copy = {}
-  for (var key in entry) {
-    if (key === "id") continue
-    copy[key] = entry[key]
+  if (isPlainObject(entry)) {
+    for (var key in entry) {
+      if (key === "id") continue
+      copy[key] = entry[key]
+    }
+  }
+  if (isPlainObject(override)) {
+    for (var name in override) {
+      if (name === "id") continue
+      copy[name] = override[name]
+    }
   }
   return copy
 }

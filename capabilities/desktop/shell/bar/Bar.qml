@@ -35,6 +35,13 @@ Item {
   readonly property color urgent: Commons.Color.bar.active
   readonly property bool foregroundAnimationEnabled: true
   readonly property var layoutConfig: Util.normalizeLayout(barConfig.layout)
+  // Per-widget inline settings (bar.widgets.<id>), layered over layout entries.
+  readonly property var widgetOverrides: Util.isPlainObject(barConfig.widgets) ? barConfig.widgets : ({})
+
+  function widgetOverride(entry) {
+    var id = Util.canonicalWidgetId(BarModel.entryId(entry))
+    return id && Util.isPlainObject(widgetOverrides[id]) ? widgetOverrides[id] : null
+  }
   readonly property var providers: providerInventory
   property var clickTargets: []
   property var moduleSlots: []
@@ -655,7 +662,7 @@ Item {
     }
     Binding { target: slot.activeItem; property: "bar"; value: root; when: !!slot.activeItem && "bar" in slot.activeItem }
     Binding { target: slot.activeItem; property: "moduleName"; value: slot.moduleName; when: !!slot.activeItem && "moduleName" in slot.activeItem }
-    Binding { target: slot.activeItem; property: "settings"; value: BarModel.entrySettings(slot.entry); when: !!slot.activeItem && "settings" in slot.activeItem }
+    Binding { target: slot.activeItem; property: "settings"; value: BarModel.entrySettings(slot.entry, root.widgetOverride(slot.entry)); when: !!slot.activeItem && "settings" in slot.activeItem }
     Binding { target: slot.activeItem; property: "fixedEdge"; value: slot.fixedEdge; when: !!slot.activeItem && "fixedEdge" in slot.activeItem }
 
     Rectangle {

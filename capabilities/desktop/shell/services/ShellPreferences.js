@@ -82,7 +82,20 @@ function validate(value, defaults) {
     if (TOP_LEVEL.indexOf(keys[i]) < 0) return "unsupported key " + keys[i]
   if (has(value, "notifications") && !isPlainObject(value.notifications))
     return "notifications: expected object, found " + kind(value.notifications)
+  var widgetsError = widgetsTypeError(value.bar)
+  if (widgetsError) return widgetsError
   return typeError(value, defaults, [])
+}
+
+// bar.widgets maps a widget id to that widget's sparse inline settings.
+function widgetsTypeError(bar) {
+  if (!isPlainObject(bar) || !has(bar, "widgets")) return ""
+  if (!isPlainObject(bar.widgets)) return "bar.widgets: expected object, found " + kind(bar.widgets)
+  var ids = Object.keys(bar.widgets)
+  for (var i = 0; i < ids.length; i++)
+    if (!isPlainObject(bar.widgets[ids[i]]))
+      return "bar.widgets." + ids[i] + ": expected object, found " + kind(bar.widgets[ids[i]])
+  return ""
 }
 
 function validateDefaults(value) {
@@ -117,6 +130,32 @@ function merge(base, override) {
     if (UNSAFE_KEYS.indexOf(key) >= 0) continue
     out[key] = has(out, key) ? merge(out[key], override[key]) : clone(override[key])
   }
+  return out
+}
+
+// Per-widget inline settings (DEC-035/039). base is what the widget would have
+// without its bar.widgets entry; only keys that differ from it are kept, so a
+// key no longer sent, or equal to the base, drops its override.
+function widgetOverride(base, settings) {
+  var from = isPlainObject(base) ? base : {}
+  var next = isPlainObject(settings) ? settings : {}
+  var out = {}
+  var keys = Object.keys(next)
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i]
+    if (key === "id" || UNSAFE_KEYS.indexOf(key) >= 0 || next[key] === undefined) continue
+    if (!has(from, key) || !equal(from[key], next[key])) out[key] = clone(next[key])
+  }
+  return out
+}
+
+// Effective widget settings: the layout entry's settings, then bar.widgets[id].
+function widgetSettings(base, override) {
+  var out = isPlainObject(base) ? clone(base) : {}
+  if (!isPlainObject(override)) return out
+  var keys = Object.keys(override)
+  for (var i = 0; i < keys.length; i++)
+    if (keys[i] !== "id" && UNSAFE_KEYS.indexOf(keys[i]) < 0) out[keys[i]] = clone(override[keys[i]])
   return out
 }
 
@@ -199,6 +238,6 @@ if (typeof module !== "undefined") {
   module.exports = {
     VERSION: VERSION, validate: validate, validateDefaults: validateDefaults, parse: parse,
     resolve: resolve, diff: diff, applyChanges: applyChanges, removeOverride: removeOverride,
-    serialize: serialize
+    serialize: serialize, widgetOverride: widgetOverride, widgetSettings: widgetSettings
   }
 }

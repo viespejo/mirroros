@@ -57,12 +57,23 @@ BarWidget {
     return ""
   }
 
+  // MirrorOS (DEC-035/039): bar.widgets.<id> wins over the entry's settings.
   function entrySettings(entry) {
-    if (!Util.isPlainObject(entry)) return {}
     var copy = {}
-    for (var key in entry) {
-      if (key === "id") continue
-      copy[key] = entry[key]
+    if (Util.isPlainObject(entry)) {
+      for (var key in entry) {
+        if (key === "id") continue
+        copy[key] = entry[key]
+      }
+    }
+    var id = Util.canonicalWidgetId(entryId(entry))
+    var overrides = bar && Util.isPlainObject(bar.widgetOverrides) ? bar.widgetOverrides : null
+    var override = id && overrides && Util.isPlainObject(overrides[id]) ? overrides[id] : null
+    if (override) {
+      for (var name in override) {
+        if (name === "id") continue
+        copy[name] = override[name]
+      }
     }
     return copy
   }

@@ -24,6 +24,13 @@
 # entries are untyped bar/Style/Pipewire.nodes members, as in bar/widgets/Audio.qml; the shell.qml PostReloadHook
 # key moved with the stayAwakeService lines; the bar/widgets/Network.qml list height entry is 02-30 drift (line
 # changed after that laboratory capture); no new category.
+# Calendar and weather (plan 02-32 laboratory checkpoint, maintainer-approved): panels/clock/Panel.qml (v4.5.0
+# copy) and panels/weather/Panel.qml entries follow the v4.5.0 inline-component pattern (root and Suggestions host
+# access from delegates) and untyped bar/Style/shell members; bar/widgets/Clock.qml and bar/widgets/Weather.qml
+# entries are untyped Loader.item panel members (injectPanel pattern) and Style.bar; the bar/Bar.qml entry is the
+# per-widget settings Binding; the weather saved-locations separator and section header and the weather list
+# keys follow the same pattern; shell.qml gains the panel.clock and panel.weather GlobalShortcut entries;
+# no new category.
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -70,6 +77,7 @@ adapt ["bar/Bar.qml","Member \"body\" not found on type \"QObject\" [missing-pro
 adapt ["bar/Bar.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"tooltip\", \"border\", Commons.Color.tooltip.border, 1)"]
 adapt ["bar/Bar.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.tooltip.text"]
 adapt ["bar/Bar.qml","Unqualified access [unqualified]","Binding { target: slot.activeItem; property: \"bar\"; value: root; when: !!slot.activeItem && \"bar\" in slot.activeItem }"]
+adapt ["bar/Bar.qml","Unqualified access [unqualified]","Binding { target: slot.activeItem; property: \"settings\"; value: BarModel.entrySettings(slot.entry, root.widgetOverride(slot.entry)); when: !!slot.activeItem && \"settings\" in slot.activeItem }"]
 adapt ["bar/Bar.qml","Unqualified access [unqualified]","Component.onCompleted: root.registerModuleSlot(slot)"]
 adapt ["bar/Bar.qml","Unqualified access [unqualified]","Component.onDestruction: if (hovered) root.setBarHovered(false)"]
 adapt ["bar/Bar.qml","Unqualified access [unqualified]","Component.onDestruction: root.unregisterModuleSlot(slot)"]

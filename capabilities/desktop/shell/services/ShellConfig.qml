@@ -107,6 +107,9 @@ QtObject {
   }
 
   // Only persist an actual inline-settings change, matching Omarchy.
+  // MirrorOS (DEC-035/039): a widget placed in the layout keeps its inline
+  // settings sparse under bar.widgets.<id>; bar.layout is never written, so
+  // later default layout changes still reach the user.
   function updateEntryInline(moduleName, settings) {
     var stripped = Util.canonicalWidgetId(moduleName)
     var copy = JSON.parse(JSON.stringify(shellConfig))
@@ -117,17 +120,20 @@ QtObject {
     var sections = Util.barSections
     var foundInLayout = false
     var dirty = false
-    for (var s = 0; s < sections.length; s++) {
+    for (var s = 0; s < sections.length && !foundInLayout; s++) {
       var arr = copy.bar.layout[sections[s]] || []
       for (var i = 0; i < arr.length; i++) {
         if (arr[i] && Util.canonicalWidgetId(arr[i].id) === stripped) {
-          var next = { id: stripped }
-          for (var k in settings) if (k !== "id") next[k] = settings[k]
-          if (JSON.stringify(arr[i]) !== JSON.stringify(next)) {
-            arr[i] = next
-            dirty = true
-          }
+          var base = {}
+          for (var k in arr[i]) if (k !== "id") base[k] = arr[i][k]
+          var override = Preferences.widgetOverride(base, settings)
+          if (!Util.isPlainObject(copy.bar.widgets)) copy.bar.widgets = {}
+          if (Object.keys(override).length) copy.bar.widgets[stripped] = override
+          else delete copy.bar.widgets[stripped]
+          if (!Object.keys(copy.bar.widgets).length) delete copy.bar.widgets
+          dirty = true
           foundInLayout = true
+          break
         }
       }
     }

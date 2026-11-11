@@ -266,6 +266,29 @@ fixed. To promote a choice for every device, edit `defaults.json` in the reposit
 Notification history keeps 24 hours and at most 100 entries by default and restores active cards (DEC-020).
 Its files are private (directory `0700`, files `0600`); never copy them into evidence.
 
+## Inline settings
+
+Settings changed from a bar widget or its panel (clock format, tray pins, power percentage, weather locations) are stored per widget
+id under `bar.widgets` in `shell.json`, holding only the keys that differ from the widget's layout entry
+(DEC-035/039). Saving never writes `bar.layout`, so later default layout changes still reach the device:
+
+```json
+{
+  "version": 1,
+  "bar": { "widgets": { "omarchy.clock": { "format": "HH:mm" } } }
+}
+```
+
+Precedence is the `defaults.json` entry, then a hand-written `bar.layout` entry, then `bar.widgets.<id>`. A key
+set back to its layout value, or no longer sent by the widget, removes its override; deleting the widget's object
+restores every default. A `bar.widgets` that is not an object of objects makes the file invalid (preserved, not
+written).
+
+Files saved before this change may still hold a whole zone under `bar.layout` (for example `bar.layout.right`
+with a stored `showPercentage`), which hides widgets later added to that zone by default. There is no automatic
+migration: move the setting by hand into `bar.widgets.<id>` and delete the `bar.layout` zone, for example
+`"bar": { "widgets": { "omarchy.power": { "showPercentage": true } } }`.
+
 ## Behavior notes
 
 - **Selector replacement (DEC-027):** opening another selector or a regular menu completes the pending
