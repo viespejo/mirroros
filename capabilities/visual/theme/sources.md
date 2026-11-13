@@ -39,6 +39,15 @@ responsibility. These boundaries must be reviewed before executing theme code. N
 Omarchy themes is claimed. The theme's backgrounds are described below; opacity and application-specific
 presentation remain separate decisions.
 
+## Theme name
+
+The MirrorOS-owned `default/theme.name` names the theme in one slug line (`osaka-jade`, the slug of the Omarchy
+reference palette). `install-theme` rejects a source tree without a valid name and publishes it inside the manifest,
+so it is checked like the rest of the tree. Its first consumer is Strata's theme bridge
+([desktop/files sources](../../desktop/files/sources.md)), which links `omarchy/current/theme.name` to the name in
+the selected theme; Story 4.8 theme selection changes the theme and its name together. Every future theme must
+publish this file.
+
 ## Lock colors
 
 The MirrorOS-owned `default/hyprlock.conf` defines only five hyprlock color variables for the lock screen

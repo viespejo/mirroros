@@ -16,6 +16,7 @@ test('theme publication is idempotent, updates intact trees, and rejects conflic
   const dest = join(dir, 'installed', 'default');
   mkdirSync(source);
   writeFileSync(join(source, 'colors.toml'), 'background = "#111c18"\n');
+  writeFileSync(join(source, 'theme.name'), 'osaka-jade\n');
   const run = (action, target = dest) => spawnSync('bash', [publisher, action, source, target,
     String(process.getuid()), String(process.getgid())], { encoding: 'utf8' });
 
@@ -57,6 +58,7 @@ test('a destination appearing during initial publication is preserved', (t) => {
   mkdirSync(source);
   mkdirSync(bin);
   writeFileSync(join(source, 'colors.toml'), 'background = "#111c18"\n');
+  writeFileSync(join(source, 'theme.name'), 'osaka-jade\n');
   writeFileSync(join(bin, 'mv'), '#!/bin/bash\nif [[ "$1" == -T && "$2" == --no-clobber ]]; then mkdir "$5"; printf "keep\\n" > "$5/user-file"; fi\nexec /usr/bin/mv "$@"\n', { mode: 0o755 });
   const result = spawnSync('bash', [publisher, 'publish', source, dest,
     String(process.getuid()), String(process.getgid())], {
@@ -64,6 +66,30 @@ test('a destination appearing during initial publication is preserved', (t) => {
   });
   assert.equal(result.status, 4, result.stderr);
   assert.equal(readFileSync(join(dest, 'user-file'), 'utf8'), 'keep\n');
+});
+
+test('the theme name is required, validated and published in the manifest', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mirroros-theme-name-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = join(dir, 'source');
+  const dest = join(dir, 'dest');
+  mkdirSync(source);
+  writeFileSync(join(source, 'colors.toml'), 'background = "#111c18"\n');
+  const publish = () => spawnSync('bash', [publisher, 'publish', source, dest,
+    String(process.getuid()), String(process.getgid())], { encoding: 'utf8' });
+  for (const name of [null, '', 'Osaka Jade\n', 'osaka-jade\nsecond\n', '../escape\n']) {
+    if (name === null) rmSync(join(source, 'theme.name'), { force: true });
+    else writeFileSync(join(source, 'theme.name'), name);
+    const result = publish();
+    assert.equal(result.status, 6, JSON.stringify(name));
+    assert.match(result.stderr, /theme\.name/);
+    assert.throws(() => readFileSync(join(dest, 'colors.toml')));
+  }
+  writeFileSync(join(source, 'theme.name'), 'osaka-jade\n');
+  assert.equal(publish().status, 0);
+  assert.equal(readFileSync(join(dest, 'theme.name'), 'utf8'), 'osaka-jade\n');
+  assert.match(readFileSync(join(dest, '.mirroros-manifest'), 'utf8'), /^f 644 [0-9a-f]{64} \.\/theme\.name$/m);
+  assert.equal(readFileSync(resolve(root, 'capabilities/visual/theme/default/theme.name'), 'utf8'), 'osaka-jade\n');
 });
 
 test('unsupported source entries cannot be published', (t) => {

@@ -17,9 +17,20 @@ safe_names() {
   done < <(cd -- "$root" && find . -mindepth 1 -print0)
 }
 
+# Every theme names itself in theme.name: one slug line, published inside the manifest with the rest of the tree.
+source_name() {
+  local file="$1/theme.name"
+  if [[ ! -f "$file" || -L "$file" || "$(wc -l < "$file")" != 1 ]] ||
+    [[ ! "$(< "$file")" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+    printf 'Theme source must name the theme in one theme.name slug line: %s\n' "$file" >&2
+    return 6
+  fi
+}
+
 source_manifest() {
   local source="$1" kind mode path
   safe_names "$source" || return $?
+  source_name "$source" || return $?
   ( cd -- "$source" && find . -mindepth 1 -printf '%y %m %p\n' ) | sort -k3 | while read -r kind mode path; do
     case "$kind" in
       d) printf 'd 755 - %s\n' "$path" ;;
