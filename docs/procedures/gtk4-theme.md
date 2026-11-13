@@ -200,6 +200,14 @@ by running `gtk4-widget-factory`; its package is not part of the product declara
 GTK reloads running applications when `gtk-theme` or `icon-theme` changes; there is no forced hot reload or
 restart. Adding arbitrary palette selection is separate work.
 
+On 2026-11-13 a running configure of the lab candidate that retired the launcher changed only `visual/theme`,
+`visual/gtk4`, `visual/gtk3` and `desktop/shell`; the rerun left all 23 steps unchanged. The installed GTK4 and
+GTK3 trees no longer contained `launch`, `share` or `icon-aliases.json`, and `install-runtime check` returned 0 for
+both. The shell kept its earlier QML until the next login, as expected. After that login, **Advanced…** started
+pavucontrol in a `uwsm` application scope without `GTK_THEME` and with `XDG_DATA_DIRS=/usr/local/share:/usr/share`;
+the maintainer confirmed the Osaka style and the neutral check. The GTK4, GTK3 and Qt icon probes gave the same
+results as before. The full visual review in the checklist below was not repeated.
+
 ## Validation
 
 Run from the repository root:
