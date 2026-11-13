@@ -109,7 +109,7 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 163);
+  assert.equal(bindings.length, 165);
   for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
@@ -189,7 +189,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 163);
+  assert.equal(replaced.stdout.trim().split('\n').length, 165);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -209,6 +209,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
     'CTRL+SUPER+A', 'CTRL+SUPER+B', 'CTRL+SUPER+D', 'CTRL+SUPER+N', 'CTRL+SUPER+P',
     'ALT+CTRL+SUPER+D', 'ALT+CTRL+SUPER+W', 'ALT+CTRL+SUPER+E',
     'CTRL+SUPER+R', 'ALT+CTRL+SUPER+R', 'CTRL+SHIFT+SUPER+R',
+    'SHIFT+SUPER+F', 'ALT+SHIFT+SUPER+F',
   ];
   for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
@@ -234,7 +235,7 @@ test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
     'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
     'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V', 'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
-    'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+F', 'SHIFT+SUPER+N',
+    'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N',
     'CTRL+SUPER+W', 'CTRL+SUPER+CODE:19', 'SUPER+O',
     'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
     'XF86TOUCHPADTOGGLE', 'XF86TOUCHPADON', 'XF86TOUCHPADOFF', 'XF86KBDBRIGHTNESSUP', 'XF86KBDBRIGHTNESSDOWN', 'XF86KBDLIGHTONOFF',
@@ -258,7 +259,19 @@ test('shell actions call existing IPC functions of the installed shell', { skip:
     assert.match(sources[match[1]], new RegExp(`function ${match[2]}\\(`), action);
   }
   for (const binding of bindings.filter(b => b.action.startsWith('uwsm ')))
-    assert.match(binding.action, /^uwsm app -- foot( |$)/);
+    assert.match(binding.action, /^uwsm app -- (foot( |$)|strata$)/);
+});
+
+test('file manager bindings open Strata and the owned working-directory command', { skip: !lua && 'no Lua interpreter' }, () => {
+  assert.equal(byChord.get('SHIFT+SUPER+F').action, 'uwsm app -- strata');
+  assert.equal(byChord.get('SHIFT+SUPER+F').description, 'File manager');
+  assert.equal(byChord.get('ALT+SHIFT+SUPER+F').action, '/usr/share/mirroros/files/files-cwd');
+  assert.equal(byChord.get('ALT+SHIFT+SUPER+F').description, 'File manager (cwd)');
+  assert.match(loaded.registry, /^files\.open\tSUPER \+ SHIFT \+ F\tFile manager$/m);
+  assert.match(loaded.registry, /^files\.cwd\tSUPER \+ ALT \+ SHIFT \+ F\tFile manager \(cwd\)$/m);
+  // Story 4.5 browser, editor, clipboard and capture keys stay reserved.
+  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'SUPER+C', 'SUPER+V', 'CTRL+SUPER+V', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT'])
+    assert.ok(!byChord.has(key), 'unexpected ' + key);
 });
 
 test('reminder bindings open the prompt and run the owned reminder command', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -300,7 +313,7 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 155);
+  assert.equal(rows.length, 157);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));

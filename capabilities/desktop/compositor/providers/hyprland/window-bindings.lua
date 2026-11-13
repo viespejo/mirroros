@@ -134,4 +134,10 @@ bind("terminal.open", "SUPER + RETURN", "Terminal", dsp.exec_cmd("uwsm app -- fo
 bind("terminal.tmux", "SUPER + ALT + RETURN", "Tmux",
   dsp.exec_cmd("uwsm app -- foot bash -c 'tmux attach || tmux new -s Work'"))
 
+-- File manager (applications.lua:4-5 at origin/quattro 2d33fd59; Story 4.5 DEC-015). Strata; the cwd variant runs the
+-- owned files-cwd command, adapted from Omarchy bin/omarchy-cmd-terminal-cwd.
+bind("files.open", "SUPER + SHIFT + F", "File manager", dsp.exec_cmd("uwsm app -- strata"))
+bind("files.cwd", "SUPER + ALT + SHIFT + F", "File manager (cwd)",
+  dsp.exec_cmd("/usr/share/mirroros/files/files-cwd"))
+
 if not MirrorOSKeys.staged then MirrorOSKeys.export() end
