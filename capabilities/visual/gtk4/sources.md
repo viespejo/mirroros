@@ -51,8 +51,20 @@ Assets retain their upstream bytes and filenames, without MirrorOS headers. The 
   has a frame. Osaka's later `button.flat:backdrop` rule otherwise clears the selected flat-button background.
 
 This is a routine visual resource replacement within the existing native GTK4 and advanced-audio boundaries
-(ADR 0026), not a new provider, configuration framework or session-selection mechanism. Global activation and
-its separate decision/qualification gates remain pending; see the [procedure](../../../docs/procedures/gtk4-theme.md).
+(ADR 0026), not a new provider, configuration framework or session-selection mechanism. The session default is
+selected separately, as described under [Native lookup entry](#native-lookup-entry); see the
+[procedure](../../../docs/procedures/gtk4-theme.md).
+
+## Native lookup entry
+
+`entries/<theme>/` is published, outside the runtime tree, as the manifest-checked native entry
+`/usr/share/themes/MirrorOS-<theme>/gtk-4.0`. Its `gtk.css` imports `/usr/share/mirroros/themes/<theme>/gtk-4.0.css`
+and the installed `base.css`, `typography.css` and `apps/pavucontrol.css`, the same layers as the launcher's entry.
+Its `gtk-dark.css` imports `gtk.css`: with the dark `color-scheme` default GTK 4.24 loads that variant and,
+without it, falls back to Adwaita's dark stylesheet (observed on the VM; the launcher's `GTK_THEME` hid this).
+Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf `gtk-theme` default, so native
+GTK4 applications use it without `GTK_THEME`; a user `gtk-theme` value takes precedence. Modified, unknown or linked
+entries are conflicts. The naming rule is recorded in [theme sources](../theme/sources.md).
 
 ## Strata typography source
 
@@ -103,8 +115,7 @@ retain native fallback. Names and trademarks imply no endorsement.
 The approved default remains native application icons with only the three neutral `emblem-default` SVG variants
 shared in supported Adwaita lookup, without overwriting packaged files. The accepted Osaka preview used that
 single-check overlay, not the launcher's full alias set. Global check publication and removal of the mandatory
-launcher dependency await reconciliation with main's portal owner; optional per-application icon launchers remain
-deferred. Theme selection and icon policy are separate work, not implicitly activated by adopting Osaka.
+launcher dependency remain later steps; optional per-application icon launchers remain deferred. Theme selection and icon policy are separate work, not implicitly activated by adopting Osaka.
 
 ## Validation and limits
 

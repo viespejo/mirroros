@@ -56,6 +56,15 @@ GTK backend's Settings portal answer dark (`1`) unless the user sets a value (DE
 missing, a bounded native-tool exception documented in [capabilities/README.md](../../README.md). It never writes
 user dconf or GSettings. GTK3 and Qt dark preferences and a theme-derived `color-scheme` belong to Story 4.8.
 
+The same key file sets `gtk-theme='MirrorOS-default'`, so native GTK3 and GTK4 applications use the MirrorOS theme
+without a global `GTK_THEME` or per-application launcher. The value names the native lookup entry
+`/usr/share/themes/MirrorOS-<theme>` that `visual/gtk4` and `visual/gtk3` publish for each theme, named after the
+theme directory that `current/theme` and the theme resolver use ([theme sources](../../visual/theme/sources.md)).
+This file remains the single dconf owner; a user `gtk-theme` value takes precedence. Story 4.8 theme selection must
+change the `current/theme` link and the user's `gtk-theme` together; GTK reloads running applications when that key
+changes. Configure checks the compiled value without a bus. `portal-check` does not yet check the Settings
+`gtk-theme` answer, and libadwaita applications follow their own stylesheet rather than this key.
+
 ## portal-check
 
 `/usr/share/mirroros/portal/portal-check` (0755, tracked delivery) is the read-only session verifier run as the user

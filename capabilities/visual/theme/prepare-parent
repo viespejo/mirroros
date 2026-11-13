@@ -3,9 +3,9 @@
 # The caller is responsible for the configure root and its ancestors.
 set -Eeuo pipefail
 
-(( $# == 3 || $# == 4 )) || { printf 'Usage: prepare-parent <configure-root> <uid> <gid> [themes|foot|mirroros]\n' >&2; exit 6; }
+(( $# == 3 || $# == 4 )) || { printf 'Usage: prepare-parent <configure-root> <uid> <gid> [themes|foot|mirroros|system-themes]\n' >&2; exit 6; }
 root="$1" uid="$2" gid="$3" leaf="${4:-themes}"
-[[ "$root" == /* && "$uid" =~ ^[0-9]+$ && "$gid" =~ ^[0-9]+$ && ( "$leaf" == themes || "$leaf" == foot || "$leaf" == mirroros ) ]] || exit 6
+[[ "$root" == /* && "$uid" =~ ^[0-9]+$ && "$gid" =~ ^[0-9]+$ && ( "$leaf" == themes || "$leaf" == foot || "$leaf" == mirroros || "$leaf" == system-themes ) ]] || exit 6
 [[ "$root" == / ]] || root="${root%/}"
 checker="$(dirname -- "${BASH_SOURCE[0]}")/check-trusted-path"
 [[ "$(realpath -e -- "$root")" == "$root" ]] || { printf 'Untrusted configure root: %s\n' "$root" >&2; exit 4; }
@@ -16,7 +16,9 @@ root_mode="$(stat -c '%a' -- "$root")"
 
 relative=''
 components=(usr share mirroros)
-[[ "$leaf" == mirroros ]] || components+=("$leaf")
+# system-themes is the shared native GTK theme lookup directory, /usr/share/themes.
+[[ "$leaf" != system-themes ]] || components=(usr share themes)
+[[ "$leaf" == mirroros || "$leaf" == system-themes ]] || components+=("$leaf")
 for component in "${components[@]}"; do
   relative="${relative:+$relative/}$component"
   path="${root%/}/$relative"

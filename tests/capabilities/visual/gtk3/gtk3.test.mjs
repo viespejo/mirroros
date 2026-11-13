@@ -73,3 +73,19 @@ test('GTK3 delivery is inert and contains no application icon overlay or unrelat
   const steps = read(join(root, 'capabilities/configure-steps'));
   assert.match(steps, /visual\/theme\s+visual\/gtk4\s+visual\/gtk3\s+desktop\/terminal/);
 });
+
+test('each native entry MirrorOS-<theme> imports its published theme palette and the installed GTK3 layers in both variants', () => {
+  const names = readdirSync(join(runtime, 'entries'));
+  assert.deepEqual(names, ['default']);
+  for (const name of names) {
+    assert.match(name, /^[a-z0-9]+(-[a-z0-9]+)*$/);
+    const dir = join(runtime, 'entries', name);
+    assert.deepEqual(readdirSync(dir).sort(), ['gtk-dark.css', 'gtk.css']);
+    assert.ok(existsSync(join(root, 'capabilities/visual/theme', name, 'gtk-3.0.css')), name);
+    const imports = [...read(join(dir, 'gtk.css')).matchAll(/@import url\("([^"]+)"\);/g)].map(match => match[1]);
+    assert.deepEqual(imports, [`/usr/share/mirroros/themes/${name}/gtk-3.0.css`,
+      '/usr/share/mirroros/gtk3/base.css', '/usr/share/mirroros/gtk3/typography.css']);
+    assert.match(read(join(dir, 'gtk-dark.css')), /@import url\("gtk.css"\);/);
+  }
+  assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/entries/);
+});

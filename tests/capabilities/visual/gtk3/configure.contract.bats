@@ -36,6 +36,15 @@ teardown() { cfg_test_teardown; }
   [ ! -e "$CFG_TEST_HOME/.config/gtk-3.0" ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/etc/dconf" ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/themes/MirrorOS" ]
+  [ ! -e "$dest/entries" ]
+  local entry="$MIRROROS_CONFIGURE_ROOT/usr/share/themes/MirrorOS-default/gtk-3.0"
+  bash "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/install-runtime" check \
+    "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/entries/default" "$entry" \
+    "$(stat -c %u "$MIRROROS_CONFIGURE_ROOT")" "$(stat -c %g "$MIRROROS_CONFIGURE_ROOT")"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/entries/default/gtk.css" "$entry/gtk.css"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/entries/default/gtk-dark.css" "$entry/gtk-dark.css"
+  grep -qxF "mirroros-gtk3-entry-default"$'\t'"capabilities/visual/gtk3/entries/default"$'\t\t\t'"manifest-sha256:$(sha256sum < "$entry/.mirroros-manifest" | cut -d' ' -f1)" \
+    "$CFG_TEST_DIR/first/sources.tsv"
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
   [[ "$output" == *'visual/gtk3: unchanged'* ]]
@@ -52,6 +61,8 @@ teardown() { cfg_test_teardown; }
   [ ! -e "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/gtk3" ]
   [ ! -e "$CFG_TEST_TARGET_ROOT/etc/dconf" ]
   [ ! -e "$CFG_TEST_TARGET_ROOT/usr/share/themes/MirrorOS" ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/entries/default/gtk.css" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/themes/MirrorOS-default/gtk-3.0/gtk.css"
   run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
   [ "$status" -eq 0 ]
   [[ "$output" == *'visual/gtk3: unchanged'* ]]
@@ -139,6 +150,8 @@ teardown() { cfg_test_teardown; }
   for toolkit in gtk3 gtk4; do
     [ -f "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/$toolkit/base.css" ]
   done
+  [ "$(find "$MIRROROS_CONFIGURE_ROOT/usr/share/themes/MirrorOS-default" -mindepth 1 -maxdepth 1 -printf '%f\n' | sort)" = \
+    $'gtk-3.0\ngtk-4.0' ]
   grep -qx 'personal settings' "$CFG_TEST_HOME/.config/gtk-3.0/settings.ini"
   grep -qx 'personal CSS' "$CFG_TEST_HOME/.config/gtk-4.0/gtk.css"
   grep -qx 'existing routing' "$MIRROROS_CONFIGURE_ROOT/etc/xdg/xdg-desktop-portal/portals.conf"

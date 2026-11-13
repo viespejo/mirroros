@@ -1,0 +1,4 @@
+/* Native GTK3 entry MirrorOS-default: the default theme's palette and the shared GTK3 styling. */
+@import url("/usr/share/mirroros/themes/default/gtk-3.0.css");
+@import url("/usr/share/mirroros/gtk3/base.css");
+@import url("/usr/share/mirroros/gtk3/typography.css");

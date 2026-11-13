@@ -29,12 +29,13 @@ The same step publishes the palette-specific `default/gtk-3.0.css` and `default/
 shared native GTK4 bundle at `/usr/share/mirroros/gtk4`, outside the selectable-theme catalog and without a synthetic
 `theme.name`. Its staged manifest excludes delivery scripts and provenance. The audio panel's Advanced action
 still uses the relocated compatibility launcher through `uwsm app`, preserving real user preferences and changing
-only that application's GTK theme and data search path. Approved session-default selection and the shared check
-substitution are not implemented by the ownership correction.
+only that application's GTK theme and data search path. The shared check substitution is not implemented yet.
 The following `visual/gtk3` step similarly publishes Osaka GTK3 and its widget assets/notices at
-`/usr/share/mirroros/gtk3`, with matching typography but no launcher, application icon overlay or session selection.
-Both runtimes' native lookup activation awaits reconciliation with main's portal/Strata work.
-No global GTK/icon setting, portal routing or existing application is changed or restarted. See the
+`/usr/share/mirroros/gtk3`, with matching typography but no launcher or application icon overlay.
+Both steps also publish, for each theme entry, the native GTK lookup entry `/usr/share/themes/MirrorOS-<theme>`
+(`gtk-4.0/` and `gtk-3.0/`, one manifest-checked tree each) importing that theme's palette and the shared styling.
+The later `desktop/portal` step selects `MirrorOS-default` as the system dconf `gtk-theme` default; a user value
+takes precedence. No user GTK/icon setting, portal routing or existing application is changed or restarted. See the
 [GTK3 procedure](gtk3-theme.md) and [GTK4 procedure](gtk4-theme.md) for scope, validation, conflicts and recovery.
 The same step publishes the theme's backgrounds inside its manifest-checked tree at
 `/usr/share/mirroros/themes/default/backgrounds`; modified, removed, added or linked images are conflicts.
@@ -148,10 +149,10 @@ The twenty-three steps run in this order:
 | Step | Applied state |
 |---|---|
 | `visual/theme` | Reviewed product theme including its backgrounds and GTK3/GTK4 palette colors, and initialize-only current theme/background links |
-| `visual/gtk4` | Shared native GTK4 resources and transitional launcher, published independently of selectable palettes |
-| `visual/gtk3` | Shared native GTK3 resources and widget assets, without global activation or portal changes |
+| `visual/gtk4` | Shared native GTK4 resources and transitional launcher, published independently of selectable palettes, and the native `MirrorOS-default` GTK4 entry |
+| `visual/gtk3` | Shared native GTK3 resources and widget assets, and the native `MirrorOS-default` GTK3 entry |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
-| `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
+| `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` and `MirrorOS-default` `gtk-theme` dconf defaults and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
 | `desktop/files` | Strata built by the user from a reviewed recipe, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; fails while another package also owns `org.freedesktop.FileManager1` ([sources](../../capabilities/desktop/files/sources.md)) |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
@@ -302,6 +303,9 @@ Managed destinations are:
 - `/usr/share/mirroros/gtk4`: shared GTK4 CSS, resources, license and transitional launcher, published as one
   manifest-checked tree by `visual/gtk4`; palette colors remain under `themes/default`. See
   [GTK4 sources](../../capabilities/visual/gtk4/sources.md).
+- `/usr/share/themes/MirrorOS-<theme>/gtk-4.0` and `gtk-3.0`: the native GTK lookup entries, each one
+  manifest-checked tree published by `visual/gtk4` or `visual/gtk3`; modified, unknown or linked entries are
+  conflicts. Only `MirrorOS-default` exists today.
 - `/usr/share/mirroros/branding`: the wordmark SVG and its rendered PNG, published as one manifest-checked tree; see
   [branding sources](../../capabilities/visual/branding/sources.md).
 - `/usr/share/sddm/themes/mirroros`: the MirrorOS SDDM theme, published as one manifest-checked tree; see

@@ -58,8 +58,13 @@ gates; see the [GTK3 procedure](../../../docs/procedures/gtk3-theme.md).
 ## Ownership and delivery
 
 - `visual/gtk3` publishes `/usr/share/mirroros/gtk3` after `visual/theme` and `visual/gtk4`. The runtime has no
-  `theme.name` and is not a selectable palette. Its nested `share/themes/MirrorOS/gtk-3.0/` entries are prepared
-  resources, not yet published into GTK's normal system theme search path.
+  `theme.name` and is not a selectable palette. Its nested `share/themes/MirrorOS/gtk-3.0/` entries are not in
+  GTK's search path; the native entry below is.
+- `entries/<theme>/` (`gtk.css`, `gtk-dark.css`) is published, outside the runtime tree, as the manifest-checked
+  native entry `/usr/share/themes/MirrorOS-<theme>/gtk-3.0`, importing `/usr/share/mirroros/themes/<theme>/gtk-3.0.css`
+  and the installed `base.css` and `typography.css`. Only `MirrorOS-default` exists. `desktop/portal` selects it as
+  the system dconf `gtk-theme` default shared with GTK4; a user value takes precedence. Modified, unknown or linked
+  entries are conflicts.
 - `visual/theme` owns `/usr/share/mirroros/themes/default/gtk-3.0.css`. Configure publishes static reviewed CSS;
   it does not extract, generate or rewrite styles at runtime.
 - The bounded publisher follows GTK4's staged manifest contract: root-owned installed resources, directories
@@ -98,5 +103,4 @@ initial background signal-test limitation are recorded in the procedure.
 
 Installed paths, system-native theme lookup, effective portal defaults, user overrides, dark/high-contrast
 behavior, GTK4/Strata and libadwaita non-interference, recovery and clean rebuilt-candidate qualification remain
-separate checks. No full configure, product installation, global activation, merge or commit is part of this preparation. Do not install this
-branch's older baseline over the VM's newer Strata/portal work.
+separate checks. No full configure, product installation, global activation, merge or commit was part of this preparation.

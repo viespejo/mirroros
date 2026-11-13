@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 # Prerequisites: visual/theme published the reviewed palette and trust helpers.
 # Publish shared GTK3 resources independently of selectable palettes, in running and target contexts.
-# No user preferences, global GTK settings or running applications are changed.
+# No user preferences or running applications are changed; the system GTK theme default belongs to desktop/portal.
 set -Eeuo pipefail
 
 root="$(cfg_path /)"
@@ -24,6 +24,32 @@ case "$status" in
 esac
 cfg_require bash "$checker" "$root" usr/share/mirroros/gtk3 "$uid" directory
 cfg_require bash "$STEP_DIR/install-runtime" check "$STEP_DIR" "$dest" "$uid" "$gid"
+# Each entries/<theme> is the native GTK lookup entry MirrorOS-<theme> under /usr/share/themes, named after the
+# published theme directory whose palette it imports; the session default is selected by desktop/portal.
+cfg_run_host bash "$parent_helper" "$root" "$uid" "$gid" system-themes || exit 4
+for entry in "$STEP_DIR"/entries/*/; do
+  entry="${entry%/}"
+  name="${entry##*/}"
+  [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { printf 'Unsupported GTK theme entry name: %s\n' "$name" >&2; exit 6; }
+  relative="usr/share/themes/MirrorOS-$name"
+  if [[ -e "$(cfg_path "/$relative")" || -L "$(cfg_path "/$relative")" ]]; then
+    bash "$checker" "$root" "$relative" "$uid" directory || exit 4
+  fi
+  entry_dest="$(cfg_path "/$relative/gtk-3.0")"
+  status=0
+  bash "$STEP_DIR/install-runtime" check "$entry" "$entry_dest" "$uid" "$gid" || status=$?
+  case "$status" in
+    0) ;;
+    1)
+      cfg_run_host bash "$STEP_DIR/install-runtime" publish "$entry" "$entry_dest" "$uid" "$gid"
+      cfg_changed ;;
+    *) exit 4 ;;
+  esac
+  cfg_require bash "$checker" "$root" "$relative/gtk-3.0" "$uid" directory
+  cfg_require bash "$STEP_DIR/install-runtime" check "$entry" "$entry_dest" "$uid" "$gid"
+  cfg_source_record "mirroros-gtk3-entry-$name" "capabilities/visual/gtk3/entries/$name" '' '' \
+    "manifest-sha256:$(sha256sum < "$entry_dest/.mirroros-manifest" | cut -d' ' -f1)"
+done
 cfg_source_record mirroros-gtk3-runtime capabilities/visual/gtk3 '' '' \
   "manifest-sha256:$(sha256sum < "$dest/.mirroros-manifest" | cut -d' ' -f1)"
 cfg_source_record osaka-jade-gtk3 https://github.com/abhinav20sep/osaka-jade-theme '' \

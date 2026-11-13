@@ -47,10 +47,27 @@ Its own bounded publisher retains staged manifest verification, owner/mode check
 idempotency in both configure contexts. Delivery scripts and provenance are excluded from runtime publication.
 
 The maintainer also approved making the native GTK4 theme the session default and globally sharing only the
-neutral default-device check. Those behavior changes are not implemented yet. The relocated launcher remains a
-compatibility path, not the approved final global activation mechanism; optional application-icon launchers are
-deferred. Preserve main's real palette identity, Strata bridge and portal ownership during later integration.
-Do not install this branch's complete configuration on the newer Strata-configured VM.
+neutral default-device check. The session default is implemented as described in [Session default](#session-default);
+the shared check is not implemented yet. The relocated launcher remains a compatibility path; optional
+application-icon launchers are deferred.
+
+## Session default
+
+`visual/gtk4` publishes the native entry `/usr/share/themes/MirrorOS-default/gtk-4.0/gtk.css` (and `visual/gtk3`
+its `gtk-3.0/` sibling), importing the default theme's palette and the installed shared layers. Each entry also
+has `gtk-dark.css` importing `gtk.css`: under the dark `color-scheme` default GTK loads the dark variant, and the
+first VM candidate without it fell back to Adwaita's dark stylesheet in GTK4. `desktop/portal`
+adds `gtk-theme='MirrorOS-default'` to its system dconf key file, next to the dark `color-scheme`, so the Settings
+portal answers it unless the user sets a value. The name is `MirrorOS-<theme directory>`, the identifier used by
+`current/theme` and the resolver; each future theme gets its own entry, and Story 4.8 theme selection changes the
+link and the user's `gtk-theme` together. GTK reloads running applications when `gtk-theme` changes; the default
+itself takes effect at the next login. No `GTK_THEME`, user dconf, user CSS or per-application launcher is used.
+
+Configure checks the compiled default without a bus. Effective Settings answers at login, GTK3/GTK4 rendering in
+the installed session, user overrides, dark/high-contrast behavior, Strata regression and libadwaita
+non-interference have not been validated on the VM yet. To return a user's session to Adwaita without changing the
+product default, run as that user `gsettings set org.gnome.desktop.interface gtk-theme Adwaita`; `gsettings reset
+org.gnome.desktop.interface gtk-theme` restores the MirrorOS default.
 
 ### Selection prototype
 
@@ -263,13 +280,15 @@ For a native appearance without the product overlay, close pavucontrol, then run
 pavucontrol
 ```
 
-No global setting needs undoing. Do not invoke native recovery from a shell that inherited the test launcher
+This uses the session default theme; see [Session default](#session-default) to choose Adwaita per user.
+Do not invoke native recovery from a shell that inherited the test launcher
 resources. Do not reconfigure portals or Strata, copy laboratory settings into HOME, or kill processes by name.
 
 ## Integration with pending work
 
-This change was developed in `feat/gtk4-theme` from `8a9ad72`, outside the dirty main checkout. Its pending
-Strata/portal work is not copied into this branch. Before merging, preserve that work's `default/theme.name`,
+This change was developed in `feat/gtk4-theme` from `8a9ad72`, outside the dirty main checkout, and was later
+rebased onto main's Strata/portal work; the session default uses that work's single dconf owner. The notes below
+record the reconciliation constraints. Preserve that work's `default/theme.name`,
 source-name validation, Strata bridge and portal ownership. Shared GTK4 resources are no longer published as a
 selectable theme and require no synthetic identity or weakened palette-name validation. Reconcile the shared
 source and attribution records (one Strata project entry, covering both uses), retain the explicit `visual/gtk4`

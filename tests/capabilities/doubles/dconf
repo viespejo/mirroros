@@ -8,7 +8,10 @@ case "$1" in
   update) cat "$root"/etc/dconf/db/local.d/* > "$root/etc/dconf/db/local" ;;
   read)
     [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && "$DCONF_PROFILE" == user && -f "$root/etc/dconf/profile/user" ]] || exit 0
-    [[ "$2" == /org/gnome/desktop/interface/color-scheme ]] || exit 97
-    sed -n 's/^color-scheme=//p' "$root/etc/dconf/db/local" 2> /dev/null || true ;;
+    case "$2" in
+      /org/gnome/desktop/interface/color-scheme | /org/gnome/desktop/interface/gtk-theme) ;;
+      *) exit 97 ;;
+    esac
+    sed -n "s/^${2##*/}=//p" "$root/etc/dconf/db/local" 2> /dev/null || true ;;
   *) exit 97 ;;
 esac

@@ -43,3 +43,22 @@ test('theme parent creation is idempotent and rejects untrusted directories', (t
   assert.equal(run().status, 4);
   assert.ok(existsSync(other));
 });
+
+test('the native GTK theme lookup parent is prepared outside the product tree and rejects untrusted directories', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mirroros-system-themes-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const target = join(dir, 'root');
+  mkdirSync(target);
+  const run = () => spawnSync('bash', [helper, target, String(process.getuid()), String(process.getgid()), 'system-themes'], { encoding: 'utf8' });
+  assert.equal(run().status, 0);
+  assert.ok(existsSync(join(target, 'usr/share/themes')));
+  assert.equal(existsSync(join(target, 'usr/share/mirroros')), false);
+  assert.equal(run().status, 0);
+  chmodSync(join(target, 'usr/share/themes'), 0o777);
+  assert.equal(run().status, 4);
+  rmSync(join(target, 'usr/share/themes'), { recursive: true });
+  const other = join(dir, 'other');
+  mkdirSync(other);
+  symlinkSync(other, join(target, 'usr/share/themes'));
+  assert.equal(run().status, 4);
+});

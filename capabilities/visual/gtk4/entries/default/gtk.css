@@ -1,0 +1,5 @@
+/* Native GTK4 entry MirrorOS-default: the default theme's palette and the shared GTK4 styling. */
+@import url("/usr/share/mirroros/themes/default/gtk-4.0.css");
+@import url("/usr/share/mirroros/gtk4/base.css");
+@import url("/usr/share/mirroros/gtk4/typography.css");
+@import url("/usr/share/mirroros/gtk4/apps/pavucontrol.css");

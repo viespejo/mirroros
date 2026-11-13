@@ -21,7 +21,7 @@ safe_names() {
 source_manifest() {
   local source="$1" kind mode path
   safe_names "$source" || return $?
-  ( cd -- "$source" && find . -mindepth 1 \( -path ./apply -o -path ./packages -o -path ./install-runtime \
+  ( cd -- "$source" && find . -mindepth 1 \( -path ./apply -o -path ./packages -o -path ./install-runtime -o -path ./entries \
       -o -path ./sources.md \) -prune -o -printf '%y %m %p\n' ) | sort -k3 | while read -r kind mode path; do
     case "$kind" in
       d) printf 'd 755 - %s\n' "$path" ;;

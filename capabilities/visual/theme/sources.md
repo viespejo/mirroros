@@ -61,8 +61,15 @@ session-integration limits in the [GTK4 procedure](../../../docs/procedures/gtk4
 `mirroros_osaka_gtk3_NNN` tokens from the same Osaka revision's GTK3 stylesheet. It does not change GTK4's tokens
 or the shared `colors.toml` palette. Its implementation, 126 unchanged widget assets, upstream reconstruction
 hash and retained Yaru/Osaka and Strata notices belong to [visual/gtk3](../gtk3/sources.md). The
-[GTK3 procedure](../../../docs/procedures/gtk3-theme.md) records preparation without global activation; later
-session-default integration remains coordinated with main's portal owner.
+[GTK3 procedure](../../../docs/procedures/gtk3-theme.md) records its validation and limits.
+
+GTK cannot follow the per-user `current/theme` link from a system stylesheet, so each published theme has a system
+native GTK entry named `MirrorOS-<theme directory>` (today `MirrorOS-default`) under `/usr/share/themes`, published
+by `visual/gtk4` and `visual/gtk3` and importing that theme's `gtk-4.0.css` or `gtk-3.0.css`. The GTK theme name is
+derived from the directory, not from `theme.name`, so the link, the resolver and GTK share one identifier. The
+session default is the `gtk-theme` dconf value owned by [desktop/portal](../../desktop/portal/sources.md). Every
+future theme must publish both GTK palette files and gain matching entries; Story 4.8 theme selection changes the
+link and the user's `gtk-theme` together.
 
 ## Theme name
 

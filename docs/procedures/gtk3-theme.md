@@ -4,8 +4,8 @@
 
 Osaka Jade GTK3 is prepared alongside [GTK4](gtk4-theme.md) in `feat/gtk4-theme`. The maintainer approved the
 isolated GTK3 portal file picker and requested both toolkit resources in this branch before later reconciliation
-with main's Strata/portal work. This preparation does not select a session theme, change portal routing, or
-modify Strata. It imports no GTK2 theme, XFCE decorations or application icon pack. GTK3's own widget assets
+with main's Strata/portal work. After that reconciliation, `desktop/portal`'s system dconf default selects the
+native `MirrorOS-default` entry for GTK3 and GTK4 together; portal routing and Strata are unchanged. It imports no GTK2 theme, XFCE decorations or application icon pack. GTK3's own widget assets
 are included, unchanged, as necessary parts of the theme.
 
 The [GTK3 sources record](../../capabilities/visual/gtk3/sources.md) contains the upstream revision, licenses,
@@ -19,6 +19,8 @@ contract, not authorization for a new global selection mechanism.
 | `visual/theme` | `/usr/share/mirroros/themes/default` | Palette including `gtk-3.0.css` and `gtk-4.0.css` |
 | `visual/gtk4` | `/usr/share/mirroros/gtk4` | Existing GTK4 runtime and transitional launcher |
 | `visual/gtk3` | `/usr/share/mirroros/gtk3` | GTK3 Osaka base, 126 assets, typography and retained notices |
+| `visual/gtk4`, `visual/gtk3` | `/usr/share/themes/MirrorOS-default/gtk-4.0`, `gtk-3.0` | Native lookup entries, one manifest-checked tree each |
+| `desktop/portal` | `/etc/dconf/db/local.d/00-mirroros-appearance` | System `gtk-theme='MirrorOS-default'` default |
 
 The order is `visual/theme`, `visual/gtk4`, `visual/gtk3`, then the existing consumers. Each runtime is separately
 manifest-checked, with safe ancestors, staged publication, permissions, conflict preservation and unchanged
@@ -31,8 +33,9 @@ same cascade. The 211 stable palette tokens reconstruct the original CSS byte fo
 license notices retain their exact bytes. Typography matches GTK4's family stack and 13px sizing. The laboratory
 resolved JetBrains Mono to Noto Sans Mono; actual JetBrains rendering remains unverified there.
 
-**These nested entries are not yet in the global GTK search path.** No theme is selected, and ordinary GTK3
-applications continue using their current settings. There is no global `GTK_THEME`, user-priority CSS injection,
+Those nested runtime entries are not in GTK's search path. The native entry `entries/default/` is published as
+`/usr/share/themes/MirrorOS-default/gtk-3.0/` with the same cascade through absolute imports, and the system dconf
+default selects it at the next login unless the user sets `gtk-theme`. There is no global `GTK_THEME`, user-priority CSS injection,
 application icon overlay, portal restart or user preference write. Native application icons remain the default;
 the neutral default-device check's eventual shared publication is separate work already tracked with GTK4.
 
@@ -85,17 +88,17 @@ product installation, global activation, merge or commit was performed.
 
 An unknown, locally modified, incomplete, linked or unsafe runtime fails configure without being overwritten.
 Inspect the reported path; restore the reviewed delivery or deliberately move it aside before rerunning.
-Never delete personal GTK settings or reroute portals to make a publication test pass. This preparation changes
-no session preference, so normal applications need no theme-setting rollback. Close laboratory dialogs normally;
+Never delete personal GTK settings or reroute portals to make a publication test pass. To return one user's
+session to Adwaita, run as that user `gsettings set org.gnome.desktop.interface gtk-theme Adwaita`; `gsettings reset
+org.gnome.desktop.interface gtk-theme` restores the MirrorOS default. Configure never writes that user value. Close laboratory dialogs normally;
 reverify any temporary process's executable, owner and isolated environment before stopping it.
 
 ## Later integration with main
 
-Do not run this branch's full configure against the newer Strata-configured VM. After main's Strata/portal work
-is ready, reconcile its palette identity, theme bridge and single dconf/portal owner. Publish both toolkit
-entries under the same native `MirrorOS` theme name using conflict-safe system lookup delivery, then validate a
-shared native default without global `GTK_THEME`; respect explicit user theme preferences. Record the mechanism
-through the ADR process if its selection or constraints require one, as described in the GTK4 procedure.
+The branch was rebased onto main's Strata/portal work. Both toolkit entries are published under the shared native
+`MirrorOS-default` name through conflict-safe system lookup delivery, selected by the single dconf/portal owner
+without global `GTK_THEME`, and explicit user theme preferences take precedence. The naming rule and Story 4.8
+synchronization are recorded in the [theme sources](../../capabilities/visual/theme/sources.md).
 
 Before activation acceptance, verify installed lookup paths, the actual Settings backend and portal FileChooser,
 user overrides and high-contrast selection, both variants, real fonts, GTK4 pavucontrol, Strata's own styling,

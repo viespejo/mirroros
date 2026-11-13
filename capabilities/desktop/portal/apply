@@ -4,7 +4,7 @@
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
 # Postconditions (declared state only): packages are installed; /etc/xdg/mimeapps.list, the dconf user profile and
 # the MirrorOS appearance key file exist and the compiled /etc/dconf/db/local answers color-scheme 'prefer-dark'
-# without a bus; portal-check matches its last delivery; the packaged pam_gnome_keyring lines exist once SDDM is
+# and gtk-theme 'MirrorOS-default' without a bus; portal-check matches its last delivery; the packaged pam_gnome_keyring lines exist once SDDM is
 # installed. In running context, the system inode/directory default resolves to Strata once its desktop entry exists.
 # `dconf update` runs through cfg_exec only when the profile or key file changed, or the database is missing.
 # Nothing is started, restarted or reloaded: portal changes take effect at the next login, checked by portal-check.
@@ -13,10 +13,12 @@ set -Eeuo pipefail
 strata_entry=io.github.lgse.Strata.desktop
 
 # The compiled system database, read without a bus and without any user database.
-dark_default() {
+system_default() {
   [[ "$(cfg_exec env -u DBUS_SESSION_BUS_ADDRESS HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent DCONF_PROFILE=user \
-    dconf read /org/gnome/desktop/interface/color-scheme)" == "'prefer-dark'" ]]
+    dconf read "/org/gnome/desktop/interface/$1")" == "$2" ]]
 }
+dark_default() { system_default color-scheme "'prefer-dark'"; }
+theme_default() { system_default gtk-theme "'MirrorOS-default'"; }
 
 # The packaged SDDM PAM stack unlocks and starts gnome-keyring; configure only reads it.
 sddm_keyring() {
@@ -53,6 +55,7 @@ cfg_require cfg_system_file_present /etc/dconf/profile/user
 cfg_require cfg_system_file_present /etc/dconf/db/local.d/00-mirroros-appearance
 cfg_require cfg_system_file_present /etc/dconf/db/local
 cfg_require dark_default
+cfg_require theme_default
 cfg_require cfg_tracked_file_present /usr/share/mirroros/portal/portal-check
 if [[ -f "$(cfg_path /etc/pam.d/sddm)" ]]; then
   cfg_require sddm_keyring

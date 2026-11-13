@@ -31,6 +31,17 @@ teardown() { cfg_test_teardown; }
     "$CFG_TEST_DIR/first/sources.tsv"
   grep -qxF $'strata-gtk4-font\thttps://github.com/lgse/strata\tv1.2.1\t491e6ba9735e821f9f49910ffd2582076196865c\t' \
     "$CFG_TEST_DIR/first/sources.tsv"
+  [ ! -e "$dest/entries" ]
+  local entry="$MIRROROS_CONFIGURE_ROOT/usr/share/themes/MirrorOS-default/gtk-4.0"
+  bash "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/install-runtime" check \
+    "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/entries/default" "$entry" \
+    "$(stat -c %u "$MIRROROS_CONFIGURE_ROOT")" "$(stat -c %g "$MIRROROS_CONFIGURE_ROOT")"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/entries/default/gtk.css" "$entry/gtk.css"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/entries/default/gtk-dark.css" "$entry/gtk-dark.css"
+  [ "$(stat -c %a "$entry/gtk.css")" = 644 ]
+  grep -qxF "mirroros-gtk4-entry-default"$'\t'"capabilities/visual/gtk4/entries/default"$'\t\t\t'"manifest-sha256:$(sha256sum < "$entry/.mirroros-manifest" | cut -d' ' -f1)" \
+    "$CFG_TEST_DIR/first/sources.tsv"
+  [ ! -e "$MIRROROS_CONFIGURE_ROOT/etc/dconf" ]
   [ ! -e "$CFG_TEST_HOME/.config/gtk-4.0" ]
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
@@ -46,6 +57,8 @@ teardown() { cfg_test_teardown; }
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/base.css" "$dest/base.css"
   [ -x "$dest/launch" ]
   [ ! -e "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/gtk4" ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/entries/default/gtk.css" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/themes/MirrorOS-default/gtk-4.0/gtk.css"
   run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
   [ "$status" -eq 0 ]
   [[ "$output" == *'visual/gtk4: unchanged'* ]]
@@ -119,4 +132,27 @@ teardown() { cfg_test_teardown; }
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 4 ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/gtk4" ]
+}
+
+@test "GTK4 configure preserves a modified unknown or linked native theme entry" {
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  local themes="$MIRROROS_CONFIGURE_ROOT/usr/share/themes"
+  printf '\n/* local entry */\n' >> "$themes/MirrorOS-default/gtk-4.0/gtk.css"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -q 'local entry' "$themes/MirrorOS-default/gtk-4.0/gtk.css"
+  rm -rf "$themes/MirrorOS-default"
+  mkdir -p "$themes/MirrorOS-default/gtk-4.0"
+  printf 'keep\n' > "$themes/MirrorOS-default/gtk-4.0/gtk.css"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -qx keep "$themes/MirrorOS-default/gtk-4.0/gtk.css"
+  rm -rf "$themes/MirrorOS-default"
+  mkdir -p "$CFG_TEST_DIR/other"
+  ln -s "$CFG_TEST_DIR/other" "$themes/MirrorOS-default"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  [ -L "$themes/MirrorOS-default" ]
+  [ ! -e "$CFG_TEST_DIR/other/gtk-4.0" ]
 }

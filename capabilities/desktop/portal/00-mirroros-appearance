@@ -1,4 +1,6 @@
 # managed by MirrorOS configure
 # System default answered by the Settings portal through the GTK backend (DEC-010). A user value takes precedence.
+# gtk-theme names the native GTK entry MirrorOS-<theme> published by visual/gtk4 and visual/gtk3 for the default theme.
 [org/gnome/desktop/interface]
 color-scheme='prefer-dark'
+gtk-theme='MirrorOS-default'

@@ -1,0 +1,2 @@
+/* GTK loads this variant when the session prefers dark; Osaka Jade is dark, so both variants share one cascade. */
+@import url("gtk.css");

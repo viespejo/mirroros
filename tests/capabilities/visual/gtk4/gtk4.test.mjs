@@ -234,3 +234,18 @@ test('production launcher admits only reviewed applications and has no test root
   assert.doesNotMatch(code, /MIRROROS_.*ROOT|TEST_|XDG_CONFIG_HOME=|XDG_DATA_HOME=|XDG_CACHE_HOME=|HOME=|gsettings|dconf|kill|pkill/);
   assert.match(code, /resolve-current" \/ "\$state" 0 gtk4/);
 });
+
+test('each native entry MirrorOS-<theme> imports its published theme palette and the same installed GTK4 layers', () => {
+  const names = readdirSync(join(runtime, 'entries'));
+  assert.deepEqual(names, ['default']);
+  for (const name of names) {
+    assert.match(name, /^[a-z0-9]+(-[a-z0-9]+)*$/);
+    assert.deepEqual(readdirSync(join(runtime, 'entries', name)).sort(), ['gtk-dark.css', 'gtk.css']);
+    // The dark color scheme loads gtk-dark.css; without it GTK falls back to Adwaita's dark variant.
+    assert.match(read(join(runtime, 'entries', name, 'gtk-dark.css')), /^@import url\("gtk\.css"\);$/m);
+    assert.ok(existsSync(join(theme, name, 'gtk-4.0.css')), name);
+    const imports = [...read(join(runtime, 'entries', name, 'gtk.css')).matchAll(/@import url\("([^"]+)"\);/g)].map(match => match[1]);
+    assert.deepEqual(imports, [`/usr/share/mirroros/themes/${name}/gtk-4.0.css`, ...layers.map(path => `/usr/share/mirroros/gtk4/${path}`)]);
+  }
+  assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/entries/);
+});
