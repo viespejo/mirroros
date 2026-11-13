@@ -8,6 +8,7 @@ local function load_defaults(vendor)
     hl = {
         env = function() end,
         config = function(spec) configs[#configs + 1] = spec end,
+        window_rule = function() end,
     }
     package.loaded["/usr/share/mirroros/hypr/layouts.lua"] = "us"
     dofile = function(file)

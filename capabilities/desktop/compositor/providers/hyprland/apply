@@ -28,6 +28,8 @@ cfg_user_script "$STEP_DIR/prepare-bindings" "$(base64 -w 0 < "$STEP_DIR/persona
 [[ "$CFG_USER_SCRIPT_RESULT" != 'unchanged user-owned:'* ]] || cfg_log "$CFG_USER_SCRIPT_RESULT"
 cfg_system_link /usr/share/wayland-sessions/hyprland-uwsm.desktop /usr/share/mirroros/wayland-sessions/hyprland-uwsm.desktop
 cfg_system_file "$STEP_DIR/sddm/20-mirroros-hyprland.conf" /etc/sddm.conf.d/20-mirroros-hyprland.conf 0644
+cfg_system_file "$STEP_DIR/hyprland-portals.conf" /etc/xdg/xdg-desktop-portal/hyprland-portals.conf 0644
+cfg_user_file "$STEP_DIR/xdph.conf" .config/hypr/xdph.conf
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_system_file_present /usr/share/mirroros/hypr/keyboard.lua
@@ -46,4 +48,6 @@ cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/defaults.lua
 cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/personal-loader.lua
 cfg_require cfg_user_file_present .config/hypr/hyprland.lua
 cfg_require cfg_system_file_present /etc/sddm.conf.d/20-mirroros-hyprland.conf
+cfg_require cfg_system_file_present /etc/xdg/xdg-desktop-portal/hyprland-portals.conf
+cfg_require cfg_user_file_present .config/hypr/xdph.conf
 cfg_require cfg_session_is_only /usr/share/mirroros/wayland-sessions hyprland-uwsm.desktop 'uwsm start' hyprland.desktop

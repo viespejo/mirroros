@@ -330,7 +330,7 @@ test('session and greeter reload shared monitor rules and session sets GDK scale
         or file == '/usr/share/mirroros/hypr/hardware-bindings.lua', file)
     end
     hl = {
-      config = function() end, bind = function() end, on = function() end,
+      config = function() end, bind = function() end, on = function() end, window_rule = function() end,
       env = function(key, value) assert(key == 'GDK_SCALE' and value == '1'); print('GDK_SCALE') end,
       dsp = { exec_cmd = function() end },
       monitor = function(spec)
@@ -362,9 +362,23 @@ test('session defaults disable only update news on every configuration load', { 
     local original_dofile = dofile
     package.preload['/usr/share/mirroros/hypr/layouts.lua'] = function() return 'us,es' end
     dofile = function() return function() return nil end end
-    local deliveries = 0
+    local deliveries, rules = 0, 0
     hl = {
       env = function() end,
+      window_rule = function(rule)
+        if rule.name == 'mirroros-portal-gtk-size' then
+          assert(rule.match.class == '^(xdg-desktop-portal-gtk)$')
+          assert(rule.size[1] == 875 and rule.size[2] == 600 and rule.float == nil)
+          rules = rules + 1
+          return
+        end
+        assert(rule.name == 'mirroros-portal-dialogs')
+        assert(rule.float == true and rule.center == true and rule.size == nil)
+        for _, class in ipairs({ 'xdg%-desktop%-portal%-gtk', 'hyprland%-share%-picker', 'io\\\\%.github\\\\%.lgse\\\\%.Strata\\\\%.FileChooser' }) do
+          assert(rule.match.class:find(class), class)
+        end
+        rules = rules + 1
+      end,
       config = function(config)
         if config.ecosystem then
           assert(config.ecosystem.no_update_news == true)
@@ -378,6 +392,7 @@ test('session defaults disable only update news on every configuration load', { 
     }
     for reload = 1, 2 do original_dofile(arg[1]) end
     assert(deliveries == 2)
+    assert(rules == 4)
   `, '-', path.join(provider, 'defaults.lua')], { input: '', encoding: 'utf8' });
   assert.equal(result, '');
 });

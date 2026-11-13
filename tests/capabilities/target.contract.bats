@@ -276,6 +276,7 @@ NODE
     /usr/lib/systemd/user/hypridle.service ]
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/lock/hypridle.conf" "$CFG_TEST_HOME/.config/hypr/hypridle.conf"
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/lock/hyprlock.conf" "$CFG_TEST_HOME/.config/hypr/hyprlock.conf"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/compositor/providers/hyprland/xdph.conf" "$CFG_TEST_HOME/.config/hypr/xdph.conf"
   grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/quickshell" "$CFG_TEST_CALLS"
   run grep -qE 'systemctl (start|restart|reload|daemon-reload|--user)' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]

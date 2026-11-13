@@ -28,6 +28,22 @@ local vendor = vendor_file and vendor_file:read("l") or ""
 if vendor_file then vendor_file:close() end
 if vendor == "QEMU" then hl.config({ quirks = { skip_non_kms_dmabuf_formats = false } }) end
 
+-- Portal dialogs (GTK file chooser, xdph share picker, Strata file chooser) float centered, as Omarchy floats every
+-- xdg-desktop-portal-gtk window; dialogs without a Wayland parent would otherwise tile.
+hl.window_rule({
+    name = "mirroros-portal-dialogs",
+    match = { class = "^(xdg-desktop-portal-gtk|hyprland-share-picker|io\\.github\\.lgse\\.Strata\\.FileChooser)$" },
+    float = true,
+    center = true,
+})
+
+-- GTK portal dialogs request a natural height that can exceed the screen; Omarchy gives them a fixed floating size.
+hl.window_rule({
+    name = "mirroros-portal-gtk-size",
+    match = { class = "^(xdg-desktop-portal-gtk)$" },
+    size = { 875, 600 },
+})
+
 -- Approved Story 4.3 bindings. dofile runs them again at every configuration load; nothing is unbound at runtime.
 MirrorOSStageBindings = true
 dofile("/usr/share/mirroros/hypr/shell-bindings.lua")

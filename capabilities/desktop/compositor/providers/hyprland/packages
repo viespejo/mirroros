@@ -1,3 +1,7 @@
 hyprland extra
+# Screenshot and ScreenCast portal backend with the share picker; preferences in hyprland-portals.conf.
+xdg-desktop-portal-hyprland extra
+# Required by xdg-desktop-portal-hyprland for the Screenshot portal to function; not a capture tool.
+grim extra
 # Runtime display actions parse and validate Hyprland monitor JSON.
 jq extra

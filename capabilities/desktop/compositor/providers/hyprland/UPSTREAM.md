@@ -68,6 +68,32 @@ monitor-file edits, audit logging or reloads. `jq` from the signed Arch **extra*
 runtime dependency for parsing and validating the monitor JSON; `hyprland` also comes from **extra**.
 No downloaded executable or additional package source is used.
 
+## Story 4.5 portal additions
+
+The provider owns `xdg-desktop-portal-hyprland` (**extra**), the Screenshot and ScreenCast backend whose package
+also ships `hyprland-share-picker`, and `grim` (**extra**), which that backend requires for the Screenshot portal; it
+is a backend dependency, not a capture tool. `xdph.conf` is delivered to `~/.config/hypr/xdph.conf` with
+`cfg_user_file`, because the backend reads only `$XDG_CONFIG_HOME/hypr/xdph.conf` or `~/.config/hypr/xdph.conf`; a
+copy without the MirrorOS marker is user-owned and preserved. It sets only `allow_token_by_default = true`, so the
+picker's restore-token box starts checked: Chromium's preview and share sessions then reuse one choice instead of
+prompting twice, while every new share still prompts. This amends DEC-012 after the Story 4.5 laboratory and adapts
+Omarchy `origin/quattro` (`2d33fd5973eb349c3f7e3ae56e6c293516cc4e18`, MIT) `config/hypr/xdph.conf` without its
+`custom_picker_binary`. `hyprland-portals.conf` is original MirrorOS configuration delivered to
+`/etc/xdg/xdg-desktop-portal/`, which replaces the `hyprland` package's
+`/usr/share/xdg-desktop-portal/hyprland-portals.conf` whole. It keeps that file's `default=hyprland;gtk`, routes
+`org.freedesktop.impl.portal.Secret` to the `gnome-keyring` declared by `desktop/portal`, and sets the FileChooser
+backend selected by the Story 4.5 laboratory evaluation. The frontend and the GTK backend belong to `desktop/portal`.
+
+The `mirroros-portal-dialogs` window rule in `defaults.lua` floats and centers the `xdg-desktop-portal-gtk`,
+`hyprland-share-picker` and `io.github.lgse.Strata.FileChooser` classes (DEC-020). It adapts Omarchy
+`origin/quattro` (`2d33fd5973eb349c3f7e3ae56e6c293516cc4e18`, MIT, the attribution above)
+`default/hypr/apps/system.lua`, which floats every `xdg-desktop-portal-gtk` window through its `o.window` helper.
+MirrorOS calls the native `hl.window_rule` API directly, checked against the Hyprland 0.57.1 stubs
+(`/usr/share/hypr/stubs/hl.meta.lua`), and adds the share picker and the Strata chooser. The separate
+`mirroros-portal-gtk-size` rule gives `xdg-desktop-portal-gtk` windows Omarchy's 875×600 floating-window size,
+because the GTK file chooser otherwise requests a height above the reference VM's 1536×864 logical screen. It does
+not import the Omarchy floating-window tag or the helper. Window classes are confirmed in the laboratory.
+
 Command interface (active graphical session required):
 
 - `display laptop` toggles the internal panel, refusing to disable it without an active external display.

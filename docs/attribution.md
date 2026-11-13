@@ -95,3 +95,10 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **License (SPDX):** `MIT` for Sesh; the AUR recipe it derives from declares no separate license
 - **Incorporated material:** Recipe adapted from the AUR package `sesh-bin` into `capabilities/workflow/tmux/sesh/PKGBUILD`, keeping its maintainer line; the upstream release binary is downloaded and checksum-verified at build time, not stored
 - **Detailed provenance:** [Tmux sources and notice scope](../capabilities/workflow/tmux/sources.md)
+
+### Omarchy portal integration
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** From Omarchy `origin/quattro` (`2d33fd5973eb349c3f7e3ae56e6c293516cc4e18`): `config/hypr/xdph.conf` without its custom picker, adapted into `capabilities/desktop/compositor/providers/hyprland/xdph.conf`; the floating rule and 875×600 size for `xdg-desktop-portal-gtk` windows from `default/hypr/apps/system.lua`, adapted into the `mirroros-portal-dialogs` and `mirroros-portal-gtk-size` rules of `capabilities/desktop/compositor/providers/hyprland/defaults.lua` through the native window-rule API, extended to the share picker and the Strata chooser
+- **License text:** Omarchy's MIT text retained unchanged at `capabilities/desktop/shell/LICENSE.omarchy`
+- **Detailed provenance:** [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md#story-45-portal-additions)

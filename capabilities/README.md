@@ -24,7 +24,7 @@ dependency graph, or resume state. The current order is:
 12. `system/power`: UPower, brightnessctl, power-profiles-daemon and libnotify; owned brightness/profile/watcher commands, enable-only user watcher, and tracked power-key policy with bounded logind reload.
 13. `system/network`: NetworkManager/systemd-resolved DNS integration, local stub, private migration/recovery and isolated target DNS; profiles and public provider unchanged ([ADR 0024](../docs/adr/0024-networkmanager-resolved-dns-integration.md)).
 14. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
-15. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, and session selection.
+15. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, session selection, the Hyprland portal backend with its `hyprland-portals.conf` preferences, and the portal-dialog window rules.
 16. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
 17. `desktop/reminders`: jq, the freedesktop sound theme and the owned `reminder` command over transient user timers.
 18. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
