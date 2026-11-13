@@ -391,6 +391,23 @@ cfg_unit_reload systemd-logind /etc/power-key.conf'
   done < <(find "$CFG_SOURCE_ROOT/capabilities" -type f -name apply -print0)
 }
 
+@test "apply scripts route native tools through cfg_exec only for checks and the bounded exceptions" {
+  local script name line
+  while IFS= read -r -d '' script; do
+    name="${script#"$CFG_SOURCE_ROOT/capabilities/"}"
+    while IFS= read -r line; do
+      [[ "$line" =~ ^cfg_require\ cfg_exec\ bash\ -s ]] && continue
+      case "$name" in
+        visual/branding/apply) [[ "$line" == *'cfg_exec rsvg-convert '* ]] && continue ;;
+        desktop/portal/apply) [[ "$line" =~ cfg_exec\ (dconf\ update$|env\ ) ]] && continue ;;
+      esac
+      printf 'Unexpected native tool execution in %s: %s\n' "$name" "$line" >&2
+      return 1
+    done < <(grep -vE '^[[:space:]]*#' "$script" | grep -E '\bcfg_(exec|run)\b' | sed -E 's/^[[:space:]]+//')
+  done < <(find "$CFG_SOURCE_ROOT/capabilities" -type f -name apply -print0)
+  [ "$(grep -c '^  cfg_exec dconf update$' "$CFG_SOURCE_ROOT/capabilities/desktop/portal/apply")" -eq 1 ]
+}
+
 terminal_desktop_entry() {
   mkdir -p "$CFG_TEST_HOME/.local/share/applications"
   printf '[Desktop Entry]\nName=Foot\nExec=foot\n' > "$CFG_TEST_HOME/.local/share/applications/${1:-foot.desktop}"

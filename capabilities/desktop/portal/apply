@@ -1,0 +1,68 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages; gnome-keyring login unlock relies on the packaged SDDM PAM integration, which
+# configure reads but never edits.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions (declared state only): packages are installed; /etc/xdg/mimeapps.list, the dconf user profile and
+# the MirrorOS appearance key file exist and the compiled /etc/dconf/db/local answers color-scheme 'prefer-dark'
+# without a bus; portal-check matches its last delivery; the packaged pam_gnome_keyring lines exist once SDDM is
+# installed. In running context, the system inode/directory default resolves to Strata once its desktop entry exists.
+# `dconf update` runs through cfg_exec only when the profile or key file changed, or the database is missing.
+# Nothing is started, restarted or reloaded: portal changes take effect at the next login, checked by portal-check.
+set -Eeuo pipefail
+
+strata_entry=io.github.lgse.Strata.desktop
+
+# The compiled system database, read without a bus and without any user database.
+dark_default() {
+  [[ "$(cfg_exec env -u DBUS_SESSION_BUS_ADDRESS HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent DCONF_PROFILE=user \
+    dconf read /org/gnome/desktop/interface/color-scheme)" == "'prefer-dark'" ]]
+}
+
+# The packaged SDDM PAM stack unlocks and starts gnome-keyring; configure only reads it.
+sddm_keyring() {
+  local pam
+  pam="$(cfg_path /etc/pam.d/sddm)"
+  grep -Eq '^-?auth[[:space:]]+optional[[:space:]]+pam_gnome_keyring\.so' "$pam" &&
+    grep -Eq '^-?password[[:space:]]+optional[[:space:]]+pam_gnome_keyring\.so[[:space:]]+use_authtok' "$pam" &&
+    grep -Eq '^-?session[[:space:]]+optional[[:space:]]+pam_gnome_keyring\.so[[:space:]]+auto_start' "$pam"
+}
+
+# The system association, independent of the session and of any user mimeapps.list (a user choice is a notice
+# reported by portal-check, never a configure failure).
+directory_default() {
+  [[ "$(cfg_exec env -i PATH="$PATH" HOME=/nonexistent XDG_CONFIG_HOME=/nonexistent XDG_DATA_HOME=/nonexistent \
+    xdg-mime query default inode/directory)" == "$strata_entry" ]]
+}
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_system_file "$STEP_DIR/mimeapps.list" /etc/xdg/mimeapps.list 0644
+cfg_system_file "$STEP_DIR/dconf-profile-user" /etc/dconf/profile/user 0644
+cfg_system_file "$STEP_DIR/00-mirroros-appearance" /etc/dconf/db/local.d/00-mirroros-appearance 0644
+if [[ -n "${CFG_FILES_CHANGED[/etc/dconf/profile/user]:-}${CFG_FILES_CHANGED[/etc/dconf/db/local.d/00-mirroros-appearance]:-}" ||
+  ! -f "$(cfg_path /etc/dconf/db/local)" ]]; then
+  cfg_log 'dconf update'
+  cfg_exec dconf update
+  cfg_changed
+fi
+cfg_tracked_file "$STEP_DIR/portal-check" /usr/share/mirroros/portal/portal-check 0755
+cfg_log 'portal changes take effect at the next login; run /usr/share/mirroros/portal/portal-check after it'
+
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_system_file_present /etc/xdg/mimeapps.list
+cfg_require cfg_system_file_present /etc/dconf/profile/user
+cfg_require cfg_system_file_present /etc/dconf/db/local.d/00-mirroros-appearance
+cfg_require cfg_system_file_present /etc/dconf/db/local
+cfg_require dark_default
+cfg_require cfg_tracked_file_present /usr/share/mirroros/portal/portal-check
+if [[ -f "$(cfg_path /etc/pam.d/sddm)" ]]; then
+  cfg_require sddm_keyring
+else
+  cfg_log 'unavailable: SDDM PAM integration; desktop/login installs SDDM later in the step order'
+fi
+if [[ "$CONFIGURE_CONTEXT" == running ]]; then
+  if [[ -f "$(cfg_path "/usr/share/applications/$strata_entry")" ]]; then
+    cfg_require directory_default
+  else
+    cfg_log "unavailable: inode/directory default check; $strata_entry is not installed yet"
+  fi
+fi

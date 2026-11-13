@@ -131,12 +131,13 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The twenty steps run in this order:
+The twenty-one steps run in this order:
 
 | Step | Applied state |
 |---|---|
 | `visual/theme` | Reviewed product theme including its backgrounds, and initialize-only current theme/background links |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
+| `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
 | `desktop/files` | Nautilus from `extra`, with packaged dependencies; no personal settings, optional integrations or desktop-portal configuration ([sources](../../capabilities/desktop/files/sources.md)) |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
@@ -211,6 +212,13 @@ Managed destinations are:
   only after validation, so a failed run leaves no partial directory.
 - `~/.config/mirroros/bash/starship.bash`: default Starship initialization for interactive bash; sourced through
   one marked block appended to `~/.bashrc`. No `starship.toml` is supplied.
+- `/etc/xdg/mimeapps.list`, `/etc/dconf/profile/user`, `/etc/dconf/db/local.d/00-mirroros-appearance` and
+  `/usr/share/mirroros/portal/portal-check`: the single system association file (`inode/directory` to Strata), the
+  system dconf default answering dark, and the read-only session verifier. `dconf update` compiles
+  `/etc/dconf/db/local` through `cfg_exec` only when the profile or key file changed or the database is missing; it
+  is a bounded native-tool exception. Configure never starts, restarts or reloads portal or user services: portal
+  changes take effect at the next login, then run `portal-check`. See the
+  [portals and files procedure](portals-and-files.md).
 - `~/.config/xdg-terminals.list`: `foot.desktop`, the terminal `uwsm app` uses for `Terminal=true` desktop entries.
   A user-owned list (or `~/.config/hyprland-xdg-terminals.list`) is preserved; when the effective list names no
   installed desktop entry, the step fails with an actionable message instead of passing.

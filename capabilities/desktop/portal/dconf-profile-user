@@ -1,0 +1,4 @@
+# managed by MirrorOS configure
+# The user's writable database first, then the compiled MirrorOS system defaults; user values take precedence.
+user-db:user
+system-db:local

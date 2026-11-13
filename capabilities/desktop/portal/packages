@@ -1,0 +1,5 @@
+# Desktop portal frontend, GTK backend, Secret service and the dconf default; the Hyprland backend is provider-owned.
+xdg-desktop-portal extra
+xdg-desktop-portal-gtk extra
+gnome-keyring extra
+dconf extra

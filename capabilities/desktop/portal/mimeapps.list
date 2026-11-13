@@ -1,0 +1,5 @@
+# managed by MirrorOS configure
+# System default application associations for the desktop (DEC-014). This is the single owner: later Story 4.5
+# plans extend this file instead of creating another association file. A user mimeapps.list takes precedence.
+[Default Applications]
+inode/directory=io.github.lgse.Strata.desktop

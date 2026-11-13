@@ -1,0 +1,14 @@
+#!/usr/bin/bash
+# dconf compiles every local.d key file into one database and reads it back through the named profile only,
+# without a bus; it never touches the host's dconf databases.
+set -Eeuo pipefail
+printf 'dconf %s\n' "$*" >> "$CFG_TEST_CALLS"
+root="${MIRROROS_CONFIGURE_ROOT:-${CFG_TEST_TARGET_ROOT:?}}"
+case "$1" in
+  update) cat "$root"/etc/dconf/db/local.d/* > "$root/etc/dconf/db/local" ;;
+  read)
+    [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && "$DCONF_PROFILE" == user && -f "$root/etc/dconf/profile/user" ]] || exit 0
+    [[ "$2" == /org/gnome/desktop/interface/color-scheme ]] || exit 97
+    sed -n 's/^color-scheme=//p' "$root/etc/dconf/db/local" 2> /dev/null || true ;;
+  *) exit 97 ;;
+esac

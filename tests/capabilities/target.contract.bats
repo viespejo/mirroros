@@ -217,7 +217,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the twenty-step configuration converges in the target and reruns without transactions" {
+@test "the twenty-one-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -235,17 +235,18 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/20 visual/theme =='* ]]
-  [[ "$output" == *'== 3/20 desktop/files =='* ]]
-  [[ "$output" == *'== 9/20 system/audio =='* ]]
-  [[ "$output" == *'== 10/20 system/bluetooth =='* ]]
-  [[ "$output" == *'== 11/20 system/power =='* ]]
-  [[ "$output" == *'== 12/20 system/network =='* ]]
-  [[ "$output" == *'== 13/20 system/vpn =='* ]]
-  [[ "$output" == *'== 16/20 desktop/reminders =='* ]]
-  [[ "$output" == *'== 18/20 visual/branding =='* ]]
-  [[ "$output" == *'== 19/20 system/boot-splash =='* ]]
-  [[ "$output" == *'== 20/20 desktop/login =='* ]]
+  [[ "$output" == *'== 1/21 visual/theme =='* ]]
+  [[ "$output" == *'== 3/21 desktop/portal =='* ]]
+  [[ "$output" == *'== 4/21 desktop/files =='* ]]
+  [[ "$output" == *'== 10/21 system/audio =='* ]]
+  [[ "$output" == *'== 11/21 system/bluetooth =='* ]]
+  [[ "$output" == *'== 12/21 system/power =='* ]]
+  [[ "$output" == *'== 13/21 system/network =='* ]]
+  [[ "$output" == *'== 14/21 system/vpn =='* ]]
+  [[ "$output" == *'== 17/21 desktop/reminders =='* ]]
+  [[ "$output" == *'== 19/21 visual/branding =='* ]]
+  [[ "$output" == *'== 20/21 system/boot-splash =='* ]]
+  [[ "$output" == *'== 21/21 desktop/login =='* ]]
   [ -e "$CFG_TEST_INSTALLED/nautilus" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/colors.toml" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/colors.toml"
@@ -303,7 +304,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 20 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 21 ]
   cfg_test_no_install
   run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]

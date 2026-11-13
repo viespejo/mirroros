@@ -1,0 +1,156 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Read-only check of the effective desktop portal session (Story 4.5, DEC-019). Run it as the session user after a
+# new login. It queries the user manager and the session bus only: it never starts, restarts or reloads a service
+# and never prints secret values, item labels or attributes. User-level overrides are notices on stdout; a missing
+# or wrong element is a failure naming the element and the expected owner. Exit 0 on pass, 1 on failure.
+# MIRROROS_PORTAL_CHECK_ROOT prefixes the system paths read here; it is empty outside tests.
+set -uo pipefail
+
+root="${MIRROROS_PORTAL_CHECK_ROOT:-}"
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+portals_dir="$root/usr/share/xdg-desktop-portal/portals"
+system_preferences="$root/etc/xdg/xdg-desktop-portal/hyprland-portals.conf"
+status=0
+
+ok() { printf 'ok: %s\n' "$*"; }
+notice() { printf 'notice: %s\n' "$*"; }
+fail() { printf 'FAIL: %s\n' "$*" >&2; status=1; }
+
+# The value of <key> in the [<section>] of a key file, with surrounding blanks removed.
+key_value() {
+  awk -F= -v section="[$2]" -v key="$3" '
+    /^[[:space:]]*\[/ { current = $0; gsub(/[[:space:]]/, "", current); next }
+    current == section {
+      name = $1; gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name == key) { value = substr($0, index($0, "=") + 1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit }
+    }' "$1"
+}
+
+# 1. Activation environment exported by uwsm to the user manager.
+environment="$(systemctl --user show-environment 2>/dev/null)" ||
+  fail 'activation environment: systemctl --user show-environment failed; expected the user manager of a uwsm session'
+for variable in WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE; do
+  if grep -q "^$variable=." <<< "$environment"; then ok "activation environment: $variable"
+  else fail "activation environment: $variable missing; expected export by uwsm"; fi
+done
+desktops="$(sed -n 's/^XDG_CURRENT_DESKTOP=//p' <<< "$environment" | tr '[:upper:]' '[:lower:]' | tr ':' ' ')"
+
+# 2. Effective preference file, in the frontend's search order: the first file found wins whole.
+preferences=''
+for directory in "$config_home/xdg-desktop-portal" "$root/etc/xdg/xdg-desktop-portal" "$root/usr/share/xdg-desktop-portal"; do
+  for desktop in $desktops; do
+    [[ -z "$preferences" && -f "$directory/$desktop-portals.conf" ]] && preferences="$directory/$desktop-portals.conf"
+  done
+  [[ -z "$preferences" && -f "$directory/portals.conf" ]] && preferences="$directory/portals.conf"
+  [[ -z "$preferences" ]] || break
+done
+user_preferences=0
+if [[ -z "$preferences" ]]; then
+  fail "portal preferences: no portals.conf found; expected $system_preferences from the Hyprland provider"
+elif [[ "$preferences" == "$config_home"/* ]]; then
+  user_preferences=1
+  notice "portal preferences: user override $preferences replaces $system_preferences"
+elif [[ "$preferences" != "$system_preferences" ]]; then
+  fail "portal preferences: effective file is $preferences; expected $system_preferences from the Hyprland provider"
+else
+  ok "portal preferences: $preferences"
+fi
+
+# 3. Routing: the first configured backend whose .portal declares the interface; its bus name must be reachable.
+names="$(busctl --user list --no-legend 2>/dev/null | awk '{ print $1 }')"
+expected_chooser=gtk
+if [[ -f "$system_preferences" ]]; then
+  expected_chooser="$(key_value "$system_preferences" preferred org.freedesktop.impl.portal.FileChooser)"
+  expected_chooser="${expected_chooser%%;*}"
+fi
+declare -A expected=([FileChooser]="${expected_chooser:-gtk}" [Screenshot]=hyprland [ScreenCast]=hyprland
+  [Settings]=gtk [Secret]=gnome-keyring)
+for interface in FileChooser Screenshot ScreenCast Settings Secret; do
+  routed='' bus=''
+  if [[ -n "$preferences" ]]; then
+    value="$(key_value "$preferences" preferred "org.freedesktop.impl.portal.$interface")"
+    [[ -n "$value" ]] || value="$(key_value "$preferences" preferred default)"
+    IFS=';' read -ra backends <<< "$value"
+    for backend in "${backends[@]}"; do
+      file="$portals_dir/$backend.portal"
+      [[ -n "$backend" && -f "$file" ]] || continue
+      if [[ ";$(key_value "$file" portal Interfaces);" == *";org.freedesktop.impl.portal.$interface;"* ]]; then
+        routed="$backend" bus="$(key_value "$file" portal DBusName)"
+        break
+      fi
+    done
+  fi
+  if [[ -z "$routed" ]]; then
+    fail "$interface: no configured backend declares org.freedesktop.impl.portal.$interface; expected ${expected[$interface]}"
+  elif ! grep -qxF -- "$bus" <<< "$names"; then
+    fail "$interface: backend $routed bus name $bus is neither owned nor activatable; expected ${expected[$interface]}"
+  elif [[ "$routed" != "${expected[$interface]}" ]]; then
+    if (( user_preferences )); then notice "$interface: routed to $routed by the user override; system expects ${expected[$interface]}"
+    else fail "$interface: routed to $routed; expected ${expected[$interface]}"; fi
+  else
+    ok "$interface: routed to $routed ($bus)"
+  fi
+done
+
+# 4. Settings answers dark (1) for org.freedesktop.appearance color-scheme.
+answer="$(busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop \
+  org.freedesktop.portal.Settings ReadOne ss org.freedesktop.appearance color-scheme 2>/dev/null)" ||
+  answer="$(busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop \
+    org.freedesktop.portal.Settings Read ss org.freedesktop.appearance color-scheme 2>/dev/null)" || answer=''
+if [[ "${answer##* }" == 1 && -n "$answer" ]]; then ok 'Settings: color-scheme answers 1 (dark)'
+else fail "Settings: color-scheme answers '${answer:-no reply}'; expected 1 (dark) from gtk through the dconf default"; fi
+
+# 5. Secret service: owned by gnome-keyring-daemon with the login collection unlocked. Only the Locked flag is read.
+owner="$(busctl --user status org.freedesktop.secrets 2>/dev/null | sed -n 's/^Exe=//p')"
+if [[ "${owner##*/}" != gnome-keyring-daemon ]]; then
+  fail "org.freedesktop.secrets: owner '${owner:-none}'; expected gnome-keyring-daemon started at SDDM login"
+else
+  ok 'org.freedesktop.secrets: owned by gnome-keyring-daemon'
+  locked="$(busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login \
+    org.freedesktop.Secret.Collection Locked 2>/dev/null)"
+  if [[ "$locked" == 'b false' ]]; then ok 'login collection: unlocked'
+  elif [[ "$locked" == 'b true' ]]; then fail 'login collection: locked; expected unlocked by pam_gnome_keyring at SDDM login'
+  else fail 'login collection: unavailable; expected unlocked by pam_gnome_keyring at SDDM login'; fi
+fi
+
+# 6. FileManager1: the running owner, or else the single system service file, is Strata.
+service_files() { grep -lsx 'Name=org.freedesktop.FileManager1' "$1"/*.service; }
+owner="$(busctl --user status org.freedesktop.FileManager1 2>/dev/null | sed -n 's/^Exe=//p')"
+mapfile -t system_services < <(service_files "$root/usr/share/dbus-1/services")
+if [[ -n "$owner" ]]; then
+  if [[ "${owner##*/}" == strata ]]; then ok 'org.freedesktop.FileManager1: owned by strata'
+  else fail "org.freedesktop.FileManager1: owned by ${owner##*/}; expected strata"; fi
+elif (( ${#system_services[@]} != 1 )); then
+  fail "org.freedesktop.FileManager1: ${#system_services[@]} system service files (${system_services[*]:-none}); expected one from strata"
+elif [[ "$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "${system_services[0]}")" != */strata ]]; then
+  fail "org.freedesktop.FileManager1: ${system_services[0]} does not start strata; expected strata"
+else
+  ok 'org.freedesktop.FileManager1: activatable through strata'
+fi
+
+# 7. Share picker defaults and Screenshot backend dependency from the Hyprland provider.
+if [[ -x "$root/usr/bin/grim" ]]; then ok 'Screenshot: grim present for xdg-desktop-portal-hyprland'
+else fail 'Screenshot: grim missing; expected grim from the Hyprland provider for the hyprland backend'; fi
+xdph="$config_home/hypr/xdph.conf"
+if [[ ! -e "$xdph" ]]; then
+  fail "share picker: $xdph missing; expected the managed copy from the Hyprland provider"
+elif ! grep -Eq '^[[:space:]]*#.*managed by MirrorOS configure' "$xdph"; then
+  notice "user override: $xdph"
+elif grep -Eq '^[[:space:]]*allow_token_by_default[[:space:]]*=[[:space:]]*true[[:space:]]*$' "$xdph"; then
+  ok "share picker: restore token checked by default ($xdph)"
+else
+  fail "share picker: $xdph lacks allow_token_by_default = true; expected the managed copy from the Hyprland provider"
+fi
+
+# User-level overrides are reported, never failed.
+for file in "$config_home"/xdg-desktop-portal/*portals.conf "$data_home"/xdg-desktop-portal/portals/*.portal \
+  "$data_home"/dbus-1/services/*FileManager1*; do
+  [[ -e "$file" ]] && notice "user override: $file"
+done
+for file in "$config_home"/mimeapps.list "$config_home"/*-mimeapps.list "$data_home"/applications/mimeapps.list; do
+  [[ -f "$file" ]] && grep -q '^inode/directory=' "$file" && notice "user choice: inode/directory in $file"
+done
+
+exit "$status"
