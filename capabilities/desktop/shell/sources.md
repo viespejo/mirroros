@@ -69,7 +69,9 @@ state is neither read, migrated nor removed. Images are never copied, changed or
 personal images come from `$XDG_CONFIG_HOME/mirroros/backgrounds/<resolved-theme-name>/` (fallback `~/.config`).
 The scanner resolves directories before enumeration so catalog paths match the saved real path. `next` scans
 every time and retains all entries; the picker deduplicates by basename, first sorted path wins, as Omarchy does.
-Only Install > Style > Background creates the personal folder and opens Nautilus, owned by `desktop/files`.
+Only Install > Style > Background creates the personal folder and opens it with `xdg-open` (xdg-utils), which
+resolves `inode/directory` through the `mimeapps.list` owned by `desktop/portal`; the file manager is owned by
+`desktop/files`.
 
 `services/wallpaper-thumbnails` adapts Omarchy's libvips generation: 1536x864 centre-cropped JPEG, Q82 with metadata
 stripped, single-threaded generators fanned out in parallel. The disposable cache is

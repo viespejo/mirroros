@@ -4,11 +4,10 @@ import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, mkdirSync, cpSync, writeFileSync, readFileSync, readdirSync, statSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const hasVips = existsSync('/usr/bin/vipsthumbnail') && existsSync('/usr/bin/vipsheader')
-const hasNautilus = ['nautilus', 'dbus-run-session', 'weston', 'gdbus'].every((name) => existsSync('/usr/bin/' + name))
+const hasXdgOpen = ['xdg-open', 'xdg-mime', 'file'].every((name) => existsSync('/usr/bin/' + name))
 
 function fixture(t) {
   const dir = mkdtempSync(join(tmpdir(), 'mirroros-wallpaper-applications-'))
@@ -50,54 +49,27 @@ test('real libvips decodes all product backgrounds and reuses cached JPEG thumbn
   assert.equal(readdirSync(join(env.XDG_CACHE_HOME, 'mirroros/image-selector')).filter((name) => name.endsWith('.jpg')).length, 6)
 })
 
-test('real Nautilus starts on private D-Bus and headless Weston with an isolated personal folder', { skip: !hasNautilus }, (t) => {
+test('install action opens the personal folder through xdg-open and the inode/directory handler', { skip: !hasXdgOpen }, (t) => {
   const { dir, env } = fixture(t)
+  const source = readFileSync(resolve('capabilities/desktop/shell/services/WallpaperActions.qml'), 'utf8')
+  assert.doesNotMatch(source, /nautilus/i)
+  const launches = [...source.matchAll(/Quickshell\.execDetached\((\[[^\]]*\])\)/g)].map((match) => match[1])
+  assert.deepEqual(launches, ['["xdg-open", root.library.personalDirectory]'])
   const personal = join(env.XDG_CONFIG_HOME, 'mirroros/backgrounds/default')
   mkdirSync(personal, { recursive: true })
-  const result = spawnSync('/usr/bin/dbus-run-session', ['--', '/usr/bin/bash', '-c', `
-    set -Eeuo pipefail
-    weston --backend=headless --renderer=pixman --socket=wallpaper-app-test --idle-time=0 > "$1/weston.log" 2>&1 &
-    compositor=$!
-    app=""
-    cleanup() {
-      if [[ -n $app ]]; then
-        kill "$app" 2>/dev/null || :
-        wait "$app" 2>/dev/null || :
-      fi
-      kill "$compositor" 2>/dev/null || :
-      wait "$compositor" 2>/dev/null || :
-    }
-    trap cleanup EXIT
-    for ((i=0; i<100; i++)); do
-      [[ -S $XDG_RUNTIME_DIR/wallpaper-app-test ]] && break
-      kill -0 "$compositor"
-      sleep 0.05
-    done
-    nautilus --new-window "$2" > "$1/nautilus.log" 2>&1 &
-    app=$!
-    for ((i=0; i<100; i++)); do
-      kill -0 "$app"
-      if gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.NameHasOwner org.gnome.Nautilus | grep -q true; then
-        sleep 2
-        kill -0 "$app"
-        gdbus introspect --session --dest org.gnome.Nautilus --object-path /org/gnome/Nautilus > "$1/introspection.log"
-        grep -q org.freedesktop.Application "$1/introspection.log"
-        gdbus call --session --dest org.gnome.Nautilus --object-path /org/freedesktop/FileManager1 --method org.freedesktop.DBus.Properties.Get org.freedesktop.FileManager1 OpenLocations
-        printf 'NAUTILUS_READY\\n'
-        exit 0
-      fi
-      sleep 0.05
-    done
-    exit 1
-  `, 'mirroros-wallpaper-app-test', dir, personal], {
-    env: { ...env, XDG_SESSION_TYPE: 'wayland', WAYLAND_DISPLAY: 'wallpaper-app-test', GDK_BACKEND: 'wayland', GSK_RENDERER: 'cairo',
-      GTK_USE_PORTAL: '0', NO_AT_BRIDGE: '1' },
+  const handler = join(dir, 'handler')
+  const handlerLog = join(dir, 'handler.log')
+  writeFileSync(handler, '#!/usr/bin/bash\nprintf "%s" "$1" > "$HANDLER_LOG"\n', { mode: 0o755 })
+  mkdirSync(join(env.XDG_DATA_HOME, 'applications'), { recursive: true })
+  writeFileSync(join(env.XDG_DATA_HOME, 'applications/mirroros-probe.desktop'),
+    `[Desktop Entry]\nType=Application\nName=Probe\nExec=${handler} %f\nMimeType=inode/directory;\n`)
+  writeFileSync(join(env.XDG_CONFIG_HOME, 'mimeapps.list'), '[Default Applications]\ninode/directory=mirroros-probe.desktop\n')
+  const result = spawnSync('/usr/bin/xdg-open', [personal], {
+    env: { PATH: '/usr/bin', HOME: env.HOME, XDG_CONFIG_HOME: env.XDG_CONFIG_HOME, XDG_DATA_HOME: env.XDG_DATA_HOME,
+      XDG_CONFIG_DIRS: join(dir, 'none'), XDG_DATA_DIRS: join(dir, 'none'), XDG_RUNTIME_DIR: env.XDG_RUNTIME_DIR,
+      WAYLAND_DISPLAY: 'wallpaper-app-test', BROWSER: '/usr/bin/false', HANDLER_LOG: handlerLog },
     encoding: 'utf8', timeout: 20000,
   })
-  const log = existsSync(join(dir, 'nautilus.log')) ? readFileSync(join(dir, 'nautilus.log'), 'utf8') : ''
-  assert.equal(result.status, 0, result.stdout + result.stderr + log)
-  assert.match(result.stdout, /NAUTILUS_READY/)
-  assert.ok(result.stdout.includes(pathToFileURL(personal).href), result.stdout)
-  if (log.trim()) t.diagnostic(log.trim())
-  assert.doesNotMatch(log, /Gtk-ERROR|Failed to open display|cannot open display|assertion failed/)
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.equal(readFileSync(handlerLog, 'utf8'), personal)
 })

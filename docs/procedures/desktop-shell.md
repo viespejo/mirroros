@@ -372,8 +372,11 @@ the notification service for two seconds. The picker deduplicates by basename, f
 does not, reproducing Omarchy's distinction. Links to individual personal images can still differ from their
 saved resolved targets, as in Omarchy.
 
-Install > Style > Background creates the personal directory with `mkdir -p` and opens it in Nautilus. The file
-manager is delivered by `desktop/files`; no preferences or optional integrations are set by this action. Personal
+Install > Style > Background creates the personal directory with `mkdir -p` and opens it with `xdg-open` and fixed
+argv; xdg-utils resolves `inode/directory` through desktop/portal's `/etc/xdg/mimeapps.list` to the file manager
+delivered by `desktop/files` (Strata), and a user association takes precedence. The shell names no file manager
+binary, and no preferences or optional integrations are set by this action. Plan 02-35 confirmed in the reference VM
+that the folder opens in Strata ([portals and files](portals-and-files.md)). Personal
 images are never copied, modified or deleted. Opening scans and generates missing thumbnails before showing the
 picker. Its cache is `$XDG_CACHE_HOME/mirroros/image-selector/` (fallback `~/.cache`), with size/mtime signatures,
 index and per-thumbnail locks; libvips generates 1536x864 centre-cropped JPEGs, Q82, metadata stripped.
@@ -391,8 +394,10 @@ IPC returns `accepted` when starting an asynchronous operation, not when saving,
 failures are reported in the shell journal. Overlapping operations return a busy error and are not queued. There
 is no `status` action. When the shell is absent, `qs ipc` fails; no fallback daemon or state writer runs.
 The dependency-gated `wallpaper-applications.test.mjs` probes real libvips decoding/cache reuse for all six product
-backgrounds and real Nautilus folder opening, confirmed through its D-Bus OpenLocations property, on private D-Bus
-and headless Weston with temporary user directories. These passed in the reference VM after separately authorized
+backgrounds and, since plan 02-35, delegation of the folder action to the real `xdg-open` with a temporary
+`inode/directory` association and a fake desktop handler. Its earlier version probed real Nautilus folder opening,
+confirmed through its D-Bus OpenLocations property, on private D-Bus and headless Weston with temporary user
+directories; the historical evidence below refers to that version. These passed in the reference VM after separately authorized
 package installation. Nautilus warned about a missing Mutter-specific service channel; portal dialogs were not
 tested. After a separately authorized bounded deployment, installed manifests, tracked Hyprland files, wallpaper
 IPC and the registered chord were verified. The maintainer reported the jade background, chord and desktop

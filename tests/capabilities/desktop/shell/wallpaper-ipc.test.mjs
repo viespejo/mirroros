@@ -32,7 +32,7 @@ test('native wallpaper IPC uses links, fresh scans, outside files and integrated
   const bin = join(dir, 'bin')
   mkdirSync(bin)
   writeFileSync(join(bin, 'vipsthumbnail'), '#!/usr/bin/bash\nsleep 0.1\nprintf thumbnail > "${6%[[]*}"\n', { mode: 0o755 })
-  writeFileSync(join(bin, 'nautilus'), '#!/usr/bin/bash\nprintf "%s" "$1" > "$FILE_MANAGER_LOG"\n', { mode: 0o755 })
+  writeFileSync(join(bin, 'xdg-open'), '#!/usr/bin/bash\nprintf "%s" "$1" > "$FILE_MANAGER_LOG"\n', { mode: 0o755 })
   const probe = join(dir, 'probe.qml')
   const log = join(dir, 'shell.log')
   writeFileSync(probe, `import QtQuick
@@ -107,11 +107,11 @@ ShellRoot {
     rm -- "$6/0-new.png" "$6/first.png" "$3"
     call "$1" next
     wait_idle "$1"
-  `, 'mirroros-wallpaper-ipc-test', probe, log, special, outside, join(dir, 'nautilus.log'), product], {
+  `, 'mirroros-wallpaper-ipc-test', probe, log, special, outside, join(dir, 'xdg-open.log'), product], {
     cwd: dir,
     env: { ...process.env, QT_QPA_PLATFORM: 'offscreen', XDG_RUNTIME_DIR: join(dir, 'runtime'),
       XDG_CONFIG_HOME: config, XDG_STATE_HOME: join(dir, 'state'), XDG_CACHE_HOME: join(dir, 'cache'),
-      PATH: bin + ':' + process.env.PATH, FILE_MANAGER_LOG: join(dir, 'nautilus.log'), NO_COLOR: '1' },
+      PATH: bin + ':' + process.env.PATH, FILE_MANAGER_LOG: join(dir, 'xdg-open.log'), NO_COLOR: '1' },
     encoding: 'utf8', timeout: 20000,
   })
   const output = (result.stdout || '') + (result.stderr || '')
@@ -122,7 +122,7 @@ ShellRoot {
   assert.equal(states[6].opened, true, diagnostic)
   assert.equal(states[6].images.length, 2, diagnostic)
   assert.equal(states[7].opened, false)
-  assert.equal(readFileSync(join(dir, 'nautilus.log'), 'utf8'), personal)
+  assert.equal(readFileSync(join(dir, 'xdg-open.log'), 'utf8'), personal)
   assert.equal(states[9].path, join(product, '0-new.png'), diagnostic)
   assert.equal(states[10].notice, 'No background was found for theme', diagnostic)
   assert.equal(readlinkSync(join(current, 'background')), join(product, '0-new.png'))

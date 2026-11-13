@@ -102,7 +102,7 @@ QtObject {
   property Process mkdir: Process {
     onExited: function(code) {
       root.operation = ""
-      if (code === 0) Quickshell.execDetached(["nautilus", root.library.personalDirectory])
+      if (code === 0) Quickshell.execDetached(["xdg-open", root.library.personalDirectory])
       else console.warn("Cannot create personal background directory")
     }
   }
