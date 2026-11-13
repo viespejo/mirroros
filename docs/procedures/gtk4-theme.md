@@ -91,8 +91,11 @@ They show mainly in GTK's built-in file chooser (GTK3 applications, GTK4 applica
 `GtkFileChooserDialog`, and the portal's `gtk` fallback) and in device lists such as pavucontrol's. GTK4
 `GtkFileDialog` requests open Strata through the portal and are unaffected. Folders and devices use `bright_blue`,
 not the accent, so they remain visible on selected rows. A temporary prototype was reviewed in the VM's GTK3 file
-chooser on 2026-11-13; the product tree still needs installed-session review. The `gsettings` commands above also
-remove or restore these icons.
+chooser on 2026-11-13. A running configure of the committed lab candidate then changed only `visual/gtk4`, publishing
+14 folder, 30 file-type and 26 device icons with their licenses and no `icon-sources/`; `install-runtime check`
+returned 0 for the icon theme and the runtime, and the rerun left all 23 steps unchanged. The maintainer reviewed
+the installed icons in the GTK3 file chooser, including Other Locations, and in pavucontrol's device list, and
+accepted them. The `gsettings` commands above also remove or restore these icons.
 
 ### Selection prototype
 
