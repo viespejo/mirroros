@@ -312,8 +312,9 @@ user survives: in the guest, `inotifywait` processes leaked by the check scripts
 ## Fixed palette
 
 At startup the shell invokes the fixed product resolver for `$XDG_STATE_HOME/mirroros/current/theme`
-(falling back to `~/.local/state`). The only accepted selection is currently the reviewed default; missing or
-unknown selections warn and use that default after its palette path is checked. If the resolver or the trusted
+(falling back to `~/.local/state`). The resolver accepts any published product theme whose palette is trusted (only
+the reviewed default is published today); missing, unknown or untrusted selections warn and use the default after
+its palette path is checked. If the resolver or the trusted
 default is unavailable, the shell keeps its built-in palette. While resolution runs, built-in colors are used.
 The shell reads `foreground`, `background`, `accent`, `muted` and `red` from the resolved product palette;
 `red` supplies the urgent role. Each must occur once as a

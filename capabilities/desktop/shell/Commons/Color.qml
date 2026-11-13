@@ -37,7 +37,7 @@ QtObject {
       var diagnostic = themeError.text.trim()
       if (diagnostic) console.warn(diagnostic)
       var lines = themeOutput.text.trim().split("\n")
-      if (code === 0 && lines[0] === "/usr/share/mirroros/themes/default" &&
+      if (code === 0 && /^\/usr\/share\/mirroros\/themes\/[a-z0-9]+(-[a-z0-9]+)*$/.test(lines[0]) &&
           (lines.length === 1 || (lines.length === 2 && lines[1] === "shell.toml"))) {
         root.trustedThemeSurfaces = lines.length === 2
         root.palettePath = lines[0] + "/colors.toml"

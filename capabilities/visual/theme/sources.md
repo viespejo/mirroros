@@ -18,9 +18,9 @@ MirrorOS-owned `default/shell.toml` surface settings; their values correspond to
 but the file is not copied from it. Personal surface settings are optional and take precedence per valid key.
 Foot and the
 Hyprland provider use separately reviewed native values, with tests checking their consistency with the palette.
-The MirrorOS-owned `default/hyprland.lua` returns the same two border values. The provider resolves only its
-reviewed product path, loads text in an empty global environment and validates both border strings before applying
-them, with provider literals as fallback. The user-controlled selection link is not a trust authority. Validating
+The MirrorOS-owned `default/hyprland.lua` returns the same two border values. The provider resolves the selected
+theme's product path through the resolver, loads text in an empty global environment and validates both border strings before applying
+them, with provider literals as fallback. The user-controlled selection link is not itself a trust authority. Validating
 returned data does not make executing untrusted Lua safe, and the empty environment is not a resource sandbox.
 Isolated config verification passed; installed-session validation remains pending. The shared native GTK4 consumer is documented in [GTK4 sources](../gtk4/sources.md). `default/neovim.lua` is MirrorOS-owned highlight code, not copied from
 Omarchy: it changes only the four tested background roles and preserves the existing highlight attributes;
@@ -31,8 +31,13 @@ It rejects unknown or modified destination trees but does not establish trust in
 ancestor directories or protect against concurrent privileged changes. The separate
 `check-trusted-path` checks each component below a trusted anchor for owner,
 permissions and symlinks; running-system callers must use `/` as the anchor. It
-is a point-in-time check, not an atomic open-and-execute operation. The product resolver checks the default
-palette and, in its explicit Hyprland mode, the reviewed `hyprland.lua` path separately. These checks do not
+is a point-in-time check, not an atomic open-and-execute operation. The product resolver follows the selection
+link only to a direct child of `/usr/share/mirroros/themes/` named as a slug (`[a-z0-9]+(-[a-z0-9]+)*`) whose files
+required by the consumer (the palette, plus `hyprland.lua` or `gtk-4.0.css` in its explicit modes) pass
+`check-trusted-path`. Any other link, including one to a published helper, warns and selects the default theme,
+whose files are then checked the same way. The shell and Hyprland accept only resolver output of that form. Every
+theme in that directory is published by configure, so a selection chooses among reviewed themes and cannot
+introduce user content; only `default` is published today. These checks do not
 establish file-content integrity or protect against concurrent
 privileged modification; the resolver is not a general executable-theme trust guarantee. The configure step checks theme-parent directories before publication; its
 configure root and the ancestors above that root remain the caller's

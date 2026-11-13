@@ -15,10 +15,18 @@ local function unexpected_load() loaded = true; return theme end
 assert(resolve_theme(function() error("unavailable") end, unexpected_load, validate, warn) == nil)
 assert(resolve_theme(function() return "/tmp/untrusted.lua" end, unexpected_load, validate, warn) == nil)
 assert(resolve_theme(function() return nil end, unexpected_load, validate, warn) == nil)
+for _, name in ipairs({ "-jade", "jade-", "osaka--jade", "Osaka", "osaka/jade", "..", "" }) do
+  assert(resolve_theme(function() return "/usr/share/mirroros/themes/" .. name .. "/hyprland.lua" end,
+    unexpected_load, validate, warn) == nil)
+end
 assert(not loaded)
 assert(resolve_theme(function() return path end, function() error("broken Lua") end, validate, warn) == nil)
 assert(resolve_theme(function() return path end, function() return { active_border = "bad" } end, validate, warn) == nil)
 assert(resolve_theme(function() return path end, load, function() error("validator failure") end, warn) == nil)
-assert(#warnings == 6)
+assert(#warnings == 13)
+local other = "/usr/share/mirroros/themes/osaka-jade/hyprland.lua"
+assert(resolve_theme(function() return other end, function(value) assert(value == other); return theme end, validate, warn)
+  .active_border == "rgba(509475ff)")
+assert(#warnings == 13)
 for _, message in ipairs(warnings) do assert(message:match("using provider defaults")) end
 print("PASS Hyprland theme loader")

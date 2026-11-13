@@ -23,7 +23,8 @@ return function()
     local pipe = assert(io.popen(command, "r"))
     local output = pipe:read("*a")
     local ok = pipe:close()
-    if not ok or output ~= "/usr/share/mirroros/themes/default/hyprland.lua\n" then return nil end
+    local name = ok and output:match("^/usr/share/mirroros/themes/([a-z0-9][a-z0-9-]*)/hyprland%.lua\n$")
+    if not name or name:sub(-1) == "-" or name:find("--", 1, true) then return nil end
     return output:sub(1, -2)
   end
   local function load(path)

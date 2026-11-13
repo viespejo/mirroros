@@ -25,7 +25,7 @@ test('missing, invalid and duplicate required values reject the entire palette',
 test('shell resolves selection through the product helper and keeps built-in fallback', () => {
   const color = fs.readFileSync('capabilities/desktop/shell/Commons/Color.qml', 'utf8');
   assert.match(color, /\/usr\/share\/mirroros\/themes\/resolve-current/);
-  assert.match(color, /code === 0 && lines\[0\] === "\/usr\/share\/mirroros\/themes\/default"/);
+  assert.ok(color.includes('code === 0 && /^\\/usr\\/share\\/mirroros\\/themes\\/[a-z0-9]+(-[a-z0-9]+)*$/.test(lines[0])'));
   assert.match(color, /root\.palette && root\.palettePath && root\.trustedThemeSurfaces/);
   assert.match(color, /property string palettePath: ""/);
   assert.match(color, /Cannot resolve MirrorOS shell theme; using defaults/);

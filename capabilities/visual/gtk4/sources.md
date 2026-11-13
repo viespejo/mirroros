@@ -92,7 +92,7 @@ GTK Widget Factory. It forwards argv/stdin and `exec` preserves child status. It
 single-instance forwarding may retain an earlier process's appearance. It preserves real application preferences,
 HOME, XDG homes, session bus and graphical context; only process-local `GTK_THEME=MirrorOS` and a prepended
 `XDG_DATA_DIRS` are set. Root ownership, safe ancestors, required CSS and the complete runtime tree are checked
-before launch, and the resolver admits only the fixed trusted default palette. These are point-in-time permission
+before launch, and the launcher admits only the resolver's default palette, the one its entry point imports. These are point-in-time permission
 checks, not a sandbox or content-integrity guarantee against privileged edits. Normal user CSS/data still apply.
 
 Its retained application-alias overlay is transitional, not the approved final icon policy. The eight original

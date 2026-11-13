@@ -22,8 +22,9 @@ available in the running system, not from the administrator's environment; witho
 `~/.local/state`. A mounted target always uses `~/.local/state`, not a session on the installation host.
 If the session later uses another state directory, configure does not move an existing link automatically.
 The step also publishes tracked selection and path-checking helpers under `/usr/share/mirroros/themes/`;
-modified or unknown helper files are preserved as conflicts. This link is not itself a trust guarantee, and
-the shell and Hyprland use the resolver and only accept the reviewed default. Other consumers do not yet use the link.
+modified or unknown helper files are preserved as conflicts. This link is not itself a trust guarantee: the shell
+and Hyprland use the resolver, which follows it only to a published theme directly under `/usr/share/mirroros/themes/`
+whose required files are trusted, and otherwise warns and uses the default. Other consumers do not yet use the link.
 The same step publishes the palette-specific `default/gtk-3.0.css` and `default/gtk-4.0.css`. The separate `visual/gtk4` step publishes the
 shared native GTK4 bundle at `/usr/share/mirroros/gtk4`, outside the selectable-theme catalog and without a synthetic
 `theme.name`. Its staged manifest excludes delivery scripts and provenance. The audio panel's Advanced action

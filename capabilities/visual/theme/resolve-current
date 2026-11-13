@@ -1,6 +1,7 @@
 #!/usr/bin/bash
 # managed by MirrorOS configure
-# Resolve the one reviewed theme without trusting the user-controlled selection link.
+# Resolve the user's theme selection link to a published product theme, falling back to the default theme.
+# The link is followed only to a direct child of the product themes directory whose required files are trusted.
 # The anchor is / on a running system; other anchors are for isolated tests.
 set -Eeuo pipefail
 
@@ -9,33 +10,53 @@ anchor="$1" state="$2" uid="$3" consumer="${4:-shell}"
 [[ "$anchor" == /* && "$state" == /* && "$uid" =~ ^[0-9]+$ && ( "$consumer" == shell || "$consumer" == hyprland || "$consumer" == gtk4 ) ]] || exit 6
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 link="$state/mirroros/current/theme"
-selected=/usr/share/mirroros/themes/default
-if [[ ! -L "$link" ]] || [[ "$(readlink -- "$link")" != "$selected" ]]; then
+themes=/usr/share/mirroros/themes
+case "$consumer" in
+  hyprland) required=(colors.toml hyprland.lua) ;;
+  gtk4) required=(colors.toml gtk-4.0.css) ;;
+  *) required=(colors.toml) ;;
+esac
+trusted_theme() {
+  local file
+  for file in "${required[@]}"; do
+    bash "$script_dir/check-trusted-path" "$anchor" "${themes#/}/$1/$file" "$uid" file 2>/dev/null || return 1
+  done
+}
+target=''
+[[ -L "$link" ]] && target="$(readlink -- "$link")"
+name="${target#"$themes"/}"
+selected="$themes/default"
+if [[ "$target" != "$themes/$name" || ! "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
   printf 'Invalid or missing theme selection; using the default theme.\n' >&2
+elif [[ "$name" != default ]] && ! trusted_theme "$name"; then
+  printf 'The selected theme %s is unavailable or untrusted; using the default theme.\n' "$name" >&2
+else
+  selected="$themes/$name"
 fi
-bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/colors.toml "$uid" file || {
-  printf 'The default theme palette is unavailable or untrusted.\n' >&2
+name="${selected##*/}"
+bash "$script_dir/check-trusted-path" "$anchor" "${selected#/}/colors.toml" "$uid" file || {
+  printf 'The %s theme palette is unavailable or untrusted.\n' "$name" >&2
   exit 4
 }
 if [[ "$consumer" == hyprland ]]; then
-  bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/hyprland.lua "$uid" file || {
-    printf 'The default Hyprland theme is unavailable or untrusted.\n' >&2
+  bash "$script_dir/check-trusted-path" "$anchor" "${selected#/}/hyprland.lua" "$uid" file || {
+    printf 'The %s Hyprland theme is unavailable or untrusted.\n' "$name" >&2
     exit 4
   }
   printf '%s/hyprland.lua\n' "$selected"
   exit 0
 fi
 if [[ "$consumer" == gtk4 ]]; then
-  bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/gtk-4.0.css "$uid" file || {
-    printf 'The default GTK4 palette is unavailable or untrusted.\n' >&2
+  bash "$script_dir/check-trusted-path" "$anchor" "${selected#/}/gtk-4.0.css" "$uid" file || {
+    printf 'The %s GTK4 palette is unavailable or untrusted.\n' "$name" >&2
     exit 4
   }
   printf '%s/gtk-4.0.css\n' "$selected"
   exit 0
 fi
 printf '%s\n' "$selected"
-if bash "$script_dir/check-trusted-path" "$anchor" usr/share/mirroros/themes/default/shell.toml "$uid" file 2>/dev/null; then
+if bash "$script_dir/check-trusted-path" "$anchor" "${selected#/}/shell.toml" "$uid" file 2>/dev/null; then
   printf 'shell.toml\n'
 else
-  printf 'The default shell surface settings are unavailable or untrusted; using fallback.\n' >&2
+  printf 'The %s shell surface settings are unavailable or untrusted; using fallback.\n' "$name" >&2
 fi

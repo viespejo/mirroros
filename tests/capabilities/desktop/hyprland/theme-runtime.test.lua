@@ -41,4 +41,14 @@ output = path .. "\n"
 success = false
 assert(runtime() == nil and load_count == 1)
 assert(#messages == 3)
+path = "/usr/share/mirroros/themes/osaka-jade/hyprland.lua"
+output = path .. "\n"
+success = true
+assert(runtime().active_border == "rgba(509475ff)" and load_count == 2)
+local rejected = { "-jade", "jade-", "osaka--jade", "Osaka", "osaka/jade", "..", "" }
+for _, name in ipairs(rejected) do
+  output = "/usr/share/mirroros/themes/" .. name .. "/hyprland.lua\n"
+  assert(runtime() == nil and load_count == 2)
+end
+assert(#messages == 3 + #rejected)
 print("PASS Hyprland theme runtime adapter")

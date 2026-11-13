@@ -3,7 +3,8 @@
 -- The caller supplies the trusted resolver and loader; the selection link is not a trust authority.
 return function(resolve, load, validate, warn)
   local ok, path = pcall(resolve)
-  if not ok or type(path) ~= "string" or path ~= "/usr/share/mirroros/themes/default/hyprland.lua" then
+  local name = ok and type(path) == "string" and path:match("^/usr/share/mirroros/themes/([a-z0-9][a-z0-9-]*)/hyprland%.lua$")
+  if not name or name:sub(-1) == "-" or name:find("--", 1, true) then
     warn("Cannot resolve trusted Hyprland theme; using provider defaults")
     return nil
   end
