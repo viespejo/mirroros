@@ -8,31 +8,22 @@ root="${root%/}"
 uid="$(stat -c %u -- "$root")"
 gid="$(stat -c %g -- "$root")"
 cfg_run_host bash "$STEP_DIR/prepare-parent" "$root" "$uid" "$gid" || exit 4
-for delivery in default gtk4; do
-  dest="$(cfg_path "/usr/share/mirroros/themes/$delivery")"
-  status=0
-  bash "$STEP_DIR/install-theme" check "$STEP_DIR/$delivery" "$dest" "$uid" "$gid" || status=$?
-  case "$status" in
-    0) ;;
-    1)
-      cfg_run_host bash "$STEP_DIR/install-theme" publish "$STEP_DIR/$delivery" "$dest" "$uid" "$gid"
-      cfg_changed ;;
-    *) exit 4 ;;
-  esac
-done
+dest="$(cfg_path /usr/share/mirroros/themes/default)"
+status=0
+bash "$STEP_DIR/install-theme" check "$STEP_DIR/default" "$dest" "$uid" "$gid" || status=$?
+case "$status" in
+  0) ;;
+  1)
+    cfg_run_host bash "$STEP_DIR/install-theme" publish "$STEP_DIR/default" "$dest" "$uid" "$gid"
+    cfg_changed ;;
+  *) exit 4 ;;
+esac
 cfg_require bash "$STEP_DIR/check-trusted-path" "$root" usr/share/mirroros/themes "$uid" directory
 cfg_tracked_file "$STEP_DIR/check-trusted-path" /usr/share/mirroros/themes/check-trusted-path 0644
 cfg_tracked_file "$STEP_DIR/resolve-current" /usr/share/mirroros/themes/resolve-current 0644
 cfg_require cfg_tracked_file_present /usr/share/mirroros/themes/check-trusted-path
 cfg_require cfg_tracked_file_present /usr/share/mirroros/themes/resolve-current
-for delivery in default gtk4; do
-  cfg_require bash "$STEP_DIR/install-theme" check "$STEP_DIR/$delivery" \
-    "$(cfg_path "/usr/share/mirroros/themes/$delivery")" "$uid" "$gid"
-done
-cfg_source_record mirroros-gtk4-runtime capabilities/visual/theme/gtk4 '' '' \
-  "manifest-sha256:$(sha256sum < "$(cfg_path /usr/share/mirroros/themes/gtk4/.mirroros-manifest)" | cut -d' ' -f1)"
-cfg_source_record strata-gtk4-css https://github.com/lgse/strata v1.2.1 \
-  491e6ba9735e821f9f49910ffd2582076196865c ''
+cfg_require bash "$STEP_DIR/install-theme" check "$STEP_DIR/default" "$dest" "$uid" "$gid"
 if [[ "$CONFIGURE_CONTEXT" == target ]]; then
   cfg_user_script "$STEP_DIR/prepare-current" --default || exit 4
 else

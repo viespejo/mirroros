@@ -1,8 +1,0 @@
-/* pavucontrol 6.2 Configuration footer; see ../../sources.md. */
-/* Configuration footer: preserve native indicators and focus hit targets. */
-window.pavucontrol-window notebook viewport > box > box:last-child > separator + checkbutton {
-  margin: 12px 12px 6px;
-}
-window.pavucontrol-window notebook viewport > box > box:last-child > checkbutton + checkbutton {
-  margin: 0 12px 12px;
-}

@@ -1,0 +1,20 @@
+/* Keep pavucontrol's mute, channel-lock and default-device toggles selected
+ * visibly, including flat buttons and unfocused windows. See ../sources.md.
+ */
+window.pavucontrol-window button.toggle:checked:not(:disabled) {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_osaka_029;
+  color: @mirroros_background;
+  box-shadow: none;
+}
+window.pavucontrol-window button.toggle:checked:hover:not(:disabled) {
+  background-color: @mirroros_osaka_029;
+  border-color: @mirroros_foreground;
+}
+window.pavucontrol-window button.toggle:checked:backdrop:not(:disabled) {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_osaka_029;
+  color: @mirroros_background;
+}

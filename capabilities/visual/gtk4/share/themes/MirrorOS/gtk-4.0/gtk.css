@@ -1,0 +1,5 @@
+/* Shared native GTK4 styling; palette identity remains separate. */
+@import url("/usr/share/mirroros/themes/default/gtk-4.0.css");
+@import url("../../../../base.css");
+@import url("../../../../typography.css");
+@import url("../../../../apps/pavucontrol.css");

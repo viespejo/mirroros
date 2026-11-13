@@ -66,12 +66,19 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **Incorporated material:** Osaka Jade palette adapted at `capabilities/visual/theme/default/colors.toml`; published by configure but not yet loaded by consumers
 - **Detailed provenance:** [Fixed theme source](../capabilities/visual/theme/sources.md) and [MIT notice](../capabilities/visual/theme/default/LICENSE.omarchy)
 
+### Osaka Jade GTK4 / Ubuntu Yaru
+
+- **License (SPDX):** `GPL-3.0-only` (theme software), `CC-BY-SA-4.0` (inherited artwork); upstream also supplies an `MIT` notice explicitly excluding the Yaru-derived theme/artwork from MIT-only coverage
+- **Incorporated material:** Osaka Jade's Yaru-derived GTK4 CSS adapted at `capabilities/visual/gtk4/base.css`, exact color values moved to `capabilities/visual/theme/default/gtk-4.0.css`, and unchanged widget assets at `capabilities/visual/gtk4/assets/`; no GTK2/GTK3 theme, application icon pack or installer is incorporated
+- **License texts and attribution:** Upstream GPL and CC BY-SA texts, Yaru author list and Osaka Jade notice retained unchanged at `capabilities/visual/gtk4/licenses/` and delivered with the runtime; upstream's declaration is recorded without claiming an independent per-asset license audit
+- **Detailed provenance:** [Shared native GTK4 sources](../capabilities/visual/gtk4/sources.md)
+
 ### Strata
 
 - **License (SPDX):** `MIT`
-- **Incorporated material:** Selective GTK4 form-control and font-stack adaptation in `capabilities/visual/theme/gtk4/base.css`; the common GTK4 coverage, application adapters and neutral application-icon drawings are original MirrorOS material, not a copied Strata theme or an Adwaita icon tree
-- **License text:** Original notice retained at `capabilities/visual/theme/gtk4/STRATA-LICENSE`, delivered with the shared GTK4 bundle
-- **Detailed provenance:** [Native GTK4 theme sources](../capabilities/visual/theme/sources.md#native-gtk4-theme-and-pavucontrol)
+- **Incorporated material:** Selective GTK4 font-stack and sizing adaptation in `capabilities/visual/gtk4/typography.css`; the former form-control adaptation is superseded by Osaka Jade. The pavucontrol adapter and neutral application-icon drawings remain original MirrorOS material
+- **License text:** Original notice retained at `capabilities/visual/gtk4/STRATA-LICENSE`, delivered with the shared GTK4 bundle
+- **Detailed provenance:** [Shared native GTK4 sources](../capabilities/visual/gtk4/sources.md)
 
 ### Tokyo Night terminal palette
 

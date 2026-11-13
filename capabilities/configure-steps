@@ -1,6 +1,7 @@
 # Ordered capability paths relative to capabilities/. No discovery or resume state.
 CFG_STEPS=(
   visual/theme
+  visual/gtk4
   desktop/terminal
   desktop/portal
   desktop/files

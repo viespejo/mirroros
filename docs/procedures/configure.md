@@ -24,9 +24,12 @@ If the session later uses another state directory, configure does not move an ex
 The step also publishes tracked selection and path-checking helpers under `/usr/share/mirroros/themes/`;
 modified or unknown helper files are preserved as conflicts. This link is not itself a trust guarantee, and
 the shell and Hyprland use the resolver and only accept the reviewed default. Other consumers do not yet use the link.
-The same step separately publishes the shared native GTK4 bundle at `/usr/share/mirroros/themes/gtk4` and the
-palette-specific `default/gtk-4.0.css`. The audio panel's Advanced action uses its bounded launcher through
-`uwsm app`, preserving real user preferences and changing only the application's GTK theme and data search path.
+The same step publishes the palette-specific `default/gtk-4.0.css`. The separate `visual/gtk4` step publishes the
+shared native GTK4 bundle at `/usr/share/mirroros/gtk4`, outside the selectable-theme catalog and without a synthetic
+`theme.name`. Its staged manifest excludes delivery scripts and provenance. The audio panel's Advanced action
+still uses the relocated compatibility launcher through `uwsm app`, preserving real user preferences and changing
+only that application's GTK theme and data search path. Approved session-default selection and the shared check
+substitution are not implemented by the ownership correction.
 No global GTK/icon setting, portal routing or existing application is changed or restarted. See the
 [GTK4 procedure](gtk4-theme.md) for scope, validation, conflicts and native-appearance recovery.
 The same step publishes the theme's backgrounds inside its manifest-checked tree at
@@ -136,11 +139,12 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The twenty-one steps run in this order:
+The twenty-two steps run in this order:
 
 | Step | Applied state |
 |---|---|
-| `visual/theme` | Reviewed product theme including its backgrounds and GTK4 palette, shared native GTK4 resources/launcher, and initialize-only current theme/background links |
+| `visual/theme` | Reviewed product theme including its backgrounds and GTK4 palette colors, and initialize-only current theme/background links |
+| `visual/gtk4` | Shared native GTK4 resources and transitional launcher, published independently of selectable palettes |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
 | `desktop/files` | Strata built by the user from a reviewed recipe, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; fails while another package also owns `org.freedesktop.FileManager1` ([sources](../../capabilities/desktop/files/sources.md)) |
@@ -290,6 +294,9 @@ Managed destinations are:
   stock-theme file is migrated, any other content is a conflict.
 - `/usr/share/mirroros/themes/default/backgrounds`: the default theme's product backgrounds, published inside the
   theme tree and manifest; see [theme sources](../../capabilities/visual/theme/sources.md#backgrounds).
+- `/usr/share/mirroros/gtk4`: shared GTK4 CSS, resources, license and transitional launcher, published as one
+  manifest-checked tree by `visual/gtk4`; palette colors remain under `themes/default`. See
+  [GTK4 sources](../../capabilities/visual/gtk4/sources.md).
 - `/usr/share/mirroros/branding`: the wordmark SVG and its rendered PNG, published as one manifest-checked tree; see
   [branding sources](../../capabilities/visual/branding/sources.md).
 - `/usr/share/sddm/themes/mirroros`: the MirrorOS SDDM theme, published as one manifest-checked tree; see

@@ -7,29 +7,153 @@ pavucontrol from the audio panel's **Advanced…** action. It does not change GT
 portal routing, audio values, Strata or the desktop's global environment. GTK3 and libadwaita are not covered.
 The shared bundle is independent of palette-specific colors; arbitrary themes are not admitted by the resolver.
 
-[Theme sources](../../capabilities/visual/theme/sources.md#native-gtk4-theme-and-pavucontrol) record licensing,
+[GTK4 sources](../../capabilities/visual/gtk4/sources.md) record licensing,
 layout, icon ownership, laboratory approval and validation limits. This applies the existing native-theme and
 advanced-audio boundaries; it adds no configuration framework, provider, service or resident theme manager.
+
+## Selected GTK4 base: Osaka Jade
+
+On 2026-11-13 the maintainer selected Osaka Jade over the earlier MirrorOS/Strata-derived control treatment after
+isolated pavucontrol and GTK Widget Factory comparison. The selected revision is
+`2ac2934f2ebf62ad1088bc5ea434c4670b8cd2dc` from `abhinav20sep/osaka-jade-theme`; only its GTK4 CSS and widget assets
+are incorporated. This does not select its GTK2/GTK3 theme, application icons, XFCE borders or installation scripts.
+
+The shared runtime now loads the palette, Osaka base, retained 13px typography, and a pavucontrol-only checked-toggle
+adapter. Mute and channel-lock are frameless toggles with fixed images; the default-device tick is framed. The
+approved adapter gives checked, enabled buttons a jade background/border and preserves selection when unfocused.
+It does not change the audio actions or other applications' toggles. The previous custom control/focus/chrome
+layers and Configuration-footer spacing are superseded, not stacked onto Osaka.
+
+All 114 literal declaration colors remain palette-owned. Tests expand their stable tokens to reconstruct the
+pinned upstream CSS byte for byte, and check all 182 unchanged assets and the retained Yaru/Osaka notices. The
+inherited GTK4 theme/artwork is not MIT-only; see the detailed [sources record](../../capabilities/visual/gtk4/sources.md).
+The typography stack is unchanged; the VM resolved `JetBrains Mono` to Noto Sans Mono during review, so actual
+JetBrains rendering remains a separate installed-font check.
+
+The accepted temporary previews used native application icons plus the neutral check. The retained compatibility
+launcher's wider alias overlay is still transitional. No full configure, global theme activation, merge or commit
+is authorized by the visual selection alone. Reconcile with main's portal/Strata work before installed delivery.
+The prior base's page-by-page, popup and parser results below are historical, not qualification of Osaka.
+
+## Ownership correction and approved session-default amendment
+
+The shared implementation now belongs to `capabilities/visual/gtk4/`, published by its own `visual/gtk4` configure
+step at `/usr/share/mirroros/gtk4/`, immediately after `visual/theme`. Palette colors remain in
+`visual/theme/default/gtk-4.0.css`, published under `/usr/share/mirroros/themes/default/`. The shared bundle's
+synthetic `theme.name` is removed; it is not a selectable palette and does not use the selectable-theme publisher.
+Its own bounded publisher retains staged manifest verification, owner/mode checks, conflict preservation and
+idempotency in both configure contexts. Delivery scripts and provenance are excluded from runtime publication.
+
+The maintainer also approved making the native GTK4 theme the session default and globally sharing only the
+neutral default-device check. Those behavior changes are not implemented yet. The relocated launcher remains a
+compatibility path, not the approved final global activation mechanism; optional application-icon launchers are
+deferred. Preserve main's real palette identity, Strata bridge and portal ownership during later integration.
+Do not install this branch's complete configuration on the newer Strata-configured VM.
+
+### Selection prototype
+
+A non-privileged reference-VM probe on 2026-11-13 tested GTK 4.24.1 and GTK 3.24.52. It created no windows and
+changed no real dconf value, portal configuration or product installation. Separate `dbus-run-session` buses
+hosted a minimal Settings portal with a version property and controlled `ReadAll` answers. A temporary native
+`settings.ini` requested MirrorOS in every scenario. The probe read `gtk-theme-name`, loaded that named CSS
+provider and compared its serialized CSS SHA-256 with Adwaita's provider. This checks selection and provider
+resolution, not rendering or application-specific precedence.
+
+| Settings source | GTK4 result | GTK3 result |
+|---|---|---|
+| Real portal answering Adwaita | Adwaita; local `settings.ini` did not win | Adwaita |
+| Private portal answering Adwaita | Adwaita | Adwaita |
+| Private portal answering MirrorOS, temporary resource search path | MirrorOS; CSS differs from Adwaita; zero CSS diagnostics | MirrorOS setting, but resolved CSS equals Adwaita |
+| Private portal answering MirrorOS, native theme entry and standard `XDG_DATA_DIRS` | MirrorOS; CSS differs from Adwaita; zero CSS diagnostics | MirrorOS setting, but resolved CSS equals Adwaita |
+
+The native-entry fixture was under the temporary `XDG_DATA_HOME/themes/MirrorOS/gtk-4.0/` search location; its
+single import referenced the temporary runtime stylesheet. Only the fixed palette import in the copied product
+stylesheet was relocated; the reviewed style cascade and assets were unchanged. No GTK3 stylesheet was supplied.
+This proves that an entry in GTK's normal theme lookup can resolve the shared CSS without prepending the icon
+bundle to `XDG_DATA_DIRS`; final system-path publication and entry imports still require installed-path tests.
+The real session's `gtk-theme` remained Adwaita afterward.
+
+Implementation evidence is temporary: local fixtures and the final clean transcript are in
+`/tmp/mirroros-gtk4-session-probe.pZHYOPVV/`, with VM fixtures in
+`/tmp/mirroros-gtk4-session-probe.TMJc1DOz/`. An initial fixture without the portal's version property was rejected
+by GTK4 and is not selection evidence. The final run used `GIO_USE_VFS=local`, private cache/data/state directories
+and disabled accessibility bridges for the windowless probes; it establishes neither GVfs nor accessibility
+readiness. No laboratory helper is product code.
+
+### Mechanism constraints and remaining decision
+
+- Prefer a native session theme selection plus a normal theme lookup entry, not global `GTK_THEME`. GTK documents
+  that variable primarily as a debugging override. A plain GTK4 `settings.ini` is insufficient when the session's
+  Settings portal supplies `gtk-theme-name`.
+- Main's pending `desktop/portal` owns the dconf profile, database compilation and dark default. Reconcile with that
+  owner before integration; do not copy its pending implementation or create a second profile/database owner.
+  A system dconf `org/gnome/desktop/interface gtk-theme='MirrorOS'` default is the candidate to validate through
+  the actual backend, with user values retaining precedence and no writes to user dconf.
+- This key is shared with GTK3. The tested GTK3 provider falls back to Adwaita because MirrorOS has no GTK3 CSS;
+  that is not the same as leaving the GTK3 setting unchanged. Preserve and test user theme choices, dark variants
+  and high-contrast behavior rather than claiming universal GTK3 non-interference.
+- Libadwaita is not installed in this VM. Source inspection indicates its style manager owns its theme provider
+  when `GTK_THEME` is unset; runtime non-interference remains unverified. Do not use global user-priority `gtk.css`
+  injection as a substitute for theme selection or promise libadwaita coverage.
+- The maintainer approved a shared substitution of only `emblem-default` and its symbolic variant with the
+  original neutral check. Keep native application icons by default. Optional per-application alias launchers are
+  deferred until the end; do not activate the other 25 aliases globally. The shared substitution may affect any
+  consumer requesting that name, not only pavucontrol, and is scoped to the supported Adwaita lookup rather than
+  overriding arbitrary user icon themes. Publish without overwriting packaged Adwaita files or copying its index.
+  Normal GTK theme selection and icon publication remain separate concerns.
+- Configure must retain staged, conflict-safe, root-owned, idempotent publication in both contexts; no session
+  service/application is started or restarted. Native GTK lookup permits user theme overrides and does not execute
+  the current launcher's per-process resource trust checks. Document that boundary rather than claiming otherwise.
+
+Upstream inspection references: [GTK settings and precedence](https://github.com/GNOME/gtk/blob/4.24.1/gtk/gtksettings.c),
+[Wayland Settings translation](https://github.com/GNOME/gtk/blob/4.24.1/gdk/wayland/gdksettings-wayland.c),
+[native theme lookup](https://github.com/GNOME/gtk/blob/4.24.1/gtk/gtkcssprovider.c), and
+[`GTK_THEME` documentation](https://docs.gtk.org/gtk4/running.html#gtk_theme).
+Record the selected mechanism and any architecture-changing prototype constraints through the ADR process before
+production activation. Graphical review, shared-check publication, installed-session launch coverage, libadwaita
+checks, user overrides, recovery and clean rebuilt-candidate qualification remain open gates.
+
+### Single-check icon prototype
+
+A temporary overlay containing only three existing original SVGs was checked with GTK 4.24.1 and GTK 3.24.52:
+`Adwaita/16x16/status/emblem-default.svg`, `Adwaita/scalable/status/emblem-default.svg` and
+`Adwaita/symbolic/status/emblem-default-symbolic.svg`. Both icon names resolved to that overlay at sizes 16/24/32,
+scales 1/2 and ordinary/forced-symbolic modes: 24 check lookups passed per toolkit. Forced-symbolic requests
+returned symbolic assets. For each toolkit, 336 lookup paths for the 25 application/generic alias names and three
+standard system icons were identical with and without the overlay, including matching missing-icon behavior.
+This is lookup evidence, not a rendering or contrast guarantee for non-symbolic consumers.
+
+The source and binaries are temporary VM fixtures under the selection-prototype root above
+(`check-icon-probe.c`, `check-icon-probe-gtk3`, `check-icon-probe-gtk4`, `check-only/` and
+`check-only-results.log`). A pavucontrol preview now uses the same three files under its temporary
+`XDG_DATA_HOME/icons`, standard `XDG_DATA_DIRS`, the existing isolated laboratory application config and the
+reviewed shared CSS. Only its verified predecessor laboratory process was replaced. The live PID is recorded in
+`preview.pid`; recheck its executable, owner and isolated environment before any later action. Its log is
+`preview-single-check.log`. No real audio value, user icon directory, system icon file or global theme setting was
+changed. The maintainer visually accepted this neutral-check pavucontrol preview. Publication in a standard
+system lookup directory, conflict-safe ownership, broader GTK3/GTK4 rendering checks and a reversible removal path
+remain unimplemented.
 
 ## Delivery and use
 
 After integration with the current product baseline, run the normal [configure procedure](configure.md).
-The `visual/theme` step publishes two independently manifest-checked trees:
+Two separately owned configure steps publish independently manifest-checked trees:
 
-| Tree | Purpose |
-|---|---|
-| `/usr/share/mirroros/themes/default` | Reviewed palette, including `gtk-4.0.css` and existing consumers |
-| `/usr/share/mirroros/themes/gtk4` | Shared CSS, pavucontrol adapter, neutral SVG aliases, launcher and MIT notice |
+| Owner | Tree | Purpose |
+|---|---|---|
+| `visual/theme` | `/usr/share/mirroros/themes/default` | Reviewed palette, including `gtk-4.0.css` and existing consumers |
+| `visual/gtk4` | `/usr/share/mirroros/gtk4` | Osaka CSS/assets/notices, typography, pavucontrol adapter, retained neutral SVG aliases and compatibility launcher |
 
-The bundle's `theme.name` (`mirroros-gtk4`) is a resource-bundle identity, not a palette selection. The theme's
-font stack uses the JetBrains font already declared by the terminal capability. Pavucontrol brings GTK4 and
-Adwaita from the official repositories; no demo or additional runtime dependency is installed by `visual/theme`.
+The shared runtime has no palette identity file. Its font stack uses JetBrains already declared by the terminal
+capability. Pavucontrol brings GTK4 and Adwaita from the official repositories; `visual/gtk4` adds no package.
+The following launch behavior remains transitional until session-default selection and single-check publication
+are implemented and qualified.
 
 Configure never launches or reloads an application. Close any existing pavucontrol window normally, then use
 **Advanced…**, or run as the session user:
 
 ```bash
-uwsm app -- /usr/share/mirroros/themes/gtk4/launch pavucontrol
+uwsm app -- /usr/share/mirroros/gtk4/launch pavucontrol
 ```
 
 The launcher sets only `GTK_THEME` and prepends its resource directory to `XDG_DATA_DIRS`, in that process.
@@ -41,7 +165,7 @@ The same launcher admits an already installed Widget Factory for explicit testin
 the product declaration:
 
 ```bash
-/usr/share/mirroros/themes/gtk4/launch gtk4-widget-factory
+/usr/share/mirroros/gtk4/launch gtk4-widget-factory
 ```
 
 Theme changes apply on the next application launch, not through forced hot reload. A new palette consumer must
@@ -52,17 +176,47 @@ retain the resolver's trust boundary and document its coverage; adding arbitrary
 Run from the repository root:
 
 ```bash
-node --test tests/capabilities/visual/theme/*.test.mjs \
+node --test tests/capabilities/visual/theme/*.test.mjs tests/capabilities/visual/gtk4/*.test.mjs \
   tests/capabilities/desktop/shell/audio-panel-model.test.mjs
-bats tests/capabilities/visual/theme/configure.contract.bats
-shellcheck capabilities/visual/theme/apply capabilities/visual/theme/resolve-current \
-  capabilities/visual/theme/gtk4/launch
+bats tests/capabilities/visual/theme/configure.contract.bats tests/capabilities/visual/gtk4/configure.contract.bats
+shellcheck capabilities/visual/theme/apply capabilities/visual/theme/prepare-parent \
+  capabilities/visual/theme/resolve-current capabilities/visual/gtk4/apply \
+  capabilities/visual/gtk4/install-runtime capabilities/visual/gtk4/launch
 ```
 
-The contracts cover both configure contexts, idempotency, executable delivery, preservation of unknown/modified
-resources and user settings, palette roles, import order, selected-row hover and popup fixes, CSD insets,
-pavucontrol-only footer spacing, neutral SVG aliases and launcher argv/stdin/exit/permission behavior.
+The contracts cover separate publication owners, excluded delivery inputs, absence of a synthetic palette identity,
+both configure contexts, idempotency, executable delivery, preservation of unknown/modified
+resources and user settings, palette roles, upstream CSS reconstruction, asset/notice hashes, import order,
+typography, pavucontrol-only checked/hover/backdrop selection, neutral SVG aliases and launcher
+argv/stdin/exit/permission behavior.
 They do not prove installed-session rendering or clean-candidate readiness.
+
+Osaka adoption verification passed on the integration worktree: all discovered capability Node tests produced
+369 passes, 33 skips and no failures (402 total). Theme/GTK4 configure contracts passed all 15 cases, including
+running/target delivery and unchanged reruns. The broader mechanism/target/theme/GTK4/shell contract run hit its
+180-second harness limit after 136 completed cases with no failures; the remaining shell suite was rerun
+separately and all seven cases passed. Across the completed suites this covers 140 passes and one pre-existing
+Tmux-version skip, not a claim that the interrupted command itself succeeded. ShellCheck, `git diff --check` and
+a focused Gitleaks scan of the GTK4 runtime passed. The publisher now permits `@` in safe filenames for upstream
+HiDPI `@2.png` assets; a byte-preserving delivery test covers those names.
+
+A temporary copy of the product resources, changing only the fixed palette import to its fixture path, loaded
+with zero parsing diagnostics under VM GTK 4.24.1. This was a windowless provider check, not installed-path or
+product-source graphical acceptance. The fixture is `/tmp/mirroros-osaka-product.GxNI5joG` in the VM; host logs are
+`/tmp/mirroros-osaka-adoption-{all-node,configure,all-configure,shell-configure,gitleaks}.log`. The attended raw-Osaka
+preview and the later product-source parser check are distinct evidence. No global activation, full configure,
+merge or commit was performed.
+
+Historical pre-Osaka ownership-correction host verification passed: all `tests/capabilities/**/*.test.mjs` discovered with `find`
+produced 368 passes, 33 skips and no failures (401 tests total). The selected Bats suites were
+`tests/capabilities/{mechanism,target}.contract.bats`, the theme and GTK4 configure suites above, and
+`tests/capabilities/desktop/shell/configure.contract.bats`: 140 passes and one existing Tmux-version skip.
+ShellCheck passed for the changed delivery/launch scripts; `git diff --check` and a focused Gitleaks scan of
+`capabilities/visual/gtk4` passed. SHA-256 comparisons against the pre-relocation sources confirmed all 90 moved
+CSS/SVG/license/alias resources unchanged; only the launcher's runtime path changed and the synthetic identity
+was removed. Host logs are `/tmp/mirroros-gtk4-layout-node-tests.log` and
+`/tmp/mirroros-gtk4-layout-configure-tests.log`, not product artifacts. No relocated product tree was installed
+or executed in the VM during this ownership correction.
 
 After merging and publication in the disposable VM:
 
@@ -76,16 +230,18 @@ After merging and publication in the disposable VM:
    keyboard focus, selected and disabled states. Open and dismiss **Show**, **Port** and **Profile** without
    selecting another audio option. Do not toggle mute, default devices, profiles, latency or real audio values
    solely to test CSS. Check the popup's transparent outer allocation, rounded panel and separation above/below.
-4. Confirm Configuration footer margins, the new neutral default-device check, and a real stream's symbolic icon
+4. Confirm the approved checked-toggle fill/border at rest, hover and unfocused, the neutral default-device check,
+   and a real stream's symbolic icon
    without launching unrelated applications or collecting personal content. The new check is original geometry;
-   its appearance needs confirmation beyond successful icon lookup. Unknown names must retain native fallback.
+   its laboratory appearance was accepted, but installed-path rendering still needs confirmation. Unknown names
+   must retain native fallback.
 5. If Widget Factory is installed, review Pages 1–3 and transient dialogs/popovers for regressions. Preserve
    sample color swatches and hue/alpha ramps. Check focus and hit targets, not merely removal of blue.
 6. Repeat with the supported window sizes and display scales. A lookup at scale 2 does not establish optical
    alignment, contrast or every rendering state. Record failures honestly; the laboratory's pre-existing
    accessibility-bus warning prevents claiming AT-SPI or full focus qualification from a parser pass.
 
-The shared CSS was parsed successfully with GTK 4.24.1 in a relocated temporary fixture; 312 icon lookups passed
+The superseded shared CSS was parsed successfully with GTK 4.24.1 in a relocated temporary fixture; 312 icon lookups passed
 at sizes 16/24/32 and scales 1/2, in ordinary/forced-symbolic modes, with standard Adwaita fallback preserved.
 These are product-source checks, not installation at the final paths. No Python helper or temporary test path is
 part of product delivery. A rebuilt candidate and physical-target qualification remain separate gates.
@@ -110,8 +266,9 @@ resources. Do not reconfigure portals or Strata, copy laboratory settings into H
 
 This change was developed in `feat/gtk4-theme` from `8a9ad72`, outside the dirty main checkout. Its pending
 Strata/portal work is not copied into this branch. Before merging, preserve that work's `default/theme.name`,
-source-name validation, Strata bridge and portal ownership. The shared bundle already supplies its separate
-`theme.name`, so both trees satisfy source-name validation without weakening it. Reconcile the shared source and
-attribution records (one Strata project entry, covering both uses) and rerun the combined configure contracts.
+source-name validation, Strata bridge and portal ownership. Shared GTK4 resources are no longer published as a
+selectable theme and require no synthetic identity or weakened palette-name validation. Reconcile the shared
+source and attribution records (one Strata project entry, covering both uses), retain the explicit `visual/gtk4`
+configure order and rerun the combined configure contracts.
 Do not run the older branch's complete configure on a newer Strata-configured VM: that branch's unrelated file
 manager baseline is not a proposed rollback. Final-path testing belongs to the reconciled product candidate.

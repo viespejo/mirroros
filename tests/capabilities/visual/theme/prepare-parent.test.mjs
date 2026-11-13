@@ -9,6 +9,21 @@ import { test } from 'node:test';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const helper = resolve(root, 'capabilities/visual/theme/prepare-parent');
 
+test('shared product parent creation does not create a selectable theme or runtime', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mirroros-shared-parent-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const target = join(dir, 'root');
+  mkdirSync(target);
+  const run = () => spawnSync('bash', [helper, target, String(process.getuid()), String(process.getgid()), 'mirroros'], { encoding: 'utf8' });
+  assert.equal(run().status, 0);
+  assert.ok(existsSync(join(target, 'usr/share/mirroros')));
+  assert.equal(existsSync(join(target, 'usr/share/mirroros/gtk4')), false);
+  assert.equal(existsSync(join(target, 'usr/share/mirroros/themes')), false);
+  assert.equal(run().status, 0);
+  chmodSync(join(target, 'usr/share/mirroros'), 0o777);
+  assert.equal(run().status, 4);
+});
+
 test('theme parent creation is idempotent and rejects untrusted directories', (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mirroros-parent-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

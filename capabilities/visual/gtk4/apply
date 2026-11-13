@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+# Prerequisites: visual/theme published the reviewed palette and trust helpers.
+# Publish shared GTK4 resources independently of selectable palettes, in running and target contexts.
+# No user preferences, global GTK settings or running applications are changed.
+set -Eeuo pipefail
+
+root="$(cfg_path /)"
+root="${root%/}"
+[[ -n "$root" ]] || root=/
+uid="$(stat -c %u -- "$root")"
+gid="$(stat -c %g -- "$root")"
+parent_helper="$CAPABILITIES_DIR/visual/theme/prepare-parent"
+checker="$CAPABILITIES_DIR/visual/theme/check-trusted-path"
+dest="$(cfg_path /usr/share/mirroros/gtk4)"
+cfg_run_host bash "$parent_helper" "$root" "$uid" "$gid" mirroros || exit 4
+status=0
+bash "$STEP_DIR/install-runtime" check "$STEP_DIR" "$dest" "$uid" "$gid" || status=$?
+case "$status" in
+  0) ;;
+  1)
+    cfg_run_host bash "$STEP_DIR/install-runtime" publish "$STEP_DIR" "$dest" "$uid" "$gid"
+    cfg_changed ;;
+  *) exit 4 ;;
+esac
+cfg_require bash "$checker" "$root" usr/share/mirroros/gtk4 "$uid" directory
+cfg_require bash "$STEP_DIR/install-runtime" check "$STEP_DIR" "$dest" "$uid" "$gid"
+cfg_source_record mirroros-gtk4-runtime capabilities/visual/gtk4 '' '' \
+  "manifest-sha256:$(sha256sum < "$dest/.mirroros-manifest" | cut -d' ' -f1)"
+cfg_source_record osaka-jade-gtk4 https://github.com/abhinav20sep/osaka-jade-theme '' \
+  2ac2934f2ebf62ad1088bc5ea434c4670b8cd2dc ''
+cfg_source_record strata-gtk4-font https://github.com/lgse/strata v1.2.1 \
+  491e6ba9735e821f9f49910ffd2582076196865c ''

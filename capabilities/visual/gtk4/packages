@@ -1,0 +1,1 @@
+# Shared GTK4 resources add no packages; native consumers declare their own GTK dependencies.
