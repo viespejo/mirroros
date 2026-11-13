@@ -535,10 +535,21 @@ its absence was subsequently confirmed. No production timeout was changed and no
   reference-VM-only exception and no repeated identical test (DEC-029); retain both results as failed, not passed.
   QEMU involvement is plausible, not demonstrated. Comparative hardware qualification remains pending; no hardware
   success or blanket Story 4.3 acceptance follows from this exception.
-- Quiet checks still fail on missing PipeWire/UPower and intermittent portal diagnostics. DEC-030 accepts a
-  temporary exception only for these observed absent-provider categories, owned by Stories 4.4/4.5; revisit it
-  when those providers are delivered. Original suite exit 1 and unavailable states remain visible. No provider
-  was installed or warning suppressed to manufacture a pass; new or unrelated diagnostics are not waived.
+- Quiet checks: DEC-030 is narrowed, not closed. Plan 02-35 delivered the portal stack and reran the eight quiet
+  suites and the production journal check in the reference VM (2026-11-12/13). With PipeWire 1.6.10 and UPower
+  1.91.5 installed since 2026-11-05, the formerly failing provider suites exit 0; the PipeWire and UPower
+  categories are dropped as an observation, without claiming Story 4.4 closure. By explicit maintainer decision the
+  exception now covers only these portal diagnostics: the shell's `qt.qpa.services` "Failed to register with host
+  portal … already associated with an application ID" (once per shell start, pre-existing) and the frontend's
+  "Failed to load RealtimeKit property" (no `rtkit`, pre-existing), both outside this plan's boundaries; the GTK
+  chooser's `Could not init tracker3 search engine`, caused by `sudo pacman -Rns nautilus` removing `localsearch`
+  (as on an Omarchy fresh install; absent while Strata is the chooser); and the Strata chooser's sporadic GTK4
+  frame-timing and SVG warnings, tracing `WARN` lines for unreadable directories and a `strata@` activation unit
+  failing when the session ends inside its idle window, accepted with the `strata;gtk` selection. gnome-keyring's
+  `discover_other_daemon: 1` is benign. Diagnostics outside this list are not waived, nothing was suppressed, and
+  original suite exit 1 states remain visible. `check-selector-replacement` still exits 1 on a pre-existing
+  fixture defect (no theme selection link, since `410d4fa`), which is not a portal diagnostic. See the
+  [portals and files procedure](portals-and-files.md#laboratory-evidence).
   Private-bus inability to activate the real user manager remains a fixture limitation, not production evidence.
   Production journal checks confirmed the provider-warning categories. The reviewed QML baseline is separate.
 - Idle locking was observed repeatedly, but exact 300-second timing and idle-from-es reset remain unverified.
@@ -550,7 +561,7 @@ its absence was subsequently confirmed. No production timeout was changed and no
   does not erase their original outcomes.
 
 Final Task 3 review accepted this bounded result and its listed limits. Story 4.3 closure remains unclaimed:
-reference-only drag exception DEC-029 and temporary absent-provider diagnostic exception DEC-030 do not waive
+reference-only drag exception DEC-029 and the narrowed portal diagnostic exception DEC-030 do not waive
 other requirements. Unverified checks above remain unverified. Publication and laptop migration are separate
 operations.
 

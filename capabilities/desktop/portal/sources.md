@@ -7,7 +7,7 @@ configuration. Configure records the installed package versions in `packages.tsv
 | Package | Repository | License (SPDX) | Role |
 |---|---|---|---|
 | `xdg-desktop-portal` | Arch **extra** | `LGPL-2.1-or-later` | Portal frontend (`org.freedesktop.portal.Desktop`), D-Bus-activated user unit |
-| `xdg-desktop-portal-gtk` | Arch **extra** | `LGPL-2.0-or-later` | GTK backend: FileChooser (per the Story 4.5 outcome), Settings and other GTK interfaces |
+| `xdg-desktop-portal-gtk` | Arch **extra** | `LGPL-2.0-or-later` | GTK backend: FileChooser fallback after Strata (`strata;gtk`, the Story 4.5 outcome), Settings and other GTK interfaces |
 | `gnome-keyring` | Arch **extra** | `GPL-2.0-or-later AND LGPL-2.1-or-later` | `org.freedesktop.secrets` and the `Secret` portal backend |
 | `dconf` | Arch **extra** | `LGPL-2.1-or-later` | System defaults database read by the GTK backend's Settings answer |
 

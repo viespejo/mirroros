@@ -65,7 +65,7 @@ project-owned QML.
 | Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; the shell's runtime-only Stay Awake indicator suspends the idle lock while active, and lock before sleep is unchanged; no DPMS or automatic suspend policy; one password field over the blurred selected background in the selected theme's colors ([ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md)) |
 | Quick reminders | configure | Owned `reminder` command over transient systemd user timers and shell notifications | Scope change without an ADR (no daemon, privilege, network or provider); relative and ephemeral ("in N minutes"), ends with the session; set from the shell prompt or the command, shown by the bar's Reminder indicator; delivery is a Critical notification with a sound that passes Do Not Disturb; [desktop shell procedure](procedures/desktop-shell.md#reminders) |
 | Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
-| Desktop portals | configure | open — selected by Story 4.5 | |
+| Desktop portals | configure | xdg-desktop-portal with the Hyprland backend (Screenshot, ScreenCast) and the GTK backend; FileChooser `strata;gtk`; Secret through gnome-keyring | Story 4.5 (plan 02-35, no ADR); preferences in the Hyprland provider's `hyprland-portals.conf`, the Strata FileChooser selected by laboratory evidence with an accepted quiet-criterion deviation and URL download; gnome-keyring unlocked at SDDM password login by the packaged PAM lines (no MirrorOS PAM change); dark Settings answer from a system dconf default; system `mimeapps.list`; the read-only `portal-check` verifies the session after a new login ([portals and files procedure](procedures/portals-and-files.md)) |
 | Clipboard and history | configure | open — selected by Story 4.5 | |
 | Screenshots | configure | open — selected by Story 4.5 | |
 | Keyboard shortcuts | configure | Hyprland native configuration | Conventions belong to Story 4.3, which delivers the approved Omarchy-first key table; each later slice binds its own reserved actions. The session provides `us` and `es` (`us` first); the greeter keeps the resolved layout; both default to Right Alt Compose; AltGr overrides use native ownership rules in the configure procedure |
@@ -73,8 +73,9 @@ project-owned QML.
 Story 4.3 source is delivered through configure at reviewed candidate `8c3c3cc` (plan 02-19). Clean-reference
 target/running application, an unchanged second running run, native binding reload, session stop/start, one
 shell-failure recovery and bounded attended lock/counter checks have evidence. Final acceptance remains open:
-mouse drag remains failed under the reference-VM-only DEC-029 exception, and absent-provider quiet diagnostics
-retain their failures under temporary DEC-030 review until Stories 4.4/4.5 deliver their owners. Unperformed
+mouse drag remains failed under the reference-VM-only DEC-029 exception, and quiet diagnostics retain a DEC-030
+exception narrowed by plan 02-35 to named portal diagnostics; the PipeWire and UPower categories were dropped on
+observation, without claiming Story 4.4 closure ([open failures](procedures/desktop-shell.md#open-failures-and-limits)). Unperformed
 keyboard, output and hardware checks are not passes. See the [desktop shell procedure](procedures/desktop-shell.md#final-source-verification-checkpoint).
 This checkpoint selects no additional providers and does not qualify the complete MVP or target laptop.
 
@@ -85,7 +86,7 @@ This checkpoint selects no additional providers and does not qualify the complet
 | Terminal | configure | foot | Workbench-local Tokyo Night palette, JetBrainsMono Nerd Font Mono 14, centered 16x16 padding and CSI-u key paths; not a global visual provider selection |
 | Interactive shell | configure | Zsh with Starship | Default interactive login shell with Zplug, vi editing, autosuggestions, syntax highlighting, Fzf, Zoxide and local-only Atuin; plugins are provisioned by `configure`, never at shell startup. Bash remains the implementation language of bounded scripts |
 | Terminal multiplexer | configure | tmux | Native configuration with TPM plugins (Resurrect/Continuum, Neovim-aware navigation) and Sesh as the session selector from a reviewed local package recipe; Floax is excluded |
-| File manager | configure | Nautilus (Story 4.5) | Maintainer-selected during wallpaper review; package-only delivery, optional integrations remain separate ([sources](../capabilities/desktop/files/sources.md)) |
+| File manager | configure | Strata (Story 4.5) | Replaces the earlier Nautilus placeholder (plan 02-35); attested release binary from a reviewed local recipe with its FileManager1 and FileChooser integrations; follows the MirrorOS theme through a minimal `~/.local/state/omarchy/current` bridge; `SUPER+SHIFT+F` and `SUPER+ALT+SHIFT+F` (focused terminal's directory, tmux-aware); Nautilus is removed by the user, never by configure ([sources](../capabilities/desktop/files/sources.md)) |
 | Browser | configure | open — selected by Story 4.5 | |
 
 ### Development
