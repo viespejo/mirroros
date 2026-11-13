@@ -2,11 +2,11 @@
 
 ## Scope
 
-MirrorOS's native GTK4 theme is a process-local consumer of the reviewed default palette, first used by
-pavucontrol from the audio panel's **Advanced…** action. It does not change GTK settings, icon-theme selection,
-portal routing, audio values, Strata or the desktop's global environment. GTK3 resources are now prepared
-separately in [the GTK3 procedure](gtk3-theme.md), without global activation; libadwaita adaptation is not covered.
-The shared bundle is independent of palette-specific colors; arbitrary themes are not admitted by the resolver.
+MirrorOS's native GTK4 theme styles native GTK4 applications through the session's system `gtk-theme` and
+`icon-theme` defaults, first reviewed with pavucontrol from the audio panel's **Advanced…** action. It does not
+change user GTK settings, portal routing, audio values, Strata or the desktop's global environment. GTK3 resources
+are prepared in [the GTK3 procedure](gtk3-theme.md) and share the same default; libadwaita adaptation is not covered.
+The shared bundle is independent of palette-specific colors; each published theme gets its own native entry.
 
 [GTK4 sources](../../capabilities/visual/gtk4/sources.md) record licensing,
 layout, icon ownership, laboratory approval and validation limits. This applies the existing native-theme and
@@ -32,8 +32,8 @@ inherited GTK4 theme/artwork is not MIT-only; see the detailed [sources record](
 The typography stack is unchanged; the VM resolved `JetBrains Mono` to Noto Sans Mono during review, so actual
 JetBrains rendering remains a separate installed-font check.
 
-The accepted temporary previews used native application icons plus the neutral check. The retained compatibility
-launcher's wider alias overlay is still transitional. No full configure, global theme activation, merge or commit
+The accepted temporary previews used native application icons plus the neutral check. The compatibility
+launcher's wider alias overlay was later removed with the launcher. No full configure, global theme activation, merge or commit
 is authorized by the visual selection alone. Reconcile with main's portal/Strata work before installed delivery.
 The prior base's page-by-page, popup and parser results below are historical, not qualification of Osaka.
 
@@ -48,8 +48,8 @@ idempotency in both configure contexts. Delivery scripts and provenance are excl
 
 The maintainer also approved making the native GTK4 theme the session default and globally sharing only the
 neutral default-device check. The session default and the shared check are implemented as described in
-[Session default](#session-default). The relocated launcher remains a compatibility path; optional
-application-icon launchers are deferred.
+[Session default](#session-default). The relocated compatibility launcher was then removed; shipping application
+icons again, globally or per application, is a separate maintainer decision.
 
 ## Session default
 
@@ -131,14 +131,14 @@ readiness. No laboratory helper is product code.
   when `GTK_THEME` is unset; runtime non-interference remains unverified. Do not use global user-priority `gtk.css`
   injection as a substitute for theme selection or promise libadwaita coverage.
 - The maintainer approved a shared substitution of only `emblem-default` and its symbolic variant with the
-  original neutral check. Keep native application icons by default. Optional per-application alias launchers are
-  deferred until the end; do not activate the other 25 aliases globally. The shared substitution may affect any
+  original neutral check. Keep native application icons by default. The other 25 aliases are not activated
+  globally; the launcher that carried them was removed. The shared substitution may affect any
   consumer requesting that name, not only pavucontrol, and is scoped to the supported Adwaita lookup rather than
   overriding arbitrary user icon themes. Publish without overwriting packaged Adwaita files or copying its index.
   Normal GTK theme selection and icon publication remain separate concerns.
 - Configure must retain staged, conflict-safe, root-owned, idempotent publication in both contexts; no session
   service/application is started or restarted. Native GTK lookup permits user theme overrides and does not execute
-  the current launcher's per-process resource trust checks. Document that boundary rather than claiming otherwise.
+  the former launcher's per-process resource trust checks. Document that boundary rather than claiming otherwise.
 
 Upstream inspection references: [GTK settings and precedence](https://github.com/GNOME/gtk/blob/4.24.1/gtk/gtksettings.c),
 [Wayland Settings translation](https://github.com/GNOME/gtk/blob/4.24.1/gdk/wayland/gdksettings-wayland.c),
@@ -177,35 +177,28 @@ Three separately owned configure steps publish independently manifest-checked tr
 | Owner | Tree | Purpose |
 |---|---|---|
 | `visual/theme` | `/usr/share/mirroros/themes/default` | Reviewed palette, including `gtk-3.0.css`, `gtk-4.0.css` and existing consumers |
-| `visual/gtk4` | `/usr/share/mirroros/gtk4` | Osaka CSS/assets/notices, typography, pavucontrol adapter, retained neutral SVG aliases and compatibility launcher |
-| `visual/gtk3` | `/usr/share/mirroros/gtk3` | Osaka GTK3 CSS/widget assets/notices and matching typography; no launcher or global selection |
+| `visual/gtk4` | `/usr/share/mirroros/gtk4` | Osaka CSS/assets/notices, typography and pavucontrol adapter |
+| `visual/gtk3` | `/usr/share/mirroros/gtk3` | Osaka GTK3 CSS/widget assets/notices and matching typography |
 
 The shared runtime has no palette identity file. Its font stack uses JetBrains already declared by the terminal
 capability. Pavucontrol brings GTK4 and Adwaita from the official repositories; `visual/gtk4` adds no package.
-The following launch behavior remains transitional until session-default selection and single-check publication
-are qualified.
+The native entries and the icon theme are described under [Session default](#session-default).
 
 Configure never launches or reloads an application. Close any existing pavucontrol window normally, then use
-**Advanced…**, or run as the session user:
+**Advanced…**, which runs, as the session user:
 
 ```bash
-uwsm app -- /usr/share/mirroros/gtk4/launch pavucontrol
+uwsm app -- pavucontrol
 ```
 
-The launcher sets only `GTK_THEME` and prepends its resource directory to `XDG_DATA_DIRS`, in that process.
-Real application preferences remain in their existing locations. An already running single-instance application
-may receive the request instead and keep its earlier appearance; the launcher does not kill or restart it.
-Normal GTK user CSS and user data remain effective. No full isolation from user customization is claimed.
+No environment variable or data path is added; the application follows the session defaults. Real application
+preferences remain in their existing locations. An already running single-instance application may receive the
+request instead and keep its earlier appearance; nothing kills or restarts it. Normal GTK user CSS, user data and
+user `gtk-theme`/`icon-theme` values remain effective. An installed GTK Widget Factory is reviewed the same way,
+by running `gtk4-widget-factory`; its package is not part of the product declaration.
 
-The same launcher admits an already installed Widget Factory for explicit testing; its package is not part of
-the product declaration:
-
-```bash
-/usr/share/mirroros/gtk4/launch gtk4-widget-factory
-```
-
-Theme changes apply on the next application launch, not through forced hot reload. A new palette consumer must
-retain the resolver's trust boundary and document its coverage; adding arbitrary palette selection is separate work.
+GTK reloads running applications when `gtk-theme` or `icon-theme` changes; there is no forced hot reload or
+restart. Adding arbitrary palette selection is separate work.
 
 ## Validation
 
@@ -217,14 +210,14 @@ node --test tests/capabilities/visual/theme/*.test.mjs tests/capabilities/visual
 bats tests/capabilities/visual/theme/configure.contract.bats tests/capabilities/visual/gtk4/configure.contract.bats
 shellcheck capabilities/visual/theme/apply capabilities/visual/theme/prepare-parent \
   capabilities/visual/theme/resolve-current capabilities/visual/gtk4/apply \
-  capabilities/visual/gtk4/install-runtime capabilities/visual/gtk4/launch
+  capabilities/visual/gtk4/install-runtime
 ```
 
 The contracts cover separate publication owners, excluded delivery inputs, absence of a synthetic palette identity,
 both configure contexts, idempotency, executable delivery, preservation of unknown/modified
 resources and user settings, palette roles, upstream CSS reconstruction, asset/notice hashes, import order,
-typography, pavucontrol-only checked/hover/backdrop selection, neutral SVG aliases and launcher
-argv/stdin/exit/permission behavior.
+typography, pavucontrol-only checked/hover/backdrop selection, the native entries and icon theme, the absence of
+the removed launcher and overlay, and the Advanced action's plain `uwsm app -- pavucontrol` command.
 They do not prove installed-session rendering or clean-candidate readiness.
 
 Osaka adoption verification passed on the integration worktree: all discovered capability Node tests produced
@@ -259,7 +252,7 @@ After merging and publication in the disposable VM:
 1. Check configure's delivered manifests and the unchanged rerun; it must not start/restart any user application,
    portal or session service, write GTK settings, or change user theme/background links.
 2. Close the earlier test application normally. Open pavucontrol through **Advanced…** without a privilege prompt.
-   Confirm that the launched process uses `GTK_THEME=MirrorOS` and the product-only icon overlay, while HOME,
+   Confirm that the launched process has no `GTK_THEME` and no product path in `XDG_DATA_DIRS`, while HOME,
    XDG config/data/cache/state homes and the session bus remain the real session's values. Inspect only these
    allowlisted variables, never dump the full environment or personal preferences.
 3. Review Playback, Recording, Output Devices, Input Devices and Configuration at rest and with UI-only hover,
@@ -286,18 +279,11 @@ part of product delivery. A rebuilt candidate and physical-target qualification 
 
 Unknown, modified, incomplete or linked product deliveries are preserved and fail configure. Inspect the named
 conflict and restore the last reviewed delivery or move it aside deliberately before rerunning; never delete
-personal configuration to make a theme check pass. The launcher returns 4 when its required trusted resources or
-application are unavailable, 2 for unsupported consumers, otherwise the application's exit outcome.
+personal configuration to make a theme check pass.
 
-For a native appearance without the product overlay, close pavucontrol, then run from a normal session terminal:
-
-```bash
-pavucontrol
-```
-
-This uses the session default theme; see [Session default](#session-default) to choose Adwaita per user.
-Do not invoke native recovery from a shell that inherited the test launcher
-resources. Do not reconfigure portals or Strata, copy laboratory settings into HOME, or kill processes by name.
+To return a user to Adwaita and its icons, see [Session default](#session-default); applications started afterward,
+including pavucontrol from **Advanced…**, follow that user value. Do not reconfigure portals or Strata, copy
+laboratory settings into HOME, or kill processes by name.
 
 ## Integration with pending work
 

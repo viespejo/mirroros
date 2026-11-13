@@ -28,8 +28,7 @@ whose required files are trusted, and otherwise warns and uses the default. Othe
 The same step publishes the palette-specific `default/gtk-3.0.css` and `default/gtk-4.0.css`. The separate `visual/gtk4` step publishes the
 shared native GTK4 bundle at `/usr/share/mirroros/gtk4`, outside the selectable-theme catalog and without a synthetic
 `theme.name`. Its staged manifest excludes delivery scripts and provenance. The audio panel's Advanced action
-still uses the relocated compatibility launcher through `uwsm app`, preserving real user preferences and changing
-only that application's GTK theme and data search path. The same step publishes the native icon theme
+runs `uwsm app -- pavucontrol`, which follows the session defaults below. The same step publishes the native icon theme
 `/usr/share/icons/MirrorOS-<theme>`, which shares only the neutral default-device check over Adwaita.
 The following `visual/gtk3` step similarly publishes Osaka GTK3 and its widget assets/notices at
 `/usr/share/mirroros/gtk3`, with matching typography but no launcher or application icon overlay.
@@ -150,7 +149,7 @@ The twenty-three steps run in this order:
 | Step | Applied state |
 |---|---|
 | `visual/theme` | Reviewed product theme including its backgrounds and GTK3/GTK4 palette colors, and initialize-only current theme/background links |
-| `visual/gtk4` | Shared native GTK4 resources and transitional launcher, published independently of selectable palettes, and the native `MirrorOS-default` GTK4 entry and icon theme |
+| `visual/gtk4` | Shared native GTK4 resources, published independently of selectable palettes, and the native `MirrorOS-default` GTK4 entry and icon theme |
 | `visual/gtk3` | Shared native GTK3 resources and widget assets, and the native `MirrorOS-default` GTK3 entry |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` and `MirrorOS-default` `gtk-theme` and `icon-theme` dconf defaults and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
@@ -301,7 +300,7 @@ Managed destinations are:
   stock-theme file is migrated, any other content is a conflict.
 - `/usr/share/mirroros/themes/default/backgrounds`: the default theme's product backgrounds, published inside the
   theme tree and manifest; see [theme sources](../../capabilities/visual/theme/sources.md#backgrounds).
-- `/usr/share/mirroros/gtk4`: shared GTK4 CSS, resources, license and transitional launcher, published as one
+- `/usr/share/mirroros/gtk4`: shared GTK4 CSS, resources and licenses, published as one
   manifest-checked tree by `visual/gtk4`; palette colors remain under `themes/default`. See
   [GTK4 sources](../../capabilities/visual/gtk4/sources.md).
 - `/usr/share/themes/MirrorOS-<theme>/gtk-4.0` and `gtk-3.0`: the native GTK lookup entries, each one

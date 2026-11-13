@@ -1,4 +1,0 @@
-/* Shared native GTK3 styling; palette identity remains separate. */
-@import url("/usr/share/mirroros/themes/default/gtk-3.0.css");
-@import url("../../../../base.css");
-@import url("../../../../typography.css");

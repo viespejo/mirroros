@@ -53,10 +53,10 @@ test('GTK3 widget assets and upstream notices retain their exact bytes', () => {
 });
 
 test('GTK3 entries load only their palette, base and shared typography in both variants', () => {
-  const entry = join(runtime, 'share/themes/MirrorOS/gtk-3.0/gtk.css');
+  const entry = join(runtime, 'entries/default/gtk.css');
   const imports = [...read(entry).matchAll(/@import url\("([^"]+)"\);/g)].map(match => match[1]);
   assert.equal(imports[0], '/usr/share/mirroros/themes/default/gtk-3.0.css');
-  assert.deepEqual(imports.slice(1).map(path => resolve(dirname(entry), path)), ['base.css', 'typography.css'].map(path => join(runtime, path)));
+  assert.deepEqual(imports.slice(1), ['base.css', 'typography.css'].map(path => `/usr/share/mirroros/gtk3/${path}`));
   assert.match(read(join(dirname(entry), 'gtk-dark.css')), /@import url\("gtk.css"\);/);
   assert.equal(read(join(runtime, 'typography.css')), read(join(root, 'capabilities/visual/gtk4/typography.css')));
   assert.match(read(join(runtime, 'typography.css')), /font-size: 13px;/);
@@ -64,7 +64,7 @@ test('GTK3 entries load only their palette, base and shared typography in both v
 });
 
 test('GTK3 delivery is inert and contains no application icon overlay or unrelated upstream components', () => {
-  for (const name of ['launch', 'theme.name', 'apps', 'share/icons', 'gtk-2.0', 'xfwm4']) assert.equal(existsSync(join(runtime, name)), false, name);
+  for (const name of ['launch', 'theme.name', 'apps', 'share', 'gtk-2.0', 'xfwm4']) assert.equal(existsSync(join(runtime, name)), false, name);
   for (const path of files(runtime)) {
     if (path.endsWith('.css')) assert.doesNotMatch(read(path), /\/tmp\/|pavucontrol-window|@lab_/);
   }

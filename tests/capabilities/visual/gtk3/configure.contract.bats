@@ -21,7 +21,7 @@ teardown() { cfg_test_teardown; }
   [ -f "$dest/typography.css" ]
   [ -f "$dest/licenses/COPYING.yaru" ]
   [ -f "$dest/licenses/LICENSE_CCBYSA.yaru" ]
-  [ -f "$dest/share/themes/MirrorOS/gtk-3.0/gtk-dark.css" ]
+  [ ! -e "$dest/share" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/assets/check-symbolic.svg" "$dest/assets/check-symbolic.svg"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/gtk-3.0.css" \
     "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes/default/gtk-3.0.css"

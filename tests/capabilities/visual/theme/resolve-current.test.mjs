@@ -122,9 +122,8 @@ test('selection follows the link only to a trusted published theme and otherwise
   assert.equal(result.status, 0);
   assert.equal(result.stdout, `${selected}\nshell.toml\n`);
   assert.equal(result.stderr, '');
-  result = run('gtk4');
-  assert.equal(result.stdout, `${selected}/gtk-4.0.css\n`);
-  assert.equal(result.stderr, '');
+  // Native GTK selects its theme through gtk-theme; the resolver has no GTK consumer.
+  assert.equal(run('gtk4').status, 6);
 
   // A published theme lacking the consumer's file is not selected for that consumer.
   result = run('hyprland');

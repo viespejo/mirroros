@@ -33,7 +33,7 @@ ancestor directories or protect against concurrent privileged changes. The separ
 permissions and symlinks; running-system callers must use `/` as the anchor. It
 is a point-in-time check, not an atomic open-and-execute operation. The product resolver follows the selection
 link only to a direct child of `/usr/share/mirroros/themes/` named as a slug (`[a-z0-9]+(-[a-z0-9]+)*`) whose files
-required by the consumer (the palette, plus `hyprland.lua` or `gtk-4.0.css` in its explicit modes) pass
+required by the consumer (the palette, plus `hyprland.lua` in its explicit mode) pass
 `check-trusted-path`. Any other link, including one to a published helper, warns and selects the default theme,
 whose files are then checked the same way. The shell and Hyprland accept only resolver output of that form. Every
 theme in that directory is published by configure, so a selection chooses among reviewed themes and cannot
@@ -53,7 +53,7 @@ retain 114 exact declaration colors from the selected Osaka Jade GTK4 theme, der
 stable first-use order allows tests to reconstruct the pinned upstream stylesheet byte for byte. These values
 retain upstream's GPL-3.0 / CC BY-SA attribution rather than becoming original MirrorOS or MIT-only material.
 The detailed revision, modifications, asset inventory and retained notices are recorded by the implementation
-owner. Shared implementation, launcher, resources, Osaka/Yaru and Strata attribution and validation belong to
+owner. Shared implementation, resources, Osaka/Yaru and Strata attribution and validation belong to
 [visual/gtk4](../gtk4/sources.md), with delivery and
 session-integration limits in the [GTK4 procedure](../../../docs/procedures/gtk4-theme.md).
 

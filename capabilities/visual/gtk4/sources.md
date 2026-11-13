@@ -59,9 +59,9 @@ selected separately, as described under [Native lookup entry](#native-lookup-ent
 
 `entries/<theme>/` is published, outside the runtime tree, as the manifest-checked native entry
 `/usr/share/themes/MirrorOS-<theme>/gtk-4.0`. Its `gtk.css` imports `/usr/share/mirroros/themes/<theme>/gtk-4.0.css`
-and the installed `base.css`, `typography.css` and `apps/pavucontrol.css`, the same layers as the launcher's entry.
+and the installed `base.css`, `typography.css` and `apps/pavucontrol.css`.
 Its `gtk-dark.css` imports `gtk.css`: with the dark `color-scheme` default GTK 4.24 loads that variant and,
-without it, falls back to Adwaita's dark stylesheet (observed on the VM; the launcher's `GTK_THEME` hid this).
+without it, falls back to Adwaita's dark stylesheet (observed on the VM; the former launcher's `GTK_THEME` hid this).
 Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf `gtk-theme` default, so native
 GTK4 applications use it without `GTK_THEME`; a user `gtk-theme` value takes precedence. Modified, unknown or linked
 entries are conflicts. The naming rule is recorded in [theme sources](../theme/sources.md).
@@ -72,7 +72,7 @@ entries are conflicts. The naming rule is recorded in [theme sources](../theme/s
 `/usr/share/icons/MirrorOS-<theme>`, with its manifest at the theme root (GTK ignores it). It contains only an
 original `index.theme` (`Inherits=Adwaita,hicolor`; `16x16/status`, `scalable/status` and `symbolic/status` with the
 same sizes and types as the packaged Adwaita 51 index) and the three neutral `emblem-default` SVG variants,
-byte-identical to the launcher overlay's reviewed drawings (GPL-3.0-only). Every other name resolves through
+the reviewed original MirrorOS drawing, identical in every variant (GPL-3.0-only). Every other name resolves through
 Adwaita exactly as before; Adwaita 51 has no `emblem-default`, so the replaced check is AdwaitaLegacy's PNG.
 No packaged file or Adwaita index is copied or overwritten, and no application icon alias is shared globally.
 Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf `icon-theme` default; a user
@@ -98,7 +98,7 @@ JetBrains itself was installed or rendered there.
 ## Ownership and delivery
 
 - `visual/gtk4` owns the implementation at `/usr/share/mirroros/gtk4`, published immediately after `visual/theme`.
-  It has no `theme.name`; native lookup name `MirrorOS` is independent of palette identity.
+  It has no `theme.name` and no lookup entry of its own; native entries are named after the theme directory.
 - `visual/theme` owns colors at `/usr/share/mirroros/themes/default/gtk-4.0.css`, including the retained general
   roles tied to `colors.toml` and the exact Osaka color tokens. Configure does not generate or rewrite CSS.
 - `install-runtime` retains complete staged manifests, owner/mode checks, conflict preservation and idempotency
@@ -109,25 +109,19 @@ JetBrains itself was installed or rendered there.
 - No product installation or complete configure was performed for this adoption. Reconcile with main before
   installation; do not roll back the VM's newer portal/Strata configuration with this branch's baseline.
 
-## Transitional launcher and icons
+## Removed launcher and application icons
 
-The compatibility launcher remains `/usr/share/mirroros/gtk4/launch`, admitting only pavucontrol and an installed
-GTK Widget Factory. It forwards argv/stdin and `exec` preserves child status. It never closes existing instances;
-single-instance forwarding may retain an earlier process's appearance. It preserves real application preferences,
-HOME, XDG homes, session bus and graphical context; only process-local `GTK_THEME=MirrorOS` and a prepended
-`XDG_DATA_DIRS` are set. Root ownership, safe ancestors, required CSS and the complete runtime tree are checked
-before launch, and the launcher admits only the resolver's default palette, the one its entry point imports. These are point-in-time permission
-checks, not a sandbox or content-integrity guarantee against privileged edits. Normal user CSS/data still apply.
+The transitional `/usr/share/mirroros/gtk4/launch` (process-local `GTK_THEME=MirrorOS` and a prepended
+`XDG_DATA_DIRS` icon overlay for pavucontrol and GTK Widget Factory), its nested `share/themes/MirrorOS` entry, the
+`icon-aliases.json` overlay of eight original drawings under 25 application aliases and the resolver's `gtk4`
+consumer were removed once the session `gtk-theme` and `icon-theme` defaults covered pavucontrol. The audio
+panel's Advanced action now runs `uwsm app -- pavucontrol` as ADR 0026 states. Configure replaces the earlier
+runtime tree as an ordinary manifest update.
 
-Its retained application-alias overlay is transitional, not the approved final icon policy. The eight original
-MirrorOS drawings, 25 aliases and neutral check remain under GPL-3.0-only; no upstream Osaka/Yaru application
-icons are imported. The overlay has no copied Adwaita index/cache or packaged theme tree. Standard/unknown names
-retain native fallback. Names and trademarks imply no endorsement.
-
-The approved default remains native application icons with only the three neutral `emblem-default` SVG variants
-shared in supported Adwaita lookup, without overwriting packaged files. The accepted Osaka preview used that
-single-check overlay, not the launcher's full alias set. The check is now published as the
-[native icon theme](#native-icon-theme); removal of the mandatory launcher dependency remains a later step; optional per-application icon launchers remain deferred. Theme selection and icon policy are separate work, not implicitly activated by adopting Osaka.
+The approved icon policy is native application icons plus only the neutral check from the
+[native icon theme](#native-icon-theme). The alias drawings remain in version history; shipping application icons
+again, globally or per application, is a separate maintainer decision. Theme selection and icon policy are
+separate work, not implicitly activated by adopting Osaka.
 
 ## Validation and limits
 
@@ -135,7 +129,7 @@ The maintainer preferred Osaka after attended pavucontrol and GTK Widget Factory
 pavucontrol-only checked-toggle override. The raw theme with shared typography parsed without observed CSS
 diagnostics in the temporary VM previews. This does not establish universal state, accessibility, scaling or
 application coverage. Product-source palette extraction, scoped selectors and delivered paths require their own
-checks; tests cover upstream reconstruction, assets/notices, cascade, launcher and publication contracts.
+checks; tests cover upstream reconstruction, assets/notices, cascade and publication contracts.
 
 The previous base's page-by-page review and parser checks are historical, not qualification of Osaka. The earlier
 single-check probes remain lookup evidence: each GTK3/GTK4 run passed 24 check lookups and 336 unchanged unrelated

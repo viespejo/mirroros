@@ -11,7 +11,7 @@ for invocation, effects, evidence, and recovery.
 dependency graph, or resume state. The current order is:
 
 1. `visual/theme`: the reviewed theme, backgrounds, native GTK3/GTK4 palette colors, and initialize-only current theme/background links.
-2. `visual/gtk4`: shared native GTK4 CSS/resources and the transitional process-local launcher, published outside the selectable-theme catalog, and the native `MirrorOS-<theme>` GTK4 lookup entry under `/usr/share/themes` and icon theme (only the neutral default-device check) under `/usr/share/icons`.
+2. `visual/gtk4`: shared native GTK4 CSS/resources, published outside the selectable-theme catalog, and the native `MirrorOS-<theme>` GTK4 lookup entry under `/usr/share/themes` and icon theme (only the neutral default-device check) under `/usr/share/icons`.
 3. `visual/gtk3`: shared native GTK3 CSS and widget assets, and the native `MirrorOS-<theme>` GTK3 lookup entry under `/usr/share/themes`.
 4. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
 5. `desktop/portal`: the desktop portal frontend, the GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` and `MirrorOS-default` `gtk-theme` and `icon-theme` dconf defaults and the read-only `portal-check` session command. Portal changes take effect at the next login.

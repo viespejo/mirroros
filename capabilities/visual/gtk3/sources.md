@@ -58,8 +58,7 @@ gates; see the [GTK3 procedure](../../../docs/procedures/gtk3-theme.md).
 ## Ownership and delivery
 
 - `visual/gtk3` publishes `/usr/share/mirroros/gtk3` after `visual/theme` and `visual/gtk4`. The runtime has no
-  `theme.name` and is not a selectable palette. Its nested `share/themes/MirrorOS/gtk-3.0/` entries are not in
-  GTK's search path; the native entry below is.
+  `theme.name`, is not a selectable palette and has no lookup entry of its own; the native entry below is GTK's.
 - `entries/<theme>/` (`gtk.css`, `gtk-dark.css`) is published, outside the runtime tree, as the manifest-checked
   native entry `/usr/share/themes/MirrorOS-<theme>/gtk-3.0`, importing `/usr/share/mirroros/themes/<theme>/gtk-3.0.css`
   and the installed `base.css` and `typography.css`. Only `MirrorOS-default` exists. `desktop/portal` selects it as

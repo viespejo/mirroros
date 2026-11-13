@@ -17,7 +17,7 @@ contract, not authorization for a new global selection mechanism.
 | Owner | Tree | Purpose |
 |---|---|---|
 | `visual/theme` | `/usr/share/mirroros/themes/default` | Palette including `gtk-3.0.css` and `gtk-4.0.css` |
-| `visual/gtk4` | `/usr/share/mirroros/gtk4` | Existing GTK4 runtime and transitional launcher |
+| `visual/gtk4` | `/usr/share/mirroros/gtk4` | Existing GTK4 runtime |
 | `visual/gtk3` | `/usr/share/mirroros/gtk3` | GTK3 Osaka base, 126 assets, typography and retained notices |
 | `visual/gtk4`, `visual/gtk3` | `/usr/share/themes/MirrorOS-default/gtk-4.0`, `gtk-3.0` | Native lookup entries, one manifest-checked tree each |
 | `desktop/portal` | `/etc/dconf/db/local.d/00-mirroros-appearance` | System `gtk-theme` and `icon-theme` `'MirrorOS-default'` defaults |
@@ -27,14 +27,13 @@ manifest-checked, with safe ancestors, staged publication, permissions, conflict
 reruns in running and target contexts. GTK3 has no synthetic palette identity, package requirement or launcher.
 Delivery inputs and provenance are not installed as runtime files. Consumer capabilities own GTK dependencies.
 
-GTK3's entry is `share/themes/MirrorOS/gtk-3.0/gtk.css` inside its runtime. It imports the fixed product palette,
+GTK3's entry is `entries/default/gtk.css`. It imports the default theme's palette and the installed
 base and shared typography. Upstream's `gtk-dark.css` is identical to `gtk.css`, so our dark entry imports that
 same cascade. The 211 stable palette tokens reconstruct the original CSS byte for byte; upstream assets and
 license notices retain their exact bytes. Typography matches GTK4's family stack and 13px sizing. The laboratory
 resolved JetBrains Mono to Noto Sans Mono; actual JetBrains rendering remains unverified there.
 
-Those nested runtime entries are not in GTK's search path. The native entry `entries/default/` is published as
-`/usr/share/themes/MirrorOS-default/gtk-3.0/` with the same cascade through absolute imports, and the system dconf
+The entry is published as `/usr/share/themes/MirrorOS-default/gtk-3.0/`, and the system dconf
 default selects it at the next login unless the user sets `gtk-theme`. There is no global `GTK_THEME`, user-priority CSS injection,
 application icon overlay, portal restart or user preference write. Native application icons remain the default;
 only the neutral default-device check is shared, through the GTK4-owned native icon theme `MirrorOS-default`.

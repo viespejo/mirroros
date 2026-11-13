@@ -5,15 +5,14 @@
 # The anchor is / on a running system; other anchors are for isolated tests.
 set -Eeuo pipefail
 
-(( $# == 3 || $# == 4 )) || { printf 'Usage: resolve-current <anchor> <state-home> <owner-uid> [hyprland|gtk4]\n' >&2; exit 6; }
+(( $# == 3 || $# == 4 )) || { printf 'Usage: resolve-current <anchor> <state-home> <owner-uid> [hyprland]\n' >&2; exit 6; }
 anchor="$1" state="$2" uid="$3" consumer="${4:-shell}"
-[[ "$anchor" == /* && "$state" == /* && "$uid" =~ ^[0-9]+$ && ( "$consumer" == shell || "$consumer" == hyprland || "$consumer" == gtk4 ) ]] || exit 6
+[[ "$anchor" == /* && "$state" == /* && "$uid" =~ ^[0-9]+$ && ( "$consumer" == shell || "$consumer" == hyprland ) ]] || exit 6
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 link="$state/mirroros/current/theme"
 themes=/usr/share/mirroros/themes
 case "$consumer" in
   hyprland) required=(colors.toml hyprland.lua) ;;
-  gtk4) required=(colors.toml gtk-4.0.css) ;;
   *) required=(colors.toml) ;;
 esac
 trusted_theme() {
@@ -44,14 +43,6 @@ if [[ "$consumer" == hyprland ]]; then
     exit 4
   }
   printf '%s/hyprland.lua\n' "$selected"
-  exit 0
-fi
-if [[ "$consumer" == gtk4 ]]; then
-  bash "$script_dir/check-trusted-path" "$anchor" "${selected#/}/gtk-4.0.css" "$uid" file || {
-    printf 'The %s GTK4 palette is unavailable or untrusted.\n' "$name" >&2
-    exit 4
-  }
-  printf '%s/gtk-4.0.css\n' "$selected"
   exit 0
 fi
 printf '%s\n' "$selected"

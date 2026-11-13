@@ -16,7 +16,8 @@ teardown() { cfg_test_teardown; }
   bash "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/install-runtime" check \
     "$CFG_SOURCE_ROOT/capabilities/visual/gtk4" "$dest" \
     "$(stat -c %u "$MIRROROS_CONFIGURE_ROOT")" "$(stat -c %g "$MIRROROS_CONFIGURE_ROOT")"
-  [ -x "$dest/launch" ]
+  [ ! -e "$dest/launch" ]
+  [ ! -e "$dest/share" ]
   [ "$(stat -c %a "$dest/base.css")" = 644 ]
   [ -f "$dest/STRATA-LICENSE" ]
   [ -f "$dest/typography.css" ]
@@ -47,7 +48,7 @@ teardown() { cfg_test_teardown; }
     "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default" "$icons" \
     "$(stat -c %u "$MIRROROS_CONFIGURE_ROOT")" "$(stat -c %g "$MIRROROS_CONFIGURE_ROOT")"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/index.theme" "$icons/index.theme"
-  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/share/icons/Adwaita/symbolic/status/emblem-default-symbolic.svg" \
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/symbolic/status/emblem-default-symbolic.svg" \
     "$icons/symbolic/status/emblem-default-symbolic.svg"
   [ "$(stat -c %a "$icons/index.theme")" = 644 ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/icons/Adwaita" ]
@@ -65,9 +66,8 @@ teardown() { cfg_test_teardown; }
   run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&3; return 1; }
   local dest="$CFG_TEST_TARGET_ROOT/usr/share/mirroros/gtk4"
-  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/launch" "$dest/launch"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/base.css" "$dest/base.css"
-  [ -x "$dest/launch" ]
+  [ ! -e "$dest/launch" ]
   [ ! -e "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/gtk4" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/entries/default/gtk.css" \
     "$CFG_TEST_TARGET_ROOT/usr/share/themes/MirrorOS-default/gtk-4.0/gtk.css"
@@ -78,7 +78,7 @@ teardown() { cfg_test_teardown; }
   [[ "$output" == *'visual/gtk4: unchanged'* ]]
 }
 
-@test "GTK4 configure preserves locally modified styles and icon aliases" {
+@test "GTK4 configure preserves locally modified styles and assets" {
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
   local dest="$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/gtk4"
@@ -87,7 +87,7 @@ teardown() { cfg_test_teardown; }
   [ "$status" -eq 4 ]
   grep -q 'local change' "$dest/base.css"
   cp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/base.css" "$dest/base.css"
-  local icon="$dest/share/icons/Adwaita/symbolic/apps/chromium-browser-symbolic.svg"
+  local icon="$dest/assets/check-symbolic.svg"
   printf '\n<!-- local icon -->\n' >> "$icon"
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 4 ]
@@ -101,7 +101,7 @@ teardown() { cfg_test_teardown; }
   rm -rf "$dest"
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
-  [ -x "$dest/launch" ]
+  [ -f "$dest/base.css" ]
   rm -rf "$dest"
   mkdir "$dest"
   printf 'keep\n' > "$dest/personal-file"

@@ -7,10 +7,9 @@
 `wpctl`; playerctl is the terminal MPRIS provider. `libpulse` supplies `pactl` (served by `pipewire-pulse`), `pipewire`
 supplies `pw-dump`, and `jq` parses their JSON for `audio-device`. `pavucontrol` is the advanced audio tool accepted
 by [ADR 0026](../../../docs/adr/0026-mpris-player-names-and-advanced-audio-tool.md); it is installed only, never
-started by configure. The audio panel's existing `uwsm app` action now reaches it through
-`/usr/share/mirroros/gtk4/launch pavucontrol`: the `visual/gtk4` capability owns that transitional process-local theme/icon
-adapter and its Configuration-footer CSS, not the audio backend. It preserves real pavucontrol preferences and
-audio values, and adds no service or global GTK setting. See [GTK4 sources](../../visual/gtk4/sources.md)
+started by configure. The audio panel's Advanced action runs `uwsm app -- pavucontrol`; its appearance comes from
+the session's native `gtk-theme` and `icon-theme` defaults, whose resources `visual/gtk4` owns, not the audio
+backend. Real pavucontrol preferences and audio values are untouched. See [GTK4 sources](../../visual/gtk4/sources.md)
 and the [GTK4 procedure](../../../docs/procedures/gtk4-theme.md). This is bounded native presentation of the already
 accepted tool, not a new advanced-audio provider or a shell control panel.
 PipeWire services and WirePlumber are enabled only for the
