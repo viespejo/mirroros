@@ -1,2 +1,14 @@
-# File manager selected for Story 4.5; optional integrations remain separate.
-nautilus extra
+# File manager selected for Story 4.5: Strata from the reviewed local recipe in strata/PKGBUILD.
+xdg-user-dirs extra
+# Recipe build prerequisite, as for Sesh.
+base-devel core
+# Runtime depends of strata-bin 1.2.1 (packaging/aur/PKGBUILD.in at the recipe tag); makepkg runs without -s.
+bubblewrap extra
+fontconfig extra
+glibc core
+gstreamer extra
+gst-plugins-base extra
+gtk4 extra
+gtksourceview5 extra
+gvfs extra
+poppler-glib extra

@@ -1,0 +1,77 @@
+# Maintainer: Strata maintainers <https://github.com/lgse/strata/issues>
+# Derived by MirrorOS from Strata's first-party packaging/aur/PKGBUILD.in at tag v1.2.1, commit
+# 491e6ba9735e821f9f49910ffd2582076196865c (https://github.com/lgse/strata), rendered for the stable strata-bin
+# channel. Changes: x86_64 only; pkgrel suffixed .1; the FileManager1 activation file is installed in
+# /usr/share/dbus-1/services instead of /usr/share/strata; the archive's FileChooser portal metadata and its D-Bus
+# activation file (with Exec=/usr/bin/strata --portal) are installed; the archive's portals.conf, udiskie hook and
+# documentation are not. The install-source.toml marker is unchanged. Built by the selected user and installed by
+# configure; see ../sources.md.
+pkgname=strata-bin
+pkgver=1.2.1
+pkgrel=1.1
+_releasever=1.2.1
+pkgdesc="A fast, keyboard-first file manager for Linux"
+arch=('x86_64')
+url="https://github.com/lgse/strata"
+license=('MIT' 'LicenseRef-UnRAR')
+depends=(
+  'bubblewrap'
+  'fontconfig'
+  'glibc>=2.39'
+  'gstreamer>=1.20'
+  'gst-plugins-base'
+  'gtk4>=4.12'
+  'gtksourceview5'
+  'gvfs'
+  'poppler-glib'
+)
+optdepends=(
+  'ffmpeg: video previews'
+  'ffmpegthumbnailer: video thumbnails'
+  'gst-libav: additional media format playback'
+  'gst-plugins-good: media playback in previews'
+  'gvfs-smb: SMB network locations'
+  'imagemagick: RAW image previews'
+  'libraw: RAW image previews when ImageMagick is unavailable'
+  'squashfs-tools: AppImage icon thumbnails'
+  'xdg-terminal-exec: preferred Open in Terminal launcher (AUR)'
+)
+provides=("strata=${pkgver}")
+conflicts=('strata' 'strata-rc-bin')
+# Preserve byte identity with the attested release artifact.
+options=('!strip' '!debug')
+source=("${url}/releases/download/v${_releasever}/strata-${_releasever}-x86_64-unknown-linux-gnu.tar.gz")
+sha256sums=('a63710ce626078ecc107105223680179a4437b8cb9fbce34d74e3d42c80330d0')
+
+package() {
+  local dist="${srcdir}/strata-${_releasever}-${CARCH}-unknown-linux-gnu"
+
+  install -Dm755 "${dist}/strata" "${pkgdir}/usr/bin/strata"
+  install -Dm644 "${dist}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 "${dist}/UnRAR.txt" "${pkgdir}/usr/share/licenses/${pkgname}/UnRAR.txt"
+  install -Dm644 "${dist}/THIRD_PARTY_LICENSES.md" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/THIRD_PARTY_LICENSES.md"
+
+  install -Dm644 "${dist}/io.github.lgse.Strata.desktop" \
+    "${pkgdir}/usr/share/applications/io.github.lgse.Strata.desktop"
+  install -Dm644 "${dist}/io.github.lgse.Strata.svg" \
+    "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.lgse.Strata.svg"
+
+  install -Dm644 "${dist}/io.github.lgse.Strata.FileManager1.service" \
+    "${pkgdir}/usr/share/dbus-1/services/io.github.lgse.Strata.FileManager1.service"
+
+  # FileChooser backend (DEC-003); selected or not by the Hyprland provider's hyprland-portals.conf.
+  install -Dm644 "${dist}/portal/strata.portal" \
+    "${pkgdir}/usr/share/xdg-desktop-portal/portals/strata.portal"
+  sed 's|@STRATA_EXECUTABLE@|/usr/bin/strata|' \
+    "${dist}/portal/org.freedesktop.impl.portal.desktop.strata.service.in" |
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.strata.service"
+
+  install -Dm644 /dev/stdin "${pkgdir}/usr/share/strata/install-source.toml" <<'MARKER'
+manager = "pacman"
+package = "strata-bin"
+channel = "stable"
+aur_helpers = ["yay", "paru", "pikaur", "trizen"]
+alternate_package = "strata-rc-bin"
+MARKER
+}

@@ -138,7 +138,7 @@ The twenty-one steps run in this order:
 | `visual/theme` | Reviewed product theme including its backgrounds, and initialize-only current theme/background links |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
-| `desktop/files` | Nautilus from `extra`, with packaged dependencies; no personal settings, optional integrations or desktop-portal configuration ([sources](../../capabilities/desktop/files/sources.md)) |
+| `desktop/files` | Strata built by the user from a reviewed recipe, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; fails while another package also owns `org.freedesktop.FileManager1` ([sources](../../capabilities/desktop/files/sources.md)) |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
 | `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |
@@ -219,6 +219,13 @@ Managed destinations are:
   is a bounded native-tool exception. Configure never starts, restarts or reloads portal or user services: portal
   changes take effect at the next login, then run `portal-check`. See the
   [portals and files procedure](portals-and-files.md).
+- `strata-bin`, `/usr/share/mirroros/files/files-cwd`, `~/.local/state/omarchy/current/{theme,theme.name}` and
+  `~/.config/strata/portal-opt-in-v1`: Strata is built by the user from the reviewed recipe (cache
+  `~/.cache/mirroros/strata`) and installed with `pacman -U`; the theme bridge is created only while
+  `~/.local/state/omarchy` is absent, and any other existing state is a preserved conflict; the first-launch
+  offer marker is written once by `strata --dismiss-portal-prompt`. `cfg_dbus_service_owner_unique` fails the step
+  while more than one packaged D-Bus service declares `org.freedesktop.FileManager1`, naming each owner and its
+  package; configure never uninstalls Nautilus. See [file manager sources](../../capabilities/desktop/files/sources.md).
 - `~/.config/xdg-terminals.list`: `foot.desktop`, the terminal `uwsm app` uses for `Terminal=true` desktop entries.
   A user-owned list (or `~/.config/hyprland-xdg-terminals.list`) is preserved; when the effective list names no
   installed desktop entry, the step fails with an actionable message instead of passing.

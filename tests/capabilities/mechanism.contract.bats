@@ -384,6 +384,40 @@ cfg_unit_reload systemd-logind /etc/power-key.conf'
   [ ! -s "$CFG_TEST_CALLS" ]
 }
 
+@test "a D-Bus name needs one packaged owner; extra owners fail naming files, packages and removal actions" {
+  local services="$MIRROROS_CONFIGURE_ROOT/usr/share/dbus-1/services" expected=/usr/share/dbus-1/services/a.service
+  mkdir -p "$services" "$CFG_TEST_DIR/owners"
+  printf '[D-BUS Service]\r\nName=org.example.Name\r\nExec=/usr/bin/a\r\n' > "$services/a.service"
+  printf '[Other]\nName=org.example.Name\n[D-BUS Service]\nName=org.example.Other\n' > "$services/unrelated.service"
+  run cfg_test_helpers "cfg_dbus_service_owner_unique org.example.Name $expected"
+  [ "$status" -eq 0 ]
+  run cfg_test_helpers 'cfg_dbus_service_owner_unique org.example.Name /usr/share/dbus-1/services/b.service'
+  [ "$status" -eq 1 ]
+  run cfg_test_helpers 'cfg_dbus_service_owner_unique org.example.Missing /usr/share/dbus-1/services/a.service'
+  [ "$status" -eq 1 ]
+  [ ! -s "$CFG_TEST_CALLS" ]
+  printf '[D-BUS Service]\nName=org.example.Name\n' > "$services/b.service"
+  printf '[D-BUS Service]\nName=org.example.Name\n' > "$services/c.service"
+  printf 'a-package\n' > "$CFG_TEST_DIR/owners/a.service"
+  printf 'b-package\n' > "$CFG_TEST_DIR/owners/b.service"
+  run cfg_test_helpers "cfg_dbus_service_owner_unique org.example.Name $expected"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'Conflict: org.example.Name has 3 packaged owners:'* ]]
+  [[ "$output" == *'/usr/share/dbus-1/services/a.service (a-package)'* ]]
+  [[ "$output" == *'/usr/share/dbus-1/services/b.service (b-package)'* ]]
+  [[ "$output" == *'/usr/share/dbus-1/services/c.service (not owned by a package)'* ]]
+  [[ "$output" == *'Next action: sudo pacman -Rns b-package, then rerun configure.'* ]]
+  [[ "$output" == *'Next action: move /usr/share/dbus-1/services/c.service aside, then rerun configure.'* ]]
+  [[ "$output" != *'pacman -Rns a-package'* ]]
+  [ -f "$services/b.service" ] && [ -f "$services/c.service" ]
+  grep -qxF 'pacman -Qqo -- /usr/share/dbus-1/services/b.service' "$CFG_TEST_CALLS"
+  refute grep -qE '^pacman -R' "$CFG_TEST_CALLS"
+  : > "$CFG_TEST_CALLS"
+  run cfg_test_helpers "CONFIGURE_CONTEXT=target; cfg_dbus_service_owner_unique org.example.Name $expected"
+  [ "$status" -eq 4 ]
+  grep -qF "arch-chroot $MIRROROS_CONFIGURE_ROOT pacman -Qqo -- /usr/share/dbus-1/services/a.service" "$CFG_TEST_CALLS"
+}
+
 @test "apply scripts never invoke effectful base commands directly" {
   while IFS= read -r -d '' script; do
     ! grep -vE '^[[:space:]]*#' "$script" |

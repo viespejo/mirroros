@@ -1,6 +1,27 @@
 #!/usr/bin/bash
-# Install the selected file manager without managing personal settings or starting a session process.
+# Prerequisites: validated package declarations (base-devel and the recipe's runtime depends are declared here),
+#   visual/theme applied earlier (the MirrorOS current theme link), a non-root target user, and HTTPS access to
+#   GitHub when the recipe must be built.
+# Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: packages are installed; Strata is installed from the reviewed recipe; its FileManager1 activation
+#   file is the only packaged org.freedesktop.FileManager1 owner (a second owner fails, naming every owner and the
+#   removal action; nothing is uninstalled); files-cwd matches its last delivery; Strata's first-launch offer is
+#   dismissed and the omarchy/current theme bridge exists (initialize-only; other existing state is a conflict and is
+#   preserved). Nothing is started; personal settings and default-application choices are not managed here.
 set -Eeuo pipefail
 
+file_manager=/usr/share/dbus-1/services/io.github.lgse.Strata.FileManager1.service
+if [[ "$CONFIGURE_CONTEXT" == target ]]; then session=--default; else session=--session; fi
+
 cfg_packages_ensure "$STEP_DIR/packages"
+cfg_local_package_ensure strata-bin "$STEP_DIR/strata/PKGBUILD" "$STEP_DIR/build-strata"
+cfg_source_record strata 'https://github.com/lgse/strata/releases/download/v1.2.1/strata-1.2.1-x86_64-unknown-linux-gnu.tar.gz' \
+  v1.2.1 491e6ba9735e821f9f49910ffd2582076196865c "$(cfg_recipe_version "$STEP_DIR/strata/PKGBUILD")"
+cfg_tracked_file "$STEP_DIR/files-cwd" /usr/share/mirroros/files/files-cwd 0755
+cfg_user_script "$STEP_DIR/prepare-strata" apply "$session" || exit 4
+
 cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_local_package_present strata-bin "$STEP_DIR/strata/PKGBUILD"
+cfg_require cfg_dbus_service_owner_unique org.freedesktop.FileManager1 "$file_manager"
+cfg_require cfg_tracked_file_present /usr/share/mirroros/files/files-cwd
+cfg_require cfg_user_script "$STEP_DIR/prepare-strata" check "$session"

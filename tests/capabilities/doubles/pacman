@@ -16,6 +16,10 @@ case "$mode" in
     # A locally installed package keeps the version of its file; official fixtures are always 1.0-1.
     version="$(cat -- "$CFG_TEST_INSTALLED/$name" 2> /dev/null || true)"
     printf '%s %s\n' "$name" "${version:-1.0-1}" ;;
+  -Qqo)
+    path="${!#}"
+    [[ -f "$CFG_TEST_DIR/owners/${path##*/}" ]] || { printf 'error: No package owns %s\n' "$path" >&2; exit 1; }
+    cat -- "$CFG_TEST_DIR/owners/${path##*/}" ;;
   -Qu)
     printf '%s' "${CFG_TEST_UPGRADES:-}"
     exit "${CFG_TEST_QUERY_STATUS:-0}" ;;

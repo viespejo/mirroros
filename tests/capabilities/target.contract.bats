@@ -231,6 +231,10 @@ NODE
   printf '[Desktop Entry]\nExec=foot\n' > "$CFG_TEST_HOME/.local/share/applications/foot.desktop"
   printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
   printf '/bin/bash\n/usr/bin/zsh\n' > "$CFG_TEST_TARGET_ROOT/etc/shells"
+  # The pacman double does not extract payloads; this is the Strata recipe's FileManager1 activation file.
+  mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/dbus-1/services"
+  printf '[D-BUS Service]\nName=org.freedesktop.FileManager1\n' \
+    > "$CFG_TEST_TARGET_ROOT/usr/share/dbus-1/services/io.github.lgse.Strata.FileManager1.service"
   target_pi_node_fixture
   cfg_test_boot_fixture btrfs-limine
   run target_run
@@ -247,7 +251,12 @@ NODE
   [[ "$output" == *'== 19/21 visual/branding =='* ]]
   [[ "$output" == *'== 20/21 system/boot-splash =='* ]]
   [[ "$output" == *'== 21/21 desktop/login =='* ]]
-  [ -e "$CFG_TEST_INSTALLED/nautilus" ]
+  [ ! -e "$CFG_TEST_INSTALLED/nautilus" ]
+  [ -e "$CFG_TEST_INSTALLED/xdg-user-dirs" ]
+  [ "$(< "$CFG_TEST_INSTALLED/strata-bin")" = 1.2.1-1.1 ]
+  [ -x "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/files/files-cwd" ]
+  [ "$(readlink "$CFG_TEST_HOME/.local/state/omarchy/current/theme.name")" = \
+    "$CFG_TEST_HOME/.local/state/mirroros/current/theme/theme.name" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/colors.toml" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/colors.toml"
   [ -f "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/LICENSE.omarchy" ]

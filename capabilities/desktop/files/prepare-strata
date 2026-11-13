@@ -1,0 +1,101 @@
+#!/usr/bin/bash
+# Run as the target user through cfg_user_script; initialize-only, never replacing existing state.
+# Usage: prepare-strata apply|check --session|--default. The MirrorOS state and configuration homes are resolved as
+#   prepare-current resolves them: --session reads the user manager environment, --default uses the XDG defaults.
+# First-launch offer: while ${XDG_CONFIG_HOME:-$HOME/.config}/strata/portal-opt-in-v1 is absent, run
+#   strata --dismiss-portal-prompt once. At the recipe tag it only creates that marker (no display, no bus); Strata's
+#   settings.toml is never written.
+# Theme bridge (DEC-007): Strata reads only $HOME/.local/state/omarchy/current/theme.name and .../theme/colors.toml
+#   (src/ui/theme/omarchy_state.rs; XDG_STATE_HOME is ignored). The bridge is $HOME/.local/state/omarchy holding
+#   only current/theme -> <MirrorOS state>/mirroros/current/theme and current/theme.name -> <that>/theme.name. It is
+#   created only while $HOME/.local/state/omarchy is absent; an identical bridge is unchanged; any other existing
+#   state is a conflict, reported and preserved (exit 4).
+# apply prints changed or unchanged; check prints nothing and exits 0 only when the bridge and the marker exist.
+set -Eeuo pipefail
+umask 022
+
+mode="${1:-}"
+source="${2:-}"
+if (( $# != 2 )) || [[ "$mode" != apply && "$mode" != check ]] ||
+  [[ "$source" != --session && "$source" != --default ]]; then
+  printf 'Usage: prepare-strata apply|check --session|--default\n' >&2
+  exit 6
+fi
+
+state="$HOME/.local/state"
+config="$HOME/.config"
+if [[ "$source" == --session ]]; then
+  # The administrator's environment is not evidence of the target user's session.
+  session_state='' session_config=''
+  runtime="/run/user/$(id -u)"
+  if environment=$(env -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$runtime" systemctl --user show-environment 2>/dev/null); then
+    while IFS= read -r line; do
+      case "$line" in
+        XDG_STATE_HOME=*)
+          [[ -z "$session_state" ]] || { printf 'Duplicate XDG_STATE_HOME in user manager environment.\n' >&2; exit 4; }
+          session_state="${line#XDG_STATE_HOME=}" ;;
+        XDG_CONFIG_HOME=*)
+          [[ -z "$session_config" ]] || { printf 'Duplicate XDG_CONFIG_HOME in user manager environment.\n' >&2; exit 4; }
+          session_config="${line#XDG_CONFIG_HOME=}" ;;
+      esac
+    done <<< "$environment"
+  fi
+  state="${session_state:-$state}"
+  config="${session_config:-$config}"
+fi
+for path in "$state" "$config"; do
+  if [[ "$path" != /* ]]; then
+    printf 'XDG state and configuration homes must be absolute paths: %s\n' "$path" >&2
+    exit 4
+  fi
+done
+
+marker="$config/strata/portal-opt-in-v1"
+omarchy="$HOME/.local/state/omarchy"
+want_theme="$state/mirroros/current/theme"
+want_name="$want_theme/theme.name"
+result=unchanged
+staging=''
+trap '[[ -z "$staging" || "$staging" != "${omarchy%/*}"/.omarchy.mirroros.* ]] || rm -rf -- "$staging"' EXIT
+
+bridge_is_current() {
+  [[ -d "$omarchy" && ! -L "$omarchy" && -d "$omarchy/current" && ! -L "$omarchy/current" ]] || return 1
+  [[ "$(find "$omarchy" -mindepth 1 -maxdepth 1 -printf '%f\n')" == current ]] || return 1
+  [[ "$(find "$omarchy/current" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort)" == $'theme\ntheme.name' ]] ||
+    return 1
+  [[ -L "$omarchy/current/theme" && "$(readlink -- "$omarchy/current/theme")" == "$want_theme" ]] || return 1
+  [[ -L "$omarchy/current/theme.name" && "$(readlink -- "$omarchy/current/theme.name")" == "$want_name" ]]
+}
+
+conflict() {
+  printf 'Conflict: %s is not the MirrorOS theme bridge for Strata; it was left untouched. Move it aside to let configure create the bridge.\n' "$omarchy" >&2
+  exit 4
+}
+
+if [[ ! -e "$marker" && ! -L "$marker" ]]; then
+  [[ "$mode" == apply ]] || exit 1
+  if ! env XDG_CONFIG_HOME="$config" strata --dismiss-portal-prompt > /dev/null; then
+    printf 'strata --dismiss-portal-prompt failed; the first-launch offer was not suppressed.\n' >&2
+    exit 4
+  fi
+  [[ -f "$marker" ]] || { printf 'Strata did not record its offer dismissal in %s.\n' "$marker" >&2; exit 4; }
+  result=changed
+fi
+
+if ! bridge_is_current; then
+  [[ ! -e "$omarchy" && ! -L "$omarchy" ]] || conflict
+  [[ "$mode" == apply ]] || exit 1
+  mkdir -p -- "${omarchy%/*}"
+  staging="$(mktemp -d "${omarchy%/*}/.omarchy.mirroros.XXXXXX")"
+  chmod 0755 "$staging"
+  mkdir -- "$staging/current"
+  ln -sT -- "$want_theme" "$staging/current/theme"
+  ln -sT -- "$want_name" "$staging/current/theme.name"
+  mv -T --no-clobber -- "$staging" "$omarchy" || :
+  # mv --no-clobber leaves the staging tree in place when the destination appeared meanwhile.
+  [[ ! -d "$staging" ]] || conflict
+  staging=''
+  result=changed
+fi
+
+[[ "$mode" == check ]] || printf '%s\n' "$result"

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 // The Hyprland provider's portal preferences must stay consistent with the neutral desktop/portal declarations
-// (DEC-012) and with an allowed FileChooser outcome of the Story 4.5 evaluation (DEC-003, DEC-006). The share-picker
+// (DEC-012) and with the selected FileChooser outcome of the Story 4.5 evaluation (DEC-003, DEC-006). The share-picker
 // defaults follow the laboratory amendment of DEC-012: only the restore token is checked by default.
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = file => readFileSync(path.join(repo, file), 'utf8');
@@ -44,8 +44,11 @@ test('the Secret backend is the gnome-keyring declared by desktop/portal', () =>
   for (const name of ['xdg-desktop-portal', 'xdg-desktop-portal-gtk']) assert.ok(portalPackages.includes(name), name);
 });
 
-test('the FileChooser backend is an allowed evaluation outcome', () => {
-  assert.ok(['gtk', 'strata;gtk'].includes(preferences.get('org.freedesktop.impl.portal.FileChooser')));
+test('the FileChooser backend is the selected strata;gtk outcome and the recipe ships its backend', () => {
+  assert.equal(preferences.get('org.freedesktop.impl.portal.FileChooser'), 'strata;gtk');
+  const recipe = read('capabilities/desktop/files/strata/PKGBUILD');
+  assert.match(recipe, /\/usr\/share\/xdg-desktop-portal\/portals\/strata\.portal"/);
+  assert.match(recipe, /\/usr\/share\/dbus-1\/services\/org\.freedesktop\.impl\.portal\.desktop\.strata\.service"/);
 });
 
 test('the Hyprland backend is provider-owned and no generic portals.conf is delivered', () => {

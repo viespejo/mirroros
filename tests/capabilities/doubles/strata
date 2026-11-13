@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# Strata's offer dismissal, as in crates/strata-desktop/src/portal_setup.rs at the recipe tag: create
+# ${XDG_CONFIG_HOME:-$HOME/.config}/strata/portal-opt-in-v1 once, mode 0600, content "1". No display is used.
+set -Eeuo pipefail
+printf 'strata %s\n' "$*" >> "${CFG_TEST_CALLS:?}"
+[[ "$*" == --dismiss-portal-prompt ]] || exit 97
+[[ "${CFG_TEST_STRATA_FAIL:-0}" != 1 ]] || { printf 'fixture dismissal failure\n' >&2; exit 1; }
+marker="${XDG_CONFIG_HOME:-$HOME/.config}/strata/portal-opt-in-v1"
+mkdir -p -- "${marker%/*}"
+if [[ ! -e "$marker" ]]; then (umask 077; printf '1\n' > "$marker"); fi
+printf 'File chooser offer dismissed.\n'

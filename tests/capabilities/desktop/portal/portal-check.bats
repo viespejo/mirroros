@@ -20,6 +20,7 @@ setup() {
   # The packaged hyprland default, which the /etc/xdg file replaces whole.
   printf '[preferred]\ndefault=hyprland;gtk\n' > "$ROOT/usr/share/xdg-desktop-portal/hyprland-portals.conf"
   portal gtk org.freedesktop.impl.portal.desktop.gtk 'FileChooser;org.freedesktop.impl.portal.AppChooser;org.freedesktop.impl.portal.Settings'
+  portal strata org.freedesktop.impl.portal.desktop.strata FileChooser
   portal hyprland org.freedesktop.impl.portal.desktop.hyprland 'Screenshot;org.freedesktop.impl.portal.ScreenCast;org.freedesktop.impl.portal.GlobalShortcuts'
   portal gnome-keyring org.freedesktop.secrets Secret
   printf '[D-BUS Service]\nName=org.freedesktop.FileManager1\nExec=/usr/bin/strata --file-manager1\n' \
@@ -41,7 +42,7 @@ shift
 case "$1 $2" in
   'list --no-legend')
     for name in org.freedesktop.portal.Desktop org.freedesktop.impl.portal.desktop.gtk \
-      org.freedesktop.impl.portal.desktop.hyprland org.freedesktop.secrets org.freedesktop.FileManager1; do
+      org.freedesktop.impl.portal.desktop.strata org.freedesktop.impl.portal.desktop.hyprland org.freedesktop.secrets org.freedesktop.FileManager1; do
       [[ "$name" == "${MISSING_NAME:-none}" ]] || printf '%s - - - (activatable) - - -\n' "$name"
     done ;;
   'call org.freedesktop.portal.Desktop')
@@ -77,7 +78,7 @@ read_only_calls() {
   [ "$status" -eq 0 ]
   [[ "$output" != *FAIL* && "$output" != *notice* ]]
   [[ "$output" == *"ok: portal preferences: $ROOT/etc/xdg/xdg-desktop-portal/hyprland-portals.conf"* ]]
-  for line in 'FileChooser: routed to gtk' 'Screenshot: routed to hyprland' 'ScreenCast: routed to hyprland' \
+  for line in 'FileChooser: routed to strata' 'Screenshot: routed to hyprland' 'ScreenCast: routed to hyprland' \
     'Settings: routed to gtk' 'Secret: routed to gnome-keyring' 'Settings: color-scheme answers 1 (dark)' \
     'org.freedesktop.secrets: owned by gnome-keyring-daemon' 'login collection: unlocked' \
     'org.freedesktop.FileManager1: activatable through strata' \
@@ -102,10 +103,17 @@ read_only_calls() {
   [ "$status" -eq 1 ]
   [[ "$output" == *'FAIL: Screenshot: no configured backend declares org.freedesktop.impl.portal.Screenshot; expected hyprland'* ]]
   [[ "$output" == *'FAIL: ScreenCast:'* ]]
-  [[ "$output" == *'ok: FileChooser: routed to gtk'* ]]
-  MISSING_NAME=org.freedesktop.impl.portal.desktop.gtk run "$SCRIPT"
+  [[ "$output" == *'ok: FileChooser: routed to strata'* ]]
+  MISSING_NAME=org.freedesktop.impl.portal.desktop.strata run "$SCRIPT"
   [ "$status" -eq 1 ]
-  [[ "$output" == *'FAIL: FileChooser: backend gtk bus name org.freedesktop.impl.portal.desktop.gtk is neither owned nor activatable; expected gtk'* ]]
+  [[ "$output" == *'FAIL: FileChooser: backend strata bus name org.freedesktop.impl.portal.desktop.strata is neither owned nor activatable; expected strata'* ]]
+}
+
+@test "without strata.portal the FileChooser falls back to gtk and fails naming strata" {
+  rm "$ROOT/usr/share/xdg-desktop-portal/portals/strata.portal"
+  run "$SCRIPT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'FAIL: FileChooser: routed to gtk; expected strata'* ]]
 }
 
 @test "a missing system preference file falls back to the packaged one and fails" {
@@ -202,5 +210,5 @@ read_only_calls() {
   portal gnome-keyring org.freedesktop.secrets 'Secret;org.freedesktop.impl.portal.FileChooser'
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'notice: FileChooser: routed to gnome-keyring by the user override; system expects gtk'* ]]
+  [[ "$output" == *'notice: FileChooser: routed to gnome-keyring by the user override; system expects strata'* ]]
 }

@@ -96,6 +96,19 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **Incorporated material:** Recipe adapted from the AUR package `sesh-bin` into `capabilities/workflow/tmux/sesh/PKGBUILD`, keeping its maintainer line; the upstream release binary is downloaded and checksum-verified at build time, not stored
 - **Detailed provenance:** [Tmux sources and notice scope](../capabilities/workflow/tmux/sources.md)
 
+### Strata and the strata-bin recipe
+
+- **License (SPDX):** `MIT` for Strata and its packaging template; the release binary bundles UnRAR under `LicenseRef-UnRAR` (non-free, accepted)
+- **Incorporated material:** First-party `packaging/aur/PKGBUILD.in` rendered and adapted into `capabilities/desktop/files/strata/PKGBUILD`, keeping its maintainer line; the attested release binary and its integration files are downloaded and checksum-verified at build time, not stored, and installed with Strata's `LICENSE`, `UnRAR.txt` and `THIRD_PARTY_LICENSES.md`; the theme-state paths and Quattro keys read by Strata are documented and pinned by a contract test, with no Strata code copied
+- **Detailed provenance:** [File manager source and ownership](../capabilities/desktop/files/sources.md)
+
+### Omarchy file manager integration
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** `bin/omarchy-cmd-terminal-cwd` adapted into `capabilities/desktop/files/files-cwd` (tmux-aware, opens Strata); file manager chords and descriptions from `default/hypr/bindings/applications.lua` adapted into `capabilities/desktop/compositor/providers/hyprland/window-bindings.lua`
+- **License text:** Copyright and permission notice retained at `capabilities/desktop/files/OMARCHY-LICENSE`
+- **Detailed provenance:** [File manager source and ownership](../capabilities/desktop/files/sources.md) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md)
+
 ### Omarchy portal integration
 
 - **License (SPDX):** `MIT`

@@ -1,0 +1,63 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Open Strata in the working directory of the focused terminal (Story 4.5, DEC-016), bound to SUPER+ALT+SHIFT+F.
+# Adapted from Omarchy bin/omarchy-cmd-terminal-cwd, origin/quattro 2d33fd5973eb349c3f7e3ae56e6c293516cc4e18
+# (MIT; see OMARCHY-LICENSE in capabilities/desktop/files). The focused window's newest child must lead its own
+# session on a pty, as a terminal's shell does. When the terminal's foreground process is a tmux client (Foot
+# running tmux, or tmux started from the shell), the directory is that client's active pane path; otherwise it is
+# the shell's working directory, if the shell is listed in /etc/shells. Anything else, or a directory that no longer
+# exists, opens $HOME. Kitty and Strata windows are not directory sources.
+# Usage: files-cwd [--print]. --print writes the directory instead of opening Strata.
+# MIRROROS_FILES_CWD_ROOT prefixes /proc and /etc/shells; it is empty outside tests.
+set -uo pipefail
+
+root="${MIRROROS_FILES_CWD_ROOT:-}"
+print=0
+if (( $# == 1 )) && [[ "$1" == --print ]]; then
+  print=1
+elif (( $# != 0 )); then
+  printf 'Usage: files-cwd [--print]\n' >&2
+  exit 2
+fi
+
+directory=''
+terminal_pid=''
+window="$(hyprctl activewindow -j 2>/dev/null)" || window=''
+if [[ "$window" =~ \"pid\":[[:space:]]*([0-9]+) ]]; then terminal_pid="${BASH_REMATCH[1]}"; fi
+
+# The newest child, read from the kernel's child lists.
+child=''
+if [[ -n "$terminal_pid" ]]; then
+  for children_file in "$root/proc/$terminal_pid"/task/*/children; do
+    [[ -r "$children_file" ]] || continue
+    read -ra children < "$children_file" || true
+    for candidate in "${children[@]}"; do
+      [[ "$candidate" =~ ^[0-9]+$ ]] || continue
+      (( candidate > ${child:-0} )) && child="$candidate"
+    done
+  done
+fi
+
+if [[ -n "$child" ]] && read -r stat 2>/dev/null < "$root/proc/$child/stat"; then
+  # Fields after the command: state ppid pgrp session tty_nr tpgid.
+  read -r _ _ _ session tty_nr foreground _ <<< "${stat##*) }"
+  if [[ "$session" == "$child" && "$tty_nr" =~ ^[0-9]+$ && "$tty_nr" != 0 && "$foreground" =~ ^[0-9]+$ ]]; then
+    if (( foreground > 0 )) && [[ "$(readlink "$root/proc/$foreground/exe" 2>/dev/null)" == */tmux ]]; then
+      client_tty="$(readlink "$root/proc/$foreground/fd/0" 2>/dev/null)"
+      if [[ "$client_tty" == /dev/pts/* ]]; then
+        directory="$(tmux display-message -c "$client_tty" -p '#{pane_current_path}' 2>/dev/null)"
+      fi
+    else
+      directory="$(readlink -f "$root/proc/$child/cwd" 2>/dev/null)"
+      shell="$(readlink -f "$root/proc/$child/exe" 2>/dev/null)"
+      grep -Fqsx -- "$shell" "$root/etc/shells" || directory=''
+    fi
+  fi
+fi
+
+[[ -n "$directory" && -d "$directory" ]] || directory="$HOME"
+if (( print )); then
+  printf '%s\n' "$directory"
+  exit 0
+fi
+exec uwsm app -- strata "$directory"

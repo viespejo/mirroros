@@ -13,7 +13,7 @@ dependency graph, or resume state. The current order is:
 1. `visual/theme`: the reviewed theme, backgrounds and initialize-only current theme/background links.
 2. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
 3. `desktop/portal`: the desktop portal frontend, the GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` session command. Portal changes take effect at the next login.
-4. `desktop/files`: Nautilus, without personal settings or optional integrations.
+4. `desktop/files`: Strata from a reviewed local recipe with its FileManager1 and FileChooser integrations, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; it fails while another package also owns `org.freedesktop.FileManager1`.
 5. `workflow/node`: the user's NVM release and the declared Node.js runtime, with its managed environment file.
 6. `workflow/shell`: Zsh as the interactive shell with its approved native startup files, Zplug and identified plugin sources, shell tools, and the Starship initialization for bash.
 7. `workflow/tmux`: tmux with the approved native defaults, TPM and identified plugin sources, the compiled tmux-thumbs helper, and Sesh from a reviewed local recipe.
@@ -65,7 +65,7 @@ Helpers in `lib/` own the effect boundary:
 | `common.sh` | Context guard, `cfg_exec` command routing, positioned step execution, change tracking, postcondition checks, outcomes and signals |
 | `validate.sh` | Arguments, prerequisites, lock, keyboard validation, package resolution and upgrade guard |
 | `packages.sh` | Missing-package transactions, installed-package postconditions, and the reviewed local-recipe package build |
-| `files.sh` | Managed files and links, user work and scripts, bashrc block, Node.js declaration, and single-session query |
+| `files.sh` | Managed files and links, user work and scripts, bashrc block, Node.js declaration, single-session query, and the single-owner check for packaged D-Bus session services |
 | `units.sh` | Unit enablement, bounded system-unit start/reload, default target, and read-only display-manager queries |
 | `evidence.sh` | Private run directory, sanitized TSV records, package versions, source identities, and allowed logs |
 | `repositories.sh` | User-level current-branch resolution and safe external source synchronization |

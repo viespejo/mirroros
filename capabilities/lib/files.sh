@@ -267,6 +267,41 @@ cfg_login_shell_present() {
   [[ "$current" == "$1" || ( "$current" != /usr/bin/bash && "$current" != /bin/bash ) ]]
 }
 
+# A session bus name must have one packaged activation file. Every /usr/share/dbus-1/services file whose
+# [D-BUS Service] section declares Name=<bus-name> is an owner; with more than one, each file and its package are
+# reported with the action that removes each unexpected owner, and the result is 4; nothing is removed. Otherwise the
+# result is 0 only when the single owner is the expected file.
+cfg_dbus_service_owner_unique() {
+  local name="$1" expected="$2" file path package owners=()
+  cfg_context
+  for file in "$(cfg_path /usr/share/dbus-1/services)"/*.service; do
+    [[ -f "$file" ]] || continue
+    awk -v name="$name" '
+      { sub(/\r$/, "") }
+      /^\[D-BUS Service\]$/ { section=1; next }
+      /^\[/ { section=0 }
+      section && $0 == "Name=" name { found=1 }
+      END { exit !found }
+    ' "$file" || continue
+    owners+=("/usr/share/dbus-1/services/${file##*/}")
+  done
+  if (( ${#owners[@]} > 1 )); then
+    printf 'Conflict: %s has %s packaged owners:\n' "$name" "${#owners[@]}" >&2
+    for path in "${owners[@]}"; do
+      package="$(cfg_exec pacman -Qqo -- "$path" 2>/dev/null)" || package=''
+      printf '  %s (%s)\n' "$path" "${package:-not owned by a package}" >&2
+      [[ "$path" != "$expected" ]] || continue
+      if [[ -n "$package" ]]; then
+        printf 'Next action: sudo pacman -Rns %s, then rerun configure.\n' "$package" >&2
+      else
+        printf 'Next action: move %s aside, then rerun configure.\n' "$path" >&2
+      fi
+    done
+    return 4
+  fi
+  [[ "${#owners[@]}" == 1 && "${owners[0]}" == "$expected" ]]
+}
+
 # The Node.js version is declared once, in the managed Zsh environment file, and parsed as data.
 cfg_node_version() {
   local version
