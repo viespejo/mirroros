@@ -24,6 +24,11 @@ If the session later uses another state directory, configure does not move an ex
 The step also publishes tracked selection and path-checking helpers under `/usr/share/mirroros/themes/`;
 modified or unknown helper files are preserved as conflicts. This link is not itself a trust guarantee, and
 the shell and Hyprland use the resolver and only accept the reviewed default. Other consumers do not yet use the link.
+The same step separately publishes the shared native GTK4 bundle at `/usr/share/mirroros/themes/gtk4` and the
+palette-specific `default/gtk-4.0.css`. The audio panel's Advanced action uses its bounded launcher through
+`uwsm app`, preserving real user preferences and changing only the application's GTK theme and data search path.
+No global GTK/icon setting, portal routing or existing application is changed or restarted. See the
+[GTK4 procedure](gtk4-theme.md) for scope, validation, conflicts and native-appearance recovery.
 The same step publishes the theme's backgrounds inside its manifest-checked tree at
 `/usr/share/mirroros/themes/default/backgrounds`; modified, removed, added or linked images are conflicts.
 It initializes `$XDG_STATE_HOME/mirroros/current/background` to the approved logo image (`2-mirroros-jade.png`) only when absent, preserving
@@ -135,7 +140,7 @@ The twenty-one steps run in this order:
 
 | Step | Applied state |
 |---|---|
-| `visual/theme` | Reviewed product theme including its backgrounds, and initialize-only current theme/background links |
+| `visual/theme` | Reviewed product theme including its backgrounds and GTK4 palette, shared native GTK4 resources/launcher, and initialize-only current theme/background links |
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
 | `desktop/files` | Strata built by the user from a reviewed recipe, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; fails while another package also owns `org.freedesktop.FileManager1` ([sources](../../capabilities/desktop/files/sources.md)) |

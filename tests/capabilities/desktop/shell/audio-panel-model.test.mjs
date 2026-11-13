@@ -99,7 +99,7 @@ test('panel contract: owned commands, open-only probes, advanced tool and no Oma
   assert.match(audio, /command: \[root\.audioDevice, "availability", "input"\]/);
   assert.match(audio, /interval: 5000\n\s+running: root\.opened/);
   assert.match(audio, /enabled: root\.opened && !!root\.inputPeakNode/);
-  assert.match(audio, /Quickshell\.execDetached\(\["uwsm", "app", "--", "pavucontrol"\]\)/);
+  assert.match(audio, /Quickshell\.execDetached\(\["uwsm", "app", "--", "\/usr\/share\/mirroros\/themes\/gtk4\/launch", "pavucontrol"\]\)/);
   assert.match(audio, /text: "Advanced…"/);
   const code = audio.split('\n').filter(line => !/^\s*\/\//.test(line)).join('\n');
   assert.doesNotMatch(code, /omarchy-audio|omarchy\.media|easyeffects|UntypedInput|AudioNodes|activeMediaPlayer|ipcTarget/);

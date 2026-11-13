@@ -1,0 +1,257 @@
+/* Reviewed coverage for GTK 4.24 stock controls.
+ * Uses the existing MirrorOS palette; no GTK assets are copied.
+ * Strata-derived base attribution remains in ../sources.md.
+ */
+window button.toggle,
+window button.toggle:backdrop {
+  background-image: none;
+  background-color: @mirroros_raised;
+  color: @mirroros_text;
+  border-color: @mirroros_border;
+  box-shadow: none;
+}
+window button.toggle:hover {
+  background: @mirroros_selection;
+  color: @mirroros_bright;
+}
+window button.toggle:checked,
+window button.toggle:checked:backdrop,
+window button.toggle:active {
+  background: @mirroros_accent;
+  color: @mirroros_deep;
+  border-color: @mirroros_secondary;
+}
+window button.toggle:disabled,
+window button.toggle:disabled:backdrop {
+  background: @mirroros_background;
+  color: @mirroros_dim;
+  border-color: @mirroros_selection;
+}
+window button.toggle:checked:disabled,
+window button.toggle:checked:disabled:backdrop {
+  background: @mirroros_selection;
+  color: @mirroros_dim;
+  border-color: @mirroros_border;
+}
+window button.toggle > label {
+  color: inherit;
+}
+
+/* Radios and TreeView cell renderers do not match checkbutton > check. */
+window checkbutton > radio,
+check,
+radio {
+  background-image: none;
+  background-color: @mirroros_surface;
+  color: @mirroros_text;
+  border-color: @mirroros_border;
+  box-shadow: none;
+}
+window checkbutton > radio:hover,
+check:hover,
+radio:hover {
+  background-image: none;
+  background-color: @mirroros_raised;
+  border-color: @mirroros_secondary;
+}
+window checkbutton > radio:checked,
+window checkbutton > radio:indeterminate,
+check:checked,
+check:indeterminate,
+radio:checked,
+radio:indeterminate {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_secondary;
+  color: @mirroros_deep;
+  box-shadow: none;
+}
+window checkbutton > radio:checked:hover,
+window checkbutton > radio:indeterminate:hover,
+check:checked:hover,
+radio:checked:hover {
+  background-image: none;
+  background-color: @mirroros_secondary;
+}
+window checkbutton > radio:disabled,
+check:disabled,
+radio:disabled {
+  opacity: 0.5;
+}
+
+window switch,
+window switch:backdrop {
+  background: @mirroros_raised;
+  border-color: @mirroros_border;
+  color: @mirroros_foreground;
+  box-shadow: none;
+}
+window switch:checked,
+window switch:checked:backdrop {
+  background: @mirroros_selection;
+  border-color: @mirroros_accent;
+}
+window switch > slider,
+window switch:hover > slider,
+window switch:backdrop > slider {
+  background-image: none;
+  background-color: @mirroros_dim;
+  border-color: @mirroros_border;
+  box-shadow: none;
+}
+window switch:checked > slider,
+window switch:checked:hover > slider {
+  background: @mirroros_accent;
+  border-color: @mirroros_secondary;
+}
+window switch:disabled,
+window switch:checked:disabled {
+  background: @mirroros_background;
+  border-color: @mirroros_selection;
+}
+window switch:disabled > slider {
+  background: @mirroros_border;
+  border-color: @mirroros_selection;
+}
+
+window notebook > header.bottom > tabs > tab:checked,
+window notebook > header.bottom > tabs > tab:checked:backdrop {
+  box-shadow: inset 0 3px @mirroros_accent;
+}
+window notebook > header.left > tabs > tab:checked,
+window notebook > header.left > tabs > tab:checked:backdrop {
+  box-shadow: inset -3px 0 @mirroros_accent;
+}
+window notebook > header.right > tabs > tab:checked,
+window notebook > header.right > tabs > tab:checked:backdrop {
+  box-shadow: inset 3px 0 @mirroros_accent;
+}
+window notebook:focus-visible > header > tabs > tab:checked {
+  outline-color: @mirroros_accent;
+}
+
+window scale > trough > highlight,
+window scale > trough > highlight:backdrop {
+  background: @mirroros_accent;
+  border-color: @mirroros_accent;
+}
+window scale > trough > slider,
+window scale > trough > slider:hover,
+window scale > trough > slider:active,
+window scale > trough > slider:backdrop {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border-color: @mirroros_accent;
+  box-shadow: none;
+}
+window scale.vertical.marks-before:not(.marks-after) > trough > slider,
+window scale.vertical.marks-after:not(.marks-before) > trough > slider,
+window scale.vertical.marks-before:not(.marks-after) > trough > slider:hover,
+window scale.vertical.marks-after:not(.marks-before) > trough > slider:hover {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border: 1px solid @mirroros_accent;
+  border-radius: 50%;
+  min-width: 16px;
+  min-height: 16px;
+  margin: -7px;
+  box-shadow: none;
+}
+window scale > trough:disabled,
+window scale > trough > highlight:disabled {
+  background: @mirroros_raised;
+  border-color: @mirroros_selection;
+}
+window scale > trough > slider:disabled {
+  background-image: none;
+  background-color: @mirroros_border;
+  border-color: @mirroros_selection;
+  box-shadow: none;
+}
+window scale:focus-visible > trough {
+  outline-color: @mirroros_accent;
+}
+
+window button.link,
+window button.link:visited,
+window link,
+window link:visited {
+  background: transparent;
+  color: @mirroros_secondary;
+  border-color: transparent;
+  box-shadow: none;
+}
+window button.link:hover,
+window link:hover {
+  color: @mirroros_bright;
+}
+window button.link:active,
+window link:active {
+  color: @mirroros_accent;
+}
+window button.link:disabled,
+window link:disabled {
+  color: @mirroros_dim;
+}
+
+window treeview.view,
+window columnview.view,
+window textview.view,
+window textview > text {
+  background-color: @mirroros_background;
+  color: @mirroros_foreground;
+  border-color: @mirroros_selection;
+  -gtk-icon-palette: success @mirroros_accent, warning @mirroros_warning, error @mirroros_error;
+}
+window treeview.view:selected,
+window treeview.view:selected:focus,
+window columnview.view:selected {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}
+window treeview.view > header > button,
+window columnview.view > header > button {
+  background: @mirroros_surface;
+  color: @mirroros_foreground;
+  border-color: @mirroros_selection;
+  box-shadow: none;
+}
+window treeview.view:focus-visible,
+window columnview.view:focus-visible {
+  outline-color: @mirroros_accent;
+}
+
+window entry > text > selection,
+window entry > text > selection:focus-within,
+window textview > text > selection,
+window textview > text > selection:focus-within {
+  background: @mirroros_selection;
+  color: @mirroros_bright;
+}
+window levelbar > trough > block:not(.empty),
+window levelbar > trough > block.high,
+window levelbar > trough > block.full {
+  background: @mirroros_accent;
+  border-color: @mirroros_accent;
+}
+window levelbar > trough > block.low {
+  background: @mirroros_warning;
+  border-color: @mirroros_warning;
+}
+window levelbar > trough > block.empty {
+  background: @mirroros_surface;
+  border-color: @mirroros_selection;
+}
+
+window entry > progress > trough > progress,
+window spinbutton:not(.vertical) > progress > trough > progress,
+window spinbutton.vertical > text > progress > trough > progress {
+  background-color: transparent;
+  background-image: none;
+  border-color: @mirroros_accent;
+}
+
+/* Optical adjustment of the tick only; preserve the native hit target. */
+check:checked:not(:indeterminate) {
+  -gtk-icon-transform: translateX(-0.5px);
+}

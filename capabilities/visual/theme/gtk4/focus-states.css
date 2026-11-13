@@ -1,0 +1,150 @@
+/* Reviewed GTK4 focus/interaction coverage.
+ * Keep native indicator widths and hit targets; change their colors only.
+ */
+*:focus,
+*:focus-visible,
+*:focus-within {
+  outline-color: @mirroros_accent;
+}
+window button:focus:focus-visible,
+window button.toggle:focus:focus-visible,
+window button.link:focus:focus-visible,
+window link:focus:focus-visible,
+window checkbutton:focus:focus-visible,
+window switch:focus:focus-visible,
+window entry:focus-within,
+window spinbutton:focus-within:not(.vertical),
+window spinbutton.vertical > text:focus-within,
+window treeview.view:focus:focus-visible,
+window columnview.view:focus:focus-visible,
+window iconview:focus:focus-visible,
+window label:focus:focus-visible,
+window flowbox > flowboxchild:focus:focus-visible,
+window gridview > child:focus:focus-visible,
+window listview > row:focus:focus-visible,
+window list > row:focus:focus-visible,
+window .boxed-list > row:focus:focus-visible,
+window stacksidebar row:focus:focus-visible,
+window .navigation-sidebar > row:focus-visible:focus-within,
+window shortcut:focus:focus-visible,
+window colorswatch:focus:focus-visible,
+window plane:focus:focus-visible,
+window calendar > grid > label:focus {
+  outline-color: @mirroros_accent;
+}
+window entry:focus-within,
+window spinbutton:focus-within:not(.vertical),
+window spinbutton.vertical > text:focus-within {
+  border-color: @mirroros_accent;
+}
+window entry.error:focus-within,
+window spinbutton.error:focus-within {
+  border-color: @mirroros_error;
+  outline-color: @mirroros_error;
+}
+window entry.warning:focus-within,
+window spinbutton.warning:focus-within {
+  border-color: @mirroros_warning;
+  outline-color: @mirroros_warning;
+}
+window scale:focus:focus-visible > trough,
+window notebook:focus:focus-visible > header > tabs > tab:checked,
+window notebook > header > tabs > arrow:focus:focus-visible,
+window expander-widget:focus:focus-visible > box > title,
+window columnview row:not(:selected) cell editablelabel:not(.editing):focus-within,
+window columnview row:not(:selected) cell editablelabel.editing:focus-within {
+  outline-color: @mirroros_accent;
+}
+window entry > image:active,
+window spinbutton:not(.vertical) > image:active {
+  color: @mirroros_accent;
+}
+
+/* Native TreeView cell nodes are transient and lack window ancestry. */
+check:active,
+radio:active {
+  background-image: none;
+  background-color: @mirroros_raised;
+  border-color: @mirroros_accent;
+  box-shadow: none;
+}
+check:checked:active,
+check:checked:hover:active,
+check:indeterminate:active,
+check:indeterminate:hover:active,
+radio:checked:active,
+radio:checked:hover:active,
+radio:indeterminate:active,
+radio:indeterminate:hover:active,
+check:checked:selected,
+check:checked:selected:focus,
+check:indeterminate:selected,
+check:indeterminate:selected:focus,
+radio:checked:selected,
+radio:checked:selected:focus,
+radio:indeterminate:selected,
+radio:indeterminate:selected:focus {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_secondary;
+  color: @mirroros_deep;
+  box-shadow: none;
+}
+check:not(:checked):not(:indeterminate):selected,
+check:not(:checked):not(:indeterminate):selected:focus,
+radio:not(:checked):not(:indeterminate):selected,
+radio:not(:checked):not(:indeterminate):selected:focus {
+  background-image: none;
+  background-color: @mirroros_surface;
+  border-color: @mirroros_secondary;
+  color: @mirroros_text;
+  box-shadow: none;
+}
+check:indeterminate,
+radio:indeterminate {
+  -gtk-icon-transform: translateX(0.5px);
+}
+check:indeterminate:hover,
+check:indeterminate:focus,
+check:indeterminate:focus-visible,
+check:indeterminate:focus-within,
+radio:indeterminate:hover,
+radio:indeterminate:focus,
+radio:indeterminate:focus-visible,
+radio:indeterminate:focus-within {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_secondary;
+  color: @mirroros_deep;
+  box-shadow: none;
+}
+window checkbutton:indeterminate:focus:focus-visible,
+window checkbutton:indeterminate:focus-within {
+  outline-color: @mirroros_accent;
+}
+
+window .view:selected,
+window .view:selected:focus,
+window iconview:selected,
+window iconview:selected:focus,
+window textview > text:selected,
+window textview > text:selected:focus,
+window flowbox > flowboxchild:selected,
+window gridview > child:selected,
+window listview > row:selected,
+window list > row:selected,
+window list > row.activatable:selected:hover,
+window list > row.activatable:selected:active,
+window list > row.activatable:selected.has-open-popup,
+window calendar > grid > label.day-number:selected {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}
+window label > selection:focus-within,
+window editablelabel > stack > text > selection:focus-within,
+window spinbutton.vertical > text > selection:focus-within,
+window spinbutton.vertical > text > text > selection:focus-within,
+window columnview row:not(:selected) cell editablelabel.editing text selection:focus-within {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}

@@ -1,0 +1,43 @@
+{
+  "chromium": [
+    "chromium-browser",
+    "chromium",
+    "google-chrome",
+    "google-chrome-stable",
+    "chrome",
+    "com.google.Chrome",
+    "org.chromium.Chromium"
+  ],
+  "firefox": [
+    "firefox",
+    "firefox-esr",
+    "org.mozilla.firefox"
+  ],
+  "spotify": [
+    "spotify",
+    "com.spotify.Client"
+  ],
+  "vlc": [
+    "vlc",
+    "org.videolan.VLC"
+  ],
+  "mpv": [
+    "mpv",
+    "io.mpv.Mpv"
+  ],
+  "discord": [
+    "discord",
+    "com.discordapp.Discord"
+  ],
+  "obs": [
+    "com.obsproject.Studio",
+    "obs",
+    "obs-studio"
+  ],
+  "generic": [
+    "application-x-executable",
+    "audio",
+    "audio-x-generic",
+    "multimedia-volume-control"
+  ]
+}

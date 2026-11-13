@@ -66,6 +66,13 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **Incorporated material:** Osaka Jade palette adapted at `capabilities/visual/theme/default/colors.toml`; published by configure but not yet loaded by consumers
 - **Detailed provenance:** [Fixed theme source](../capabilities/visual/theme/sources.md) and [MIT notice](../capabilities/visual/theme/default/LICENSE.omarchy)
 
+### Strata
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Selective GTK4 form-control and font-stack adaptation in `capabilities/visual/theme/gtk4/base.css`; the common GTK4 coverage, application adapters and neutral application-icon drawings are original MirrorOS material, not a copied Strata theme or an Adwaita icon tree
+- **License text:** Original notice retained at `capabilities/visual/theme/gtk4/STRATA-LICENSE`, delivered with the shared GTK4 bundle
+- **Detailed provenance:** [Native GTK4 theme sources](../capabilities/visual/theme/sources.md#native-gtk4-theme-and-pavucontrol)
+
 ### Tokyo Night terminal palette
 
 - **License (SPDX):** `MIT` for the explicitly licensed terminal extra; other upstream repository material has its own terms

@@ -1,0 +1,500 @@
+window, .background {
+  background-color: @mirroros_background;
+  color: @mirroros_foreground;
+}
+headerbar {
+  background: @mirroros_surface;
+  color: @mirroros_text;
+  box-shadow: inset 0 -1px @mirroros_selection;
+}
+notebook > header {
+  background: @mirroros_surface;
+  border-color: @mirroros_selection;
+}
+notebook > header > tabs > tab:checked {
+  background: @mirroros_raised;
+  box-shadow: inset 0 -3px @mirroros_accent;
+}
+notebook > stack, viewport, list, row {
+  background-color: @mirroros_background;
+  color: @mirroros_foreground;
+}
+button, dropdown > button, combobox > box > button {
+  background-image: none;
+  background-color: @mirroros_raised;
+  color: @mirroros_text;
+  border-color: @mirroros_selection;
+  box-shadow: none;
+}
+button:hover {
+  background-color: @mirroros_selection;
+}
+button:checked, button:active {
+  background-color: @mirroros_accent;
+  color: @mirroros_deep;
+}
+scale trough {
+  background-color: @mirroros_deep;
+  border-color: @mirroros_selection;
+}
+scale highlight {
+  background-color: @mirroros_accent;
+  border-color: @mirroros_accent;
+}
+scale slider {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border-color: @mirroros_accent;
+  box-shadow: none;
+}
+progressbar trough, levelbar trough {
+  background-color: @mirroros_deep;
+  border-color: @mirroros_selection;
+}
+progressbar progress, levelbar block.filled {
+  background-color: @mirroros_accent;
+  border-color: @mirroros_accent;
+}
+entry, popover > contents {
+  background-color: @mirroros_surface;
+  color: @mirroros_text;
+  border-color: @mirroros_selection;
+}
+*:focus-visible {
+  outline-color: @mirroros_secondary;
+}
+
+/* Match the base theme's state and orientation specificity. */
+notebook > header > tabs > tab,
+notebook > header > tabs > tab:checked,
+notebook > header > tabs > tab:backdrop,
+notebook > header > tabs > tab:backdrop:checked {
+  color: @mirroros_text;
+}
+notebook > header.top > tabs > tab:checked,
+notebook > header.top > tabs > tab:backdrop:checked {
+  box-shadow: inset 0 -3px @mirroros_accent;
+}
+notebook > header > tabs > tab:hover {
+  background-color: @mirroros_raised;
+  color: @mirroros_bright;
+}
+scale.horizontal > trough > highlight,
+scale.horizontal > trough > highlight:backdrop {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_accent;
+}
+scale.horizontal > trough > slider,
+scale.horizontal > trough > slider:backdrop {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border-color: @mirroros_accent;
+}
+button.image-button, button.image-button:backdrop,
+button.image-button:checked, button.image-button:backdrop:checked {
+  background-image: none;
+  background-color: @mirroros_raised;
+  color: @mirroros_text;
+  border-color: @mirroros_selection;
+}
+actionbar > revealer > box,
+actionbar > revealer > box:backdrop {
+  background: @mirroros_background;
+  border-color: @mirroros_selection;
+}
+separator {
+  background-color: @mirroros_selection;
+}
+
+window.background, window.background:backdrop {
+  background-color: @mirroros_background;
+  color: @mirroros_foreground;
+}
+scale.horizontal.marks-before:not(.marks-after) > trough > slider,
+scale.horizontal.marks-before:not(.marks-after) > trough > slider:hover,
+scale.horizontal.marks-before:not(.marks-after) > trough > slider:backdrop,
+scale.horizontal.marks-before:not(.marks-after) > trough > slider:active {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border: 1px solid @mirroros_accent;
+  border-radius: 50%;
+  min-width: 16px;
+  min-height: 16px;
+  margin: -7px;
+  box-shadow: none;
+}
+
+/* Native notebook surfaces, including pavucontrol 6.2. */
+window notebook > stack:not(:only-child) {
+  background-color: @mirroros_background;
+  color: @mirroros_foreground;
+}
+
+/* ComboBox uses a toggle button and a menu with cell views. */
+combobox > box > button.combo,
+combobox > box > button.combo:backdrop {
+  background-image: none;
+  background-color: @mirroros_raised;
+  color: @mirroros_text;
+  border: 1px solid @mirroros_selection;
+  box-shadow: none;
+}
+combobox > box > button.combo:hover,
+combobox > box > button.combo:checked {
+  background-image: none;
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+  border-color: @mirroros_accent;
+}
+combobox cellview, combobox arrow {
+  color: inherit;
+}
+popover.background, popover.background > contents,
+popover.menu > contents, popover.menu.background > contents,
+popover treeview, popover treeview.view,
+popover modelbutton, popover cellview {
+  background-image: none;
+  background-color: @mirroros_surface;
+  color: @mirroros_text;
+  border-color: @mirroros_selection;
+}
+popover modelbutton:hover, popover modelbutton:active,
+popover modelbutton:selected, popover modelbutton:selected:hover,
+popover treeview.view:selected, popover treeview.view:selected:focus {
+  background-image: none;
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}
+popover arrow {
+  color: @mirroros_secondary;
+}
+combobox popover.menu modelbutton {
+  background-color: @mirroros_surface;
+  color: @mirroros_text;
+}
+combobox popover.menu modelbutton:hover,
+combobox popover.menu modelbutton:selected,
+combobox popover.menu modelbutton:selected:active {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}
+combobox popover.menu modelbutton cellview {
+  background-color: transparent;
+  color: inherit;
+}
+combobox popover listview,
+combobox popover listview > row.activatable {
+  background-color: @mirroros_surface;
+  color: @mirroros_text;
+}
+combobox popover listview > row.activatable:hover,
+combobox popover listview > row.activatable:selected,
+combobox popover listview > row.activatable:selected:hover {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+  box-shadow: none;
+}
+combobox popover listview > row.activatable cellview {
+  background-color: transparent;
+  color: inherit;
+}
+
+/* Keep icon rendering monochrome and checked state distinct. */
+image, button image {
+  -gtk-icon-style: symbolic;
+  -gtk-icon-shadow: none;
+  -gtk-icon-filter: none;
+  color: inherit;
+}
+window button.image-button,
+window button.image-button:backdrop {
+  background-image: none;
+  background-color: @mirroros_background;
+  color: @mirroros_secondary;
+  border-color: @mirroros_selection;
+  box-shadow: none;
+}
+window button.image-button:hover {
+  background-color: @mirroros_raised;
+  color: @mirroros_bright;
+  border-color: @mirroros_accent;
+}
+window button.image-button:checked,
+window button.image-button:checked:backdrop {
+  background-image: none;
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+  border-color: @mirroros_accent;
+}
+
+/* Marked scales use image assets in Adwaita unless explicitly replaced. */
+window scale.horizontal > trough > slider,
+window scale.horizontal.marks-before:not(.marks-after) > trough > slider,
+window scale.horizontal.marks-after:not(.marks-before) > trough > slider,
+window scale.horizontal.marks-before:not(.marks-after) > trough > slider:hover,
+window scale.horizontal.marks-after:not(.marks-before) > trough > slider:hover,
+window scale.horizontal.marks-before:not(.marks-after) > trough > slider:backdrop,
+window scale.horizontal.marks-after:not(.marks-before) > trough > slider:backdrop {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border: 1px solid @mirroros_accent;
+  border-radius: 50%;
+  min-width: 16px;
+  min-height: 16px;
+  margin: -7px;
+  box-shadow: none;
+}
+
+/* Remaining GTK control states observed in the laboratory screenshots. */
+window progressbar > trough,
+window progressbar > trough:backdrop {
+  background-image: none;
+  background-color: @mirroros_deep;
+  border-color: @mirroros_selection;
+}
+window progressbar > trough > progress,
+window progressbar > trough > progress:backdrop {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_accent;
+}
+window button:focus:focus-visible,
+window checkbutton:focus:focus-visible,
+window notebook > header > tabs > tab:focus:focus-visible,
+window scale:focus:focus-visible,
+window expander:focus:focus-visible {
+  outline-color: @mirroros_secondary;
+}
+window combobox > box > button.combo:focus:focus-visible {
+  outline-color: @mirroros_secondary;
+}
+
+window checkbutton > check,
+window checkbutton > check:backdrop {
+  background-image: none;
+  background-color: @mirroros_surface;
+  border-color: @mirroros_border;
+  color: @mirroros_text;
+  box-shadow: none;
+}
+window checkbutton > check:hover {
+  background-image: none;
+  background-color: @mirroros_raised;
+  border-color: @mirroros_secondary;
+}
+window checkbutton > check:checked,
+window checkbutton > check:checked:backdrop,
+window checkbutton > check:indeterminate {
+  background-image: none;
+  background-color: @mirroros_accent;
+  border-color: @mirroros_secondary;
+  color: @mirroros_deep;
+  box-shadow: none;
+}
+window checkbutton > check:checked:hover,
+window checkbutton > check:checked:active {
+  background-image: none;
+  background-color: @mirroros_secondary;
+  border-color: @mirroros_secondary;
+  color: @mirroros_deep;
+}
+window checkbutton > check:disabled {
+  opacity: 0.5;
+}
+
+window spinbutton:not(.vertical),
+window spinbutton:not(.vertical):backdrop {
+  background-image: none;
+  background-color: @mirroros_surface;
+  border-color: @mirroros_selection;
+  color: @mirroros_text;
+  box-shadow: none;
+}
+window spinbutton:not(.vertical) > text,
+window spinbutton:not(.vertical) > text:backdrop {
+  background: transparent;
+  color: @mirroros_text;
+  caret-color: @mirroros_secondary;
+}
+window spinbutton:focus-within:not(.vertical):not(.error):not(.warning),
+window entry:focus-within:not(.error):not(.warning) {
+  outline-color: @mirroros_secondary;
+  border-color: @mirroros_accent;
+}
+window spinbutton:not(.vertical) > text > selection,
+window spinbutton:not(.vertical) > text > selection:focus-within {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}
+window spinbutton:not(.vertical) > button.image-button.up:not(.flat),
+window spinbutton:not(.vertical) > button.image-button.down:not(.flat) {
+  background-image: none;
+  background-color: @mirroros_raised;
+  border-color: @mirroros_selection;
+  color: @mirroros_secondary;
+  box-shadow: none;
+}
+window spinbutton:not(.vertical) > button.image-button.up:not(.flat):hover,
+window spinbutton:not(.vertical) > button.image-button.down:not(.flat):hover {
+  background-color: @mirroros_selection;
+  color: @mirroros_bright;
+}
+window spinbutton:not(.vertical) > button.image-button.up:not(.flat):disabled,
+window spinbutton:not(.vertical) > button.image-button.down:not(.flat):disabled {
+  background-color: @mirroros_surface;
+  color: @mirroros_border;
+}
+
+window scale > trough,
+window scale > trough:backdrop,
+window scale > trough > fill,
+window scale > trough > fill:backdrop {
+  background-image: none;
+  background-color: @mirroros_deep;
+  border-color: @mirroros_selection;
+  box-shadow: none;
+}
+
+/* Adapted from Strata v1.2.1, commit
+ * 491e6ba9735e821f9f49910ffd2582076196865c, src/style.css and
+ * src/ui/theme/font.rs. MIT, Copyright (c) 2026 LGSE Ltd.
+ * See STRATA-LICENSE and ../sources.md.
+ */
+
+/* Match Strata's default family stack; retain application widget sizing. */
+*, popover.background, popover.background > contents,
+popover.background label, popover.background button {
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+}
+window, popover, popover.background {
+  font-size: 13px;
+}
+
+window button:focus-visible,
+window checkbutton:focus-visible,
+window entry:focus-visible,
+window switch:focus-visible,
+window scale:focus-visible,
+window expander-widget:focus:focus-visible > box > title,
+window notebook > header > tabs > tab:focus-visible,
+window combobox > box > button.combo:focus-visible {
+  outline: 2px solid @mirroros_accent;
+  outline-offset: -2px;
+}
+
+window entry {
+  background: alpha(@mirroros_background, 0.72);
+  border: 1px solid alpha(@mirroros_border, 0.54);
+  border-radius: 5px;
+  box-shadow: none;
+  caret-color: @mirroros_accent;
+  color: @mirroros_foreground;
+}
+window entry:hover {
+  border-color: alpha(@mirroros_accent, 0.68);
+}
+window spinbutton:not(.vertical),
+window spinbutton:not(.vertical):backdrop {
+  background: @mirroros_background;
+  color: @mirroros_foreground;
+  border: 1px solid @mirroros_border;
+  border-radius: 5px;
+}
+window spinbutton:not(.vertical) > text,
+window spinbutton:not(.vertical) > text:backdrop {
+  background: transparent;
+  color: @mirroros_foreground;
+  caret-color: @mirroros_accent;
+}
+window spinbutton:focus-within:not(.vertical):not(.error):not(.warning),
+window entry:focus-within:not(.error):not(.warning) {
+  border-color: @mirroros_accent;
+  outline: 2px solid @mirroros_accent;
+  outline-offset: -2px;
+}
+window entry selection,
+window spinbutton:not(.vertical) > text > selection,
+window spinbutton:not(.vertical) > text > selection:focus-within {
+  background: @mirroros_accent;
+  color: @mirroros_background;
+}
+window spinbutton:not(.vertical) > button.image-button.up:not(.flat),
+window spinbutton:not(.vertical) > button.image-button.down:not(.flat) {
+  background: @mirroros_surface;
+  color: @mirroros_accent;
+  border-color: @mirroros_border;
+  box-shadow: none;
+}
+window spinbutton:not(.vertical) > button.image-button.up:not(.flat):hover,
+window spinbutton:not(.vertical) > button.image-button.down:not(.flat):hover {
+  background: alpha(@mirroros_accent, 0.15);
+  color: @mirroros_foreground;
+}
+window entry:disabled,
+window spinbutton:not(.vertical):disabled,
+window spinbutton:not(.vertical) > button.image-button.up:not(.flat):disabled,
+window spinbutton:not(.vertical) > button.image-button.down:not(.flat):disabled {
+  background: @mirroros_surface;
+  color: @mirroros_dim;
+  opacity: 0.55;
+}
+window entry.error,
+window entry.error:focus-within {
+  border-color: @mirroros_error;
+  outline-color: @mirroros_error;
+}
+
+/* Adapt the form-control treatment to pavucontrol's GtkComboBox. */
+window combobox > box > button.combo,
+window combobox > box > button.combo:backdrop {
+  background: alpha(@mirroros_background, 0.72);
+  color: @mirroros_foreground;
+  border: 1px solid alpha(@mirroros_border, 0.54);
+  border-radius: 5px;
+  box-shadow: none;
+}
+window combobox > box > button.combo:hover {
+  background: alpha(@mirroros_accent, 0.15);
+  border-color: alpha(@mirroros_accent, 0.68);
+}
+window combobox > box > button.combo:checked,
+window combobox > box > button.combo:active {
+  background: alpha(@mirroros_accent, 0.22);
+  border-color: @mirroros_accent;
+}
+window combobox > box > button.combo:disabled {
+  background: @mirroros_surface;
+  color: @mirroros_dim;
+}
+
+/* Scope native menu rules to this process, including detached popovers. */
+popover.menu modelbutton,
+popover.menu button.model {
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  box-shadow: none;
+  color: @mirroros_foreground;
+}
+combobox popover.menu modelbutton:hover,
+combobox popover.menu modelbutton:selected,
+combobox popover.menu modelbutton:selected:hover,
+combobox popover.menu modelbutton:selected:active,
+combobox popover.menu modelbutton:focus-visible,
+popover.menu button.model:hover,
+popover.menu button.model:selected,
+popover.menu button.model:focus-visible {
+  background: alpha(@mirroros_accent, 0.15);
+  color: @mirroros_foreground;
+}
+popover.menu modelbutton:focus-visible,
+popover.menu button.model:focus-visible {
+  outline: 1px solid @mirroros_accent;
+  outline-offset: -1px;
+}
+popover.menu modelbutton:disabled,
+popover.menu button.model:disabled {
+  color: @mirroros_dim;
+  opacity: 0.55;
+}

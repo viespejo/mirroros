@@ -10,7 +10,7 @@ for invocation, effects, evidence, and recovery.
 `configure-steps` is an explicit Bash `CFG_STEPS` array of paths relative to this directory. There is no discovery,
 dependency graph, or resume state. The current order is:
 
-1. `visual/theme`: the reviewed theme, backgrounds and initialize-only current theme/background links.
+1. `visual/theme`: the reviewed theme, backgrounds, native GTK4 palette/shared resources and process-local launcher, and initialize-only current theme/background links.
 2. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
 3. `desktop/portal`: the desktop portal frontend, the GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` session command. Portal changes take effect at the next login.
 4. `desktop/files`: Strata from a reviewed local recipe with its FileManager1 and FileChooser integrations, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; it fails while another package also owns `org.freedesktop.FileManager1`.

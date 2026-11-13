@@ -1,0 +1,32 @@
+/* Reviewed Osaka Jade GTK4 colors; see ../sources.md. */
+@define-color mirroros_accent #509475;
+@define-color mirroros_background #111c18;
+@define-color mirroros_surface #0c1512;
+@define-color mirroros_deep #090f0d;
+@define-color mirroros_raised #23372b;
+@define-color mirroros_selection #32473b;
+@define-color mirroros_border #53685b;
+@define-color mirroros_foreground #c1c497;
+@define-color mirroros_text #d6d5bc;
+@define-color mirroros_bright #f7e8b2;
+@define-color mirroros_secondary #81b8a8;
+@define-color mirroros_dim #7e8467;
+@define-color mirroros_error #ff5345;
+@define-color mirroros_warning #e5c736;
+@define-color mirroros_success #549e6a;
+
+@define-color theme_bg_color @mirroros_background;
+@define-color theme_fg_color @mirroros_foreground;
+@define-color theme_base_color @mirroros_surface;
+@define-color theme_text_color @mirroros_text;
+@define-color theme_selected_bg_color @mirroros_selection;
+@define-color theme_selected_fg_color @mirroros_bright;
+@define-color insensitive_bg_color @mirroros_background;
+@define-color insensitive_fg_color @mirroros_border;
+@define-color borders @mirroros_selection;
+@define-color warning_color @mirroros_warning;
+@define-color error_color @mirroros_error;
+@define-color success_color @mirroros_success;
+@define-color accent_bg_color @mirroros_accent;
+@define-color accent_fg_color @mirroros_deep;
+@define-color accent_color @mirroros_secondary;

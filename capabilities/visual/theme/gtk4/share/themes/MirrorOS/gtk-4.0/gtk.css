@@ -1,0 +1,8 @@
+/* Shared native GTK4 theme; only the reviewed default palette is supported. */
+@import url("resource:///org/gtk/libgtk/theme/Default/Default-dark.css");
+@import url("/usr/share/mirroros/themes/default/gtk-4.0.css");
+@import url("../../../../base.css");
+@import url("../../../../control-states.css");
+@import url("../../../../focus-states.css");
+@import url("../../../../chrome.css");
+@import url("../../../../apps/pavucontrol.css");

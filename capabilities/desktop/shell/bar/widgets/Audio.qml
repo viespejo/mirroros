@@ -496,7 +496,7 @@ Panel {
   }
 
   function openAdvanced() {
-    Quickshell.execDetached(["uwsm", "app", "--", "pavucontrol"])
+    Quickshell.execDetached(["uwsm", "app", "--", "/usr/share/mirroros/themes/gtk4/launch", "pavucontrol"])
     close()
   }
 

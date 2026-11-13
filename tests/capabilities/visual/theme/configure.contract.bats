@@ -9,12 +9,24 @@ setup() {
 teardown() { cfg_test_teardown; }
 
 @test "running configure publishes the theme and preserves a modified delivery" {
-  run "$CFG_TEST_ENTRY"
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/first"
   [ "$status" -eq 0 ] || { printf '%s\n' "$output" >&3; return 1; }
   [[ "$output" == *'visual/theme: changed'* ]]
   local dest="$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes/default"
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/colors.toml" "$dest/colors.toml"
   [ -f "$dest/LICENSE.omarchy" ]
+  cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/gtk-4.0.css" "$dest/gtk-4.0.css"
+  local gtk4="${dest%/default}/gtk4"
+  bash "$CFG_TEST_DIR/code/capabilities/visual/theme/install-theme" check \
+    "$CFG_TEST_DIR/code/capabilities/visual/theme/gtk4" "$gtk4" \
+    "$(stat -c %u "$MIRROROS_CONFIGURE_ROOT")" "$(stat -c %g "$MIRROROS_CONFIGURE_ROOT")"
+  [ -x "$gtk4/launch" ]
+  [ -f "$gtk4/STRATA-LICENSE" ]
+  grep -qxF "mirroros-gtk4-runtime"$'\t'"capabilities/visual/theme/gtk4"$'\t\t\t'"manifest-sha256:$(sha256sum < "$gtk4/.mirroros-manifest" | cut -d' ' -f1)" \
+    "$CFG_TEST_DIR/first/sources.tsv"
+  grep -qxF $'strata-gtk4-css\thttps://github.com/lgse/strata\tv1.2.1\t491e6ba9735e821f9f49910ffd2582076196865c\t' \
+    "$CFG_TEST_DIR/first/sources.tsv"
+  [ ! -e "$CFG_TEST_HOME/.config/gtk-4.0" ]
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/hyprland.lua" "$dest/hyprland.lua"
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/hyprlock.conf" "$dest/hyprlock.conf"
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/resolve-current" "${dest%/default}/resolve-current"
@@ -56,10 +68,47 @@ teardown() { cfg_test_teardown; }
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/colors.toml"
   cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/hyprland.lua" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/hyprland.lua"
+  cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/default/gtk-4.0.css" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/gtk-4.0.css"
+  cmp "$CFG_TEST_DIR/code/capabilities/visual/theme/gtk4/launch" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/gtk4/launch"
+  [ -x "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/gtk4/launch" ]
   [ "$(readlink "$CFG_TEST_HOME/.local/state/mirroros/current/theme")" = /usr/share/mirroros/themes/default ]
   run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
   [ "$status" -eq 0 ]
   [[ "$output" == *'visual/theme: unchanged'* ]]
+}
+
+@test "configure preserves locally modified GTK4 styles and icon aliases" {
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  local dest="$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes/gtk4"
+  printf '\n/* local change */\n' >> "$dest/base.css"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -q 'local change' "$dest/base.css"
+  cp "$CFG_TEST_DIR/code/capabilities/visual/theme/gtk4/base.css" "$dest/base.css"
+  local icon="$dest/share/icons/Adwaita/symbolic/apps/chromium-browser-symbolic.svg"
+  printf '\n<!-- local icon -->\n' >> "$icon"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -q 'local icon' "$icon"
+}
+
+@test "configure repairs an absent GTK4 delivery but preserves unknown directories" {
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  local dest="$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes/gtk4"
+  rm -rf "$dest"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [ -x "$dest/launch" ]
+  rm -rf "$dest"
+  mkdir "$dest"
+  printf 'keep\n' > "$dest/personal-file"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -qx keep "$dest/personal-file"
 }
 
 @test "configure preserves a modified selection helper" {
