@@ -2,6 +2,7 @@
 CFG_STEPS=(
   visual/theme
   visual/gtk4
+  visual/gtk3
   desktop/terminal
   desktop/portal
   desktop/files

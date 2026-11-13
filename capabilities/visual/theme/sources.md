@@ -12,8 +12,8 @@ fetched copy. This does not establish the package's build commit or byte identit
 
 The isolated `install-theme` publisher stages and checks the `default/` tree,
 including its license. The `apply` step publishes that palette through configure in running and target
-contexts, before consumer steps. Shared GTK4 resources have a separate owner at
-[`../gtk4/`](../gtk4/sources.md), outside the selectable-theme catalog. The shell reads five validated colors from the published palette and the
+contexts, before consumer steps. Shared GTK3 and GTK4 resources have separate owners at
+[`../gtk3/`](../gtk3/sources.md) and [`../gtk4/`](../gtk4/sources.md), outside the selectable-theme catalog. The shell reads five validated colors from the published palette and the
 MirrorOS-owned `default/shell.toml` surface settings; their values correspond to the reviewed Omarchy reference,
 but the file is not copied from it. Personal surface settings are optional and take precedence per valid key.
 Foot and the
@@ -40,7 +40,7 @@ responsibility. These boundaries must be reviewed before executing theme code. N
 Omarchy themes is claimed. The theme's backgrounds are described below; opacity and application-specific
 presentation remain separate decisions.
 
-## Native GTK4 palette and consumer
+## Native GTK3/GTK4 palettes and consumers
 
 `default/gtk-4.0.css` supplies the palette-specific native GTK colors and GTK aliases. Tests tie its roles to
 `colors.toml`; the additional reviewed disabled-text color is `#7e8467`. The `mirroros_osaka_NNN` definitions
@@ -51,6 +51,13 @@ The detailed revision, modifications, asset inventory and retained notices are r
 owner. Shared implementation, launcher, resources, Osaka/Yaru and Strata attribution and validation belong to
 [visual/gtk4](../gtk4/sources.md), with delivery and
 session-integration limits in the [GTK4 procedure](../../../docs/procedures/gtk4-theme.md).
+
+`default/gtk-3.0.css` similarly retains 211 exact declaration colors as independent
+`mirroros_osaka_gtk3_NNN` tokens from the same Osaka revision's GTK3 stylesheet. It does not change GTK4's tokens
+or the shared `colors.toml` palette. Its implementation, 126 unchanged widget assets, upstream reconstruction
+hash and retained Yaru/Osaka and Strata notices belong to [visual/gtk3](../gtk3/sources.md). The
+[GTK3 procedure](../../../docs/procedures/gtk3-theme.md) records preparation without global activation; later
+session-default integration remains coordinated with main's portal owner.
 
 ## Theme name
 

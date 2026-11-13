@@ -4,7 +4,8 @@
 
 MirrorOS's native GTK4 theme is a process-local consumer of the reviewed default palette, first used by
 pavucontrol from the audio panel's **Advanced…** action. It does not change GTK settings, icon-theme selection,
-portal routing, audio values, Strata or the desktop's global environment. GTK3 and libadwaita are not covered.
+portal routing, audio values, Strata or the desktop's global environment. GTK3 resources are now prepared
+separately in [the GTK3 procedure](gtk3-theme.md), without global activation; libadwaita adaptation is not covered.
 The shared bundle is independent of palette-specific colors; arbitrary themes are not admitted by the resolver.
 
 [GTK4 sources](../../capabilities/visual/gtk4/sources.md) record licensing,
@@ -16,7 +17,8 @@ advanced-audio boundaries; it adds no configuration framework, provider, service
 On 2026-11-13 the maintainer selected Osaka Jade over the earlier MirrorOS/Strata-derived control treatment after
 isolated pavucontrol and GTK Widget Factory comparison. The selected revision is
 `2ac2934f2ebf62ad1088bc5ea434c4670b8cd2dc` from `abhinav20sep/osaka-jade-theme`; only its GTK4 CSS and widget assets
-are incorporated. This does not select its GTK2/GTK3 theme, application icons, XFCE borders or installation scripts.
+are incorporated in this runtime. The later GTK3 resource addition uses its own owner; GTK2, application icons,
+XFCE borders and installation scripts remain excluded.
 
 The shared runtime now loads the palette, Osaka base, retained 13px typography, and a pavucontrol-only checked-toggle
 adapter. Mute and channel-lock are frameless toggles with fixed images; the default-device tick is framed. The
@@ -89,9 +91,10 @@ readiness. No laboratory helper is product code.
   owner before integration; do not copy its pending implementation or create a second profile/database owner.
   A system dconf `org/gnome/desktop/interface gtk-theme='MirrorOS'` default is the candidate to validate through
   the actual backend, with user values retaining precedence and no writes to user dconf.
-- This key is shared with GTK3. The tested GTK3 provider falls back to Adwaita because MirrorOS has no GTK3 CSS;
-  that is not the same as leaving the GTK3 setting unchanged. Preserve and test user theme choices, dark variants
-  and high-contrast behavior rather than claiming universal GTK3 non-interference.
+- This key is shared with GTK3. The historical probe fell back to Adwaita because no GTK3 CSS was supplied.
+  GTK3 resources are now prepared separately for the approved joint default, but not globally published or
+  selected. Preserve and test user theme choices, dark variants and high-contrast behavior; the earlier
+  Adwaita fallback result is not evidence for the new GTK3 stylesheet.
 - Libadwaita is not installed in this VM. Source inspection indicates its style manager owns its theme provider
   when `GTK_THEME` is unset; runtime non-interference remains unverified. Do not use global user-priority `gtk.css`
   injection as a substitute for theme selection or promise libadwaita coverage.
@@ -137,12 +140,13 @@ remain unimplemented.
 ## Delivery and use
 
 After integration with the current product baseline, run the normal [configure procedure](configure.md).
-Two separately owned configure steps publish independently manifest-checked trees:
+Three separately owned configure steps publish independently manifest-checked trees:
 
 | Owner | Tree | Purpose |
 |---|---|---|
-| `visual/theme` | `/usr/share/mirroros/themes/default` | Reviewed palette, including `gtk-4.0.css` and existing consumers |
+| `visual/theme` | `/usr/share/mirroros/themes/default` | Reviewed palette, including `gtk-3.0.css`, `gtk-4.0.css` and existing consumers |
 | `visual/gtk4` | `/usr/share/mirroros/gtk4` | Osaka CSS/assets/notices, typography, pavucontrol adapter, retained neutral SVG aliases and compatibility launcher |
+| `visual/gtk3` | `/usr/share/mirroros/gtk3` | Osaka GTK3 CSS/widget assets/notices and matching typography; no launcher or global selection |
 
 The shared runtime has no palette identity file. Its font stack uses JetBrains already declared by the terminal
 capability. Pavucontrol brings GTK4 and Adwaita from the official repositories; `visual/gtk4` adds no package.
@@ -269,6 +273,8 @@ Strata/portal work is not copied into this branch. Before merging, preserve that
 source-name validation, Strata bridge and portal ownership. Shared GTK4 resources are no longer published as a
 selectable theme and require no synthetic identity or weakened palette-name validation. Reconcile the shared
 source and attribution records (one Strata project entry, covering both uses), retain the explicit `visual/gtk4`
-configure order and rerun the combined configure contracts.
+configure order, followed by `visual/gtk3`, and rerun the combined configure contracts. GTK3 is prepared in this
+branch alongside GTK4; its later native lookup and shared session default must use the same reconciled portal
+owner, not a duplicate dconf configuration. Regression-check GTK4 Strata when selecting the global GTK4 default.
 Do not run the older branch's complete configure on a newer Strata-configured VM: that branch's unrelated file
 manager baseline is not a proposed rollback. Final-path testing belongs to the reconciled product candidate.

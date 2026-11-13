@@ -10,29 +10,30 @@ for invocation, effects, evidence, and recovery.
 `configure-steps` is an explicit Bash `CFG_STEPS` array of paths relative to this directory. There is no discovery,
 dependency graph, or resume state. The current order is:
 
-1. `visual/theme`: the reviewed theme, backgrounds, native GTK4 palette colors, and initialize-only current theme/background links.
+1. `visual/theme`: the reviewed theme, backgrounds, native GTK3/GTK4 palette colors, and initialize-only current theme/background links.
 2. `visual/gtk4`: shared native GTK4 CSS/resources and the transitional process-local launcher, published outside the selectable-theme catalog.
-3. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
-4. `desktop/portal`: the desktop portal frontend, the GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` session command. Portal changes take effect at the next login.
-5. `desktop/files`: Strata from a reviewed local recipe with its FileManager1 and FileChooser integrations, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; it fails while another package also owns `org.freedesktop.FileManager1`.
-6. `workflow/node`: the user's NVM release and the declared Node.js runtime, with its managed environment file.
-7. `workflow/shell`: Zsh as the interactive shell with its approved native startup files, Zplug and identified plugin sources, shell tools, and the Starship initialization for bash.
-8. `workflow/tmux`: tmux with the approved native defaults, TPM and identified plugin sources, the compiled tmux-thumbs helper, and Sesh from a reviewed local recipe.
-9. `workflow/editor`: Lazygit and the editor prerequisites, the `vim` wrapper, the external Neovim configuration cloned at `~/code/nvim` and linked from `~/.config/nvim`, with its locked plugins, tools and parsers prepared.
-10. `workflow/pi`: ffmpeg, the external pi-config cloned at `~/code/pi-config`, the Pi executable in the user's NVM prefix and the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, with the `pi-editor` and `gcloud` launcher links and the initialize-only `~/.pi` defaults, npm packages and owned skills.
-11. `system/audio`: PipeWire stack, playerctl, owned volume/media commands, enable-only user audio units and the approved A2DP preference.
-12. `system/bluetooth`: BlueZ and bluetoothctl; enable bluetooth.service and start it only if inactive and the Bluetooth subsystem exists.
-13. `system/power`: UPower, brightnessctl, power-profiles-daemon and libnotify; owned brightness/profile/watcher commands, enable-only user watcher, and tracked power-key policy with bounded logind reload.
-14. `system/network`: NetworkManager/systemd-resolved DNS integration, local stub, private migration/recovery and isolated target DNS; profiles and public provider unchanged ([ADR 0024](../docs/adr/0024-networkmanager-resolved-dns-integration.md)).
-15. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
-16. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, session selection, the Hyprland portal backend with its `hyprland-portals.conf` preferences, and the portal-dialog window rules.
-17. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
-18. `desktop/reminders`: jq, the freedesktop sound theme and the owned `reminder` command over transient user timers.
-19. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
-20. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
-21. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
+3. `visual/gtk3`: shared native GTK3 CSS and widget assets, prepared without session-default activation or portal changes.
+4. `desktop/terminal`: Foot, the approved native terminal defaults, Nerd Font Mono and emoji glyphs.
+5. `desktop/portal`: the desktop portal frontend, the GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` dconf default and the read-only `portal-check` session command. Portal changes take effect at the next login.
+6. `desktop/files`: Strata from a reviewed local recipe with its FileManager1 and FileChooser integrations, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; it fails while another package also owns `org.freedesktop.FileManager1`.
+7. `workflow/node`: the user's NVM release and the declared Node.js runtime, with its managed environment file.
+8. `workflow/shell`: Zsh as the interactive shell with its approved native startup files, Zplug and identified plugin sources, shell tools, and the Starship initialization for bash.
+9. `workflow/tmux`: tmux with the approved native defaults, TPM and identified plugin sources, the compiled tmux-thumbs helper, and Sesh from a reviewed local recipe.
+10. `workflow/editor`: Lazygit and the editor prerequisites, the `vim` wrapper, the external Neovim configuration cloned at `~/code/nvim` and linked from `~/.config/nvim`, with its locked plugins, tools and parsers prepared.
+11. `workflow/pi`: ffmpeg, the external pi-config cloned at `~/code/pi-config`, the Pi executable in the user's NVM prefix and the pi-config runtime dependencies, the identified Google Cloud CLI archive under `~/.local/opt`, with the `pi-editor` and `gcloud` launcher links and the initialize-only `~/.pi` defaults, npm packages and owned skills.
+12. `system/audio`: PipeWire stack, playerctl, owned volume/media commands, enable-only user audio units and the approved A2DP preference.
+13. `system/bluetooth`: BlueZ and bluetoothctl; enable bluetooth.service and start it only if inactive and the Bluetooth subsystem exists.
+14. `system/power`: UPower, brightnessctl, power-profiles-daemon and libnotify; owned brightness/profile/watcher commands, enable-only user watcher, and tracked power-key policy with bounded logind reload.
+15. `system/network`: NetworkManager/systemd-resolved DNS integration, local stub, private migration/recovery and isolated target DNS; profiles and public provider unchanged ([ADR 0024](../docs/adr/0024-networkmanager-resolved-dns-integration.md)).
+16. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
+17. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, session selection, the Hyprland portal backend with its `hyprland-portals.conf` preferences, and the portal-dialog window rules.
+18. `desktop/shell`: Quickshell, the reviewed shell runtime and its user unit enabled for the selected user.
+19. `desktop/reminders`: jq, the freedesktop sound theme and the owned `reminder` command over transient user timers.
+20. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
+21. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
+22. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
     overlay of the recognized boot configuration, and the regenerated boot images ([ADR 0014](../docs/adr/0014-native-login-and-boot-presentation.md)).
-22. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+23. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
 
 The [hardware procedure](../docs/procedures/hardware.md) records terminal paths, effects, recovery and the
 three-environment validation matrix. The system steps precede their Hyprland bindings. Running checks

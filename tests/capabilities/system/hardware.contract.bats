@@ -148,5 +148,5 @@ hardware_assert_rerun() {
   run /usr/bin/bash -c 'source "$1"; printf "%s\n" "${CFG_STEPS[@]}"' bash "$CFG_SOURCE_ROOT/capabilities/configure-steps"
   [ "$status" -eq 0 ]
   [[ "$output" == *$'system/audio\nsystem/bluetooth\nsystem/power\nsystem/network\nsystem/vpn\ndesktop/compositor/providers/hyprland'* ]]
-  [ "${#lines[@]}" -eq 22 ]
+  [ "${#lines[@]}" -eq 23 ]
 }

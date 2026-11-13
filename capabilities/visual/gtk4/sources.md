@@ -9,8 +9,10 @@ the archive's PAX commit comment identifies that revision. Archive SHA-256:
 `6084a8c78a584ad64004eef49f3972aec85719e41a0037fa6aea4959c5996135`.
 
 Only `Osaka-Jade/gtk-4.0/gtk.css` and its complete 182-file `assets/` directory are incorporated.
-The identical upstream `gtk-dark.css` is not duplicated. No GTK2/GTK3 theme, XFCE decoration, icon pack,
-wallpaper, terminal configuration or upstream installer is incorporated.
+The identical upstream `gtk-dark.css` is not duplicated. This runtime incorporates no GTK2/GTK3 theme,
+XFCE decoration, icon pack, wallpaper, terminal configuration or upstream installer.
+GTK3 is now prepared separately by [visual/gtk3](../gtk3/sources.md), using the same Osaka revision and
+shared typography; that resource addition does not activate either toolkit globally.
 
 Upstream identifies the GTK theme and artwork as derived from Ubuntu Yaru under GPL-3.0 and CC BY-SA 4.0,
 not under the repository's MIT license alone. Preserve both inherited license texts and the author list.
@@ -114,7 +116,8 @@ checks; tests cover upstream reconstruction, assets/notices, cascade, launcher a
 
 The previous base's page-by-page review and parser checks are historical, not qualification of Osaka. The earlier
 single-check probes remain lookup evidence: each GTK3/GTK4 run passed 24 check lookups and 336 unchanged unrelated
-paths. No GTK3 stylesheet or libadwaita adaptation is introduced. Installed paths, real session defaults and user
-overrides, GTK3 dark/high-contrast fallback, libadwaita runtime non-interference, recovery, clean rebuilt-candidate
+paths. Those probes preceded the separate GTK3 resource preparation; they do not validate its stylesheet.
+No libadwaita adaptation is introduced. Installed paths, real session defaults and user
+overrides, GTK3 dark/high-contrast behavior, Strata and libadwaita runtime non-interference, recovery, clean rebuilt-candidate
 and physical-target qualification remain open gates. No daemon, hot reload, forced process restart, copied user
 configuration or Python product runtime is added.

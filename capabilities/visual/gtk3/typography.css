@@ -1,0 +1,14 @@
+/* Adapted from Strata v1.2.1, commit
+ * 491e6ba9735e821f9f49910ffd2582076196865c, src/style.css and
+ * src/ui/theme/font.rs. MIT, Copyright (c) 2026 LGSE Ltd.
+ * See STRATA-LICENSE and sources.md.
+ */
+
+/* Match Strata's default family stack; retain application widget sizing. */
+*, popover.background, popover.background > contents,
+popover.background label, popover.background button {
+  font-family: "JetBrains Mono", "JetBrainsMono Nerd Font", monospace;
+}
+window, popover, popover.background {
+  font-size: 13px;
+}

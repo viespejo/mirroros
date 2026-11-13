@@ -217,7 +217,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the twenty-two-step configuration converges in the target and reruns without transactions" {
+@test "the twenty-three-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -239,19 +239,24 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/22 visual/theme =='* ]]
-  [[ "$output" == *'== 2/22 visual/gtk4 =='* ]]
-  [[ "$output" == *'== 4/22 desktop/portal =='* ]]
-  [[ "$output" == *'== 5/22 desktop/files =='* ]]
-  [[ "$output" == *'== 11/22 system/audio =='* ]]
-  [[ "$output" == *'== 12/22 system/bluetooth =='* ]]
-  [[ "$output" == *'== 13/22 system/power =='* ]]
-  [[ "$output" == *'== 14/22 system/network =='* ]]
-  [[ "$output" == *'== 15/22 system/vpn =='* ]]
-  [[ "$output" == *'== 18/22 desktop/reminders =='* ]]
-  [[ "$output" == *'== 20/22 visual/branding =='* ]]
-  [[ "$output" == *'== 21/22 system/boot-splash =='* ]]
-  [[ "$output" == *'== 22/22 desktop/login =='* ]]
+  [[ "$output" == *'== 1/23 visual/theme =='* ]]
+  [[ "$output" == *'== 2/23 visual/gtk4 =='* ]]
+  [[ "$output" == *'== 3/23 visual/gtk3 =='* ]]
+  [[ "$output" == *'== 5/23 desktop/portal =='* ]]
+  [[ "$output" == *'== 6/23 desktop/files =='* ]]
+  [[ "$output" == *'== 12/23 system/audio =='* ]]
+  [[ "$output" == *'== 13/23 system/bluetooth =='* ]]
+  [[ "$output" == *'== 14/23 system/power =='* ]]
+  [[ "$output" == *'== 15/23 system/network =='* ]]
+  [[ "$output" == *'== 16/23 system/vpn =='* ]]
+  [[ "$output" == *'== 19/23 desktop/reminders =='* ]]
+  [[ "$output" == *'== 21/23 visual/branding =='* ]]
+  [[ "$output" == *'== 22/23 system/boot-splash =='* ]]
+  [[ "$output" == *'== 23/23 desktop/login =='* ]]
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/base.css" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/gtk3/base.css"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/gtk-3.0.css" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/default/gtk-3.0.css"
   [ ! -e "$CFG_TEST_INSTALLED/nautilus" ]
   [ -e "$CFG_TEST_INSTALLED/xdg-user-dirs" ]
   [ "$(< "$CFG_TEST_INSTALLED/strata-bin")" = 1.2.1-1.1 ]
@@ -315,7 +320,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 22 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 23 ]
   cfg_test_no_install
   run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]
