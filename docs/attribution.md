@@ -76,9 +76,23 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 ### Strata
 
 - **License (SPDX):** `MIT`
-- **Incorporated material:** Selective font-stack and sizing adaptation in `capabilities/visual/gtk4/typography.css` and the matching GTK3 `capabilities/visual/gtk3/typography.css`; the former form-control adaptation is superseded by Osaka Jade. The pavucontrol adapter and neutral application-icon drawings remain original MirrorOS material
-- **License text:** Original notice retained as `STRATA-LICENSE` in both shared GTK runtimes and delivered with them
+- **Incorporated material:** Selective font-stack and sizing adaptation in `capabilities/visual/gtk4/typography.css` and the matching GTK3 `capabilities/visual/gtk3/typography.css`; the former form-control adaptation is superseded by Osaka Jade; the folder-icon composition parameters in `capabilities/visual/gtk4/icon-sources/generate.mjs`, without copied code. The pavucontrol adapter and neutral application-icon drawings remain original MirrorOS material
+- **License text:** Original notice retained as `STRATA-LICENSE` in both shared GTK runtimes and in the generated icon theme's `licenses/`, and delivered with them
 - **Detailed provenance:** [Shared native GTK3 sources](../capabilities/visual/gtk3/sources.md) and [Shared native GTK4 sources](../capabilities/visual/gtk4/sources.md)
+
+### Lucide
+
+- **License (SPDX):** `ISC AND MIT` (Feather-derived icons under MIT)
+- **Incorporated material:** Unmodified SVGs in `capabilities/visual/gtk4/icon-sources/lucide/`, recolored and composed into the generated folder and device icons under `capabilities/visual/gtk4/icons/default/scalable/`
+- **License text:** Upstream `LICENSE` retained unchanged beside the sources and delivered as `licenses/LICENSE.lucide` in the icon theme
+- **Detailed provenance:** [Shared native GTK4 sources](../capabilities/visual/gtk4/sources.md#generated-icon-sources)
+
+### Catppuccin VSCode Icons
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** Unmodified SVGs in `capabilities/visual/gtk4/icon-sources/catppuccin/`, with color variables resolved to the theme palette in the generated file-type icons under `capabilities/visual/gtk4/icons/default/scalable/mimetypes/`
+- **License text:** Upstream `LICENSE` retained unchanged beside the sources and delivered as `licenses/LICENSE.catppuccin` in the icon theme
+- **Detailed provenance:** [Shared native GTK4 sources](../capabilities/visual/gtk4/sources.md#generated-icon-sources)
 
 ### Tokyo Night terminal palette
 

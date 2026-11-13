@@ -51,8 +51,9 @@ for entry in "$STEP_DIR"/entries/*/; do
   cfg_source_record "mirroros-gtk4-entry-$name" "capabilities/visual/gtk4/entries/$name" '' '' \
     "manifest-sha256:$(sha256sum < "$entry_dest/.mirroros-manifest" | cut -d' ' -f1)"
 done
-# Each icons/<theme> is the native icon theme MirrorOS-<theme> under /usr/share/icons: only the neutral
-# default-device check, inheriting every other name from Adwaita; its manifest sits at the theme root.
+# Each icons/<theme> is the native icon theme MirrorOS-<theme> under /usr/share/icons: the neutral default-device
+# check and the committed output of icon-sources/generate.mjs (folders, file types, devices), inheriting every other
+# name from Adwaita; its manifest sits at the theme root.
 cfg_run_host bash "$parent_helper" "$root" "$uid" "$gid" system-icons || exit 4
 for icons in "$STEP_DIR"/icons/*/; do
   icons="${icons%/}"
@@ -80,3 +81,7 @@ cfg_source_record osaka-jade-gtk4 https://github.com/abhinav20sep/osaka-jade-the
   2ac2934f2ebf62ad1088bc5ea434c4670b8cd2dc ''
 cfg_source_record strata-gtk4-font https://github.com/lgse/strata v1.2.1 \
   491e6ba9735e821f9f49910ffd2582076196865c ''
+cfg_source_record lucide-gtk4-icons https://github.com/lucide-icons/lucide 1.35.0 \
+  a79d711591318eaced16eeb9bbc923d0128cc3a1 ''
+cfg_source_record catppuccin-gtk4-icons https://github.com/catppuccin/vscode-icons v1.26.0 \
+  b6915da9f6889b683a110aa747de96c2820a537d ''

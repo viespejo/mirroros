@@ -69,14 +69,56 @@ entries are conflicts. The naming rule is recorded in [theme sources](../theme/s
 ## Native icon theme
 
 `icons/<theme>/` is published, outside the runtime tree, as the manifest-checked native icon theme
-`/usr/share/icons/MirrorOS-<theme>`, with its manifest at the theme root (GTK ignores it). It contains only an
-original `index.theme` (`Inherits=Adwaita,hicolor`; `16x16/status`, `scalable/status` and `symbolic/status` with the
-same sizes and types as the packaged Adwaita 51 index) and the three neutral `emblem-default` SVG variants,
-the reviewed original MirrorOS drawing, identical in every variant (GPL-3.0-only). Every other name resolves through
-Adwaita exactly as before; Adwaita 51 has no `emblem-default`, so the replaced check is AdwaitaLegacy's PNG.
-No packaged file or Adwaita index is copied or overwritten, and no application icon alias is shared globally.
-Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf `icon-theme` default; a user
-`icon-theme` value takes precedence and then drops the check. Modified, unknown or linked trees are conflicts.
+`/usr/share/icons/MirrorOS-<theme>`, with its manifest at the theme root (GTK ignores it). It contains:
+
+- an original `index.theme` (`Inherits=Adwaita,hicolor`; `16x16/status`, `scalable/status` and `symbolic/status`
+  with the same sizes and types as the packaged Adwaita 51 index, plus scalable `places`, `mimetypes` and `devices`);
+- the three neutral `emblem-default` SVG variants, the reviewed original MirrorOS drawing, identical in every
+  variant (GPL-3.0-only); Adwaita 51 has no `emblem-default`, so the replaced check is AdwaitaLegacy's PNG;
+- 14 folder, 30 file-type and 26 device icons and their `licenses/`, generated from pinned upstream sources with
+  the theme's palette, as described under [Generated icon sources](#generated-icon-sources).
+
+Every other name, including all `-symbolic` icons, application icons and emblems other than the check, resolves
+through Adwaita exactly as before. No packaged file or Adwaita index is copied or overwritten, and no application
+icon alias is shared globally. Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf
+`icon-theme` default; a user `icon-theme` value takes precedence and then drops all of these icons. Modified,
+unknown or linked trees are conflicts.
+
+## Generated icon sources
+
+The maintainer approved on 2026-11-13, after attended review of a temporary VM prototype in the GTK3 file chooser,
+palette-colored folder, file-type and device icons in the style of Strata's file browser, replacing Adwaita's
+full-color blue folders. `icon-sources/` holds only the upstream files used, unmodified, with their licenses;
+`SHA256SUMS` lists each file's digest and a test checks it. It is a delivery input, excluded from every published tree.
+
+| Project | Revision | License | Files |
+|---|---|---|---|
+| [Lucide](https://github.com/lucide-icons/lucide) | tag `1.35.0`, commit `a79d711591318eaced16eeb9bbc923d0128cc3a1` | ISC; icons derived from Feather under MIT, both in `LICENSE` | 33 SVGs from `icons/` |
+| [Catppuccin VSCode Icons](https://github.com/catppuccin/vscode-icons) | tag `v1.26.0`, commit `b6915da9f6889b683a110aa747de96c2820a537d` | MIT | 20 SVGs from `icons/css-variables/` |
+
+These are the revisions Strata v1.2.1 bundles. MirrorOS takes them from upstream, not from Strata's copies.
+
+`icon-sources/generate.mjs` is development-time Node.js; configure never runs it, because `visual/gtk4` precedes
+`workflow/node`. After changing a source, a mapping or the palette, run
+`node capabilities/visual/gtk4/icon-sources/generate.mjs default` and commit the result. A test regenerates the
+theme and fails on any difference, unlisted color or insufficient contrast. Each generated SVG starts with a comment
+naming its source and license.
+
+- Folders (`folder`, `folder-open`, the XDG user directories, `user-home`, `user-desktop`, `folder-remote`) use
+  Lucide's folder: a plain outline with a 15% fill, or a 92% fill with a dark Lucide glyph. Devices use the
+  plain Lucide outline. This composition (fill opacities, glyph `translate(5.5 6.8) scale(.54)`, stroke 2.7) is
+  adapted from Strata v1.2.1 `src/assets.rs` (MIT, `licenses/STRATA-LICENSE`); no Strata code is copied.
+- Folders and devices use `bright_blue`, not the accent: GTK3/GTK4 selected rows use the accent as background and
+  an accent icon disappeared on them in the prototype. Catppuccin's color variables map only to light palette
+  tones for the same reason. Every color must reach 4.5:1 against `background` and 1.5:1 against `accent`. The
+  mid-tone accent limits the latter to about 2.4:1, so selected icons stay legible but low in contrast.
+- `image-svg+xml` is not provided because the publisher's safe-name rule excludes `+`; GTK falls back to
+  `image-x-generic`.
+
+In practice these icons appear in GTK's built-in file chooser: GTK3 applications, GTK4 applications still using
+`GtkFileChooserDialog`, and the `gtk` fallback of the portal FileChooser. GTK4 `GtkFileDialog` requests go through
+the portal to Strata, which draws its own icons. They also appear wherever GTK applications show folder, file-type
+or device icons, for example in pavucontrol's device list.
 
 ## Strata typography source
 
@@ -104,8 +146,9 @@ JetBrains itself was installed or rendered there.
 - `install-runtime` retains complete staged manifests, owner/mode checks, conflict preservation and idempotency
   in both configure contexts. Root owns the installed tree; directories/executables are 0755, other files 0644.
   Unknown, linked, unsafe, incomplete or locally modified deliveries are refused, not silently replaced.
-- `apply`, `packages`, `install-runtime` and this record are delivery inputs, excluded from runtime. Configure
-  records the runtime manifest digest, Osaka commit and Strata typography revision; it adds no packages.
+- `apply`, `packages`, `install-runtime`, `icon-sources/` and this record are delivery inputs, excluded from runtime.
+  Configure records the runtime manifest digest, Osaka commit, Strata typography revision and the Lucide and
+  Catppuccin revisions; it adds no packages.
 - No product installation or complete configure was performed for this adoption. Reconcile with main before
   installation; do not roll back the VM's newer portal/Strata configuration with this branch's baseline.
 
@@ -118,9 +161,9 @@ consumer were removed once the session `gtk-theme` and `icon-theme` defaults cov
 panel's Advanced action now runs `uwsm app -- pavucontrol` as ADR 0026 states. Configure replaces the earlier
 runtime tree as an ordinary manifest update.
 
-The approved icon policy is native application icons plus only the neutral check from the
-[native icon theme](#native-icon-theme). The alias drawings remain in version history; shipping application icons
-again, globally or per application, is a separate maintainer decision. Theme selection and icon policy are
+The approved icon policy is native application icons plus the neutral check and the generated folder, file-type and
+device icons from the [native icon theme](#native-icon-theme). The alias drawings remain in version history; shipping
+application icons again, globally or per application, is a separate maintainer decision. Theme selection and icon policy are
 separate work, not implicitly activated by adopting Osaka.
 
 ## Validation and limits

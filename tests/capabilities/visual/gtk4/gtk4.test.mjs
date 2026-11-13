@@ -108,15 +108,27 @@ test('each native entry MirrorOS-<theme> imports its published theme palette and
   assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/entries/);
 });
 
-test('each native icon theme MirrorOS-<theme> holds only the neutral check over Adwaita', () => {
+test('each native icon theme MirrorOS-<theme> holds the neutral check and exactly the generated icons over Adwaita', async () => {
+  const generator = await import(join(runtime, 'icon-sources/generate.mjs'));
   const names = readdirSync(join(runtime, 'icons'));
   assert.deepEqual(names, ['default']);
   const check = ['16x16/status/emblem-default.svg', 'scalable/status/emblem-default.svg',
     'symbolic/status/emblem-default-symbolic.svg'];
   for (const name of names) {
     const icons = join(runtime, 'icons', name);
-    assert.deepEqual(files(icons).map(path => path.slice(icons.length + 1)).sort(), ['index.theme', ...check].sort());
-    // The reviewed original drawing, identical in every variant; no other icon is shared globally.
+    const generated = generator.generate(name);
+    // Committed output must equal a fresh generation: no hand edits and no stale output.
+    assert.deepEqual(files(icons).map(path => path.slice(icons.length + 1)).sort(), [...check, ...generated.keys()].sort());
+    for (const [path, content] of generated) assert.equal(read(join(icons, path)), content, path);
+    const palette = new Set(Object.values(generator.parseColors(read(join(theme, name, 'colors.toml')))));
+    for (const path of generated.keys()) {
+      if (!path.endsWith('.svg')) continue;
+      assert.match(path, /^scalable\/(places|mimetypes|devices)\/[a-zA-Z0-9._-]+\.svg$/, path);
+      const text = generated.get(path);
+      assert.doesNotMatch(text, /var\(|currentColor/, path);
+      for (const [hex] of text.matchAll(/#[0-9a-fA-F]{6}\b/g)) assert.ok(palette.has(hex.toLowerCase()), `${path}: ${hex}`);
+    }
+    // The reviewed original drawing, identical in every variant.
     for (const path of check) {
       assert.equal(sha256(readFileSync(join(icons, path))), 'feef50a3157c69a478fa2c730a635aa503ce445a71529e6354eb4717dd8f089e', path);
       assert.match(read(join(icons, path)), /fill="currentColor"/);
@@ -125,15 +137,38 @@ test('each native icon theme MirrorOS-<theme> holds only the neutral check over 
     const sections = new Map([...index.matchAll(/^\[([^\]]+)\]\n((?:[A-Za-z]+=.*\n)+)/gm)]
       .map(match => [match[1], Object.fromEntries(match[2].trim().split('\n').map(line => line.split('=')))]));
     assert.deepEqual(sections.get('Icon Theme'), {
-      Name: `MirrorOS-${name}`, Comment: 'MirrorOS neutral check over Adwaita', Inherits: 'Adwaita,hicolor',
-      Directories: '16x16/status,scalable/status,symbolic/status',
+      Name: `MirrorOS-${name}`, Comment: 'MirrorOS check, folders, file types and devices over Adwaita',
+      Inherits: 'Adwaita,hicolor',
+      Directories: '16x16/status,scalable/status,symbolic/status,scalable/places,scalable/mimetypes,scalable/devices',
     });
     assert.deepEqual(sections.get('16x16/status'), { Context: 'Status', Size: '16', Type: 'Fixed' });
     assert.deepEqual(sections.get('scalable/status'),
       { Context: 'Status', Size: '128', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
     assert.deepEqual(sections.get('symbolic/status'),
       { Context: 'Status', Size: '16', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
-    assert.equal(sections.size, 4);
+    for (const [dir, context] of [['scalable/places', 'Places'], ['scalable/mimetypes', 'MimeTypes'], ['scalable/devices', 'Devices']])
+      assert.deepEqual(sections.get(dir), { Context: context, Size: '128', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
+    assert.equal(sections.size, 7);
   }
   assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/icons/);
+  assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/icon-sources/);
+});
+
+test('icon sources are the pinned unmodified upstream files and every drawn color keeps its contrast', async () => {
+  const sources = join(runtime, 'icon-sources');
+  const sums = read(join(sources, 'SHA256SUMS')).trim().split('\n').map(line => line.split(/  /));
+  assert.deepEqual(sums.map(([, path]) => path).sort(),
+    files(sources).map(path => path.slice(sources.length + 1)).filter(path => /^(lucide|catppuccin)\//.test(path)).sort());
+  for (const [hash, path] of sums) assert.equal(sha256(readFileSync(join(sources, path))), hash, path);
+  const generator = await import(join(sources, 'generate.mjs'));
+  const colors = generator.parseColors(read(join(theme, 'default/colors.toml')));
+  for (const key of new Set(['bright_blue', ...Object.values(generator.CATPPUCCIN_COLORS)])) {
+    assert.ok(generator.contrast(colors[key], colors.background) >= generator.MIN_BACKGROUND_CONTRAST, key);
+    assert.ok(generator.contrast(colors[key], colors.accent) >= generator.MIN_SELECTED_CONTRAST, key);
+  }
+  // A palette whose shape color matches the selected-row accent is rejected.
+  const clash = read(join(theme, 'default/colors.toml')).replace(/^bright_blue = "#[0-9a-fA-F]{6}"$/m, `bright_blue = "${colors.accent}"`);
+  assert.throws(() => generator.generate('default', {
+    read: path => (path.endsWith('colors.toml') ? clash : readFileSync(path, 'utf8')),
+  }), /bright_blue/);
 });

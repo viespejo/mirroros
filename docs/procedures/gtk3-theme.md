@@ -36,7 +36,8 @@ resolved JetBrains Mono to Noto Sans Mono; actual JetBrains rendering remains un
 The entry is published as `/usr/share/themes/MirrorOS-default/gtk-3.0/`, and the system dconf
 default selects it at the next login unless the user sets `gtk-theme`. There is no global `GTK_THEME`, user-priority CSS injection,
 application icon overlay, portal restart or user preference write. Native application icons remain the default;
-only the neutral default-device check is shared, through the GTK4-owned native icon theme `MirrorOS-default`.
+the neutral default-device check and palette-colored folder, file-type and device icons are shared through the
+GTK4-owned native icon theme `MirrorOS-default`. GTK3's built-in file chooser is where they are most visible.
 
 ## Validation
 

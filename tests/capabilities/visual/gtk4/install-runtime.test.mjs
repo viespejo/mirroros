@@ -74,6 +74,8 @@ test('delivery metadata is excluded while runtime modes and palette independence
   mkdirSync(source);
   for (const name of ['apply', 'packages', 'install-runtime', 'sources.md'])
     writeFileSync(join(source, name), 'delivery metadata\n');
+  mkdirSync(join(source, 'icon-sources'));
+  writeFileSync(join(source, 'icon-sources/generate.mjs'), 'delivery metadata\n');
   writeFileSync(join(source, 'base.css'), 'button { opacity: 1; }\n');
   mkdirSync(join(source, 'assets'));
   writeFileSync(join(source, 'assets/slider@2.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
@@ -81,7 +83,7 @@ test('delivery metadata is excluded while runtime modes and palette independence
   const result = spawnSync('bash', [publisher, 'publish', source, dest,
     String(process.getuid()), String(process.getgid())], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  for (const name of ['apply', 'packages', 'install-runtime', 'sources.md', 'theme.name'])
+  for (const name of ['apply', 'packages', 'install-runtime', 'sources.md', 'theme.name', 'icon-sources'])
     assert.equal(existsSync(join(dest, name)), false, name);
   assert.equal(readFileSync(join(dest, 'base.css'), 'utf8'), 'button { opacity: 1; }\n');
   assert.deepEqual(readFileSync(join(dest, 'assets/slider@2.png')), readFileSync(join(source, 'assets/slider@2.png')));

@@ -66,8 +66,8 @@ changes. Configure checks the compiled value without a bus. `portal-check` does 
 `gtk-theme` answer, and libadwaita applications follow their own stylesheet rather than this key.
 
 It also sets `icon-theme='MirrorOS-default'`, the native icon theme `/usr/share/icons/MirrorOS-<theme>` published by
-`visual/gtk4`: only the neutral default-device check over Adwaita, every other icon unchanged
-([GTK4 sources](../../visual/gtk4/sources.md#native-icon-theme)). A user `icon-theme` value takes precedence, and Story
+`visual/gtk4`: the neutral default-device check and palette-colored folder, file-type and device icons over
+Adwaita, every other icon unchanged ([GTK4 sources](../../visual/gtk4/sources.md#native-icon-theme)). A user `icon-theme` value takes precedence, and Story
 4.8 theme selection changes it together with `gtk-theme`. Configure checks the compiled value without a bus;
 `portal-check` does not yet check the Settings `icon-theme` answer.
 

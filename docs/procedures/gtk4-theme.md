@@ -84,6 +84,16 @@ the check in installed applications other than the accepted pavucontrol preview 
 To return a user to the packaged icons, run as that user `gsettings set org.gnome.desktop.interface icon-theme
 Adwaita`; `gsettings reset org.gnome.desktop.interface icon-theme` restores the MirrorOS default.
 
+The same icon theme also replaces Adwaita's full-color folder, file-type and device icons with palette-colored
+Lucide and Catppuccin drawings in the style of Strata's file browser. They are generated during development from
+pinned sources and committed; see [Generated icon sources](../../capabilities/visual/gtk4/sources.md#generated-icon-sources).
+They show mainly in GTK's built-in file chooser (GTK3 applications, GTK4 applications still using
+`GtkFileChooserDialog`, and the portal's `gtk` fallback) and in device lists such as pavucontrol's. GTK4
+`GtkFileDialog` requests open Strata through the portal and are unaffected. Folders and devices use `bright_blue`,
+not the accent, so they remain visible on selected rows. A temporary prototype was reviewed in the VM's GTK3 file
+chooser on 2026-11-13; the product tree still needs installed-session review. The `gsettings` commands above also
+remove or restore these icons.
+
 ### Selection prototype
 
 A non-privileged reference-VM probe on 2026-11-13 tested GTK 4.24.1 and GTK 3.24.52. It created no windows and
@@ -224,7 +234,8 @@ shellcheck capabilities/visual/theme/apply capabilities/visual/theme/prepare-par
 The contracts cover separate publication owners, excluded delivery inputs, absence of a synthetic palette identity,
 both configure contexts, idempotency, executable delivery, preservation of unknown/modified
 resources and user settings, palette roles, upstream CSS reconstruction, asset/notice hashes, import order,
-typography, pavucontrol-only checked/hover/backdrop selection, the native entries and icon theme, the absence of
+typography, pavucontrol-only checked/hover/backdrop selection, the native entries and icon theme, reproduction of the
+generated icons from pinned source digests, their palette-only colors and contrast, the absence of
 the removed launcher and overlay, and the Advanced action's plain `uwsm app -- pavucontrol` command.
 They do not prove installed-session rendering or clean-candidate readiness.
 

@@ -29,7 +29,8 @@ The same step publishes the palette-specific `default/gtk-3.0.css` and `default/
 shared native GTK4 bundle at `/usr/share/mirroros/gtk4`, outside the selectable-theme catalog and without a synthetic
 `theme.name`. Its staged manifest excludes delivery scripts and provenance. The audio panel's Advanced action
 runs `uwsm app -- pavucontrol`, which follows the session defaults below. The same step publishes the native icon theme
-`/usr/share/icons/MirrorOS-<theme>`, which shares only the neutral default-device check over Adwaita.
+`/usr/share/icons/MirrorOS-<theme>`, which shares the neutral default-device check and palette-colored folder,
+file-type and device icons over Adwaita.
 The following `visual/gtk3` step similarly publishes Osaka GTK3 and its widget assets/notices at
 `/usr/share/mirroros/gtk3`, with matching typography but no launcher or application icon overlay.
 Both steps also publish, for each theme entry, the native GTK lookup entry `/usr/share/themes/MirrorOS-<theme>`
@@ -306,8 +307,8 @@ Managed destinations are:
 - `/usr/share/themes/MirrorOS-<theme>/gtk-4.0` and `gtk-3.0`: the native GTK lookup entries, each one
   manifest-checked tree published by `visual/gtk4` or `visual/gtk3`; modified, unknown or linked entries are
   conflicts. Only `MirrorOS-default` exists today.
-- `/usr/share/icons/MirrorOS-<theme>`: the native icon theme sharing only the neutral default-device check over
-  Adwaita, one manifest-checked tree published by `visual/gtk4`; modified, unknown or linked trees are conflicts.
+- `/usr/share/icons/MirrorOS-<theme>`: the native icon theme sharing the neutral default-device check and
+  palette-colored folder, file-type and device icons over Adwaita, one manifest-checked tree published by `visual/gtk4`; modified, unknown or linked trees are conflicts.
 - `/usr/share/mirroros/branding`: the wordmark SVG and its rendered PNG, published as one manifest-checked tree; see
   [branding sources](../../capabilities/visual/branding/sources.md).
 - `/usr/share/sddm/themes/mirroros`: the MirrorOS SDDM theme, published as one manifest-checked tree; see

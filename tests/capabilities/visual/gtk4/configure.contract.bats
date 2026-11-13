@@ -24,13 +24,17 @@ teardown() { cfg_test_teardown; }
   [ -f "$dest/licenses/COPYING.yaru" ]
   [ -f "$dest/licenses/LICENSE_CCBYSA.yaru" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/assets/check-symbolic.svg" "$dest/assets/check-symbolic.svg"
-  for file in apply packages install-runtime sources.md theme.name; do [ ! -e "$dest/$file" ]; done
+  for file in apply packages install-runtime sources.md theme.name icon-sources; do [ ! -e "$dest/$file" ]; done
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/themes/gtk4" ]
   grep -qxF "mirroros-gtk4-runtime"$'\t'"capabilities/visual/gtk4"$'\t\t\t'"manifest-sha256:$(sha256sum < "$dest/.mirroros-manifest" | cut -d' ' -f1)" \
     "$CFG_TEST_DIR/first/sources.tsv"
   grep -qxF $'osaka-jade-gtk4\thttps://github.com/abhinav20sep/osaka-jade-theme\t\t2ac2934f2ebf62ad1088bc5ea434c4670b8cd2dc\t' \
     "$CFG_TEST_DIR/first/sources.tsv"
   grep -qxF $'strata-gtk4-font\thttps://github.com/lgse/strata\tv1.2.1\t491e6ba9735e821f9f49910ffd2582076196865c\t' \
+    "$CFG_TEST_DIR/first/sources.tsv"
+  grep -qxF $'lucide-gtk4-icons\thttps://github.com/lucide-icons/lucide\t1.35.0\ta79d711591318eaced16eeb9bbc923d0128cc3a1\t' \
+    "$CFG_TEST_DIR/first/sources.tsv"
+  grep -qxF $'catppuccin-gtk4-icons\thttps://github.com/catppuccin/vscode-icons\tv1.26.0\tb6915da9f6889b683a110aa747de96c2820a537d\t' \
     "$CFG_TEST_DIR/first/sources.tsv"
   [ ! -e "$dest/entries" ]
   local entry="$MIRROROS_CONFIGURE_ROOT/usr/share/themes/MirrorOS-default/gtk-4.0"
@@ -50,6 +54,11 @@ teardown() { cfg_test_teardown; }
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/index.theme" "$icons/index.theme"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/symbolic/status/emblem-default-symbolic.svg" \
     "$icons/symbolic/status/emblem-default-symbolic.svg"
+  for file in scalable/places/folder.svg scalable/mimetypes/text-x-generic.svg scalable/devices/drive-harddisk.svg \
+    licenses/LICENSE.lucide licenses/LICENSE.catppuccin licenses/STRATA-LICENSE; do
+    cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/$file" "$icons/$file"
+  done
+  [ ! -e "$icons/generate.mjs" ]
   [ "$(stat -c %a "$icons/index.theme")" = 644 ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/icons/Adwaita" ]
   grep -qxF "mirroros-gtk4-icons-default"$'\t'"capabilities/visual/gtk4/icons/default"$'\t\t\t'"manifest-sha256:$(sha256sum < "$icons/.mirroros-manifest" | cut -d' ' -f1)" \
