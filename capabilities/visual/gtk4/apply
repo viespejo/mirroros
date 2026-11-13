@@ -1,7 +1,8 @@
 #!/usr/bin/bash
 # Prerequisites: visual/theme published the reviewed palette and trust helpers.
 # Publish shared GTK4 resources independently of selectable palettes, in running and target contexts.
-# No user preferences or running applications are changed; the system GTK theme default belongs to desktop/portal.
+# No user preferences or running applications are changed; the system GTK and icon theme defaults belong to
+# desktop/portal.
 set -Eeuo pipefail
 
 root="$(cfg_path /)"
@@ -49,6 +50,29 @@ for entry in "$STEP_DIR"/entries/*/; do
   cfg_require bash "$STEP_DIR/install-runtime" check "$entry" "$entry_dest" "$uid" "$gid"
   cfg_source_record "mirroros-gtk4-entry-$name" "capabilities/visual/gtk4/entries/$name" '' '' \
     "manifest-sha256:$(sha256sum < "$entry_dest/.mirroros-manifest" | cut -d' ' -f1)"
+done
+# Each icons/<theme> is the native icon theme MirrorOS-<theme> under /usr/share/icons: only the neutral
+# default-device check, inheriting every other name from Adwaita; its manifest sits at the theme root.
+cfg_run_host bash "$parent_helper" "$root" "$uid" "$gid" system-icons || exit 4
+for icons in "$STEP_DIR"/icons/*/; do
+  icons="${icons%/}"
+  name="${icons##*/}"
+  [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { printf 'Unsupported icon theme name: %s\n' "$name" >&2; exit 6; }
+  relative="usr/share/icons/MirrorOS-$name"
+  icons_dest="$(cfg_path "/$relative")"
+  status=0
+  bash "$STEP_DIR/install-runtime" check "$icons" "$icons_dest" "$uid" "$gid" || status=$?
+  case "$status" in
+    0) ;;
+    1)
+      cfg_run_host bash "$STEP_DIR/install-runtime" publish "$icons" "$icons_dest" "$uid" "$gid"
+      cfg_changed ;;
+    *) exit 4 ;;
+  esac
+  cfg_require bash "$checker" "$root" "$relative" "$uid" directory
+  cfg_require bash "$STEP_DIR/install-runtime" check "$icons" "$icons_dest" "$uid" "$gid"
+  cfg_source_record "mirroros-gtk4-icons-$name" "capabilities/visual/gtk4/icons/$name" '' '' \
+    "manifest-sha256:$(sha256sum < "$icons_dest/.mirroros-manifest" | cut -d' ' -f1)"
 done
 cfg_source_record mirroros-gtk4-runtime capabilities/visual/gtk4 '' '' \
   "manifest-sha256:$(sha256sum < "$dest/.mirroros-manifest" | cut -d' ' -f1)"

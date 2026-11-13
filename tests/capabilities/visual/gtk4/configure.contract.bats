@@ -41,6 +41,18 @@ teardown() { cfg_test_teardown; }
   [ "$(stat -c %a "$entry/gtk.css")" = 644 ]
   grep -qxF "mirroros-gtk4-entry-default"$'\t'"capabilities/visual/gtk4/entries/default"$'\t\t\t'"manifest-sha256:$(sha256sum < "$entry/.mirroros-manifest" | cut -d' ' -f1)" \
     "$CFG_TEST_DIR/first/sources.tsv"
+  [ ! -e "$dest/icons" ]
+  local icons="$MIRROROS_CONFIGURE_ROOT/usr/share/icons/MirrorOS-default"
+  bash "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/install-runtime" check \
+    "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default" "$icons" \
+    "$(stat -c %u "$MIRROROS_CONFIGURE_ROOT")" "$(stat -c %g "$MIRROROS_CONFIGURE_ROOT")"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/index.theme" "$icons/index.theme"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/share/icons/Adwaita/symbolic/status/emblem-default-symbolic.svg" \
+    "$icons/symbolic/status/emblem-default-symbolic.svg"
+  [ "$(stat -c %a "$icons/index.theme")" = 644 ]
+  [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/icons/Adwaita" ]
+  grep -qxF "mirroros-gtk4-icons-default"$'\t'"capabilities/visual/gtk4/icons/default"$'\t\t\t'"manifest-sha256:$(sha256sum < "$icons/.mirroros-manifest" | cut -d' ' -f1)" \
+    "$CFG_TEST_DIR/first/sources.tsv"
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/etc/dconf" ]
   [ ! -e "$CFG_TEST_HOME/.config/gtk-4.0" ]
   run "$CFG_TEST_ENTRY"
@@ -59,6 +71,8 @@ teardown() { cfg_test_teardown; }
   [ ! -e "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/themes/gtk4" ]
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/entries/default/gtk.css" \
     "$CFG_TEST_TARGET_ROOT/usr/share/themes/MirrorOS-default/gtk-4.0/gtk.css"
+  cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/index.theme" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/icons/MirrorOS-default/index.theme"
   run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
   [ "$status" -eq 0 ]
   [[ "$output" == *'visual/gtk4: unchanged'* ]]
@@ -155,4 +169,27 @@ teardown() { cfg_test_teardown; }
   [ "$status" -eq 4 ]
   [ -L "$themes/MirrorOS-default" ]
   [ ! -e "$CFG_TEST_DIR/other/gtk-4.0" ]
+}
+
+@test "GTK4 configure preserves a modified unknown or linked native icon theme" {
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  local icons="$MIRROROS_CONFIGURE_ROOT/usr/share/icons/MirrorOS-default"
+  printf '\n<!-- local icon -->\n' >> "$icons/scalable/status/emblem-default.svg"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -q 'local icon' "$icons/scalable/status/emblem-default.svg"
+  rm -rf "$icons"
+  mkdir -p "$icons"
+  printf 'keep\n' > "$icons/index.theme"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -qx keep "$icons/index.theme"
+  rm -rf "$icons"
+  mkdir -p "$CFG_TEST_DIR/other"
+  ln -s "$CFG_TEST_DIR/other" "$icons"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  [ -L "$icons" ]
+  [ ! -e "$CFG_TEST_DIR/other/index.theme" ]
 }

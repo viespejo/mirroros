@@ -249,3 +249,31 @@ test('each native entry MirrorOS-<theme> imports its published theme palette and
   }
   assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/entries/);
 });
+
+test('each native icon theme MirrorOS-<theme> holds only the neutral check over Adwaita', () => {
+  const names = readdirSync(join(runtime, 'icons'));
+  assert.deepEqual(names, ['default']);
+  const check = ['16x16/status/emblem-default.svg', 'scalable/status/emblem-default.svg',
+    'symbolic/status/emblem-default-symbolic.svg'];
+  for (const name of names) {
+    const icons = join(runtime, 'icons', name);
+    assert.deepEqual(files(icons).map(path => path.slice(icons.length + 1)).sort(), ['index.theme', ...check].sort());
+    // The same bytes as the launcher's reviewed overlay; no other icon is shared globally.
+    for (const path of check)
+      assert.deepEqual(readFileSync(join(icons, path)), readFileSync(join(runtime, 'share/icons/Adwaita', path)), path);
+    const index = read(join(icons, 'index.theme'));
+    const sections = new Map([...index.matchAll(/^\[([^\]]+)\]\n((?:[A-Za-z]+=.*\n)+)/gm)]
+      .map(match => [match[1], Object.fromEntries(match[2].trim().split('\n').map(line => line.split('=')))]));
+    assert.deepEqual(sections.get('Icon Theme'), {
+      Name: `MirrorOS-${name}`, Comment: 'MirrorOS neutral check over Adwaita', Inherits: 'Adwaita,hicolor',
+      Directories: '16x16/status,scalable/status,symbolic/status',
+    });
+    assert.deepEqual(sections.get('16x16/status'), { Context: 'Status', Size: '16', Type: 'Fixed' });
+    assert.deepEqual(sections.get('scalable/status'),
+      { Context: 'Status', Size: '128', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
+    assert.deepEqual(sections.get('symbolic/status'),
+      { Context: 'Status', Size: '16', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
+    assert.equal(sections.size, 4);
+  }
+  assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/icons/);
+});

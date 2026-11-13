@@ -1,0 +1,25 @@
+# Native icon theme MirrorOS-default: only the neutral default-device check, every other name from Adwaita.
+[Icon Theme]
+Name=MirrorOS-default
+Comment=MirrorOS neutral check over Adwaita
+Inherits=Adwaita,hicolor
+Directories=16x16/status,scalable/status,symbolic/status
+
+[16x16/status]
+Context=Status
+Size=16
+Type=Fixed
+
+[scalable/status]
+Context=Status
+Size=128
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[symbolic/status]
+Context=Status
+Size=16
+MinSize=8
+MaxSize=512
+Type=Scalable

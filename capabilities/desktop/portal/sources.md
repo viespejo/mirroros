@@ -65,6 +65,12 @@ change the `current/theme` link and the user's `gtk-theme` together; GTK reloads
 changes. Configure checks the compiled value without a bus. `portal-check` does not yet check the Settings
 `gtk-theme` answer, and libadwaita applications follow their own stylesheet rather than this key.
 
+It also sets `icon-theme='MirrorOS-default'`, the native icon theme `/usr/share/icons/MirrorOS-<theme>` published by
+`visual/gtk4`: only the neutral default-device check over Adwaita, every other icon unchanged
+([GTK4 sources](../../visual/gtk4/sources.md#native-icon-theme)). A user `icon-theme` value takes precedence, and Story
+4.8 theme selection changes it together with `gtk-theme`. Configure checks the compiled value without a bus;
+`portal-check` does not yet check the Settings `icon-theme` answer.
+
 ## portal-check
 
 `/usr/share/mirroros/portal/portal-check` (0755, tracked delivery) is the read-only session verifier run as the user

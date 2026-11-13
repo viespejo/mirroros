@@ -67,9 +67,11 @@ GTK cannot follow the per-user `current/theme` link from a system stylesheet, so
 native GTK entry named `MirrorOS-<theme directory>` (today `MirrorOS-default`) under `/usr/share/themes`, published
 by `visual/gtk4` and `visual/gtk3` and importing that theme's `gtk-4.0.css` or `gtk-3.0.css`. The GTK theme name is
 derived from the directory, not from `theme.name`, so the link, the resolver and GTK share one identifier. The
-session default is the `gtk-theme` dconf value owned by [desktop/portal](../../desktop/portal/sources.md). Every
-future theme must publish both GTK palette files and gain matching entries; Story 4.8 theme selection changes the
-link and the user's `gtk-theme` together.
+session default is the `gtk-theme` dconf value owned by [desktop/portal](../../desktop/portal/sources.md). The
+native icon theme `/usr/share/icons/MirrorOS-<theme directory>`, published by `visual/gtk4`, follows the same rule and
+is selected by the `icon-theme` dconf value. Every future theme must publish both GTK palette files and gain
+matching entries and an icon theme; Story 4.8 theme selection changes the link and the user's `gtk-theme` and
+`icon-theme` together.
 
 ## Theme name
 

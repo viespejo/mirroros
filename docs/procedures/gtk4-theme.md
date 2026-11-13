@@ -47,8 +47,8 @@ Its own bounded publisher retains staged manifest verification, owner/mode check
 idempotency in both configure contexts. Delivery scripts and provenance are excluded from runtime publication.
 
 The maintainer also approved making the native GTK4 theme the session default and globally sharing only the
-neutral default-device check. The session default is implemented as described in [Session default](#session-default);
-the shared check is not implemented yet. The relocated launcher remains a compatibility path; optional
+neutral default-device check. The session default and the shared check are implemented as described in
+[Session default](#session-default). The relocated launcher remains a compatibility path; optional
 application-icon launchers are deferred.
 
 ## Session default
@@ -68,6 +68,21 @@ the installed session, user overrides, dark/high-contrast behavior, Strata regre
 non-interference have not been validated on the VM yet. To return a user's session to Adwaita without changing the
 product default, run as that user `gsettings set org.gnome.desktop.interface gtk-theme Adwaita`; `gsettings reset
 org.gnome.desktop.interface gtk-theme` restores the MirrorOS default.
+
+The neutral default-device check is shared the same way. `visual/gtk4` publishes the native icon theme
+`/usr/share/icons/MirrorOS-default` (an `index.theme` inheriting Adwaita and hicolor, plus the three reviewed
+`emblem-default` SVG variants) and `desktop/portal` adds `icon-theme='MirrorOS-default'` to the same key file.
+Every other icon name resolves through Adwaita as before; no application alias is shared globally and no packaged
+icon file is overwritten. Any consumer requesting `emblem-default` in this theme gets the check, not only
+pavucontrol. On 2026-11-13 a running configure of the lab candidate changed only `visual/gtk4` and `desktop/portal`;
+the rerun left all 23 steps unchanged. Without a new login the Settings portal answered `icon-theme`
+`'MirrorOS-default'`; windowless GTK 4.24.1 and GTK 3.24.52 probes in the session received that name, resolved
+`emblem-default` and its symbolic name from `/usr/share/icons/MirrorOS-default` in 24 lookups each (sizes 16/24/32,
+scales 1/2, ordinary/forced symbolic) and 444 other lookup paths identical to Adwaita. Qt 6.12 in the shell's
+environment (no `QT_*` variables) uses `hicolor` and ignores this key, so the shell is unaffected. Rendering of
+the check in installed applications other than the accepted pavucontrol preview has not been reviewed.
+To return a user to the packaged icons, run as that user `gsettings set org.gnome.desktop.interface icon-theme
+Adwaita`; `gsettings reset org.gnome.desktop.interface icon-theme` restores the MirrorOS default.
 
 ### Selection prototype
 
@@ -150,9 +165,9 @@ The source and binaries are temporary VM fixtures under the selection-prototype 
 reviewed shared CSS. Only its verified predecessor laboratory process was replaced. The live PID is recorded in
 `preview.pid`; recheck its executable, owner and isolated environment before any later action. Its log is
 `preview-single-check.log`. No real audio value, user icon directory, system icon file or global theme setting was
-changed. The maintainer visually accepted this neutral-check pavucontrol preview. Publication in a standard
-system lookup directory, conflict-safe ownership, broader GTK3/GTK4 rendering checks and a reversible removal path
-remain unimplemented.
+changed. The maintainer visually accepted this neutral-check pavucontrol preview. Conflict-safe publication in the
+standard system lookup directory and the per-user recovery are now described under [Session default](#session-default);
+broader GTK3/GTK4 rendering checks remain open.
 
 ## Delivery and use
 
@@ -168,7 +183,7 @@ Three separately owned configure steps publish independently manifest-checked tr
 The shared runtime has no palette identity file. Its font stack uses JetBrains already declared by the terminal
 capability. Pavucontrol brings GTK4 and Adwaita from the official repositories; `visual/gtk4` adds no package.
 The following launch behavior remains transitional until session-default selection and single-check publication
-are implemented and qualified.
+are qualified.
 
 Configure never launches or reloads an application. Close any existing pavucontrol window normally, then use
 **Advanced…**, or run as the session user:

@@ -9,7 +9,8 @@ case "$1" in
   read)
     [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && "$DCONF_PROFILE" == user && -f "$root/etc/dconf/profile/user" ]] || exit 0
     case "$2" in
-      /org/gnome/desktop/interface/color-scheme | /org/gnome/desktop/interface/gtk-theme) ;;
+      /org/gnome/desktop/interface/color-scheme | /org/gnome/desktop/interface/gtk-theme | \
+        /org/gnome/desktop/interface/icon-theme) ;;
       *) exit 97 ;;
     esac
     sed -n "s/^${2##*/}=//p" "$root/etc/dconf/db/local" 2> /dev/null || true ;;

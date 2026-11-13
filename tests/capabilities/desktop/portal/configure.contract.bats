@@ -55,6 +55,7 @@ portal_strata_entry() {
   [ "$(stat -c %a "$root/usr/share/mirroros/portal/portal-check")" = 755 ]
   grep -qx "color-scheme='prefer-dark'" "$root/etc/dconf/db/local"
   grep -qx "gtk-theme='MirrorOS-default'" "$root/etc/dconf/db/local"
+  grep -qx "icon-theme='MirrorOS-default'" "$root/etc/dconf/db/local"
   [ "$(grep -c '^dconf update$' "$CFG_TEST_CALLS")" -eq 1 ]
   grep -qF 'portal changes take effect at the next login' "$CFG_TEST_DIR/first/configure.log"
   grep -qF 'unavailable: inode/directory default check; io.github.lgse.Strata.desktop is not installed yet' \
@@ -75,7 +76,7 @@ portal_strata_entry() {
   portal_sddm_pam "$MIRROROS_CONFIGURE_ROOT"
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
-  printf '# managed by MirrorOS configure\n[org/gnome/desktop/interface]\ncolor-scheme='"'prefer-dark'"'\ngtk-theme='"'MirrorOS-default'"'\n\n' \
+  printf '# managed by MirrorOS configure\n[org/gnome/desktop/interface]\ncolor-scheme='"'prefer-dark'"'\ngtk-theme='"'MirrorOS-default'"'\nicon-theme='"'MirrorOS-default'"'\n\n' \
     > "$PORTAL_CODE/00-mirroros-appearance"
   : > "$CFG_TEST_CALLS"
   run "$CFG_TEST_ENTRY"
@@ -96,6 +97,16 @@ portal_strata_entry() {
   run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/no-theme"
   [ "$status" -eq 4 ]
   grep -qF 'Postcondition failed: theme_default' "$CFG_TEST_DIR/no-theme/configure.log"
+  refute grep -qE '^(gsettings|systemctl) ' "$CFG_TEST_CALLS"
+}
+
+@test "the compiled system default must select the MirrorOS-default icon theme" {
+  portal_sddm_pam "$MIRROROS_CONFIGURE_ROOT"
+  printf '# managed by MirrorOS configure\n[org/gnome/desktop/interface]\ncolor-scheme='"'prefer-dark'"'\ngtk-theme='"'MirrorOS-default'"'\n' \
+    > "$PORTAL_CODE/00-mirroros-appearance"
+  run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/no-icons"
+  [ "$status" -eq 4 ]
+  grep -qF 'Postcondition failed: icon_default' "$CFG_TEST_DIR/no-icons/configure.log"
   refute grep -qE '^(gsettings|systemctl) ' "$CFG_TEST_CALLS"
 }
 
@@ -149,6 +160,7 @@ portal_strata_entry() {
   grep -qx "arch-chroot $CFG_TEST_TARGET_ROOT dconf update" "$CFG_TEST_CALLS"
   grep -qx "color-scheme='prefer-dark'" "$CFG_TEST_TARGET_ROOT/etc/dconf/db/local"
   grep -qx "gtk-theme='MirrorOS-default'" "$CFG_TEST_TARGET_ROOT/etc/dconf/db/local"
+  grep -qx "icon-theme='MirrorOS-default'" "$CFG_TEST_TARGET_ROOT/etc/dconf/db/local"
   [ -x "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/portal/portal-check" ]
   refute grep -qE '(^| )(systemctl|busctl|xdg-mime|gsettings) ' "$CFG_TEST_CALLS"
 }

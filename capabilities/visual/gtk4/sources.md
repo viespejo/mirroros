@@ -66,6 +66,18 @@ Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf 
 GTK4 applications use it without `GTK_THEME`; a user `gtk-theme` value takes precedence. Modified, unknown or linked
 entries are conflicts. The naming rule is recorded in [theme sources](../theme/sources.md).
 
+## Native icon theme
+
+`icons/<theme>/` is published, outside the runtime tree, as the manifest-checked native icon theme
+`/usr/share/icons/MirrorOS-<theme>`, with its manifest at the theme root (GTK ignores it). It contains only an
+original `index.theme` (`Inherits=Adwaita,hicolor`; `16x16/status`, `scalable/status` and `symbolic/status` with the
+same sizes and types as the packaged Adwaita 51 index) and the three neutral `emblem-default` SVG variants,
+byte-identical to the launcher overlay's reviewed drawings (GPL-3.0-only). Every other name resolves through
+Adwaita exactly as before; Adwaita 51 has no `emblem-default`, so the replaced check is AdwaitaLegacy's PNG.
+No packaged file or Adwaita index is copied or overwritten, and no application icon alias is shared globally.
+Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf `icon-theme` default; a user
+`icon-theme` value takes precedence and then drops the check. Modified, unknown or linked trees are conflicts.
+
 ## Strata typography source
 
 The family stack and font sizing are adapted from [Strata v1.2.1](https://github.com/lgse/strata/tree/491e6ba9735e821f9f49910ffd2582076196865c),
@@ -114,8 +126,8 @@ retain native fallback. Names and trademarks imply no endorsement.
 
 The approved default remains native application icons with only the three neutral `emblem-default` SVG variants
 shared in supported Adwaita lookup, without overwriting packaged files. The accepted Osaka preview used that
-single-check overlay, not the launcher's full alias set. Global check publication and removal of the mandatory
-launcher dependency remain later steps; optional per-application icon launchers remain deferred. Theme selection and icon policy are separate work, not implicitly activated by adopting Osaka.
+single-check overlay, not the launcher's full alias set. The check is now published as the
+[native icon theme](#native-icon-theme); removal of the mandatory launcher dependency remains a later step; optional per-application icon launchers remain deferred. Theme selection and icon policy are separate work, not implicitly activated by adopting Osaka.
 
 ## Validation and limits
 
