@@ -2,6 +2,19 @@
 set -Eeuo pipefail
 printf 'busctl %s\n' "$*" >> "$CFG_TEST_CALLS"
 [[ "${HW_BUS_FAIL:-0}" == 0 ]] || exit 17
+# Fingerprint step probes: logind lid state (HW_LID_LOGIND open|closed|timeout) and the notification server.
+case "$*" in
+  *' org.freedesktop.login1.Manager LidClosed')
+    case "${HW_LID_LOGIND:-open}" in
+      closed) printf 'b true\n' ;;
+      timeout) exit 1 ;;
+      *) printf 'b false\n' ;;
+    esac
+    exit 0 ;;
+  *' NameHasOwner s org.freedesktop.Notifications')
+    printf 'b %s\n' "${HW_NOTIFICATIONS:-true}"
+    exit 0 ;;
+esac
 # --system get-property service path interface property
 property=${6:-}
 case "$2:$property" in

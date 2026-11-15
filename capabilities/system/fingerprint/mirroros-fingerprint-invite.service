@@ -1,0 +1,15 @@
+# managed by MirrorOS configure
+# One-time fingerprint enrollment invitation (ADR 0030); the script decides whether to invite and keeps its marker.
+[Unit]
+Description=MirrorOS fingerprint enrollment invitation
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+# notify-send waits until the notification is dismissed or its action is taken.
+TimeoutStartSec=infinity
+ExecStart=/usr/share/mirroros/hardware/fingerprint-invite
+
+[Install]
+WantedBy=graphical-session.target

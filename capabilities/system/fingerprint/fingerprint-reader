@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Fingerprint reader probe, adapted from Omarchy 7075b61 bin/omarchy-hw-fingerprint (MIT, Copyright (c) David
+# Heinemeier Hansson); license at /usr/share/mirroros/hardware/licenses/omarchy-fingerprint.
+#
+# Usage: fingerprint-reader (no arguments)
+# Exit codes: 0 a USB fingerprint reader is present; 1 none is detected.
+#
+# Read-only sysfs probe used by fingerprint-setup, fingerprint-invite and the session-menu row guard; it works before
+# fprintd is installed and writes nothing.
+#
+# MirrorOS divergences: USB readers only (no platform reader file, ADR 0030); MIRROROS_USB_DEVICES_PATH replaces the
+# OMARCHY_ override and exists for tests only.
+
+# USB vendor IDs listed here ship fingerprint readers; multi-purpose vendors
+# (e.g. Elan/STMicro, which also make USB touchscreens) are left out to avoid
+# false positives on laptops with no reader. Those still match on the product
+# string below when present.
+fingerprint_vendors=" 27c6 138a 06cb 08ff 1c7a 147e "
+usb_devices_path="${MIRROROS_USB_DEVICES_PATH:-/sys/bus/usb/devices}"
+
+# libfprint drives every reader it supports from userspace over libusb, so a
+# real reader sits there with no kernel driver bound to any of its interfaces.
+# The other things these vendors build (webcam bridges, touchpads,
+# touchscreens, cameras) all bind one. Only the vendor-ID guess needs this; a
+# device that names itself a fingerprint reader is trusted outright.
+has_kernel_driver() {
+  local intf driver
+  for intf in "$1"/*:*; do
+    [[ -e $intf/driver ]] || continue
+    # usbfs is the exception: libusb claims an interface through it while
+    # fprintd enrolls or verifies, which is userspace driving the reader.
+    driver=$(readlink -f "$intf/driver")
+    [[ ${driver##*/} == "usbfs" ]] || return 0
+  done
+  return 1
+}
+
+for dev in "$usb_devices_path"/*; do
+  # The device's own product descriptor usually names it, e.g. "Goodix
+  # Fingerprint USB Device", independent of driver and vendor.
+  if [[ -r $dev/product ]]; then
+    product=$(<"$dev/product")
+    product=${product,,}
+    # Elan match-on-chip readers report "ELAN:ARM-M4" and Fingerprint Cards
+    # readers start with "FPC ": the family or the manufacturer rather than the
+    # function. Both vendors are left out of the list above on purpose.
+    [[ $product == *fingerprint* || $product == *biometric* || $product == *elan:arm-m4* || $product == "fpc "* ]] && exit 0
+  fi
+
+  if [[ -r $dev/idVendor ]]; then
+    vendor=$(<"$dev/idVendor")
+    [[ $fingerprint_vendors == *" $vendor "* ]] &&
+      ! has_kernel_driver "$dev" && exit 0
+  fi
+done
+
+exit 1

@@ -31,7 +31,10 @@ case "$name" in
       exit 109
     fi
     [[ "${HW_OSD_UNAVAILABLE:-0}" == 0 ]] || exit 1 ;;
-  notify-send) [[ "${HW_NOTIFY_FAIL:-0}" == 0 ]] || exit 1 ;;
+  notify-send)
+    [[ "${HW_NOTIFY_FAIL:-0}" == 0 ]] || exit 1
+    # An action taken on a notification sent with --wait -A is printed by name.
+    [[ -z "${HW_NOTIFY_ACTION:-}" ]] || printf '%s\n' "$HW_NOTIFY_ACTION" ;;
   bluetoothctl) exit 0 ;;
   nmcli)
     [[ "$*" == '--offline connection add type vpn vpn-type openconnect con-name mirroros-plugin-check' ]] || exit 97

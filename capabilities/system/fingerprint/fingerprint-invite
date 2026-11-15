@@ -1,0 +1,46 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# One-time fingerprint enrollment invitation, adapted from Omarchy 7075b61 install/user/first-run/setup-fingerprint.hook
+# (MIT, Copyright (c) David Heinemeier Hansson); license at /usr/share/mirroros/hardware/licenses/omarchy-fingerprint.
+#
+# Usage: fingerprint-invite (no arguments; started by mirroros-fingerprint-invite.service at graphical login)
+# Exit codes: 0 always, unless the session itself fails.
+#
+# It invites only when a reader is present, the user has no prints and the marker
+# ${XDG_STATE_HOME:-~/.local/state}/mirroros/fingerprint-invited is absent. It waits at most
+# MIRROROS_FINGERPRINT_INVITE_WAIT_SECONDS (default 30) for the notification server; when none appears it exits
+# without the marker, so the next login tries again. Once the marker exists it never invites again.
+#
+# MirrorOS divergences: a marker file instead of omarchy-done; prints from fprintd instead of a lock PAM file; a
+# bounded wait for org.freedesktop.Notifications; notify-send with a setup action instead of omarchy-notification-send.
+# Critical urgency, as upstream, keeps the invitation until the user acts; a normal one would expire unseen.
+set -Eeuo pipefail
+
+here=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+marker="${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/fingerprint-invited"
+wait_seconds="${MIRROROS_FINGERPRINT_INVITE_WAIT_SECONDS:-30}"
+[[ $wait_seconds =~ ^[0-9]+$ ]] || wait_seconds=30
+
+[[ ! -e $marker ]] || exit 0
+"$here/fingerprint-reader" || exit 0
+# Without an answer from fprintd there is nothing to set up yet.
+list=$(fprintd-list "$USER" 2>/dev/null) || exit 0
+! grep -q '^ - #' <<< "$list" || exit 0
+
+notifications_ready() {
+  [[ $(busctl --user --timeout=2 call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+    NameHasOwner s org.freedesktop.Notifications 2>/dev/null) == "b true" ]]
+}
+
+for (( waited = 0; ; waited++ )); do
+  notifications_ready && break
+  (( waited < wait_seconds )) || exit 0
+  sleep 1
+done
+
+mkdir -p -- "${marker%/*}"
+: > "$marker"
+action=$(notify-send --wait -u critical -A setup="Set up" "Fingerprint reader" \
+  "Use your fingerprint for sudo and authorization prompts.") || exit 0
+[[ $action == setup ]] || exit 0
+exec uwsm app -- foot -e /usr/share/mirroros/hardware/fingerprint-setup

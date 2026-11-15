@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+set -Eeuo pipefail
+
+case "${1:-}" in
+  target) exit 0 ;;
+  running) ;;
+  *) exit 6 ;;
+esac
+pacman -Q fprintd > /dev/null
+pacman -Q libfprint > /dev/null
+gate='auth [success=1 default=ignore] pam_exec.so quiet /usr/share/mirroros/hardware/lid-closed'
+# The gate's success=1 skips exactly the next rule, so it must be the rule immediately before pam_fprintd.
+for stack in /etc/pam.d/polkit-1 /etc/pam.d/sudo; do
+  awk -v gate="$gate" '
+    /^[[:space:]]*(#|$)/ { next }
+    /pam_fprintd\.so/ { found = (previous == gate); exit }
+    { previous = $0 }
+    END { exit !found }
+  ' "$stack"
+done
+for command in lid-closed fingerprint-reader fingerprint-setup fingerprint-invite; do
+  [[ -x "/usr/share/mirroros/hardware/$command" ]]
+done

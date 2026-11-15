@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# fprintd command-line tools and uwsm for the fingerprint commands; enrolled prints live in a fixture file.
+set -Eeuo pipefail
+name=${0##*/}
+printf '%s %s\n' "$name" "$*" >> "$CFG_TEST_CALLS"
+prints=$CFG_TEST_DIR/fingerprint-prints
+case "$name" in
+  fprintd-list)
+    [[ "${HW_FPRINT_LIST_FAIL:-0}" == 0 ]] || exit 1
+    if [[ -e "$prints" ]]; then
+      printf 'Fingerprints for user %s on Synaptics Sensors (press):\n - #0: right-index-finger\n' "$1"
+    else
+      printf 'User %s has no fingers enrolled for Synaptics Sensors.\n' "$1"
+    fi ;;
+  fprintd-enroll)
+    printf 'Using device /net/reactivated/Fprint/Device/0\nEnrolling right-index-finger finger.\n'
+    if [[ "${HW_ENROLL_FAIL:-0}" != 0 ]]; then printf 'Enroll result: enroll-failed\n'; exit 1; fi
+    printf 'Enroll result: enroll-stage-passed\nEnroll result: enroll-retry-scan\nEnroll result: enroll-completed\n'
+    : > "$prints" ;;
+  fprintd-verify)
+    printf 'Using device /net/reactivated/Fprint/Device/0\nVerify started!\nVerifying: right-index-finger\n'
+    if [[ "${HW_VERIFY_FAIL:-0}" != 0 ]]; then printf 'Verify result: verify-no-match (done)\n'; exit 1; fi
+    printf 'Verify result: verify-match (done)\n' ;;
+  fprintd-delete)
+    [[ "${HW_DELETE_FAIL:-0}" == 0 ]] || exit 1
+    rm -f -- "$prints"
+    printf 'Fingerprints of user %s deleted on Synaptics Sensors.\n' "$1" ;;
+  uwsm) ;;
+  *) exit 97 ;;
+esac

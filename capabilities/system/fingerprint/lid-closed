@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Clamshell probe for the PAM fingerprint gate and the shell polkit agent, adapted from Omarchy 7075b61
+# bin/omarchy-hw-laptop-closed (MIT, Copyright (c) David Heinemeier Hansson); license at
+# /usr/share/mirroros/hardware/licenses/omarchy-fingerprint.
+#
+# Usage: lid-closed (no arguments)
+# Exit codes: 0 the lid is closed; 1 the lid is open, absent or its state is unknown.
+#
+# Contract (ADR 0030): run by pam_exec as root from /etc/pam.d/polkit-1 and /etc/pam.d/sudo and by the shell agent
+# with fixed argv. It only reads; it writes nothing, starts nothing and its only command is a logind property read
+# bounded to 2 seconds. Every error reads as an open lid, so PAM continues to pam_fprintd and then the password.
+#
+# MirrorOS divergences: MIRROROS_ACPI_LID_PATH and MIRROROS_INPUT_CLASS_PATH replace the OMARCHY_ overrides and
+# exist for tests only; a different path can only make the probe report an open lid or a closed one, which selects
+# between fingerprint and password, never grants access.
+
+acpi_lid="${MIRROROS_ACPI_LID_PATH:-/proc/acpi/button/lid}"
+input_class="${MIRROROS_INPUT_CLASS_PATH:-/sys/class/input}"
+
+shopt -s nullglob
+acpi_states=("$acpi_lid"/*/state)
+input_switches=("$input_class"/*/capabilities/sw)
+shopt -u nullglob
+
+# An input device that reports a lid switch: SW_LID, bit 0 of the last word
+# of its switch bitmap.
+has_lid_switch() {
+  local switches word
+  local -a words
+
+  for switches in "${input_switches[@]}"; do
+    [[ -r $switches ]] || continue
+    read -r -a words <"$switches" || true
+    (( ${#words[@]} )) || continue
+    word=${words[-1]}
+    [[ $word =~ ^[0-9a-fA-F]+$ ]] || continue
+    (( 16#$word & 1 )) && return 0
+  done
+  return 1
+}
+
+if (( ${#acpi_states[@]} )); then
+  # An ACPI lid reports its own state.
+  for state in "${acpi_states[@]}"; do
+    [[ -r $state ]] || continue
+    [[ $(<"$state") == *"closed"* ]] && exit 0
+  done
+elif has_lid_switch; then
+  # Elsewhere only logind reads the switch. Ask it only then: it answers "open"
+  # when it tracks no lid. This runs in sudo's and polkit's PAM stacks, so a
+  # stalled logind must not hold up every prompt.
+  lid_state=$(busctl --timeout=2 get-property org.freedesktop.login1 \
+    /org/freedesktop/login1 org.freedesktop.login1.Manager LidClosed 2>/dev/null)
+  [[ $lid_state == "b true" ]] && exit 0
+fi
+
+exit 1

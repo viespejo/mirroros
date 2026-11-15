@@ -217,7 +217,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the twenty-three-step configuration converges in the target and reruns without transactions" {
+@test "the twenty-four-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -239,20 +239,22 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/23 visual/theme =='* ]]
-  [[ "$output" == *'== 2/23 visual/gtk4 =='* ]]
-  [[ "$output" == *'== 3/23 visual/gtk3 =='* ]]
-  [[ "$output" == *'== 5/23 desktop/portal =='* ]]
-  [[ "$output" == *'== 6/23 desktop/files =='* ]]
-  [[ "$output" == *'== 12/23 system/audio =='* ]]
-  [[ "$output" == *'== 13/23 system/bluetooth =='* ]]
-  [[ "$output" == *'== 14/23 system/power =='* ]]
-  [[ "$output" == *'== 15/23 system/network =='* ]]
-  [[ "$output" == *'== 16/23 system/vpn =='* ]]
-  [[ "$output" == *'== 19/23 desktop/reminders =='* ]]
-  [[ "$output" == *'== 21/23 visual/branding =='* ]]
-  [[ "$output" == *'== 22/23 system/boot-splash =='* ]]
-  [[ "$output" == *'== 23/23 desktop/login =='* ]]
+  [[ "$output" == *'== 1/24 visual/theme =='* ]]
+  [[ "$output" == *'== 2/24 visual/gtk4 =='* ]]
+  [[ "$output" == *'== 3/24 visual/gtk3 =='* ]]
+  [[ "$output" == *'== 5/24 desktop/portal =='* ]]
+  [[ "$output" == *'== 6/24 desktop/files =='* ]]
+  [[ "$output" == *'== 12/24 system/audio =='* ]]
+  [[ "$output" == *'== 13/24 system/bluetooth =='* ]]
+  [[ "$output" == *'== 14/24 system/power =='* ]]
+  [[ "$output" == *'== 15/24 system/fingerprint =='* ]]
+  [[ "$output" == *'== 16/24 system/network =='* ]]
+  [[ "$output" == *'== 17/24 system/vpn =='* ]]
+  [[ "$output" == *'== 20/24 desktop/reminders =='* ]]
+  [[ "$output" == *'== 22/24 visual/branding =='* ]]
+  [[ "$output" == *'== 23/24 system/boot-splash =='* ]]
+  [[ "$output" == *'== 24/24 desktop/login =='* ]]
+  cmp "$CFG_SOURCE_ROOT/capabilities/system/fingerprint/polkit-1" "$CFG_TEST_TARGET_ROOT/etc/pam.d/polkit-1"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/base.css" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/gtk3/base.css"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/theme/default/gtk-3.0.css" \
@@ -320,7 +322,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 23 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 24 ]
   cfg_test_no_install
   run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]

@@ -1,0 +1,30 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and a non-root target user; no fingerprint reader is required.
+# Context: CONFIGURE_CONTEXT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: fprintd and libfprint are installed; the owned commands, license and invitation user unit are
+# delivered and the unit is enabled; /etc/pam.d/polkit-1 and /etc/pam.d/sudo carry the clamshell gate immediately
+# before pam_fprintd (ADR 0030). A /etc/pam.d/sudo other than the packaged content or the last delivery stops the
+# step with exit 4 and is never overwritten. fprintd is D-Bus activated and never started here.
+set -Eeuo pipefail
+
+# sha256 of /etc/pam.d/sudo as shipped by sudo 1.9.17.p2-6 (see sources.md).
+sudo_packaged=7ec1c668c10e0f83d00e25f336872212fe04ce2c2563e1d661d34d28852f4649
+
+cfg_packages_ensure "$STEP_DIR/packages"
+for command in lid-closed fingerprint-reader fingerprint-setup fingerprint-invite; do
+  cfg_tracked_file "$STEP_DIR/$command" "/usr/share/mirroros/hardware/$command" 0755
+  cfg_require cfg_tracked_file_present "/usr/share/mirroros/hardware/$command"
+done
+cfg_tracked_file "$STEP_DIR/OMARCHY-LICENSE" /usr/share/mirroros/hardware/licenses/omarchy-fingerprint 0644
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hardware/licenses/omarchy-fingerprint
+unit=/etc/systemd/user/mirroros-fingerprint-invite.service
+cfg_tracked_file "$STEP_DIR/mirroros-fingerprint-invite.service" "$unit" 0644
+cfg_user_unit_enable mirroros-fingerprint-invite.service "$unit" graphical-session.target
+cfg_tracked_file "$STEP_DIR/polkit-1" /etc/pam.d/polkit-1 0644
+cfg_tracked_file "$STEP_DIR/sudo" /etc/pam.d/sudo 0644 "$sudo_packaged"
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_tracked_file_present "$unit"
+cfg_require cfg_user_unit_enabled mirroros-fingerprint-invite.service graphical-session.target
+cfg_require cfg_tracked_file_present /etc/pam.d/polkit-1
+cfg_require cfg_tracked_file_present /etc/pam.d/sudo
+cfg_require cfg_exec bash -s -- "$CONFIGURE_CONTEXT" < "$STEP_DIR/check"
