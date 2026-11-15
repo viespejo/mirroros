@@ -1,7 +1,7 @@
 // MirrorOS-owned menu model. Same item schema, ids, labels, aliases, icons and
 // order as the matching rows of Omarchy default/omarchy/omarchy-menu.jsonc at
 // 7075b61c6aaa5d8589f6e816867508fc96dc49d9, restricted to Apps, Learn >
-// Keybindings and System, plus the approved background rows from the installed
+// Keybindings, Setup > Security > Fingerprint and System, plus the approved background rows from the installed
 // reference recorded in UPSTREAM.md. Not a user-editable file: there is no extension file
 // and no new configuration format.
 //
@@ -11,12 +11,19 @@
 // - Actions are ids from a closed table interpreted by Menu.qml
 //   (`session:<name>`, `help:keybindings`), never command text. Session rows
 //   carry no `when:` guard; SessionActions supplies availability instead.
+// - `when:` holds a guard id from a closed table (GUARDS) that Menu.qml runs
+//   as a fixed argv, never Bash text: `setup.security.fingerprint` uses
+//   `fingerprint-reader` (upstream `omarchy-hw-fingerprint`) and runs
+//   `fingerprint:setup` (upstream `omarchy-setup-security-fingerprint` in a
+//   floating terminal; here MirrorOS fingerprint-setup in foot, ADR 0030).
+// - The other Setup and Setup > Security rows are excluded.
 // - `system.screensaver` and the other Learn rows are excluded.
 
 var ITEMS = [
   ["apps", { icon: "\u{F003B}", label: "Apps", aliases: ["app", "applications"], provider: "apps" }],
   ["learn", { icon: "\u{F09D1}", label: "Learn" }],
   ["style", { icon: "\uEBCF", label: "Style" }],
+  ["setup", { icon: "\uE615", label: "Setup", aliases: ["settings"] }],
   ["install", { icon: "\u{F0249}", label: "Install" }],
   ["system", { icon: "\uF011", label: "System", aliases: ["power-menu"] }],
 
@@ -27,6 +34,9 @@ var ITEMS = [
   ["system.reboot", { icon: "\u{F0709}", label: "Reboot", action: "session:reboot" }],
   ["system.shutdown", { icon: "\u{F0425}", label: "Shutdown", action: "session:shutdown" }],
 
+  ["setup.security", { icon: "\uEB11", label: "Security" }],
+  ["setup.security.fingerprint", { icon: "\u{F0237}", label: "Fingerprint", when: "fingerprint-reader", action: "fingerprint:setup" }],
+
   ["learn.keybindings", { icon: "\uF11C", label: "Keybindings", action: "help:keybindings" }],
   ["style.background", { icon: "\uF03E", label: "Background", aliases: ["background", "wallpaper"], action: "wallpaper:open" }],
   ["install.style", { icon: "\uEBCF", label: "Style" }],
@@ -35,7 +45,11 @@ var ITEMS = [
 
 // Closed action table: the only values an item's `action` may hold.
 var ACTIONS = ["session:lock", "session:suspend", "session:hibernate", "session:logout",
-  "session:reboot", "session:shutdown", "help:keybindings", "wallpaper:open", "wallpaper:install"]
+  "session:reboot", "session:shutdown", "help:keybindings", "wallpaper:open", "wallpaper:install",
+  "fingerprint:setup"]
+
+// Closed guard table: the only values an item's `when` may hold.
+var GUARDS = ["fingerprint-reader"]
 
 function rawItems() {
   return ITEMS.map(function(pair) { return [pair[0], pair[1]] })
@@ -45,6 +59,11 @@ function isKnownAction(action) {
   return ACTIONS.indexOf(String(action || "")) >= 0
 }
 
+function isKnownGuard(guard) {
+  return GUARDS.indexOf(String(guard || "")) >= 0
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { rawItems: rawItems, isKnownAction: isKnownAction, actions: ACTIONS }
+  module.exports = { rawItems: rawItems, isKnownAction: isKnownAction, actions: ACTIONS,
+    isKnownGuard: isKnownGuard, guards: GUARDS }
 }

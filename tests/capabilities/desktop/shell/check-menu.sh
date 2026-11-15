@@ -208,10 +208,14 @@ check "system direct: rows in upstream order" "$(eventually 's.labels.join("|")'
 # Wait until every probe answered (no "Checking" reason left).
 expected=0; wait_for field 's.rows.filter(r=>/Checking/.test(r.detail)).length' >/dev/null
 check "system: availability" "$(field 's.rows.map(r=>r.label+"="+(r.disabled?"off":"on")).join(",")')" \
-    "Lock=off,Suspend=on,Hibernate=off,Logout=on,Reboot=on,Shutdown=off"
+    "Lock=off,Suspend=on,Hibernate=off,Logout=on,Reboot=on,Shutdown=on"
 check "system: lock reason pinned" "$(field 's.rows[0].pinned+"|"+s.rows[0].detail')" "true|Install hyprlock to lock the screen."
 check "system: hibernate reason (logind na)" "$(field 's.rows[2].detail')" "This system reports hibernate is not supported (na)."
-check "system: shutdown reason (logind challenge)" "$(field 's.rows[5].detail')" "Shutdown needs authorization (no polkit agent)."
+# A logind challenge prompts through the shell-hosted polkit agent (ADR 0030):
+# the row is available with the hint and runs the same fixed argv.
+check "system: challenge row available with the authorization hint" \
+    "$(js 's.actions.shutdown.state+"|"+s.actions.shutdown.reason' "$(ipc sessionState)")" \
+    "available|Shutdown asks for authorization."
 check "system: no checkmark on unavailable rows" "$(field 's.labels.filter(l=>l.includes("✓")).length')" 0
 check "system: cursor skips unavailable first row" "$(field 's.selected')" 1
 ipc move 1 >/dev/null
@@ -240,6 +244,10 @@ check "search: app from root with parent path" "$(eventually 's.rows.map(r=>r.la
 ipc setFilter hibernate >/dev/null
 check "search: unavailable row listed with reason" "$(field 's.rows.map(r=>r.label+"|"+r.disabled+"|"+r.detail).join(";")')" \
     "Hibernate|true|This system reports hibernate is not supported (na)."
+# Without a detected reader (probe absent or non-zero) Setup > Security >
+# Fingerprint and its empty parents stay hidden, in search too.
+ipc setFilter fingerprint >/dev/null
+check "fingerprint: row hidden without a reader" "$(field 's.rows.length')" 0
 ipc setFilter l >/dev/null
 check "search: drilldown divider after current-level rows" \
     "$(field 's.rows[0].label+"|"+s.rows[0].section+"|"+s.rows.some(r=>r.section==="drilldown")')" "Learn||true"
@@ -261,7 +269,7 @@ ipc open system.hibernate >/dev/null
 ipc open system.shutdown >/dev/null
 sleep 0.5
 check "dispatch: action routes run available actions only" "$(dispatched)" \
-    "suspend:systemctl suspend|reboot:systemctl reboot|logout:uwsm stop"
+    "suspend:systemctl suspend|reboot:systemctl reboot|logout:uwsm stop|shutdown:systemctl poweroff"
 check "sessionState: dry-run and argv table" \
     "$(js 's.dryRun+"|"+s.actions.lock.argv.join(" ")+"|"+s.actions.shutdown.argv.join(" ")' "$(ipc sessionState)")" \
     "true|loginctl lock-session|systemctl poweroff"

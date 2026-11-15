@@ -9,6 +9,7 @@ import "bar"
 import "notifications" as Notifications
 import "osd"
 import "reminders"
+import "polkit" as Polkit
 
 // MirrorOS desktop shell entry point. Composes the shell surfaces directly;
 // there is no plugin host. Shared services are created here and injected
@@ -167,6 +168,10 @@ ShellRoot {
   ReminderFlow {
     id: reminderFlow
   }
+
+  // Polkit authentication agent (ADR 0030): an isolated sibling. It receives no
+  // shell references and exposes none; no other component reaches it.
+  Polkit.PolkitAgent { }
 
   // Native IPC for the reminder command: `reminder -i` opens the prompt, and
   // the command asks for a refresh after it sets, delivers or clears a

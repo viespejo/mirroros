@@ -25,7 +25,31 @@ test('model: root injected with upstream label and first in order', () => {
 });
 
 test('model: approved root groups retain upstream order', () => {
-  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'root'), ['apps', 'learn', 'style', 'install', 'system']);
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'root'), ['apps', 'learn', 'style', 'setup', 'install', 'system']);
+});
+
+test('model: Setup > Security > Fingerprint is guarded by the closed reader probe', () => {
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'setup'), ['setup.security']);
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'setup.security'), ['setup.security.fingerprint']);
+  const row = items['setup.security.fingerprint'];
+  assert.equal(row.kind, 'action');
+  assert.equal(row.label, 'Fingerprint');
+  assert.equal(row.icon, '\u{F0237}');
+  assert.equal(row.when, 'fingerprint-reader');
+  assert.ok(MirrorMenu.isKnownGuard(row.when));
+  assert.equal(row.action, 'fingerprint:setup');
+  assert.equal(items.setup.icon, '\uE615');
+  assert.deepEqual(items.setup.aliases, ['settings']);
+  assert.equal(items['setup.security'].icon, '\uEB11');
+  for (const id of itemOrder) if (items[id].when) assert.ok(MirrorMenu.isKnownGuard(items[id].when), id);
+  assert.equal(MirrorMenu.isKnownGuard('omarchy-hw-fingerprint'), false);
+  // Rows stay hidden until the guard answers, so the empty Setup submenus hide too.
+  const hidden = { 'setup.security.fingerprint': false };
+  for (const id of ['setup', 'setup.security', 'setup.security.fingerprint'])
+    assert.equal(MenuModel.isVisible(items, itemOrder, hidden, items[id]), false, id);
+  const shown = { 'setup.security.fingerprint': true };
+  for (const id of ['setup', 'setup.security', 'setup.security.fingerprint'])
+    assert.equal(MenuModel.isVisible(items, itemOrder, shown, items[id]), true, id);
 });
 
 test('model: Apps is a provider submenu, not an action', () => {

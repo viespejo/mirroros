@@ -23,7 +23,7 @@ usage() { printf 'Usage: install-runtime digest|check|publish <source> [<dest> [
 source_manifest() {
   local source="$1" kind mode path
   ( cd -- "$source" && find . -mindepth 1 \( -path ./apply -o -path ./packages -o -path ./install-runtime \
-      -o -path ./systemd \) -prune -o -printf '%y %m %p\n' ) | sort -k3 | while read -r kind mode path; do
+      -o -path ./systemd -o -path ./polkit-check \) -prune -o -printf '%y %m %p\n' ) | sort -k3 | while read -r kind mode path; do
     case "$kind" in
       d) printf 'd 755 - %s\n' "$path" ;;
       f)

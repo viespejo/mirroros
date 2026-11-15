@@ -193,6 +193,8 @@ Item {
       root.wallpaperActions.install()
     } else if (command.indexOf("session:") === 0 && root.sessionActions) {
       root.sessionActions.run(command.substring(8))
+    } else if (command === "fingerprint:setup") {
+      Quickshell.execDetached(["uwsm", "app", "--", "foot", "-e", "/usr/share/mirroros/hardware/fingerprint-setup"])
     }
   }
 
@@ -301,6 +303,7 @@ Item {
     for (var i = 0; i < raw.length; i++) normalized.push(root.normalizeItem(raw[i][0], raw[i][1]))
     root.defaultMenuItems = normalized
     root.rebuildItemsFromSources()
+    root.resetGuards()
   }
 
   Component.onCompleted: root.loadModel()
@@ -886,6 +889,7 @@ Item {
     cursorActive = true
     root.disarmPointer()
     if (root.sessionActions) root.sessionActions.refresh()
+    root.refreshGuards()
     opened = true
     rebuildDisplay()
     invalidateVolatileProvider(activeMenu)
@@ -1075,11 +1079,47 @@ Item {
   }
 
   // Upstream fills these from the generated Bash guard batch. The owned model
-  // declares no `when:`, `checked:` or `disabled:` expressions, so they stay
-  // empty; session availability comes from SessionActions instead.
+  // declares no `checked:` or `disabled:` expressions, so those stay empty;
+  // session availability comes from SessionActions instead. `when:` holds a
+  // guard id from MirrorMenu's closed table, run below as a fixed argv.
   property var whenResults: ({})       // id → true|false (allow visibility)
   property var checkedResults: ({})    // id → true|false (show ✓)
   property var disabledResults: ({})   // id → true|false (dim, skip cursor)
+
+  // Guard id → fixed argv; exit 0 shows the guarded rows. Guarded rows stay
+  // hidden until their guard answers, and an unknown guard keeps them hidden.
+  readonly property var guardCommands: ({
+    "fingerprint-reader": ["/usr/share/mirroros/hardware/fingerprint-reader"]
+  })
+
+  function resetGuards() {
+    var next = ({})
+    for (var i = 0; i < root.itemOrder.length; i++) {
+      var entry = root.items[root.itemOrder[i]]
+      if (entry && entry.when) next[entry.id] = false
+    }
+    root.whenResults = next
+  }
+
+  function setGuard(guard, visible) {
+    var next = ({})
+    for (var id in root.whenResults) {
+      var entry = root.items[id]
+      next[id] = (entry && entry.when === guard) ? visible : root.whenResults[id]
+    }
+    root.whenResults = next
+    if (root.opened && !root.dmenuActive) root.rebuildDisplay()
+  }
+
+  function refreshGuards() {
+    if (!fingerprintReaderProbe.running) fingerprintReaderProbe.running = true
+  }
+
+  Process {
+    id: fingerprintReaderProbe
+    command: root.guardCommands["fingerprint-reader"]
+    onExited: function(exitCode) { root.setGuard("fingerprint-reader", exitCode === 0) }
+  }
 
   Connections {
     target: root.sessionActions

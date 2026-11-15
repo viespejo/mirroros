@@ -29,13 +29,13 @@ staging_left() { compgen -G "$WORK/usr/share/mirroros/.shell.mirroros-staging.*"
   [ "$status" -eq 0 ]
   while IFS= read -r -d '' file; do
     relative="${file#"$SOURCE"/}"
-    case "$relative" in apply|packages|install-runtime|systemd/*) continue ;; esac
+    case "$relative" in apply|packages|install-runtime|systemd/*|polkit-check/*) continue ;; esac
     cmp "$file" "$DEST/$relative"
     if [[ -x "$file" ]]; then [ "$(stat -c %a "$DEST/$relative")" = 755 ]; else [ "$(stat -c %a "$DEST/$relative")" = 644 ]; fi
   done < <(find "$SOURCE" -type f -print0)
   [ "$(stat -c %a "$DEST/services/hidden-entries.sh")" = 755 ]
   [ "$(stat -c %a "$DEST")" = 755 ]
-  for excluded in apply packages install-runtime systemd; do [ ! -e "$DEST/$excluded" ]; done
+  for excluded in apply packages install-runtime systemd polkit-check; do [ ! -e "$DEST/$excluded" ]; done
   [ -f "$DEST/.mirroros-manifest" ]
   run grep -q 'managed by MirrorOS configure' "$DEST/menu/Menu.qml" "$DEST/LICENSE.omarchy"
   [ "$status" -eq 1 ]

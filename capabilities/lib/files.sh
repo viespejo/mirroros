@@ -302,6 +302,116 @@ cfg_dbus_service_owner_unique() {
   [[ "${#owners[@]}" == 1 && "${owners[0]}" == "$expected" ]]
 }
 
+# The executable basename of the first <key> in the [<section>] of a desktop entry or unit file, after env
+# assignments and unit command prefixes, or ":hidden" for a Hidden=true entry.
+# shellcheck disable=SC2016 # An awk program, expanded by awk only.
+CFG_AGENT_PARSER='
+  { sub(/\r$/, "") }
+  /^[[:space:]]*\[/ { current = $0; gsub(/^[[:space:]]+|[[:space:]]+$/, "", current); next }
+  current == "[" section "]" && /^Hidden[[:space:]]*=[[:space:]]*true[[:space:]]*$/ { hidden = 1 }
+  current == "[" section "]" && !found && $0 ~ ("^" key "[[:space:]]*=") { found = 1; value = substr($0, index($0, "=") + 1) }
+  END {
+    if (hidden) { print ":hidden"; exit }
+    n = split(value, words, /[[:space:]]+/)
+    for (i = 1; i <= n; i++) {
+      word = words[i]
+      if (word == "env" || word ~ /^[A-Za-z_][A-Za-z0-9_]*=/) continue
+      sub(/^[-@+!:]+/, "", word); gsub(/["\047]/, "", word); sub(/.*\//, "", word)
+      if (word != "") { print word; exit }
+    }
+  }'
+
+# The packaged unit file for an enabled user unit name: /etc/systemd/user before /usr/lib/systemd/user.
+cfg_agent_unit_file() {
+  local candidate
+  for candidate in "/etc/systemd/user/$1" "/usr/lib/systemd/user/$1"; do
+    [[ -f "$(cfg_path "$candidate")" ]] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 1
+}
+
+# Reports one competing starter <shown> of <agent>; <owned> is the system path whose package is queried, or empty.
+cfg_agent_conflict() {
+  local shown="$1" owned="$2" agent="$3" action="$4" package=''
+  if [[ -n "$owned" ]]; then package="$(cfg_exec pacman -Qqo -- "$owned" 2>/dev/null)" || package=''; fi
+  printf 'Conflict: %s starts %s, a competing agent (%s).\n' "$shown" "$agent" "${package:-not owned by a package}" >&2
+  printf 'Next action: %s, then rerun configure.\n' "$action" >&2
+}
+
+# A session agent must have one starter. Every active XDG autostart entry (/etc/xdg/autostart, or the selected user's
+# ~/.config/autostart, whose entry shadows a system entry of the same name) and every enabled user unit (globally in
+# /etc/systemd/user or for the selected user) whose executable basename is listed in <agents-file> is a conflict;
+# Hidden=true entries are inactive. Each conflict is reported with its package and the next action, and the result
+# is 4; nothing is started, removed, hidden or disabled. The user's files are read by the user's Bash, never by root.
+# shellcheck disable=SC2016 # HOME and the parser are expanded only inside the user's Bash.
+cfg_session_agent_unique() {
+  local list="$1" name rest kind relative unit exe file path wants line conflicts=0 entries=()
+  local -A agents=() shadowed=()
+  cfg_context
+  while read -r name rest || [[ -n "$name" ]]; do
+    [[ -n "$name" && "$name" != \#* ]] || continue
+    agents["$name"]=1
+  done < "$list"
+  mapfile -t entries < <(cfg_exec runuser -u "$TARGET_USER" -- bash -c '
+    parse=$1
+    for file in "$HOME"/.config/autostart/*.desktop; do
+      [[ -f "$file" ]] || continue
+      printf "autostart\t.config/autostart/%s\t%s\t%s\n" "${file##*/}" "${file##*/}" \
+        "$(awk -v section="Desktop Entry" -v key=Exec "$parse" "$file")"
+    done
+    for link in "$HOME"/.config/systemd/user/*.wants/*.service; do
+      [[ -e "$link" || -L "$link" ]] || continue
+      unit=${link##*/} exe=""
+      if [[ -f "$HOME/.config/systemd/user/$unit" ]]; then
+        exe=$(awk -v section=Service -v key=ExecStart "$parse" "$HOME/.config/systemd/user/$unit")
+        [[ -n "$exe" ]] || exe=":none"
+      fi
+      printf "unit\t%s\t%s\t%s\n" "${link#"$HOME"/}" "$unit" "$exe"
+    done
+  ' bash "$CFG_AGENT_PARSER")
+  for line in "${entries[@]}"; do
+    IFS=$'\t' read -r kind relative name exe <<< "$line"
+    [[ "$kind" != autostart ]] || shadowed["$name"]=1
+  done
+  for file in "$(cfg_path /etc/xdg/autostart)"/*.desktop; do
+    [[ -f "$file" ]] || continue
+    name="${file##*/}"
+    [[ "${shadowed[$name]:-0}" == 0 ]] || continue
+    exe="$(awk -v section='Desktop Entry' -v key=Exec "$CFG_AGENT_PARSER" "$file")"
+    [[ -n "$exe" && "${agents[$exe]:-0}" == 1 ]] || continue
+    path="/etc/xdg/autostart/$name"
+    cfg_agent_conflict "$path" "$path" "$exe" \
+      "add a ~/.config/autostart/$name entry with Hidden=true, or remove its package"
+    conflicts=$((conflicts + 1))
+  done
+  for file in "$(cfg_path /etc/systemd/user)"/*.wants/*.service; do
+    [[ -e "$file" || -L "$file" ]] || continue
+    unit="${file##*/}" wants="${file%/*}"
+    path="$(cfg_agent_unit_file "$unit")" || continue
+    exe="$(awk -v section=Service -v key=ExecStart "$CFG_AGENT_PARSER" "$(cfg_path "$path")")"
+    [[ -n "$exe" && "${agents[$exe]:-0}" == 1 ]] || continue
+    cfg_agent_conflict "/etc/systemd/user/${wants##*/}/$unit" "$path" "$exe" "sudo systemctl --global disable $unit"
+    conflicts=$((conflicts + 1))
+  done
+  for line in "${entries[@]}"; do
+    IFS=$'\t' read -r kind relative name exe <<< "$line"
+    path=''
+    if [[ "$kind" == unit && -z "$exe" ]]; then
+      path="$(cfg_agent_unit_file "$name")" || continue
+      exe="$(awk -v section=Service -v key=ExecStart "$CFG_AGENT_PARSER" "$(cfg_path "$path")")"
+    fi
+    [[ -n "$exe" && "${agents[$exe]:-0}" == 1 ]] || continue
+    # shellcheck disable=SC2088 # The user's paths are shown relative to their home, never expanded by root.
+    if [[ "$kind" == autostart ]]; then
+      cfg_agent_conflict "~/$relative" '' "$exe" "remove ~/$relative or set Hidden=true in it"
+    else
+      cfg_agent_conflict "~/$relative" "$path" "$exe" "systemctl --user disable $name"
+    fi
+    conflicts=$((conflicts + 1))
+  done
+  (( conflicts == 0 )) || return 4
+}
+
 # The Node.js version is declared once, in the managed Zsh environment file, and parsed as data.
 cfg_node_version() {
   local version

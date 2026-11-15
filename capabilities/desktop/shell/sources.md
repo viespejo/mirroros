@@ -90,11 +90,63 @@ writes; normal missing-sink and provider-startup behavior is unchanged. This bou
 the Story 4.4 reference-VM finding on 2026-11-05; regression coverage is in
 `tests/capabilities/desktop/shell/audio-availability.test.mjs`. It adds no panel or service.
 
+## Authentication agent
+
+`polkit/PolkitAgent.qml` is the session's polkit authentication agent, adapted from Omarchy over
+`Quickshell.Services.Polkit` and bounded by
+[ADR 0030](../../../docs/adr/0030-shell-hosted-polkit-agent-and-fingerprint.md):
+
+- `shell.qml` instantiates it once as an isolated sibling; it registers at `/org/mirroros/PolkitAgent`,
+  receives no shell references and is not exposed to other components.
+- It stores, persists and logs no flow data (message, prompt or response). Its only log is a warning when
+  registration fails.
+- Its only process is `/usr/share/mirroros/hardware/lid-closed` with fixed argv (exit 0 means the lid is
+  closed); it runs no `bash -c`. It reads `/etc/pam.d/polkit-1` read-only to decide whether to offer the
+  fingerprint mode.
+- Colors come from `Color.polkit`, derived from the selected theme; strings are the English `polkit.*` keys.
+- No shell means no agent: polkit requests then fail closed. hyprlock is unchanged.
+
+### Single owner
+
+Polkit accepts one authentication agent per session and agents own no bus name, so `cfg_dbus_service_owner_unique`
+does not apply. A competing agent is detected by what starts it. The postcondition `cfg_session_agent_unique`
+(`capabilities/lib/files.sh`) fails the step with outcome `4`, naming each file, its package (or "not owned by a
+package") and the next action, when:
+
+- an active XDG autostart entry in `/etc/xdg/autostart` or the selected user's `~/.config/autostart` has an `Exec`
+  whose executable basename is listed in `polkit-check/agents`; a user entry shadows the system entry of the same
+  name, and `Hidden=true` entries are inactive;
+- a user unit enabled globally (`/etc/systemd/user/*.wants`) or for the selected user
+  (`~/.config/systemd/user/*.wants`) has an `ExecStart` whose executable basename is listed.
+
+Configure never removes, hides or disables a competitor. `OnlyShowIn` and `NotShowIn` are not evaluated: an entry
+for another desktop still counts. Personal Hyprland `autostart.lua` is never parsed; an agent started from it fails
+`polkit-check` in the session only.
+
+`agents` lists, one executable basename per line, the polkit authentication agents packaged for Arch that ship an
+XDG autostart entry or a user unit and register with polkit as a session agent: polkit-gnome, lxsession's lxpolkit,
+polkit-kde-agent, mate-polkit, lxqt-policykit, xfce-polkit and hyprpolkitagent (plan 02-36 residue). Agents hosted
+inside another process cannot be listed by executable and are outside this check.
+
+### Session check
+
+`polkit-check` is a read-only command in the style of `portal-check`, run by the session user after a new login. It
+prints `ok:` and `FAIL:` lines and exits 0 when `mirroros-shell.service` is active and no listed agent process runs
+for the user, and 1 otherwise. Full command lines are matched because process names are truncated to 15 characters.
+Registration of the shell-hosted agent is evidenced by attended prompts, not by this check.
+
+### Session action challenge
+
+When logind answers `challenge` for a session action, `services/SessionActions.qml` makes the row available with
+"<Label> asks for authorization." and runs the same fixed argv, so the agent shows the prompt. The shell probes no
+agent unit, never handles credentials and neither retries nor reports a cancelled or denied prompt (fail-closed,
+ADR 0012). Coverage: `tests/capabilities/desktop/shell/check-menu.sh`.
+
 ## Delivery and lifecycle
 
 The `desktop/shell` configure step (`apply`) installs `packages`, publishes the
 runtime with `install-runtime` and enables the user unit. `apply`, `packages`,
-`install-runtime` and `systemd/` are not part of the runtime.
+`install-runtime`, `systemd/` and `polkit-check/` are not part of the runtime.
 
 - The runtime is published to `/usr/share/mirroros/shell` as one tree with
   unchanged bytes (executable files `0755`, others `0644`) and a
@@ -110,6 +162,9 @@ runtime with `install-runtime` and enables the user unit. `apply`, `packages`,
   owner (DEC-023): bounded `on-failure` restarts, journal logging, no Hyprland
   autostart and no supervision script. It does not depend on hypridle or
   hyprlock.
+- `polkit-check/polkit-check` (`0755`) and `polkit-check/agents` (`0644`) are
+  delivered to `/usr/share/mirroros/polkit/`; `cfg_session_agent_unique` reads
+  the source list during configure.
 - Configure never starts, restarts or reloads the shell. A running session
   picks up a new unit at its next login; to switch earlier, run
   `systemctl --user daemon-reload` and `systemctl --user restart

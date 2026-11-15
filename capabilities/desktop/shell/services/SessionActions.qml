@@ -66,7 +66,6 @@ Item {
   // Short reasons: the menu shows them in two lines under the label.
   function logindReason(label, answer) {
     if (answer === "yes") return ""
-    if (answer === "challenge") return label + " needs authorization (no polkit agent)."
     if (answer === "no" || answer === "na") return "This system reports " + label.toLowerCase() + " is not supported (" + answer + ")."
     return "Could not ask logind whether " + label.toLowerCase() + " is supported."
   }
@@ -78,6 +77,13 @@ Item {
         var parsed = JSON.parse(String(text || "").trim())
         if (parsed && Array.isArray(parsed.data)) answer = String(parsed.data[0] || "")
       } catch (e) { answer = "" }
+    }
+    // A logind "challenge" asks for authorization through the shell-hosted
+    // polkit agent (ADR 0030); the same fixed argv runs, and the shell never
+    // handles credentials nor retries or reports a cancelled or denied prompt.
+    if (answer === "challenge") {
+      root.setState(name, "available", label + " asks for authorization.")
+      return
     }
     var reason = root.logindReason(label, answer)
     root.setState(name, reason ? "unavailable" : "available", reason)

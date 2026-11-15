@@ -1,0 +1,10 @@
+# managed by MirrorOS configure
+# Known polkit authentication agents that compete with the shell-hosted agent (ADR 0030); criteria in sources.md.
+# One executable basename per line, then a comment naming its usual Arch package.
+polkit-gnome-authentication-agent-1 # polkit-gnome
+lxpolkit # lxsession
+polkit-kde-authentication-agent-1 # polkit-kde-agent
+polkit-mate-authentication-agent-1 # mate-polkit
+lxqt-policykit-agent # lxqt-policykit
+xfce-polkit # xfce-polkit
+hyprpolkitagent # hyprpolkitagent

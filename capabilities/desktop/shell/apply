@@ -3,7 +3,9 @@
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
 # Postconditions: packages installed; the runtime tree and the user unit match their last delivery; the unit is
 # enabled for the selected user or user-owned. Nothing is started, restarted or reloaded: a running session picks
-# the shell up at its next login. Personal preferences and private state are never read or written.
+# the shell up at its next login. Personal preferences and private state are never read or written. polkit-check and
+# its agent list are installed, and no listed competing polkit agent is started by an active autostart entry or an
+# enabled user unit (ADR 0030); competitors are reported, never removed, hidden or disabled.
 set -Eeuo pipefail
 
 runtime=/usr/share/mirroros/shell
@@ -24,8 +26,13 @@ cfg_source_record mirroros-shell-runtime capabilities/desktop/shell '' '' \
   "manifest-sha256:$(bash "$STEP_DIR/install-runtime" digest "$STEP_DIR")"
 cfg_tracked_file "$STEP_DIR/systemd/mirroros-shell.service" "$unit" 0644
 cfg_user_unit_enable mirroros-shell.service "$unit" graphical-session.target
+cfg_system_file "$STEP_DIR/polkit-check/polkit-check" /usr/share/mirroros/polkit/polkit-check 0755
+cfg_system_file "$STEP_DIR/polkit-check/agents" /usr/share/mirroros/polkit/agents 0644
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require bash "$STEP_DIR/install-runtime" check "$STEP_DIR" "$(cfg_path "$runtime")"
 cfg_require cfg_tracked_file_present "$unit"
 cfg_require cfg_user_unit_enabled mirroros-shell.service graphical-session.target
+cfg_require cfg_system_file_present /usr/share/mirroros/polkit/polkit-check
+cfg_require cfg_system_file_present /usr/share/mirroros/polkit/agents
+cfg_require cfg_session_agent_unique "$STEP_DIR/polkit-check/agents"

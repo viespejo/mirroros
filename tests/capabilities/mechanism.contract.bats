@@ -418,6 +418,34 @@ cfg_unit_reload systemd-logind /etc/power-key.conf'
   grep -qF "arch-chroot $MIRROROS_CONFIGURE_ROOT pacman -Qqo -- /usr/share/dbus-1/services/a.service" "$CFG_TEST_CALLS"
 }
 
+@test "a session agent needs one starter; listed starters fail naming files, packages through cfg_exec and actions" {
+  local autostart="$MIRROROS_CONFIGURE_ROOT/etc/xdg/autostart" units="$MIRROROS_CONFIGURE_ROOT/usr/lib/systemd/user"
+  local list="$CFG_TEST_DIR/agents"
+  mkdir -p "$autostart" "$units" "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/default.target.wants" "$CFG_TEST_DIR/owners"
+  printf '# comment\nexample-agent # example-package\n' > "$list"
+  printf '[Desktop Entry]\nExec=/usr/bin/other\n' > "$autostart/other.desktop"
+  run cfg_test_helpers "cfg_session_agent_unique $list"
+  [ "$status" -eq 0 ]
+  refute grep -qE '^pacman' "$CFG_TEST_CALLS"
+  printf '[Desktop Entry]\r\nExec=env A=1 /usr/lib/example/example-agent --x\r\n' > "$autostart/a.desktop"
+  printf 'example-package\n' > "$CFG_TEST_DIR/owners/a.desktop"
+  printf '[Service]\nExecStart=-/usr/bin/example-agent\n' > "$units/b.service"
+  ln -s /usr/lib/systemd/user/b.service "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/default.target.wants/b.service"
+  run cfg_test_helpers "cfg_session_agent_unique $list"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'Conflict: /etc/xdg/autostart/a.desktop starts example-agent, a competing agent (example-package).'* ]]
+  [[ "$output" == *'Conflict: /etc/systemd/user/default.target.wants/b.service starts example-agent, a competing agent (not owned by a package).'* ]]
+  [[ "$output" == *'Next action: sudo systemctl --global disable b.service, then rerun configure.'* ]]
+  [ -f "$autostart/a.desktop" ] && [ -L "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/default.target.wants/b.service" ]
+  grep -qxF 'pacman -Qqo -- /etc/xdg/autostart/a.desktop' "$CFG_TEST_CALLS"
+  grep -qxF 'pacman -Qqo -- /usr/lib/systemd/user/b.service' "$CFG_TEST_CALLS"
+  refute grep -qE '^(pacman -R|systemctl)' "$CFG_TEST_CALLS"
+  : > "$CFG_TEST_CALLS"
+  run cfg_test_helpers "CONFIGURE_CONTEXT=target; cfg_session_agent_unique $list"
+  [ "$status" -eq 4 ]
+  grep -qF "arch-chroot $MIRROROS_CONFIGURE_ROOT pacman -Qqo -- /etc/xdg/autostart/a.desktop" "$CFG_TEST_CALLS"
+}
+
 @test "apply scripts never invoke effectful base commands directly" {
   while IFS= read -r -d '' script; do
     ! grep -vE '^[[:space:]]*#' "$script" |
