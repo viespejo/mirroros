@@ -145,7 +145,7 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The twenty-three steps run in this order:
+The twenty-four steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -163,10 +163,11 @@ The twenty-three steps run in this order:
 | `system/audio` | PipeWire, WirePlumber, pipewire-pulse, pipewire-alsa and playerctl; owned volume/media commands, user audio units enabled only, and the approved A2DP preference |
 | `system/bluetooth` | BlueZ and bluez-utils; bluetooth.service enabled and started only if inactive and the Bluetooth subsystem exists |
 | `system/power` | UPower, brightnessctl, power-profiles-daemon and libnotify; owned commands, enable-only user watcher, PPD enabled and started only if inactive, and a tracked logind power-key drop-in with change-triggered reload |
+| `system/fingerprint` | fprintd and libfprint on every target; the managed `polkit-1` and `sudo` PAM stacks with the `lid-closed` clamshell gate before `pam_fprintd`; the owned reader, enrollment and invitation commands, and the invitation user unit enabled only; fails on a locally edited `/etc/pam.d/sudo` ([sources](../../capabilities/system/fingerprint/sources.md)) |
 | `system/network` | NetworkManager/systemd-resolved backend and stub, resolver enablement, private migration/recovery and isolated target DNS; no provider/profile edits |
 | `system/vpn` | NetworkManager OpenConnect plugin, with an offline registration check; no corporate profile or connection |
 | `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 and hardware bindings, runtime-only display helper, the greeter layout indicator, Wayland greeter, one uwsm session entry, the file manager chords, and the Hyprland portal backend with `grim`, `hyprland-portals.conf`, the user `xdph.conf` and the portal-dialog window rules |
-| `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell`, and its user unit enabled for the selected user |
+| `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell` with its hosted polkit agent, its user unit enabled for the selected user, and the read-only `polkit-check` command; fails while a listed competing polkit agent is started for the user |
 | `desktop/reminders` | jq and sound-theme-freedesktop, and the owned `reminder` command with its Omarchy licence under `/usr/share/mirroros/reminders`; no unit, daemon or user state ([sources](../../capabilities/desktop/reminders/sources.md)) |
 | `desktop/lock` | hyprlock and hypridle, native lock and idle configuration, a hypridle drop-in, and hypridle enabled for the selected user |
 | `visual/branding` | librsvg, the shared MirrorOS wordmark SVG and the PNG rendered from it by the installed `rsvg-convert` |
@@ -288,6 +289,17 @@ Managed destinations are:
   profiles through D-Bus and sends one critical notification per low discharging episode at or below 10%.
   Profile choices in `$XDG_STATE_HOME/mirroros/power-profiles/{ac,battery}` are runtime user state, not privileged
   configure inputs. Defaults are performance (or balanced) on AC and balanced on battery.
+- `/etc/pam.d/polkit-1` and `/etc/pam.d/sudo`: tracked complete PAM stacks with the `lid-closed` clamshell gate
+  immediately before `auth sufficient pam_fprintd.so`, followed by the vendor `system-auth` includes
+  ([ADR 0030](../adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)). `polkit-1` is created; `sudo` is replaced
+  only while it holds the exact packaged content recorded in the
+  [fingerprint sources](../../capabilities/system/fingerprint/sources.md) or the last delivery. A locally edited
+  `/etc/pam.d/sudo` fails the step with outcome `4` naming the file and is never overwritten: restore the packaged
+  content or move the file aside, then rerun. Without enrolled prints both stacks prompt for the password as before.
+- `/usr/share/mirroros/hardware/{lid-closed,fingerprint-reader,fingerprint-setup,fingerprint-invite}` and
+  `/etc/systemd/user/mirroros-fingerprint-invite.service`: owned commands and a oneshot user unit enabled for the
+  selected user's `graphical-session.target`, never started by configure. Configure never starts fprintd, reads
+  no reader and enrolls nothing; enrollment is user-run. See the [hardware procedure](hardware.md#fingerprint).
 - `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`, `hardware-bindings.lua`: the approved key table and the registry the
   shell's keyboard help reads (`$XDG_RUNTIME_DIR/mirroros-keybindings.tsv`). Nothing is unbound at runtime. See
   [Hyprland bindings provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md).
@@ -322,6 +334,13 @@ Managed destinations are:
   its enablement for the selected user. Personal preferences (`~/.config/mirroros/shell.json`) and private state
   (`~/.local/state/mirroros/shell`) are never read or written. See
   [shell sources](../../capabilities/desktop/shell/sources.md) and the [desktop shell procedure](desktop-shell.md).
+- `/usr/share/mirroros/polkit/{agents,polkit-check}`: the competing-agent list and the read-only session check. The
+  shell hosts the polkit authentication agent ([ADR 0030](../adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)).
+  The step fails with outcome `4` while an active XDG autostart entry or an enabled global or user unit starts a
+  listed agent (including `hyprpolkitagent`); the console names only the failed postcondition, and `configure.log`
+  names the starter, its package and the next action. Configure never removes, hides or disables a competitor:
+  disable the unit, hide or remove the entry, or uninstall the package as named, then rerun. After a new login,
+  `/usr/share/mirroros/polkit/polkit-check` exits 0 when `mirroros-shell.service` is active and no listed agent runs.
 - `~/.config/hypr/hypridle.conf`, `~/.config/hypr/hyprlock.conf`: lock after 300 seconds idle and before sleep, the
   `us` layout before every lock, the while-away lock marker hooks, and one password field over the blurred selected
   background with the selected theme's colors (ADR 0021) and system PAM authentication; `/etc/systemd/user/hypridle.service.d/10-mirroros.conf`: stale-marker cleanup before hypridle

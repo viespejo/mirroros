@@ -10,5 +10,8 @@
   accepted decision to a new consumer within its boundaries is routine: record provenance in the governing
   `sources.md` or `UPSTREAM.md`, not in a new ADR.
 - Update attribution, tests, and documentation together with the change they govern.
+- Derive vendor package facts (versions, packaged file contents and hashes, defaults) from the reference VM or the
+  current Arch repositories, never from the development host; record the source and version in the governing
+  `sources.md`.
 - Never add MirrorOS license headers to unmodified vendor files.
 - Treat `.agents/` as local workflow tooling outside the product runtime and authoritative source control; see [README.md — Workflow tooling](README.md#workflow-tooling).

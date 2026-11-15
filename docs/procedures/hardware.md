@@ -8,7 +8,7 @@ Laptop 13 Pro remains the sole MVP laptop target, with physical validation pendi
 ## Ownership and activation
 
 The explicit [step order](../../capabilities/configure-steps) places `system/audio`, `system/bluetooth`,
-`system/power`, `system/network` and `system/vpn` before the Hyprland provider. See the [configure procedure](configure.md) for
+`system/power`, `system/fingerprint`, `system/network` and `system/vpn` before the Hyprland provider. See the [configure procedure](configure.md) for
 prerequisites, both contexts, tracked-file conflicts, normalized outcomes and evidence. Running postconditions
 check effective system state; target postconditions check installed files and enabled units without activation.
 A successful configure is not proof of hardware usability.
@@ -26,6 +26,11 @@ A successful configure is not proof of hardware usability.
   after the drop-in changes in the current step. Logind is never restarted. Existing hypridle/hyprlock continue
   to own lock-before-sleep. The user power watcher is enabled for `graphical-session.target`, never started by
   configure, and begins at the next graphical login.
+- [Fingerprint sources](../../capabilities/system/fingerprint/sources.md): fprintd and libfprint on every target,
+  the managed `polkit-1` and `sudo` PAM stacks with the `lid-closed` clamshell gate, and the owned reader,
+  enrollment and invitation commands under
+  [ADR 0030](../adr/0030-shell-hosted-polkit-agent-and-fingerprint.md). Configure never starts fprintd or enrolls;
+  the invitation unit is enabled for `graphical-session.target` and runs at the next login. See [Fingerprint](#fingerprint).
 - [Network sources](../../capabilities/system/network/sources.md): generic NetworkManager/systemd-resolved
   backend and stub integration under [ADR 0024](../adr/0024-networkmanager-resolved-dns-integration.md).
   Profiles and public DNS choices are preserved; VPN DNS/domains arrive dynamically. The step also delivers
@@ -74,7 +79,10 @@ guest (no Bluetooth subsystem) on `3748a64`; A5 is the supervised, non-qualifyin
 and final `1907d37` (list-height and agent-stop fixes, not re-run in the guest). VPN section identities (plan
 02-30, 2026-11-10): V6 is the laboratory guest (no Wi-Fi device) on `1393383`, fictitious profiles only; A6 is the
 supervised, non-qualifying T14s session with the maintainer's corporate profile on `46810b9` and final `1bf11d5`
-(Wi-Fi list height fix, not re-run in the guest). These temporary candidate commits
+(Wi-Fi list height fix, not re-run in the guest). Fingerprint and polkit agent identities (plan 02-37,
+2026-11-14/15): V7 is the reference VM (no reader, no ACPI lid) on `997e66e`, `3aab6bc`, `e05566a`, `bec0819` and
+final `a7068c6`; A7 is the supervised, non-qualifying T14s session (Synaptics `06cb:00bd`, MirrorOS partition) on
+`e05566a`, `bec0819` and final `a7068c6`. These temporary candidate commits
 identify the tested trees, not a release ISO or fixed-harness qualification.
 
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
@@ -101,6 +109,7 @@ identify the tested trees, not a release ISO or fixed-harness qualification.
 | Network panel: Wi-Fi and band | V4: not applicable, no Wi-Fi device | A4 (`e350075`, 2026-11-09, non-qualifying): scan/list updates, disconnect/reconnect, forget and PSK reconnect, wrong-passphrase re-prompt, 2.4/5/Auto chosen/current/focus/pending states and ignored double click pass; journal records session-user operations. Not exercised: open/OWE, enterprise, 6 GHz and band rollback on failure | pending target-laptop validation |
 | Network panel: per-profile DNS and portal | V4 (`a629c36`, 2026-11-09): confirmation with Cancel focused, Escape/other-pill dismissal, Custom empty cancel and apply pass; only active Ethernet changed, dummy Ethernet/VPN and global DNS unchanged, DHCP restores profile. Simulated portal recheck and browser-launch failure pass; real browser/portal not exercised | A4 (`e350075`, 2026-11-09, non-qualifying): Cloudflare/Google/Custom/DHCP pass on Wi-Fi only; VPN/Ethernet/loopback and global DNS unchanged, DHCP restores profile; no sudo/polkit prompt. Real portal and enterprise not exercised | pending target-laptop validation |
 | Bluetooth panel | V5 (`3748a64`, 2026-11-09): configure and unchanged rerun (19 steps); `bluez-tools`, commands, license and agent unit delivered, unit enabled and skipped by its condition without a restart loop; panel opens unavailable with the tooltip reason and no devices; `SUPER+CTRL+B`, IPC, numbering and Tab pass; session suites and reviewed qmllint baseline pass | A5 (`7ef2959`, `f993a99`, `1907d37`, 2026-11-09/10, non-qualifying): agent active with no identities in its journal; radio switch with repeat protection; discovery stops after close; Just Works headset pairing trusts, connects and switches the default output; connecting a terminal-paired device leaves trust unchanged; disconnect/forget; unaccepted code requests fail with the Advanced literal and stay untrusted; Advanced numeric-comparison pairing leaves the device untrusted; not discoverable to a phone; chords, numbering 1–5, Tab, any-button click; no sudo/polkit; logout stops the agent at once. Failed: radio-off persistence across reboot. Phones can pair through Just Works when their consent dialog is accepted. Not exercised: legacy PIN, passkey entry, multi-monitor discovery handoff | pending target-laptop validation |
+| Fingerprint and polkit agent | V7 (`a7068c6`, 2026-11-14/15): configure exit 4 naming the residual `hyprpolkitagent` unit, then unchanged reruns; `polkit-check` 0; `pkexec true` correct 0, wrong then correct 0, Escape 126; `pkexec` and `sudo true` prompt for the password without perceptible delay or fingerprint mode (`lid-closed` 2–3 ms, exit 1); no fingerprint row and no invitation without a reader; a shell restart ends a pending request without granting it | A7 (`a7068c6`, 2026-11-15, non-qualifying): before enrollment password only without delay; the invitation stays until acted on and is not repeated; enrollment from it or the menu row authorizes through the agent; with a print, in `pkexec` and `sudo`, correct finger 0, wrong finger or timeout falls back to the password 0, cancel 126 (pkexec) or cancelled (sudo); lid closed with an external monitor goes straight to the password; deletion restores password only. Limitation: after a cancel the reader stays claimed for up to 30 s (see [Fingerprint](#fingerprint)) | pending target-laptop validation |
 | Network panel: VPN section | V6 (`1393383`, 2026-11-10): no section and unchanged height without profiles; one and five fictitious profiles within the list cap; Connect opens Foot and closes the panel; Failed, Cancelled, `SAVE` (0600 file) and `FORGET` pass with an empty runtime directory and nothing active; hidden with NetworkManager stopped; session suites and the reviewed qmllint baseline pass. Not exercised: real connection, connected rows and Disconnect | A6 (`46810b9`, `1bf11d5`, 2026-11-10, non-qualifying): row reads Connected within 2 s after a panel Connect; panel Disconnect; saved username reused and `FORGET` asks again; Ctrl+C at the OTP prompt reports Cancelled with cleanup; Connect from the keyboard through the VPN row; one-VPN gating with a fictitious second profile. The card overflowed with a long Wi-Fi list on `46810b9`; on `1bf11d5` the Wi-Fi list cap yields the VPN section's height and the card fits. This server re-prompts after a wrong password, so Failed was not observed. No gateway or profile identity in the journal | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
@@ -108,7 +117,8 @@ Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T
 `evidence/shell-panels/t14s-02-27/checkpoint-partial.md`; network panel:
 `evidence/shell-panels/lab-02-28/checkpoint.md` and `evidence/shell-panels/t14s-02-28/checkpoint.md`; Bluetooth panel:
 `evidence/shell-panels/lab-02-29/checkpoint.md` and `evidence/shell-panels/t14s-02-29/checkpoint.md`; VPN section:
-`evidence/shell-panels/lab-02-30/checkpoint.md` and `evidence/shell-panels/t14s-02-30/checkpoint.md`.
+`evidence/shell-panels/lab-02-30/checkpoint.md` and `evidence/shell-panels/t14s-02-30/checkpoint.md`; fingerprint
+and polkit agent: `evidence/polkit/lab-02-37/checkpoint.md` and `evidence/polkit/lab-02-37/t14s/g2.md`.
 Task 2–4 source/contract test results are recorded in the local plan
 execution log; mocked tests do not establish clean installation or physical acceptance. Future acceptance records
 must identify date, clean candidate commit, execution context and limitations for every row.
@@ -395,6 +405,42 @@ Use the original handoff only when `vpn-connect` is unavailable or refuses a pro
 The gateway, certificate/fingerprint, authentication result, resolved addresses and credentials are all private.
 Do not retain any of them as evidence, even when a value is not itself a password. Exploration established the
 handoff once; future real connection acceptance remains supervised and must recheck that no secrets were saved.
+
+## Fingerprint
+
+Fingerprint authentication applies to `sudo` and to polkit prompts shown by the shell-hosted agent
+([ADR 0030](../adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)); the screen lock (hyprlock) and SDDM keep
+password-only authentication. Only USB readers are detected; platform readers and `libfprint-git` are out of scope.
+
+- **Enrollment.** With a detected reader, the session menu shows Setup › Security › Fingerprint, and the first
+  graphical login of a user without prints sends one critical notification whose "Set up" action opens the same
+  command. Both run `/usr/share/mirroros/hardware/fingerprint-setup` in Foot as the session user: it enrolls the
+  right index finger and verifies it. fprintd asks polkit for authorization, so the agent dialog may appear. The
+  command never runs `pacman`, `sudo` or `systemctl` and never writes `/etc`. The invitation marker is
+  `~/.local/state/mirroros/fingerprint-invited`; removing it allows one more invitation. Without a notification
+  server the invitation writes no marker and tries again at the next login.
+- **Re-enrollment and deletion.** When prints exist the command offers `[r]` enroll again, `[d]` delete or `[q]`
+  quit. After deletion both stacks prompt for the password only.
+- **Use.** With a print, `sudo` and polkit prompts first wait for the finger; a wrong finger or the `pam_fprintd`
+  timeout falls back to the password. Cancel returns 126 from `pkexec` and stops `sudo`. Without prints or a reader,
+  `pam_fprintd` returns at once and the password prompt appears as before.
+- **Closed lid.** `lid-closed` reports a closed lid from ACPI, or from logind's `LidClosed` within 2 seconds when no
+  ACPI lid exists; PAM then skips `pam_fprintd` and asks for the password directly, and the dialog shows no
+  fingerprint mode. A probe error counts as an open lid. Each authentication with an open or absent lid logs
+  `pam_exec(...): /usr/share/mirroros/hardware/lid-closed failed: exit code 1`; this is expected gate noise.
+- **Cancelled prompt.** After Escape, `polkit-agent-helper-1` keeps the reader claimed until the 30-second
+  `pam_fprintd` timeout; `sudo` or `pkexec` in that window fall back to the password. This upstream behavior is
+  fail-safe and was accepted without changing the timeout.
+- **Lockout.** Stock Arch `system-auth` (`pam_faillock`, `deny=3`, 600 s) counts every non-successful attempt,
+  including a cancelled prompt and a request ended by a shell restart. The dialog shows the lockout message; the
+  user can clear it with `faillock --reset` or wait.
+- **`sudo` updates.** `/etc/pam.d/sudo` is a managed file. After a `sudo` update, review any
+  `/etc/pam.d/sudo.pacnew` as described in the [fingerprint sources](../../capabilities/system/fingerprint/sources.md);
+  until the recorded packaged hash is updated, configure keeps the managed file. A local edit makes configure fail
+  with outcome `4` (see the [configure procedure](configure.md)).
+- **Agent check.** After a new login run `/usr/share/mirroros/polkit/polkit-check` as the session user: it exits 0
+  when `mirroros-shell.service` is active and no listed competing agent runs. Registration itself is shown by an
+  attended prompt such as `pkexec true`. Without a running shell there is no agent and polkit requests fail closed.
 
 ## Evidence-driven tuning decisions
 
