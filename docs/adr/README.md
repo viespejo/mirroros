@@ -65,6 +65,18 @@ Accepted. It partially supersedes ADR 0025's panel list with the clock calendar,
 its "Diagnostics" item for open-meteo traffic only, through `curl` with fixed `https://` URLs; wttr.in, IP-based
 location, GitHub and `sudo` stay excluded, and world-clock implementation remains with plan 02-33.
 
+## Authentication agent extension
+
+[ADR 0030: Shell-Hosted Polkit Agent and Fingerprint](0030-shell-hosted-polkit-agent-and-fingerprint.md) is
+Accepted. It partially amends [ADR 0012](0012-owned-quickshell-desktop-shell.md) and
+[ADR 0025](0025-shell-panels.md) with a polkit agent UI hosted in the owned shell, and fingerprint authentication in
+the `polkit-1` and `sudo` PAM stacks behind a clamshell gate; the screen lock stays hyprlock and unchanged. The plan
+02-37 laboratory gates passed in the reference VM and on the T14s.
+
+The context line "MirrorOS adds no `fprintd`" in
+[ADR 0023](0023-recognized-unqualified-targets-and-target-hibernate-mode.md) is outdated by ADR 0030. This is an index
+note, not a supersession; ADR 0023's decision is unchanged.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.

@@ -308,6 +308,7 @@ MirrorOS exposes no remote product API and introduces no application-specific au
 **Local identity:**
 
 - Linux accounts and PAM own user authentication.
+- Configure manages the `polkit-1` and `sudo` PAM stacks for fingerprint authentication with password fallback; the read-only `lid-closed` clamshell gate is the only MirrorOS-owned code in PAM ([ADR 0030](adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)).
 - Credentials are supplied at execution time and never stored in source, generated images, or retained evidence.
 - Password-manager integration is deferred until a concrete requirement demonstrates its value.
 
@@ -699,7 +700,7 @@ Use the smallest language appropriate to the responsibility:
 2. JavaScript ESM on Node.js for non-trivial structured data, plan generation, validation, result aggregation, and evidence reporting.
 3. Python only when an approved ADR requires Archinstall API/plugin integration or another upstream Python interface.
 4. Lua remains local to tools that already use it, such as Neovim or Hyprland configuration.
-5. QML is used only for the MirrorOS-owned Quickshell desktop shell, bounded by [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md) and its wallpaper capability amendment [ADR 0020](adr/0020-wallpaper-selection.md) and shell panels amendment [ADR 0025](adr/0025-shell-panels.md), and for the presentation-only SDDM theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md), for its keyboard-layout indicator, [ADR 0015](adr/0015-greeter-keyboard-layout-switching.md), and for confirmed restart and shutdown through SDDM's proxy, [ADR 0016](adr/0016-greeter-power-actions.md), with its presentation layout bounded by [ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md). Neither authenticates: SDDM and the lock screen keep their PAM services.
+5. QML is used only for the MirrorOS-owned Quickshell desktop shell, bounded by [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md) and its wallpaper capability amendment [ADR 0020](adr/0020-wallpaper-selection.md) and shell panels amendment [ADR 0025](adr/0025-shell-panels.md), and for the presentation-only SDDM theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md), for its keyboard-layout indicator, [ADR 0015](adr/0015-greeter-keyboard-layout-switching.md), and for confirmed restart and shutdown through SDDM's proxy, [ADR 0016](adr/0016-greeter-power-actions.md), with its presentation layout bounded by [ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md). Neither authenticates: SDDM and the lock screen keep their PAM services. QML also hosts the polkit authentication agent UI in the shell, bounded by [ADR 0030](adr/0030-shell-hosted-polkit-agent-and-fingerprint.md); it only relays prompts while PAM authenticates.
 6. Plymouth script is used only as the native format of the shared installed/live MirrorOS Plymouth theme, bounded by [ADR 0014](adr/0014-native-login-and-boot-presentation.md) and [ADR 0019](adr/0019-shared-symbol-and-live-splash.md). Only the reviewed time-based opacity effect is admitted; Plymouth retains boot completion and native diagnostics.
 
 Do not rewrite simple shell operations in JavaScript for uniformity. Do not retain complex parsing or state models in Bash when JavaScript materially reduces risk.

@@ -27,7 +27,9 @@ Each entry has an origin and a provider.
 
 Where a provider is open, the division of work between the desktop shell and a dedicated tool is a guideline for
 exploration only. The one frozen principle is that authentication (screen lock and the polkit agent) is never
-project-owned QML.
+project-owned QML, with one exception: the polkit agent UI hosted in the owned shell, bounded by
+[ADR 0030](adr/0030-shell-hosted-polkit-agent-and-fingerprint.md), where PAM still authenticates. The screen lock is
+never project-owned QML.
 
 ### System
 
@@ -54,6 +56,7 @@ project-owned QML.
 | Virtual machine guest support | installation | Per hardware rules | Source: `hardware/rules/` |
 | Brightness, media keys, battery, lid, and suspend | configure | brightnessctl, playerctl, UPower and systemd-logind with existing hypridle/hyprlock | Story 4.4 reviewed provider selection; owned hardware commands, battery warning, power-key policy and Hyprland runtime display handling; [hardware procedure](procedures/hardware.md) |
 | Automatic AC/battery power profiles | configure | power-profiles-daemon | Story 4.4 scope addition for daily-use power behavior; owned command and user watcher remember per-source choices; [hardware procedure](procedures/hardware.md) |
+| Fingerprint authentication | configure | fprintd and libfprint with gated `polkit-1` and `sudo` PAM stacks | Story 4.5 scope addition bounded by [ADR 0030](adr/0030-shell-hosted-polkit-agent-and-fingerprint.md); unconditional packages, the `lid-closed` clamshell gate before `pam_fprintd`, password fallback; attended user-run enrollment from the session menu or a one-time invitation when a USB reader is detected; not for the screen lock or SDDM |
 
 ### Desktop
 
@@ -64,7 +67,7 @@ project-owned QML.
 | Desktop shell: bar, launcher, notifications, OSD, session menu, and bar panels for audio, network/Wi-Fi, Bluetooth, display, power, clock calendar, weather, and world clock | configure | Owned Quickshell shell | [ADR 0012](adr/0012-owned-quickshell-desktop-shell.md); panels are a Story 4.4 scope change (Story 4.3 DEC-016) bounded by [ADR 0025](adr/0025-shell-panels.md), with the terminal paths as fallback; the audio mixer shows MPRIS player names without a shell media service ([ADR 0026](adr/0026-mpris-player-names-and-advanced-audio-tool.md)); the display panel offers the runtime mirror toggle ([ADR 0027](adr/0027-display-panel-mirror-toggle.md)); the clock calendar, weather and world clock panels are a scope change bounded by [ADR 0029](adr/0029-clock-calendar-weather-and-world-clock-panels.md), with open-meteo as the only weather provider and the world clock without people, globe or time-zone change; the bar also shows a microphone indicator while the default source is in use or muted, and the active window label; bounded to these surfaces; started by its own systemd user unit with the uwsm graphical session |
 | Screen lock and idle | configure | hyprlock and hypridle (Story 4.3) | Never project-owned QML; system PAM authentication; packaged hypridle user unit; lock after 5 minutes idle and before sleep; the shell's runtime-only Stay Awake indicator suspends the idle lock while active, and lock before sleep is unchanged; no DPMS or automatic suspend policy; one password field over the blurred selected background in the selected theme's colors ([ADR 0021](adr/0021-neutral-greeter-and-themed-lock.md)) |
 | Quick reminders | configure | Owned `reminder` command over transient systemd user timers and shell notifications | Scope change without an ADR (no daemon, privilege, network or provider); relative and ephemeral ("in N minutes"), ends with the session; set from the shell prompt or the command, shown by the bar's Reminder indicator; delivery is a Critical notification with a sound that passes Do Not Disturb; [desktop shell procedure](procedures/desktop-shell.md#reminders) |
-| Polkit authentication agent | configure | open — selected by Story 4.5 | Never project-owned QML |
+| Polkit authentication agent | configure | MirrorOS shell QML agent (ADR 0030) | Story 4.5; UI over `Quickshell.Services.Polkit` hosted in the owned shell, bounded by [ADR 0030](adr/0030-shell-hosted-polkit-agent-and-fingerprint.md); PAM authenticates; no flow data stored or logged; single agent ownership checked by configure |
 | Desktop portals | configure | xdg-desktop-portal with the Hyprland backend (Screenshot, ScreenCast) and the GTK backend; FileChooser `strata;gtk`; Secret through gnome-keyring | Story 4.5 (plan 02-35, no ADR); preferences in the Hyprland provider's `hyprland-portals.conf`, the Strata FileChooser selected by laboratory evidence with an accepted quiet-criterion deviation and URL download; gnome-keyring unlocked at SDDM password login by the packaged PAM lines (no MirrorOS PAM change); dark Settings answer from a system dconf default; system `mimeapps.list`; the read-only `portal-check` verifies the session after a new login ([portals and files procedure](procedures/portals-and-files.md)) |
 | Clipboard and history | configure | open — selected by Story 4.5 | |
 | Screenshots | configure | open — selected by Story 4.5 | |
@@ -209,7 +212,7 @@ change history; git history is the record.
 These items are decided through hardware adaptation once the target laptop can be validated:
 
 - Firmware and BIOS updates (fwupd).
-- The fingerprint reader.
+- Fingerprint for the screen lock (hyprlock).
 - Other laptop-specific adjustments.
 
 ## Deferred and post-MVP candidates
