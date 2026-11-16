@@ -120,11 +120,11 @@ test('requests use fixed https:// open-meteo URLs through curl argv', () => {
   const oslo = { name: 'Oslo', latitude: 59.91273, longitude: 10.74609 };
   const fields = '&daily=weather_code,temperature_2m_max,temperature_2m_min'
     + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day'
-    + '&forecast_days=4&timezone=auto';
+    + '&forecast_days=4&timezone=Europe%2FMadrid';
 
-  assert.deepEqual(weather.forecastCommand([malibu]), ['curl', '-fsS', '--max-time', '5',
+  assert.deepEqual(weather.forecastCommand([malibu], 'Europe/Madrid'), ['curl', '-fsS', '--max-time', '5',
     'https://api.open-meteo.com/v1/forecast?latitude=34.02577&longitude=-118.7804' + fields]);
-  assert.deepEqual(weather.forecastCommand([malibu, oslo]), ['curl', '-fsS', '--max-time', '5',
+  assert.deepEqual(weather.forecastCommand([malibu, oslo], 'Europe/Madrid'), ['curl', '-fsS', '--max-time', '5',
     'https://api.open-meteo.com/v1/forecast?latitude=34.02577,59.91273&longitude=-118.7804,10.74609' + fields],
   'one combined request for several locations');
   assert.deepEqual(weather.forecastCommand([]), [], 'no request without a location');
@@ -134,6 +134,17 @@ test('requests use fixed https:// open-meteo URLs through curl argv', () => {
   assert.deepEqual(weather.geocodingCommand('São Paulo&x=1'), ['curl', '-fsS', '--max-time', '5',
     'https://geocoding-api.open-meteo.com/v1/search?name=S%C3%A3o%20Paulo%26x%3D1&count=5&language=en&format=json'],
   'the typed text is URL-encoded into the fixed geocoder URL');
+});
+
+test('forecast dates use an explicit session timezone, never provider auto-detection', () => {
+  const locations = [{ name: 'Example', latitude: 1, longitude: 2 }];
+  const url = zone => weather.forecastCommand(locations, zone).at(-1);
+  assert.equal(new URL(url('Europe/Madrid')).searchParams.get('timezone'), 'Europe/Madrid');
+  assert.equal(new URL(url('America/New_York')).searchParams.get('timezone'), 'America/New_York');
+  assert.equal(new URL(url('Etc/GMT+5')).searchParams.get('timezone'), 'Etc/GMT+5');
+  assert.equal(new URL(url('')).searchParams.get('timezone'), 'GMT');
+  assert.equal(new URL(url()).searchParams.get('timezone'), 'GMT');
+  assert.deepEqual(weather.timezoneCommand(), ['timedatectl', 'show', '--property=Timezone', '--value']);
 });
 
 test('forecast answers are read as one report per requested location', () => {

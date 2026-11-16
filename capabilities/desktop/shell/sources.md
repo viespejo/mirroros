@@ -7,6 +7,27 @@ Per-file provenance, licenses and the pinned Omarchy revision are recorded in
 revision and carry no MirrorOS header. MirrorOS tests and tooling live under
 `tests/capabilities/desktop/shell/` and are not part of the delivered runtime.
 
+## Weather forecast time zone (ADR 0029)
+
+Weather uses the session `TZ` override or the system zone from a read-only, unprivileged
+`timedatectl show --property=Timezone --value` query, resolved before the first forecast and
+retained until the shell restarts. An empty system result falls back to explicit `GMT`.
+All saved locations use that zone, matching the panel's local-date forecast filtering.
+No zone is persisted and no system configuration is changed.
+
+Reference VM `mirroros-ref`, 2026-11-16: the complete weather forecast query returned HTTP 403
+with `timezone=auto`, while the same single-location query with `Europe/Madrid` or `GMT`
+returned HTTP 200. This is an observed endpoint failure, not a claim about every client or
+request. The model now URL-encodes an explicit zone. Model and panel contract regressions
+live in `weather-model.test.mjs` and `calendar-weather.test.mjs`.
+
+Reference VM validation, 2026-11-17: published the installed runtime plus only the two weather
+file changes through `install-runtime`, verified its manifest and restarted `mirroros-shell.service`.
+The generated combined request returned current conditions and four forecast dates for both saved
+locations using the system zone. The panel opened through native IPC; the maintainer confirmed
+that temperature and forecast displayed correctly. Shell Node tests: 229 passed, 11 skipped,
+zero failures. This validates the bounded weather repair, not unrelated worktree changes.
+
 ## Defaults, preferences and private state (DEC-024/025)
 
 | Concern | Owner | Location |

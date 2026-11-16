@@ -168,6 +168,11 @@ panel, which joins Tab switching in the center section. No location ships: until
 neutral glyph without a reading, the panel shows a "No location" hero with the city search focused, and nothing
 is requested.
 
+Forecast days follow the user's session time zone for every saved location: `TZ` when set, otherwise the
+system zone from an unprivileged `timedatectl show --property=Timezone --value` query before the first forecast.
+An unavailable system zone falls back to `GMT`. The zone is URL-encoded explicitly; provider `timezone=auto`
+is not used. Restart the shell after changing the session or system time zone to pick up the new value.
+
 The hero reports the active location (temperature, pinned name, feels, wind, humidity, three-day forecast).
 Clicking the pinned name opens the city search, which replaces the active location. The other saved locations
 follow under a "SAVED LOCATIONS" header as compact rows in saved order: clicking a row makes it active and the previous active one returns to the

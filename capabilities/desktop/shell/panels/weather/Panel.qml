@@ -24,7 +24,8 @@ import "Locations.js" as Locations
 // lives in the bar (no ShellIpc, edit IPC or refreshMinutes setting); empty
 // "No location" hero with the search focused. Unit choice keeps the `unit`
 // setting, otherwise LC_ALL / LC_MEASUREMENT / LANG (the measurement locale,
-// not the UI language; no reported country without wttr.in).
+// not the UI language; no reported country without wttr.in). Forecast dates
+// use the session TZ or the system time zone, not the provider's auto zone.
 Panel {
   id: root
   moduleName: "omarchy.weather"
@@ -147,6 +148,9 @@ Panel {
   property string pendingReason: ""
   property var inFlight: []
 
+  // Session TZ takes precedence; otherwise resolve the system zone once.
+  property string localTimezone: String(Quickshell.env("TZ") || "").replace(/^:/, "")
+
   readonly property var dailyForecastReport: reportFor(activeLocation)
   readonly property var current: Model.openMeteoCurrentCondition(dailyForecastReport)
   readonly property var forecastDays: Model.openMeteoForecastDays(dailyForecastReport, Qt.formatDate(new Date(), "yyyy-MM-dd"))
@@ -173,12 +177,17 @@ Panel {
   function refresh(reason) {
     var scope = Locations.fetchScope(locationState, root.opened, root.lockedNow, reason)
     if (scope === "none") return
+    if (localTimezone === "") {
+      if (pendingReason !== "open") pendingReason = reason
+      if (!timezoneProc.running) timezoneProc.running = true
+      return
+    }
     if (forecastProc.running) {
       if (pendingReason !== "open") pendingReason = reason
       return
     }
     var list = Locations.fetchLocations(locationState, scope)
-    var command = Model.forecastCommand(list)
+    var command = Model.forecastCommand(list, localTimezone)
     if (command.length === 0) return
     inFlight = list
     forecastProc.command = command
@@ -352,6 +361,20 @@ Panel {
   function mix(base, tint, amount) {
     return Qt.rgba(base.r + (tint.r - base.r) * amount, base.g + (tint.g - base.g) * amount,
       base.b + (tint.b - base.b) * amount, base.a + (tint.a - base.a) * amount)
+  }
+
+  Process {
+    id: timezoneProc
+    command: Model.timezoneCommand()
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root.localTimezone = text.trim() || "GMT"
+        var reason = root.pendingReason
+        root.pendingReason = ""
+        root.refresh(reason || "change")
+      }
+    }
   }
 
   Process {

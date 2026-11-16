@@ -142,8 +142,36 @@ test('weather requests only fixed https:// open-meteo URLs through curl argv', (
   // Every process command in the panel comes from the model's builders.
   const commands = [...code(weatherPanel).matchAll(/(\w+)\.command = (.*)/g)].map(m => [m[1], m[2]]);
   assert.deepEqual(commands, [['forecastProc', 'command'], ['geocodeProc', 'Model.geocodingCommand(geocodeActiveQuery)']]);
-  assert.match(weatherPanel, /var command = Model\.forecastCommand\(list\)/);
+  assert.match(weatherPanel, /var command = Model\.forecastCommand\(list, localTimezone\)/);
   assert.doesNotMatch(code(weatherPanel), /command: \[/);
+});
+
+test('weather resolves the session timezone before fetching and resumes the pending refresh', () => {
+  const expression = weatherPanel.match(/property string localTimezone: (.*)/)[1];
+  const resolve = tz => vm.runInNewContext(expression, { Quickshell: { env: () => tz } });
+  assert.equal(resolve('Europe/Madrid'), 'Europe/Madrid');
+  assert.equal(resolve(':America/New_York'), 'America/New_York');
+  assert.equal(resolve(''), '');
+  const refresh = weatherPanel.match(/  function refresh\(reason\) \{([\s\S]*?)\n  \}/)[1];
+  const context = {
+    Locations: { fetchScope: () => 'all' }, locationState: {},
+    localTimezone: '', pendingReason: '', timezoneProc: { running: false },
+    root: { opened: true, lockedNow: false },
+  };
+  vm.runInNewContext(`(function(reason) {${refresh}})('open')`, context);
+  assert.equal(context.timezoneProc.running, true);
+  assert.equal(context.pendingReason, 'open');
+
+  const collector = weatherPanel.match(/id: timezoneProc[\s\S]*?onStreamFinished: \{([\s\S]*?)\n      \}/)[1];
+  const reasons = [];
+  const root = { pendingReason: 'open', refresh: reason => reasons.push(reason) };
+  vm.runInNewContext(collector, { root, text: 'Europe/Madrid\n' });
+  assert.equal(root.localTimezone, 'Europe/Madrid');
+  assert.deepEqual(reasons, ['open']);
+  assert.equal(root.pendingReason, '');
+  vm.runInNewContext(collector, { root, text: '' });
+  assert.equal(root.localTimezone, 'GMT', 'an unavailable system zone has an explicit fallback');
+  assert.match(weatherPanel, /command: Model\.timezoneCommand\(\)/);
 });
 
 test('the geocoder runs only while the user edits a location in the open panel', () => {

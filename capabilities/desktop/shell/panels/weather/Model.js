@@ -6,7 +6,8 @@
 // provisionalCurrentIcon, weatherResponseCompletesSave, wttrNextForecastDays,
 // buildForecastDays). Added: the fixed https:// open-meteo request argv
 // (single or combined multi-location forecast, geocoder), a parser for single
-// or combined forecast answers and the neutral glyph for the empty pill. The
+// or combined forecast answers, the session time zone instead of provider
+// auto-detection, and the neutral glyph for the empty pill. The
 // other functions are unchanged.
 
 // Fixed hosts: only coordinates and the typed search text vary.
@@ -28,7 +29,7 @@ function curlCommand(url) {
 // One request for every location given: open-meteo takes comma-separated
 // coordinate lists and answers with one report per pair, in order. Empty
 // when any coordinate is missing.
-function forecastUrl(locations) {
+function forecastUrl(locations, timezone) {
   var list = locations || []
   if (!list.length) return ""
   var lats = [], lons = []
@@ -45,12 +46,17 @@ function forecastUrl(locations) {
     + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
     + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,is_day"
     + "&forecast_days=4"
-    + "&timezone=auto"
+    + "&timezone=" + encodeURIComponent(timezone || "GMT")
 }
 
-function forecastCommand(locations) {
-  var url = forecastUrl(locations)
+function forecastCommand(locations, timezone) {
+  var url = forecastUrl(locations, timezone)
   return url === "" ? [] : curlCommand(url)
+}
+
+// Read the session's system zone without changing it or requiring privileges.
+function timezoneCommand() {
+  return ["timedatectl", "show", "--property=Timezone", "--value"]
 }
 
 function geocodingCommand(query) {
@@ -294,6 +300,7 @@ if (typeof module !== "undefined") {
     curlCommand: curlCommand,
     forecastUrl: forecastUrl,
     forecastCommand: forecastCommand,
+    timezoneCommand: timezoneCommand,
     geocodingCommand: geocodingCommand,
     parseForecastReports: parseForecastReports,
     parseGeocodingResults: parseGeocodingResults,
