@@ -1,0 +1,40 @@
+Retry a busy reader for about 35 seconds, with 250 ms to 2 s backoff.
+Cover the post-Escape pam_fprintd hold without retrying during shutdown.
+
+--- a/src/auth/Fingerprint.cpp
++++ b/src/auth/Fingerprint.cpp
+@@ -240,9 +240,22 @@
+ void CFingerprint::claimDevice() {
+     const auto currentUser = ""; // Empty string means use the caller's id.
+     m_sDBUSState.device->callMethodAsync("Claim").onInterface(DEVICE).withArguments(currentUser).uponReplyInvoke([this](std::optional<sdbus::Error> e) {
+-        if (e)
++        if (e) {
+             Log::logger->log(Log::WARN, "fprint: could not claim device, {}", e->what());
+-        else {
++            // Cover the post-Escape reader hold: 20 waits total 35.75 seconds, capped at 2 seconds each.
++            if (e->getName() == "net.reactivated.Fprint.Error.AlreadyInUse" && m_sDBUSState.claimRetries < 20 && !g_pHyprlock->isFadingOutOrTerminating()) {
++                const auto delay = m_sDBUSState.claimRetries < 3 ? 250 << m_sDBUSState.claimRetries : 2000;
++                m_sDBUSState.claimRetries++;
++                g_pHyprlock->addTimer(
++                    std::chrono::milliseconds(delay),
++                    [](ASP<CTimer> self, void* data) {
++                        auto* fprint = (CFingerprint*)data;
++                        if (fprint->m_sDBUSState.device && !g_pHyprlock->isFadingOutOrTerminating())
++                            fprint->claimDevice();
++                    },
++                    this);
++            }
++        } else {
+             Log::logger->log(Log::INFO, "fprint: claimed device");
+             startVerify();
+         }
+--- a/src/auth/Fingerprint.hpp
++++ b/src/auth/Fingerprint.hpp
+@@ -29,6 +29,7 @@
+         bool                           abort     = false;
+         bool                           done      = false;
+         int                            retries   = 0;
++        int                            claimRetries = 0;
+         bool                           sleeping  = false;
+         bool                           verifying = false;
+     } m_sDBUSState;

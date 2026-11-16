@@ -25,8 +25,15 @@ Known exploratory findings in `TODO-582784b9`:
   5 ms but did not remove the error (2026-11-03); TODO-005 is deferred.
 - The firmware reports battery charge thresholds of 95 and 100 with automatic charge behavior. Their origin is
   unknown, nothing in this repository sets them, and the maintainer left them unchanged.
-- Fingerprint-session behaviour was observed on Omarchy. This finding remains open; this profile adds
-  no fingerprint mitigation or `fprintd`.
+- Fingerprint-session behaviour was observed on Omarchy; that exploratory finding remains open. On every target,
+  `system/fingerprint` supplies `fprintd` for polkit and sudo
+  ([ADR 0030](../../docs/adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)); the screen lock uses patched
+  hyprlock's native fingerprint client ([ADR 0031](../../docs/adr/0031-patched-hyprlock-native-fingerprint.md)).
+  This profile adds no fingerprint mitigation. Plan 02-39 validated the attended lock on `hyprlock-mirroros
+  0.9.7-2.2` (`fdbcdb4`, 2026-11-16), including contention isolation and password fallback; RISK-002 was explicitly
+  accepted. No-prints/re-enrollment and five suspend/resume cycles are carried forward from `2.1` by maintainer
+  decision, not revalidated on `2.2`. These are non-qualifying results; the
+  [hardware validation matrix](../../docs/procedures/hardware.md#validation-matrix) records evidence hashes and limits.
 
 Story 4.4 provider exploration was approved on 2026-11-03. The
 [hardware procedure](../../docs/procedures/hardware.md) owns the per-capability validation matrix, terminal

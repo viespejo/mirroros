@@ -1,0 +1,172 @@
+Ignore fprintd signals unless this client owns the reader and has started verification.
+
+Keep busy-reader prompts empty and invalidate stale asynchronous replies before stop or release.
+
+--- a/src/auth/Fingerprint.cpp
++++ b/src/auth/Fingerprint.cpp
+@@ -125,7 +125,11 @@
+ }
+ 
+ void CFingerprint::terminate() {
+-    if (!m_sDBUSState.abort)
++    const bool aborted = m_sDBUSState.abort;
++    m_sDBUSState.abort = true;
++    m_sDBUSState.done  = true;
++    m_sPrompt.clear();
++    if (!aborted)
+         releaseDevice();
+ }
+ 
+@@ -142,8 +146,8 @@
+     Log::logger->log(Log::INFO, "fprint: using device path {}", path.c_str());
+     m_sDBUSState.device = sdbus::createProxy(*g_dbus->m_connection, FPRINT, path);
+ 
+-    m_sDBUSState.device->uponSignal("VerifyFingerSelected").onInterface(DEVICE).call([](const std::string& finger) {
+-        if (!isSignalFromService(FPRINT))
++    m_sDBUSState.device->uponSignal("VerifyFingerSelected").onInterface(DEVICE).call([this](const std::string& finger) {
++        if (!isSignalFromService(FPRINT) || !m_sDBUSState.claimed || !m_sDBUSState.verifying || m_sDBUSState.done || m_sDBUSState.abort)
+             return;
+         Log::logger->log(Log::INFO, "fprint: finger selected: {}", finger);
+     });
+@@ -156,7 +160,8 @@
+     m_sDBUSState.device->uponSignal("PropertiesChanged")
+         .onInterface("org.freedesktop.DBus.Properties")
+         .call([this](const std::string& interface, const std::map<std::string, sdbus::Variant>& properties) {
+-            if (!isSignalFromService(FPRINT) || interface != DEVICE || m_sDBUSState.done)
++            if (!isSignalFromService(FPRINT) || interface != DEVICE || !m_sDBUSState.claimed || !m_sDBUSState.verifying || m_sDBUSState.done ||
++                m_sDBUSState.abort || m_sDBUSState.sleeping || g_pHyprlock->isFadingOutOrTerminating())
+                 return;
+ 
+             try {
+@@ -173,6 +178,10 @@
+ }
+ 
+ void CFingerprint::handleVerifyStatus(const std::string& result, bool done) {
++    // fprintd broadcasts status for other clients too; sender validation alone is not verification ownership.
++    if (!m_sDBUSState.claimed || !m_sDBUSState.verifying || m_sDBUSState.done || m_sDBUSState.abort || g_pHyprlock->isFadingOutOrTerminating())
++        return;
++
+     Log::logger->log(Log::INFO, "fprint: handling status {}", result);
+     auto matchResult   = s_mapStringToTestType[result];
+     bool authenticated = false;
+@@ -237,17 +246,30 @@
+     else if (retry)
+         g_pHyprlock->enqueueForceUpdateTimers();
+ 
+-    if (done || m_sDBUSState.abort)
+-        m_sDBUSState.done = true;
++    if (done || m_sDBUSState.abort) {
++        m_sDBUSState.done      = true;
++        m_sDBUSState.verifying = false;
++        m_sDBUSState.verifyGeneration++;
++        m_sPrompt.clear();
++    }
+ }
+ 
+ void CFingerprint::claimDevice() {
++    if (!m_sDBUSState.device || m_sDBUSState.claimed || m_sDBUSState.claiming || m_sDBUSState.abort || m_sDBUSState.done ||
++        m_sDBUSState.sleeping || g_pHyprlock->isFadingOutOrTerminating())
++        return;
++
++    m_sDBUSState.claiming = true;
+     const auto currentUser = ""; // Empty string means use the caller's id.
+     m_sDBUSState.device->callMethodAsync("Claim").onInterface(DEVICE).withArguments(currentUser).uponReplyInvoke([this](std::optional<sdbus::Error> e) {
++        m_sDBUSState.claiming = false;
+         if (e) {
++            m_sPrompt.clear();
++            g_pHyprlock->enqueueForceUpdateTimers();
+             Log::logger->log(Log::WARN, "fprint: could not claim device, {}", e->what());
+             // Cover the post-Escape reader hold: 20 waits total 35.75 seconds, capped at 2 seconds each.
+-            if (e->getName() == "net.reactivated.Fprint.Error.AlreadyInUse" && m_sDBUSState.claimRetries < 20 && !g_pHyprlock->isFadingOutOrTerminating()) {
++            if (e->getName() == "net.reactivated.Fprint.Error.AlreadyInUse" && m_sDBUSState.claimRetries < 20 && !m_sDBUSState.abort &&
++                !m_sDBUSState.done && !m_sDBUSState.sleeping && !g_pHyprlock->isFadingOutOrTerminating()) {
+                 const auto delay = m_sDBUSState.claimRetries < 3 ? 250 << m_sDBUSState.claimRetries : 2000;
+                 m_sDBUSState.claimRetries++;
+                 g_pHyprlock->addTimer(
+@@ -260,6 +282,11 @@
+                     this);
+             }
+         } else {
++            m_sDBUSState.claimed = true;
++            if (m_sDBUSState.abort || m_sDBUSState.done || g_pHyprlock->isFadingOutOrTerminating()) {
++                releaseDevice();
++                return;
++            }
+             Log::logger->log(Log::INFO, "fprint: claimed device");
+             startVerify();
+         }
+@@ -267,17 +294,30 @@
+ }
+ 
+ void CFingerprint::startVerify(bool isRetry) {
+-    m_sDBUSState.verifying = true;
++    if (m_sDBUSState.abort || m_sDBUSState.done || m_sDBUSState.sleeping || m_sDBUSState.claiming || m_sDBUSState.verifying ||
++        g_pHyprlock->isFadingOutOrTerminating())
++        return;
++
+     if (!m_sDBUSState.device) {
+         if (!createDeviceProxy())
+             return;
+ 
++    }
++    if (!m_sDBUSState.claimed) {
+         claimDevice();
+         return;
+     }
++    // Claim is exclusive. Mark our request before sending it so an early own status is not lost.
++    m_sDBUSState.verifying = true;
++    const auto generation = ++m_sDBUSState.verifyGeneration;
+     auto finger = "any"; // Any finger.
+-    m_sDBUSState.device->callMethodAsync("VerifyStart").onInterface(DEVICE).withArguments(finger).uponReplyInvoke([this, isRetry](std::optional<sdbus::Error> e) {
++    m_sDBUSState.device->callMethodAsync("VerifyStart").onInterface(DEVICE).withArguments(finger).uponReplyInvoke([this, isRetry, generation](std::optional<sdbus::Error> e) {
++        if (generation != m_sDBUSState.verifyGeneration || !m_sDBUSState.claimed || m_sDBUSState.abort || m_sDBUSState.done ||
++            g_pHyprlock->isFadingOutOrTerminating())
++            return;
+         if (e) {
++            m_sDBUSState.verifying = false;
++            m_sPrompt.clear();
+             Log::logger->log(Log::WARN, "fprint: could not start verifying, {}", e->what());
+             if (isRetry) {
+                 m_sFailureReason = "Fingerprint auth disabled (failed to restart)";
+@@ -298,7 +338,9 @@
+ 
+ bool CFingerprint::stopVerify() {
+     m_sDBUSState.verifying = false;
+-    if (!m_sDBUSState.device)
++    m_sDBUSState.verifyGeneration++;
++    m_sPrompt.clear();
++    if (!m_sDBUSState.device || !m_sDBUSState.claimed)
+         return false;
+     try {
+         m_sDBUSState.device->callMethod("VerifyStop").onInterface(DEVICE);
+@@ -311,8 +353,18 @@
+ }
+ 
+ bool CFingerprint::releaseDevice() {
++    const bool claimed = m_sDBUSState.claimed;
++    m_sDBUSState.claimed   = false;
++    m_sDBUSState.verifying = false;
++    m_sDBUSState.verifyGeneration++;
++    m_sPrompt.clear();
+     if (!m_sDBUSState.device)
+         return false;
++    if (!claimed) {
++        if (!m_sDBUSState.claiming)
++            m_sDBUSState.device.reset();
++        return false;
++    }
+     try {
+         m_sDBUSState.device->callMethod("Release").onInterface(DEVICE);
+     } catch (sdbus::Error& e) {
+--- a/src/auth/Fingerprint.hpp
++++ b/src/auth/Fingerprint.hpp
+@@ -26,6 +26,9 @@
+     struct SDBUSState {
+         std::unique_ptr<sdbus::IProxy> device;
+ 
++        bool                           claimed   = false;
++        bool                           claiming  = false;
++        unsigned                       verifyGeneration = 0;
+         bool                           abort     = false;
+         bool                           done      = false;
+         int                            retries   = 0;

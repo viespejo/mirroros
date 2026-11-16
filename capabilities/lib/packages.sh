@@ -73,3 +73,41 @@ cfg_local_package_ensure() {
   fi
   cfg_package_record "$name" "$version" local
 }
+
+# Build before removing an official package, preserving its protected file and attempting recovery on install failure.
+# The builder receives the recipe as base64 plus a base64 tar.gz of its directory for reviewed local sources.
+cfg_local_package_replace() {
+  local official="$1" name="$2" recipe="$3" builder="$4" protected="$5" version sources path installed checked
+  local -a pacman_command=(pacman)
+  cfg_context
+  version="$(cfg_recipe_version "$recipe")" || { printf 'Invalid package recipe: %s\n' "$recipe" >&2; exit 6; }
+  if ! cfg_local_package_present "$name" "$recipe"; then
+    sources="$(tar -czf - -C "$(dirname -- "$recipe")" . | base64 -w0)" || return $?
+    cfg_user_script "$builder" build "$(base64 -w0 -- "$recipe")" "$sources" || return $?
+    read -r _ path <<< "$CFG_USER_SCRIPT_RESULT"
+    [[ "$path" == /* ]] || { printf 'The package build did not report a package file.\n' >&2; return 5; }
+    if [[ "$CONFIGURE_CONTEXT" == target ]]; then pacman_command=(env SNAP_PAC_SKIP=y pacman); fi
+    # A query can resolve a provider; remove only an installed package with the exact official name.
+    if installed="$(cfg_exec pacman -Q -- "$official" 2>/dev/null)" && [[ "$installed" == "$official "* ]]; then
+      # Backup-file mismatches are printed by -Qkk but do not make its exit status non-zero.
+      if ! checked="$(cfg_exec env LC_ALL=C pacman -Qkk -- "$official" 2>&1)" ||
+        [[ "$checked" == *"$protected"* || "$checked" == *'no mtree file'* ]]; then
+        printf 'Cannot replace %s: %s is modified or could not be verified; left unchanged.\n' "$official" "$protected" >&2
+        printf '%s\n' "$checked" >&2
+        exit 4
+      fi
+      cfg_run "${pacman_command[@]}" -Rdd --noconfirm -- "$official" || return $?
+    fi
+    if ! cfg_run "${pacman_command[@]}" -U --needed --noconfirm -- "$path"; then
+      printf 'Local package installation failed; attempting to reinstall %s.\n' "$official" >&2
+      if ! cfg_run "${pacman_command[@]}" -S --noconfirm -- "$official"; then
+        printf 'Recovery failed: reinstall %s before locking the session.\n' "$official" >&2
+      fi
+      return 5
+    fi
+    cfg_changed
+    installed="$(cfg_exec pacman -Q -- "$name")" || return $?
+    [[ "$installed" == "$name $version" ]] || return 5
+  fi
+  cfg_package_record "$name" "$version" local
+}

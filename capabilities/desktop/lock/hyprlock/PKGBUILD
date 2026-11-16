@@ -1,0 +1,71 @@
+# Maintainer: Caleb Maclennan <caleb@alerque.com>
+# Contributor: Aaron Blasko <blaskoazzolaaaron [at] gmail.com>
+# Derived by MirrorOS from Arch hyprlock 0.9.7-2:
+# https://gitlab.archlinux.org/archlinux/packaging/packages/hyprlock/-/blob/0.9.7-2/PKGBUILD
+# Changes: local package name and pkgrel; five authentication-provider patches; provides/conflicts; explicit
+# upstream archive, PAM backup and local license paths. Built by the selected user and installed by configure;
+# see ../sources.md.
+
+pkgname=hyprlock-mirroros
+pkgver=0.9.7
+pkgrel=2.2
+pkgdesc='hyprland’s GPU-accelerated screen locking utility'
+arch=(x86_64 aarch64)
+url="https://github.com/hyprwm/hyprlock"
+license=(BSD-3-Clause)
+depends=(cairo # libcairo.so
+         libgcc # libgcc_s.so
+         'libstdc++' # libstdc++.so
+         glibc # libc.so libm.so
+         hyprgraphics libhyprgraphics.so
+         hyprlang libhyprlang.so
+         hyprutils libhyprutils.so
+         libdrm # libdrm.so
+         libglvnd libEGL.so
+         libxkbcommon libxkbcommon.so
+         mesa # libgbm.so
+         pam libpam.so
+         sdbus-cpp libsdbus-c++.so
+         wayland libwayland-client.so libwayland-egl.so
+         wayland-protocols)
+makedepends=(cmake
+             hyprwayland-scanner)
+provides=(hyprlock)
+conflicts=(hyprlock)
+backup=(etc/pam.d/hyprlock)
+_archive="hyprlock-$pkgver"
+source=("$url/archive/v$pkgver/$_archive.tar.gz"
+        '0001-pam-defer-start-until-input.patch'
+        '0002-fprint-release-on-match.patch'
+        '0003-fprint-retry-claim-when-in-use.patch'
+        '0004-fprint-clear-prompt-when-disabled.patch'
+        '0005-fprint-ignore-unowned-verification-signals.patch')
+sha256sums=('01145790570ffabd31e9b528c517bdccae76f36e72d733f00c2696d9c3bf2c88'
+            'bb0e03f83411c70575f80cf5ac49051f5732e3d3c9b47cacb6682cff7e0e7a19'
+            '096dfd42f9cad71033bfad93aaa403cb61e50f3219b82561839de60087e0c22d'
+            '61dc3388524feaa47b15465d3c70f994f47b58209c1ccb1e3b083a371888f898'
+            '3655a12874a0d4e880bfda12f65626435ff0307b7e7ccb8e01dc4850b4ab79f2'
+            '70ca439ab0999b7f19df7248f4362737dfb543ee20a50c82afa194bceb34d0ad')
+
+prepare() {
+	cd "$_archive"
+	patch -Np1 -i "$srcdir/0001-pam-defer-start-until-input.patch"
+	patch -Np1 -i "$srcdir/0002-fprint-release-on-match.patch"
+	patch -Np1 -i "$srcdir/0003-fprint-retry-claim-when-in-use.patch"
+	patch -Np1 -i "$srcdir/0004-fprint-clear-prompt-when-disabled.patch"
+	patch -Np1 -i "$srcdir/0005-fprint-ignore-unowned-verification-signals.patch"
+}
+
+build() {
+	cd "$_archive"
+	cmake -B build \
+		-D CMAKE_INSTALL_PREFIX=/usr \
+		-D CMAKE_BUILD_TYPE=Release
+	cmake --build build
+}
+
+package() {
+	cd "$_archive"
+	DESTDIR="$pkgdir" cmake --install build
+	install -Dm0644 -t "$pkgdir/usr/share/licenses/hyprlock-mirroros/" LICENSE
+}

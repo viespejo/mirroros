@@ -85,6 +85,13 @@ final `a7068c6`; A7 is the supervised, non-qualifying T14s session (Synaptics `0
 `e05566a`, `bec0819` and final `a7068c6`. These temporary candidate commits
 identify the tested trees, not a release ISO or fixed-harness qualification.
 
+Screen-lock fingerprint identities (plan 02-39, 2026-11-16): V8 is the no-reader reference VM and A8 is the
+supervised, non-qualifying T14s session on corrected candidate `fdbcdb417b5474b89d2e4b61ec1e3f7f3c467f28`,
+`hyprlock-mirroros 0.9.7-2.2` with five patches. Both configured twice with exit 0, an unchanged rerun and identical
+PAM hashes. By explicit maintainer amendment, A8 carries forward the no-prints/re-enrollment test and five attended
+suspend/resume/fingerprint-unlock cycles from the earlier `0.9.7-2.1` candidate `64c5ba4`; those hardware paths were
+not repeated on `2.2`. The initial `2.1` cross-client-match failure is retained, not counted as a passing gate.
+
 | Capability | Reference VM | T14s exploratory result (date and source above) | Framework Laptop 13 Pro |
 |---|---|---|---|
 | Audio output, mute and microphone | V1: audio reported unavailable without a level in the bar and OSD (maintainer visual). V2: console probe passed on the virtual dummy sink; graphical unavailable-audio not rechecked at `179f288` | A1 (`5e93654`, `f075cf1`, `e3c3228`): volume ±5/±1 and output mute with correct OSD; microphone key toggles both ways with a level-free message, and the ALSA capture switch and LED agree on `e3c3228`. Not verified: 100% cap, locked-session keys, capture quality. The microphone message is truncated with an ellipsis (unresolved) | pending target-laptop validation |
@@ -110,6 +117,7 @@ identify the tested trees, not a release ISO or fixed-harness qualification.
 | Network panel: per-profile DNS and portal | V4 (`a629c36`, 2026-11-09): confirmation with Cancel focused, Escape/other-pill dismissal, Custom empty cancel and apply pass; only active Ethernet changed, dummy Ethernet/VPN and global DNS unchanged, DHCP restores profile. Simulated portal recheck and browser-launch failure pass; real browser/portal not exercised | A4 (`e350075`, 2026-11-09, non-qualifying): Cloudflare/Google/Custom/DHCP pass on Wi-Fi only; VPN/Ethernet/loopback and global DNS unchanged, DHCP restores profile; no sudo/polkit prompt. Real portal and enterprise not exercised | pending target-laptop validation |
 | Bluetooth panel | V5 (`3748a64`, 2026-11-09): configure and unchanged rerun (19 steps); `bluez-tools`, commands, license and agent unit delivered, unit enabled and skipped by its condition without a restart loop; panel opens unavailable with the tooltip reason and no devices; `SUPER+CTRL+B`, IPC, numbering and Tab pass; session suites and reviewed qmllint baseline pass | A5 (`7ef2959`, `f993a99`, `1907d37`, 2026-11-09/10, non-qualifying): agent active with no identities in its journal; radio switch with repeat protection; discovery stops after close; Just Works headset pairing trusts, connects and switches the default output; connecting a terminal-paired device leaves trust unchanged; disconnect/forget; unaccepted code requests fail with the Advanced literal and stay untrusted; Advanced numeric-comparison pairing leaves the device untrusted; not discoverable to a phone; chords, numbering 1–5, Tab, any-button click; no sudo/polkit; logout stops the agent at once. Failed: radio-off persistence across reboot. Phones can pair through Just Works when their consent dialog is accepted. Not exercised: legacy PIN, passkey entry, multi-monitor discovery handoff | pending target-laptop validation |
 | Fingerprint and polkit agent | V7 (`a7068c6`, 2026-11-14/15): configure exit 4 naming the residual `hyprpolkitagent` unit, then unchanged reruns; `polkit-check` 0; `pkexec true` correct 0, wrong then correct 0, Escape 126; `pkexec` and `sudo true` prompt for the password without perceptible delay or fingerprint mode (`lid-closed` 2–3 ms, exit 1); no fingerprint row and no invitation without a reader; a shell restart ends a pending request without granting it | A7 (`a7068c6`, 2026-11-15, non-qualifying): before enrollment password only without delay; the invitation stays until acted on and is not repeated; enrollment from it or the menu row authorizes through the agent; with a print, in `pkexec` and `sudo`, correct finger 0, wrong finger or timeout falls back to the password 0, cancel 126 (pkexec) or cancelled (sudo); lid closed with an external monitor goes straight to the password; deletion restores password only. Limitation: after a cancel the reader stays claimed for up to 30 s (see [Fingerprint](#fingerprint)) | pending target-laptop validation |
+| Screen-lock fingerprint | V8 (`fdbcdb4`, 2026-11-16): no fingerprint line or perceptible delay, wrong-password PAM message and correct-password unlock confirmed; PAM hashes unchanged | A8 (`fdbcdb4`, 2026-11-16, non-qualifying): fingerprint and 1–2 s relock with unchanged faillock; wrong password +1, correct password clears; exhaustion hides the line and password works; both contention cases suppress foreign presentation/matches, retain password fallback and recover own verification. Hidden polkit authorization demonstrated; RISK-002 explicitly accepted. Polkit fingerprint and maintainer-reported local sudo fingerprint pass. No-prints/re-enrollment and five resume cycles carried forward from `2.1`, not revalidated on `2.2` | pending target-laptop validation |
 | Network panel: VPN section | V6 (`1393383`, 2026-11-10): no section and unchanged height without profiles; one and five fictitious profiles within the list cap; Connect opens Foot and closes the panel; Failed, Cancelled, `SAVE` (0600 file) and `FORGET` pass with an empty runtime directory and nothing active; hidden with NetworkManager stopped; session suites and the reviewed qmllint baseline pass. Not exercised: real connection, connected rows and Disconnect | A6 (`46810b9`, `1bf11d5`, 2026-11-10, non-qualifying): row reads Connected within 2 s after a panel Connect; panel Disconnect; saved username reused and `FORGET` asks again; Ctrl+C at the OTP prompt reports Cancelled with cleanup; Connect from the keyboard through the VPN row; one-VPN gating with a fictitious second profile. The card overflowed with a long Wi-Fi list on `46810b9`; on `1bf11d5` the Wi-Fi list cap yields the VPN section's height and the card fits. This server re-prompts after a wrong password, so Failed was not observed. No gateway or profile identity in the journal | pending target-laptop validation |
 
 Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T200419Z/REPORT.md` and
@@ -119,6 +127,13 @@ Selected evidence is local and ignored: `evidence/hardware/exploration-20261103T
 `evidence/shell-panels/lab-02-29/checkpoint.md` and `evidence/shell-panels/t14s-02-29/checkpoint.md`; VPN section:
 `evidence/shell-panels/lab-02-30/checkpoint.md` and `evidence/shell-panels/t14s-02-30/checkpoint.md`; fingerprint
 and polkit agent: `evidence/polkit/lab-02-37/checkpoint.md` and `evidence/polkit/lab-02-37/t14s/g2.md`.
+Screen-lock fingerprint: `evidence/lock/lab-02-39/patch-0005/vm/retry-1/checkpoint.md` (SHA-256
+`400b495d0123cd54c7013624b7a3ae1b3c1f8402289162aecd2c46d876db3d64`) and
+`evidence/lock/lab-02-39/patch-0005/t14s/g2.md` (SHA-256
+`1b5d92debe35160694c535fda7ee2eff385ef4cd517f63249f0c0e7b0dbb3fd8`). The verified nested manifests are bound by
+`evidence/lock/lab-02-39/patch-0005/SHA256SUMS-attended-2.2` (SHA-256
+`4d81ecd6eae7be326a177412dcb56c630123c099b4f1bf1913c83990a39de22d`). Approval includes the A8 historical-hardware
+evidence exception and RISK-002; it is not target qualification or a full corrected-candidate hardware rerun.
 Task 2–4 source/contract test results are recorded in the local plan
 execution log; mocked tests do not establish clean installation or physical acceptance. Future acceptance records
 must identify date, clean candidate commit, execution context and limitations for every row.
@@ -409,7 +424,8 @@ handoff once; future real connection acceptance remains supervised and must rech
 ## Fingerprint
 
 Fingerprint authentication applies to `sudo` and to polkit prompts shown by the shell-hosted agent
-([ADR 0030](../adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)); the screen lock (hyprlock) and SDDM keep
+([ADR 0030](../adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)) and to the screen lock through patched
+hyprlock's native fprintd client ([ADR 0031](../adr/0031-patched-hyprlock-native-fingerprint.md)). SDDM keeps
 password-only authentication. Only USB readers are detected; platform readers and `libfprint-git` are out of scope.
 
 - **Enrollment.** With a detected reader, the session menu shows Setup › Security › Fingerprint, and the first
@@ -420,17 +436,35 @@ password-only authentication. Only USB readers are detected; platform readers an
   `~/.local/state/mirroros/fingerprint-invited`; removing it allows one more invitation. Without a notification
   server the invitation writes no marker and tries again at the next login.
 - **Re-enrollment and deletion.** When prints exist the command offers `[r]` enroll again, `[d]` delete or `[q]`
-  quit. After deletion both stacks prompt for the password only.
+  quit. After deletion both stacks prompt for the password only; the lock must show no fingerprint line and keep
+  password unlock available. Plan 02-39 validated no-reader behavior on `2.2`; no-prints/re-enrollment hardware
+  evidence is carried forward from `2.1` by maintainer decision, not revalidated on `2.2`.
 - **Use.** With a print, `sudo` and polkit prompts first wait for the finger; a wrong finger or the `pam_fprintd`
   timeout falls back to the password. Cancel returns 126 from `pkexec` and stops `sudo`. Without prints or a reader,
   `pam_fprintd` returns at once and the password prompt appears as before.
+- **Screen lock.** Native fingerprint is enabled on every target, in parallel with the password field, without a
+  lock-time reader probe. A fingerprint glyph and the native prompt appear below the field in the theme foreground;
+  the line is empty whenever `$FPRINTPROMPT` is empty. The field keeps `Enter Password`, and the failure text shows
+  PAM or fingerprint errors. Passwords use the unchanged packaged `hyprlock` PAM service; PAM starts only on the
+  first submitted input, so fingerprint-only unlocks do not start an aborted password attempt. Too many fingerprint
+  failures, an unknown error, a reader disconnect or a failed verification restart clear the line and disable
+  fingerprint for that lock; the password remains available. No fprintd resume hook or service mitigation ships.
 - **Closed lid.** `lid-closed` reports a closed lid from ACPI, or from logind's `LidClosed` within 2 seconds when no
   ACPI lid exists; PAM then skips `pam_fprintd` and asks for the password directly, and the dialog shows no
   fingerprint mode. A probe error counts as an open lid. Each authentication with an open or absent lid logs
   `pam_exec(...): /usr/share/mirroros/hardware/lid-closed failed: exit code 1`; this is expected gate noise.
-- **Cancelled prompt.** After Escape, `polkit-agent-helper-1` keeps the reader claimed until the 30-second
-  `pam_fprintd` timeout; `sudo` or `pkexec` in that window fall back to the password. This upstream behavior is
-  fail-safe and was accepted without changing the timeout.
+- **Cancelled prompt (L-1) and contention.** After Escape, `polkit-agent-helper-1` keeps the reader claimed until
+  the 30-second `pam_fprintd` timeout; `sudo` or `pkexec` in that window fall back to the password. This upstream
+  behavior is fail-safe and was accepted without changing the timeout. The lock retries a busy reader for about
+  35 seconds, with backoff from 250 ms to 2 seconds; password unlock remains available while another client owns it.
+  While busy, no fingerprint line is shown and another client's status or finger-presence signals must not affect
+  the locker. Only a successful own Claim and verification can restore fingerprint availability. Patch 0005 enforces
+  that boundary after the first plan 02-39 contention run found a cross-client match unlocking the initial candidate;
+  the corrected `2.2` candidate passed both attended contention cases with password fallback and own-reader recovery.
+  **RISK-002:** a touch intended to unlock may instead authorize a pending polkit or sudo request hidden under the
+  lock. Retrying and ignoring unowned signals do not mitigate that hidden authorization. No pending-request
+  cancellation or global locker exclusivity ships. The maintainer explicitly accepted this residual risk at the
+  plan 02-39 checkpoint on 2026-11-16 after corrected-candidate contention tests and discussion of alternatives.
 - **Lockout.** Stock Arch `system-auth` (`pam_faillock`, `deny=3`, 600 s) counts every non-successful attempt,
   including a cancelled prompt and a request ended by a shell restart. The dialog shows the lockout message; the
   user can clear it with `faillock --reset` or wait.
@@ -438,6 +472,18 @@ password-only authentication. Only USB readers are detected; platform readers an
   `/etc/pam.d/sudo.pacnew` as described in the [fingerprint sources](../../capabilities/system/fingerprint/sources.md);
   until the recorded packaged hash is updated, configure keeps the managed file. A local edit makes configure fail
   with outcome `4` (see the [configure procedure](configure.md)).
+- **Lock package updates.** Arch updates do not automatically update `hyprlock-mirroros`. Review the current Arch
+  recipe from the reference VM or Arch repositories, bump `pkgver` and the source checksum in
+  [`hyprlock/PKGBUILD`](../../capabilities/desktop/lock/hyprlock/PKGBUILD), adjust `pkgrel` and patch checksums as
+  needed, and confirm patches 0001–0005 still apply cleanly. Record the source and version in the
+  [lock sources](../../capabilities/desktop/lock/sources.md). Rerun the minimal ADR 0031 gates: reference-VM build
+  and package inspection, mechanism/lock/theme contracts, the isolated provider-state suite with its verified source
+  archive and g++, and shell syntax checks, two configure runs with unchanged
+  PAM hashes, no-reader VM behavior, and the attended T14s fingerprint/password, quick-relock, exhausted-attempt,
+  no-prints, five resume-cycle, contention and polkit/sudo checks. A patch that no longer applies or a blocking gate
+  failure requires reconsideration under ADR 0031, not silently dropping a patch or adding a resume hook. The
+  validation matrix records plan 02-39 results and its explicit historical-hardware-evidence exception; that exception
+  does not waive these gates for future recipe updates.
 - **Agent check.** After a new login run `/usr/share/mirroros/polkit/polkit-check` as the session user: it exits 0
   when `mirroros-shell.service` is active and no listed competing agent runs. Registration itself is shown by an
   attended prompt such as `pkexec true`. Without a running shell there is no agent and polkit requests fail closed.

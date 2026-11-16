@@ -1,2 +1,3 @@
-hyprlock extra
 hypridle extra
+cmake extra
+hyprwayland-scanner extra

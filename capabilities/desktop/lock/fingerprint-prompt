@@ -1,0 +1,10 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Render hyprlock's prompt only; the optional absolute Pango size comes from lock-screen's scaled geometry.
+# hyprgraphics 0.6.0 resets relative font scaling, so the glyph uses 1024 Pango units per point (ADR 0031).
+set -uo pipefail
+
+[[ -n "${1:-}" ]] || exit 0
+size="${2:-29491}"
+[[ "$size" =~ ^[1-9][0-9]*$ ]] || size=29491
+printf '<span size="%s">󰈷</span>  %s\n' "$size" "$1"

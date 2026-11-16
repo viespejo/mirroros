@@ -33,8 +33,11 @@ EOF
 
 teardown() { rm -rf -- "$TEST_DIR"; }
 
-# The generated geometry, without its comment, is the given field width, height and border.
-geometry_is() { [ "$(grep -v '^#' "$GEOMETRY")" = "\$field_size = $1, $2"$'\n'"\$field_border = $3" ]; }
+# The generated field geometry and the fingerprint text, absolute glyph size and offset.
+geometry_is() {
+  [ "$(grep '^\$field_' "$GEOMETRY")" = "\$field_size = $1, $2"$'\n'"\$field_border = $3" ]
+  [ "$(grep '^\$fprint_' "$GEOMETRY")" = "\$fprint_font_size = $4"$'\n'"\$fprint_glyph_size = $5"$'\n'"\$fprint_offset = $6" ]
+}
 
 @test "locks in the first layout and restores the previous layout after unlocking" {
   run "$SCRIPT"
@@ -64,11 +67,16 @@ geometry_is() { [ "$(grep -v '^#' "$GEOMETRY")" = "\$field_size = $1, $2"$'\n'"\
 @test "the field geometry follows the focused monitor's scale in physical pixels" {
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  geometry_is 605 91 5
+  geometry_is 605 91 5 22 29491 -100
   SCALE=1 run "$SCRIPT"
-  geometry_is 378 57 3
+  [ "$status" -eq 0 ]
+  geometry_is 378 57 3 14 18432 -63
+  SCALE=1.25 run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  geometry_is 473 71 4 18 23040 -78
   SCALE=2.50 run "$SCRIPT"
-  geometry_is 945 143 8
+  [ "$status" -eq 0 ]
+  geometry_is 945 143 8 35 46080 -156
   [ "$(find "${GEOMETRY%/*}" -type f | wc -l)" -eq 1 ]
 }
 
@@ -80,12 +88,41 @@ geometry_is() { [ "$(grep -v '^#' "$GEOMETRY")" = "\$field_size = $1, $2"$'\n'"\
   [ "$status" -eq 0 ]
   [ ! -e "$GEOMETRY" ]
   grep -qx hyprlock "$CALLS"
+  local config="${SCRIPT%/*}/hyprlock.conf"
+  grep -qxF '$fprint_font_size = 22' "$config"
+  grep -qxF '$fprint_glyph_size = 29491' "$config"
+  grep -qxF '$fprint_offset = -100' "$config"
   run "$SCRIPT"
   SCALE=0 run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -e "$GEOMETRY" ]
   SCALE='"x"' run "$SCRIPT"
   [ ! -e "$GEOMETRY" ]
+}
+
+@test "the fingerprint prompt is empty without a message" {
+  run bash "${SCRIPT%/*}/fingerprint-prompt" '' 18432
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  run bash "${SCRIPT%/*}/fingerprint-prompt"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "the fingerprint prompt shows the UTF-8 glyph and message at an absolute scaled size" {
+  local glyph=$'\xf3\xb0\x88\xb7'
+  run bash "${SCRIPT%/*}/fingerprint-prompt" 'Use your fingerprint or password' 18432
+  [ "$status" -eq 0 ]
+  [ "$output" = "<span size=\"18432\">$glyph</span>  Use your fingerprint or password" ]
+  run bash "${SCRIPT%/*}/fingerprint-prompt" 'Reading fingerprint…' 23040
+  [ "$status" -eq 0 ]
+  [ "$output" = "<span size=\"23040\">$glyph</span>  Reading fingerprint…" ]
+  run bash "${SCRIPT%/*}/fingerprint-prompt" 'Reading fingerprint…'
+  [ "$status" -eq 0 ]
+  [ "$output" = "<span size=\"29491\">$glyph</span>  Reading fingerprint…" ]
+  run bash "${SCRIPT%/*}/fingerprint-prompt" 'Reading fingerprint…' 'invalid" size="1'
+  [ "$status" -eq 0 ]
+  [ "$output" = "<span size=\"29491\">$glyph</span>  Reading fingerprint…" ]
 }
 
 @test "an unwritable geometry directory never prevents locking" {

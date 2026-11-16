@@ -3,7 +3,7 @@
 # Run by hypridle's lock_cmd. Locks in the first layout (the configured one, decision J(a) and ADR 0015) and restores
 # the layout that was active before locking once hyprlock exits after unlocking. A failure to read or switch the
 # layout never prevents locking; without a recorded layout nothing is restored. Exits with hyprlock's status.
-# Before locking it also writes the field geometry for the focused monitor's scale (DEC-012).
+# Before locking it also writes the field and fingerprint geometry for the focused monitor's scale (DEC-012, ADR 0031).
 set -uo pipefail
 export LC_ALL=C
 
@@ -22,6 +22,7 @@ write_geometry() {
     && values="$(awk -v scale="$scale" 'BEGIN {
       if (scale <= 0) exit 1
       printf "$field_size = %d, %d\n$field_border = %d\n", 378 * scale + 0.5, 57 * scale + 0.5, 3 * scale + 0.5
+      printf "$fprint_font_size = %d\n$fprint_glyph_size = %d\n$fprint_offset = %d\n", 14 * scale + 0.5, 18 * 1024 * scale + 0.5, -(62.5 * scale + 0.5)
     }')" \
     && mkdir -p -- "${geometry%/*}" \
     && tmp="$(mktemp -- "$geometry.XXXXXX")"; then

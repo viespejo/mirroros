@@ -1148,6 +1148,213 @@ tmux_plugins_fixture() {
   [ "$(grep -c '^makepkg --force ' "$CFG_TEST_CALLS")" -eq 1 ]
 }
 
+local_package_replace_fixture() {
+  mkdir -p "$CFG_TEST_DIR/recipe"
+  printf 'pkgver=0.9.7\npkgrel=2.1\n' > "$CFG_TEST_DIR/recipe/PKGBUILD"
+  printf 'reviewed patch\n' > "$CFG_TEST_DIR/recipe/local.patch"
+  printf '%s\n' '#!/usr/bin/bash
+set -Eeuo pipefail
+printf "builder %s\n" "$1" >> "$CFG_TEST_CALLS"
+[[ "$1" == build && "$#" == 3 ]] || exit 97
+cmp <(printf "%s" "$2" | base64 -d) "$CFG_TEST_DIR/recipe/PKGBUILD"
+printf "%s" "$3" | base64 -d | tar -xzOf - ./local.patch | cmp - "$CFG_TEST_DIR/recipe/local.patch"
+[[ "${CFG_TEST_REPLACE_BUILD_FAIL:-0}" != 1 ]] || exit 18
+package="$HOME/hyprlock-mirroros-0.9.7-2.1-x86_64.pkg.tar.zst"
+: > "$package"
+printf "built %s\n" "$package"' > "$CFG_TEST_DIR/builder"
+  printf '%s\n' '#!/usr/bin/bash
+set -Eeuo pipefail
+printf "pacman %s\n" "$*" >> "$CFG_TEST_CALLS"
+case "$1" in
+  -Q)
+    name="${!#}"
+    if [[ "$name" == hyprlock && ! -f "$CFG_TEST_INSTALLED/$name" && -f "$CFG_TEST_INSTALLED/hyprlock-mirroros" ]]; then
+      name=hyprlock-mirroros
+    fi
+    [[ -f "$CFG_TEST_INSTALLED/$name" ]] || exit 1
+    printf "%s %s\n" "$name" "$(< "$CFG_TEST_INSTALLED/$name")" ;;
+  -Qkk)
+    [[ "${LC_ALL:-}" == C ]] || exit 97
+    case "${CFG_TEST_REPLACE_CHECK:-clean}" in
+      clean) printf "hyprlock: 12 total files, 0 altered files\n" ;;
+      modified)
+        printf "backup file: hyprlock: /etc/pam.d/hyprlock (SHA256 checksum mismatch)\n"
+        printf "hyprlock: 12 total files, 0 altered files\n" ;;
+      missing) printf "warning: hyprlock: /etc/pam.d/hyprlock (No such file or directory)\n" >&2; exit 1 ;;
+      no-mtree) printf "hyprlock: no mtree file\n" ;;
+      *) exit 97 ;;
+    esac ;;
+  -Rdd)
+    printf "snap-skip %s %s\n" "$1" "${SNAP_PAC_SKIP:-unset}" >> "$CFG_TEST_CALLS"
+    [[ "${!#}" == hyprlock ]] || exit 97
+    rm "$CFG_TEST_INSTALLED/hyprlock" ;;
+  -U)
+    printf "snap-skip %s %s\n" "$1" "${SNAP_PAC_SKIP:-unset}" >> "$CFG_TEST_CALLS"
+    [[ "${CFG_TEST_REPLACE_INSTALL_FAIL:-0}" != 1 ]] || exit 17
+    [[ -f "${!#}" ]] || exit 97
+    printf "0.9.7-2.1\n" > "$CFG_TEST_INSTALLED/hyprlock-mirroros" ;;
+  -S)
+    printf "snap-skip %s %s\n" "$1" "${SNAP_PAC_SKIP:-unset}" >> "$CFG_TEST_CALLS"
+    [[ "${CFG_TEST_REPLACE_RECOVERY_FAIL:-0}" != 1 ]] || exit 19
+    [[ "${!#}" == hyprlock ]] || exit 97
+    printf "0.9.7-2\n" > "$CFG_TEST_INSTALLED/hyprlock" ;;
+  *) exit 97 ;;
+esac' > "$CFG_TEST_DIR/bin/pacman"
+}
+
+local_package_replace_run() {
+  cfg_test_helpers 'CONFIGURE_CONTEXT="${CFG_TEST_REPLACE_CONTEXT:-running}"
+if [[ "$CONFIGURE_CONTEXT" == target ]]; then CONFIGURE_ROOT="$CFG_TEST_TARGET_ROOT"; fi
+printf "name\tversion\trepository\n" > "$CFG_OUTPUT/packages.tsv"
+cfg_local_package_replace hyprlock hyprlock-mirroros "$CFG_TEST_DIR/recipe/PKGBUILD" "$CFG_TEST_DIR/builder" /etc/pam.d/hyprlock
+cfg_require cfg_local_package_present hyprlock-mirroros "$CFG_TEST_DIR/recipe/PKGBUILD"'
+}
+
+@test "local replacement records an already current package without building or changing it" {
+  local_package_replace_fixture
+  printf '0.9.7-2.1\n' > "$CFG_TEST_INSTALLED/hyprlock-mirroros"
+  run local_package_replace_run
+  [ "$status" -eq 0 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  grep -q $'^hyprlock-mirroros\t0.9.7-2.1\tlocal$' "$CFG_TEST_DIR/helper-output/packages.tsv"
+  ! grep -Eq '^builder |^pacman -(Qkk|Rdd|U|S) ' "$CFG_TEST_CALLS"
+}
+
+@test "local replacement on a fresh target installs only the built package and reruns unchanged" {
+  local_package_replace_fixture
+  run local_package_replace_run
+  [ "$status" -eq 0 ]
+  [ -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock" ]
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock-mirroros")" = 0.9.7-2.1 ]
+  [ "$(grep -c '^builder build$' "$CFG_TEST_CALLS")" -eq 1 ]
+  [ "$(grep -c '^pacman -U --needed --noconfirm -- ' "$CFG_TEST_CALLS")" -eq 1 ]
+  ! grep -Eq '^pacman -(Qkk|Rdd|S) ' "$CFG_TEST_CALLS"
+  rm "$CFG_TEST_DIR/helper-output/.changed"
+  : > "$CFG_TEST_CALLS"
+  run local_package_replace_run
+  [ "$status" -eq 0 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  ! grep -Eq '^builder |^pacman -(Qkk|Rdd|U|S) ' "$CFG_TEST_CALLS"
+}
+
+@test "local replacement builds and verifies the protected file before removing the official package" {
+  local_package_replace_fixture
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  run local_package_replace_run
+  [ "$status" -eq 0 ]
+  [ -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock" ]
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock-mirroros")" = 0.9.7-2.1 ]
+  run grep -E '^builder |^pacman -(Qkk|Rdd|U|S) ' "$CFG_TEST_CALLS"
+  [ "${lines[0]}" = 'builder build' ]
+  [ "${lines[1]}" = 'pacman -Qkk -- hyprlock' ]
+  [ "${lines[2]}" = 'pacman -Rdd --noconfirm -- hyprlock' ]
+  [[ "${lines[3]}" == 'pacman -U --needed --noconfirm -- '* ]]
+  [ "${#lines[@]}" -eq 4 ]
+  ! grep -q -- '--ask' "$CFG_TEST_CALLS"
+  grep -q $'^hyprlock-mirroros\t0.9.7-2.1\tlocal$' "$CFG_TEST_DIR/helper-output/packages.tsv"
+}
+
+@test "local replacement build failure leaves the official package and performs no pacman write" {
+  local_package_replace_fixture
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  export CFG_TEST_REPLACE_BUILD_FAIL=1
+  run local_package_replace_run
+  [ "$status" -eq 18 ]
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock")" = 0.9.7-2 ]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock-mirroros" ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  ! grep -Eq '^pacman -(Qkk|Rdd|U|S) ' "$CFG_TEST_CALLS"
+}
+
+@test "local replacement rejects a modified backup even when pacman Qkk returns zero" {
+  local_package_replace_fixture
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  export CFG_TEST_REPLACE_CHECK=modified
+  run local_package_replace_run
+  [ "$status" -eq 4 ]
+  [[ "$output" == *'/etc/pam.d/hyprlock is modified or could not be verified; left unchanged.'* ]]
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock")" = 0.9.7-2 ]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock-mirroros" ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  grep -q '^builder build$' "$CFG_TEST_CALLS"
+  ! grep -Eq '^pacman -(Rdd|U|S) ' "$CFG_TEST_CALLS"
+}
+
+@test "local replacement refuses an unverifiable protected file or missing mtree without package writes" {
+  local_package_replace_fixture
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  for check in missing no-mtree; do
+    export CFG_TEST_REPLACE_CHECK="$check"
+    run local_package_replace_run
+    [ "$status" -eq 4 ]
+    [ "$(< "$CFG_TEST_INSTALLED/hyprlock")" = 0.9.7-2 ]
+    [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+    ! grep -Eq '^pacman -(Rdd|U|S) ' "$CFG_TEST_CALLS"
+  done
+}
+
+@test "local replacement installation failure reinstalls the official package and fails" {
+  local_package_replace_fixture
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  export CFG_TEST_REPLACE_INSTALL_FAIL=1
+  run local_package_replace_run
+  [ "$status" -eq 5 ]
+  [[ "$output" == *'attempting to reinstall hyprlock'* ]]
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock")" = 0.9.7-2 ]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock-mirroros" ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  run grep -E '^pacman -(Rdd|U|S) ' "$CFG_TEST_CALLS"
+  [ "${lines[0]}" = 'pacman -Rdd --noconfirm -- hyprlock' ]
+  [[ "${lines[1]}" == 'pacman -U --needed --noconfirm -- '* ]]
+  [ "${lines[2]}" = 'pacman -S --noconfirm -- hyprlock' ]
+  [ "${#lines[@]}" -eq 3 ]
+}
+
+@test "local replacement reports failed official-package recovery and never records success" {
+  local_package_replace_fixture
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  export CFG_TEST_REPLACE_INSTALL_FAIL=1 CFG_TEST_REPLACE_RECOVERY_FAIL=1
+  run local_package_replace_run
+  [ "$status" -eq 5 ]
+  [[ "$output" == *'Recovery failed: reinstall hyprlock before locking the session.'* ]]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock" ]
+  [ ! -e "$CFG_TEST_INSTALLED/hyprlock-mirroros" ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+}
+
+@test "local replacement updates an older local version when queried by its provided official name" {
+  local_package_replace_fixture
+  printf '0.9.7-2.0\n' > "$CFG_TEST_INSTALLED/hyprlock-mirroros"
+  run local_package_replace_run
+  [ "$status" -eq 0 ]
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock-mirroros")" = 0.9.7-2.1 ]
+  [ -e "$CFG_TEST_DIR/helper-output/.changed" ]
+  grep -q '^pacman -Q -- hyprlock$' "$CFG_TEST_CALLS"
+  ! grep -Eq '^pacman -(Qkk|Rdd|S) ' "$CFG_TEST_CALLS"
+}
+
+@test "target local replacement and recovery skip snap-pac inside the target context" {
+  local_package_replace_fixture
+  cfg_test_target_context
+  export CFG_TEST_REPLACE_CONTEXT=target
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  run local_package_replace_run
+  [ "$status" -eq 0 ]
+  grep -q '^snap-skip -Rdd y$' "$CFG_TEST_CALLS"
+  grep -q '^snap-skip -U y$' "$CFG_TEST_CALLS"
+  grep -q '^arch-chroot .* env SNAP_PAC_SKIP=y pacman -U ' "$CFG_TEST_CALLS"
+  rm "$CFG_TEST_INSTALLED/hyprlock-mirroros" "$CFG_TEST_DIR/helper-output/.changed"
+  printf '0.9.7-2\n' > "$CFG_TEST_INSTALLED/hyprlock"
+  export CFG_TEST_REPLACE_INSTALL_FAIL=1
+  run local_package_replace_run
+  [ "$status" -eq 5 ]
+  grep -q '^snap-skip -S y$' "$CFG_TEST_CALLS"
+  [ "$(< "$CFG_TEST_INSTALLED/hyprlock")" = 0.9.7-2 ]
+  [ ! -e "$CFG_TEST_DIR/helper-output/.changed" ]
+}
+
 @test "the recipe version is read as data and malformed recipes are rejected" {
   run cfg_test_helpers 'cfg_recipe_version "$CAPABILITIES_DIR/workflow/tmux/sesh/PKGBUILD"'
   [ "$status" -eq 0 ]

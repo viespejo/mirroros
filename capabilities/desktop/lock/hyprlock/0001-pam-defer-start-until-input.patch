@@ -1,0 +1,77 @@
+Defer password PAM until submitted input when native fingerprint is enabled.
+This deliberately diverges from upstream #1003 to avoid faillock failures
+on fingerprint-only unlocks (#1074, #1100); no PAM stack changes are made.
+
+--- a/src/auth/Pam.cpp
++++ b/src/auth/Pam.cpp
+@@ -40,9 +40,15 @@
+                 const auto PROMPTCHANGED = PROMPT != CONVERSATIONSTATE->prompt;
+                 Log::logger->log(Log::INFO, "PAMPROMPT: {}", PROMPT);
+ 
++                // Deferred mode: the first prompt is answered with the input collected before pam_start.
++                if (initialPrompt && CONVERSATIONSTATE->inputPrecollected) {
++                    CONVERSATIONSTATE->inputPrecollected = false;
++                    CONVERSATIONSTATE->prompt            = PROMPT;
++                    g_pHyprlock->enqueueForceUpdateTimers();
++                }
+                 // Some pam configurations ask for the password twice for whatever reason (Fedora su for example)
+                 // When the prompt is the same as the last one, I guess our answer can be the same.
+-                if (initialPrompt || PROMPTCHANGED) {
++                else if (initialPrompt || PROMPTCHANGED) {
+                     CONVERSATIONSTATE->prompt = PROMPT;
+                     g_pHyprlock->enqueueForceUpdateTimers();
+ 
+@@ -87,6 +93,9 @@
+ 
+     m_username = getUsernameForCurrentUid();
+ 
++    static const auto ENABLEFINGERPRINT = g_pConfigManager->getValue<Hyprlang::INT>("auth:fingerprint:enabled");
++    m_bDeferUntilInput                  = *ENABLEFINGERPRINT;
++
+     m_sConversationState.waitForInput = [this]() { this->waitForInput(); };
+ }
+ 
+@@ -102,6 +111,16 @@
+             // For grace or SIGUSR1 unlocks
+             if (m_sConversationState.terminateRequested || g_pHyprlock->isFadingOutOrTerminating())
+                 return;
++
++            if (m_bDeferUntilInput) {
++                waitForInput();
++
++                // Unlocked (fingerprint, grace or SIGUSR1) before any input: no PAM transaction was started.
++                if (m_sConversationState.terminateRequested || g_pHyprlock->isFadingOutOrTerminating())
++                    return;
++
++                m_sConversationState.inputPrecollected = true;
++            }
+ 
+             const auto AUTHENTICATED = auth();
+ 
+@@ -205,5 +224,6 @@
+     m_sConversationState.waitingForPamAuth = false;
+     m_sConversationState.inputRequested    = false;
+     m_sConversationState.failTextFromPam   = false;
++    m_sConversationState.inputPrecollected = false;
+     m_bBlockInput                          = false;
+ }
+--- a/src/auth/Pam.hpp
++++ b/src/auth/Pam.hpp
+@@ -23,6 +23,7 @@
+         bool                    waitingForPamAuth  = false;
+         bool                    inputRequested     = false;
+         bool                    failTextFromPam    = false;
++        bool                    inputPrecollected  = false;
+         std::atomic_bool        terminateRequested = false;
+         std::function<void()>   waitForInput       = []() {};
+     };
+@@ -47,6 +48,9 @@
+     SPamConversationState m_sConversationState;
+ 
+     bool                  m_bBlockInput = false;
++    // Start PAM only after the first submitted input (native fingerprint enabled), so a fingerprint unlock never
++    // aborts a pending PAM conversation (which pam_faillock records as a failure).
++    bool                  m_bDeferUntilInput = false;
+ 
+     std::string           m_sPamModule = "";
+     std::string           m_username   = "";

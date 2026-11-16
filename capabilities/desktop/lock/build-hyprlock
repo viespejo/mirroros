@@ -1,0 +1,47 @@
+#!/usr/bin/bash
+# Runs as the target user through cfg_user_script (never as root): bash -s -- build <base64 recipe> <base64 sources>.
+# build: writes the reviewed PKGBUILD and five patches from a tar.gz source payload into an owned staging directory,
+#   builds with makepkg without installing anything, and leaves the package in ~/.cache/mirroros/hyprlock.
+# Source archive members use ./<patch filename>; cfg_local_package_replace supplies the recipe directory archive.
+# Output: "built <package path>".
+set -Eeuo pipefail
+
+mode=${1:?}
+recipe=${2:?}
+sources=${3:?}
+[[ "$mode" == build ]] || exit 6
+cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+[[ "$cache_home" == /* ]] || exit 6
+packages="$cache_home/mirroros/hyprlock"
+staging=''
+
+fail() { printf 'lock: %s\n' "$*" >&2; exit 4; }
+
+cleanup() {
+  [[ -z "$staging" || "$staging" != "$packages"/.build.* ]] || rm -rf -- "$staging"
+  return 0
+}
+trap cleanup EXIT
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+command -v makepkg > /dev/null 2>&1 || fail 'makepkg is missing; install base-devel before rerunning'
+mkdir -p -- "$packages"
+[[ ! -L "$packages" ]] || fail "$packages is a symbolic link; preserved unchanged"
+staging="$(mktemp -d "$packages/.build.XXXXXXXX")"
+printf '%s' "$recipe" | base64 -d > "$staging/PKGBUILD" || fail 'the recipe is not valid base64'
+printf '%s' "$sources" | base64 -d | tar -xz --no-same-owner --no-same-permissions -C "$staging" -- \
+  ./0001-pam-defer-start-until-input.patch \
+  ./0002-fprint-release-on-match.patch \
+  ./0003-fprint-retry-claim-when-in-use.patch \
+  ./0004-fprint-clear-prompt-when-disabled.patch \
+  ./0005-fprint-ignore-unowned-verification-signals.patch || fail 'the source archive must contain the five reviewed patches'
+
+export PKGDEST="$packages" SRCDEST="$staging/sources" BUILDDIR="$staging/build"
+cd "$staging"
+# Arch's debug option also emits a -debug package; only the main package is installed by configure.
+package="$(makepkg --packagelist | awk '/\/hyprlock-mirroros-[0-9][^/]*\.pkg\.tar\./')" || fail 'the recipe cannot be built on this system'
+[[ "$package" == "$packages"/hyprlock-mirroros-[0-9]*.pkg.tar.* && "$package" != *$'\n'* ]] || fail 'unexpected package list from makepkg'
+makepkg --force --noconfirm --nocolor < /dev/null >&2 || fail 'makepkg failed; review its output above'
+[[ -f "$package" ]] || fail "makepkg did not produce $package"
+printf 'built %s\n' "$package"

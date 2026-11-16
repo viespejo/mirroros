@@ -1,0 +1,14 @@
+Release the fingerprint reader immediately after a successful match.
+A quick relock must not race a claim held by the previous locker.
+
+--- a/src/auth/Fingerprint.cpp
++++ b/src/auth/Fingerprint.cpp
+@@ -201,6 +201,8 @@
+             break;
+         case MATCH_MATCHED:
+             stopVerify();
++            // Free the reader right away so a quick relock can claim it.
++            releaseDevice();
+             authenticated = true;
+             g_pAuth->enqueueUnlock();
+             break;

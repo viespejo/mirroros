@@ -1,7 +1,9 @@
 #!/usr/bin/bash
-# Prerequisites: validated packages and a non-root target user; the compositor and shell steps completed.
+# Prerequisites: validated packages and a non-root target user; system/fingerprint, compositor and shell completed.
+# HTTPS access is needed when the reviewed hyprlock recipe must be built.
 # Context: CONFIGURE_CONTEXT, CONFIGURE_ROOT, TARGET_USER, STEP_DIR and shared helpers.
-# Postconditions: packages installed with their packaged user unit; the drop-in matches its last delivery; native
+# Postconditions: hyprlock-mirroros and packages installed with their packaged user unit; the prompt script exists;
+# the drop-in matches its last delivery; native
 # hypridle/hyprlock configuration exists, managed or user-owned; hypridle is enabled for the selected user or
 # user-owned. Nothing is started, restarted or reloaded: a running session picks it up at its next login.
 set -Eeuo pipefail
@@ -9,16 +11,23 @@ set -Eeuo pipefail
 dropin=/etc/systemd/user/hypridle.service.d/10-mirroros.conf
 
 cfg_packages_ensure "$STEP_DIR/packages"
+cfg_local_package_replace hyprlock hyprlock-mirroros "$STEP_DIR/hyprlock/PKGBUILD" \
+  "$STEP_DIR/build-hyprlock" /etc/pam.d/hyprlock
+cfg_source_record hyprlock 'https://github.com/hyprwm/hyprlock/archive/v0.9.7/hyprlock-0.9.7.tar.gz' \
+  v0.9.7 01145790570ffabd31e9b528c517bdccae76f36e72d733f00c2696d9c3bf2c88 "$(cfg_recipe_version "$STEP_DIR/hyprlock/PKGBUILD")"
 cfg_tracked_file "$STEP_DIR/systemd/10-mirroros.conf" "$dropin" 0644
 cfg_system_file "$STEP_DIR/lock-screen" /usr/share/mirroros/lock/lock-screen 0755
+cfg_system_file "$STEP_DIR/fingerprint-prompt" /usr/share/mirroros/lock/fingerprint-prompt 0755
 cfg_user_file "$STEP_DIR/hypridle.conf" .config/hypr/hypridle.conf
 cfg_user_file "$STEP_DIR/hyprlock.conf" .config/hypr/hyprlock.conf
 cfg_user_unit_enable hypridle.service /usr/lib/systemd/user/hypridle.service graphical-session.target
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_local_package_present hyprlock-mirroros "$STEP_DIR/hyprlock/PKGBUILD"
 cfg_require cfg_system_file_present /usr/lib/systemd/user/hypridle.service
 cfg_require cfg_tracked_file_present "$dropin"
 cfg_require cfg_system_file_present /usr/share/mirroros/lock/lock-screen
+cfg_require cfg_system_file_present /usr/share/mirroros/lock/fingerprint-prompt
 cfg_require cfg_user_file_present .config/hypr/hypridle.conf
 cfg_require cfg_user_file_present .config/hypr/hyprlock.conf
 cfg_require cfg_user_unit_enabled hypridle.service graphical-session.target

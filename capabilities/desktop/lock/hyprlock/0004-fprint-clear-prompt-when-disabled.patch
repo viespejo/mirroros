@@ -1,0 +1,42 @@
+Clear the fingerprint prompt whenever verification becomes unavailable.
+Do not leave a ready or retry label after fingerprint has been disabled.
+
+--- a/src/auth/Fingerprint.cpp
++++ b/src/auth/Fingerprint.cpp
+@@ -188,6 +188,8 @@
+             stopVerify();
+             if (m_sDBUSState.retries >= 3) {
+                 m_sFailureReason = "Fingerprint auth disabled (too many failed attempts)";
++                // Fingerprint is no longer offered: clear the prompt so $FPRINTPROMPT stops showing a stale state.
++                m_sPrompt.clear();
+             } else {
+                 done                         = false;
+                 static const auto RETRYDELAY = g_pConfigManager->getValue<Hyprlang::INT>("auth:fingerprint:retry_delay");
+@@ -198,6 +200,7 @@
+         case MATCH_UNKNOWN_ERROR:
+             stopVerify();
+             m_sFailureReason = "Fingerprint auth disabled (unknown error)";
++            m_sPrompt.clear();
+             break;
+         case MATCH_MATCHED:
+             stopVerify();
+@@ -224,6 +227,7 @@
+             break;
+         case MATCH_DISCONNECTED:
+             m_sFailureReason   = "Fingerprint device disconnected";
++            m_sPrompt.clear();
+             m_sDBUSState.abort = true;
+             break;
+     }
+@@ -275,8 +279,10 @@
+     m_sDBUSState.device->callMethodAsync("VerifyStart").onInterface(DEVICE).withArguments(finger).uponReplyInvoke([this, isRetry](std::optional<sdbus::Error> e) {
+         if (e) {
+             Log::logger->log(Log::WARN, "fprint: could not start verifying, {}", e->what());
+-            if (isRetry)
++            if (isRetry) {
+                 m_sFailureReason = "Fingerprint auth disabled (failed to restart)";
++                m_sPrompt.clear();
++            }
+ 
+         } else {
+             Log::logger->log(Log::INFO, "fprint: started verifying");
