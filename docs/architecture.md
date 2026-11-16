@@ -309,6 +309,7 @@ MirrorOS exposes no remote product API and introduces no application-specific au
 
 - Linux accounts and PAM own user authentication.
 - Configure manages the `polkit-1` and `sudo` PAM stacks for fingerprint authentication with password fallback; the read-only `lid-closed` clamshell gate is the only MirrorOS-owned code in PAM ([ADR 0030](adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)).
+- The screen lock accepts fingerprints through patched hyprlock's native fprintd client outside PAM, in parallel with the password; the password keeps the packaged `hyprlock` PAM service ([ADR 0031](adr/0031-patched-hyprlock-native-fingerprint.md)).
 - Credentials are supplied at execution time and never stored in source, generated images, or retained evidence.
 - Password-manager integration is deferred until a concrete requirement demonstrates its value.
 

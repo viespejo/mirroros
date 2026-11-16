@@ -77,6 +77,13 @@ The context line "MirrorOS adds no `fprintd`" in
 [ADR 0023](0023-recognized-unqualified-targets-and-target-hibernate-mode.md) is outdated by ADR 0030. This is an index
 note, not a supersession; ADR 0023's decision is unchanged.
 
+[ADR 0031: Patched hyprlock with native fingerprint for the screen lock](0031-patched-hyprlock-native-fingerprint.md)
+is Accepted. It extends ADR 0030 with native fprintd authentication outside PAM alongside the packaged password PAM
+service, bounds the ADR 0012 exception to five provider patches delivered as `hyprlock-mirroros`, and amends
+ADR 0021 for one fingerprint prompt line. The maintainer accepted it on 2026-11-16 immediately after drafting and
+explicitly authorized the fifth patch at Task 8's DEC-007 checkpoint; amended-package and laboratory gates remain
+required before plan 02-39 adoption.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.
