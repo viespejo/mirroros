@@ -3,6 +3,16 @@ load support
 setup() { cfg_test_setup; }
 teardown() { cfg_test_teardown; }
 
+@test "clipboard is step 19 of 25 immediately before shell and enables watchers without direct execution" {
+  run bash -c 'source "$1"; printf "%s\n" "${#CFG_STEPS[@]}" "${CFG_STEPS[18]}" "${CFG_STEPS[19]}"' \
+    bash "$CFG_SOURCE_ROOT/capabilities/configure-steps"
+  [ "$status" -eq 0 ]
+  [ "$output" = $'25\ndesktop/clipboard\ndesktop/shell' ]
+  local apply="$CFG_SOURCE_ROOT/capabilities/desktop/clipboard/apply"
+  grep -q 'cfg_user_unit_enable.*graphical-session.target' "$apply"
+  ! grep -qE 'cfg_exec|cfg_unit_start|cfg_session_agent_unique|systemctl' "$apply"
+}
+
 @test "system unit start activates only inactive units and reruns without change" {
   cfg_test_step example 'systemctl() {
   printf "systemctl %s\n" "$*" >> "$CFG_TEST_CALLS"

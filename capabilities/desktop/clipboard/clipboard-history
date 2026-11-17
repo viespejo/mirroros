@@ -1,0 +1,251 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Runtime-only clipboard history. Never invoke bare cliphist from a consumer.
+# URL detection follows Omarchy's omarchy-clipboard-open; text encoding detection
+# adapts its clipboard capture heuristic. See sources.md for provenance.
+set -Eeuo pipefail
+
+usage() {
+  printf 'Usage: clipboard-history {store <text|image/png>|list|decode <id>|copy <id>|delete <id>|clear|preview <id>|open <id>|pick}\n' >&2
+  exit 2
+}
+
+command=${1:-}
+case "$command" in
+  store) [[ $# == 2 && ( "$2" == text || "$2" == image/png ) ]] || usage ;;
+  decode|copy|delete|preview|open) [[ $# == 2 && "$2" =~ ^[0-9]{1,19}$ ]] || usage ;;
+  list|clear|pick) [[ $# == 1 ]] || usage ;;
+  *) usage ;;
+esac
+
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR must name the user runtime directory}"
+[[ "$XDG_RUNTIME_DIR" == /* && -d "$XDG_RUNTIME_DIR" && -O "$XDG_RUNTIME_DIR" ]] || exit 2
+umask 077
+root="$XDG_RUNTIME_DIR/mirroros/clipboard"
+for directory in "$XDG_RUNTIME_DIR/mirroros" "$root" "$root/previews" "$root/open"; do
+  [[ ! -L "$directory" ]] || exit 2
+  mkdir -p -- "$directory"
+  [[ -d "$directory" && -O "$directory" ]] || exit 2
+  chmod 0700 -- "$directory"
+done
+[[ ! -L "$root/lock" && ! -L "$root/db" ]] || exit 2
+exec 9> "$root/lock"
+flock 9
+cliphist_command=(cliphist -db-path "$root/db" -max-items 200 -config-path /dev/null)
+temporary=''
+normalized=''
+trap '[[ -z "$temporary" ]] || rm -f -- "$temporary"; [[ -z "$normalized" ]] || rm -f -- "$normalized"' EXIT
+
+history() { "${cliphist_command[@]}" "$@" 9>&-; }
+
+history_list() {
+  [[ -e "$root/db" ]] || return 0
+  history list
+}
+
+prune_previews() {
+  local listing="$1" file id
+  for file in "$root"/previews/*.png; do
+    [[ -e "$file" || -L "$file" ]] || continue
+    id=${file##*/} id=${id%.png}
+    if ! awk -F '\t' -v id="$id" '$1 == id { found=1 } END { exit !found }' <<< "$listing"; then
+      rm -f -- "$file"
+    fi
+  done
+}
+
+list_entries() {
+  local listing
+  listing=$(history_list) || return "$?"
+  prune_previews "$listing"
+  [[ -z "$listing" ]] || printf '%s\n' "$listing"
+}
+
+runtime_space() {
+  local values
+  values=$(df -B1 --output=size,avail -- "$XDG_RUNTIME_DIR")
+  read -r total available <<< "$(awk 'NR == 2 { print $1, $2 }' <<< "$values")"
+  [[ "$total" =~ ^[0-9]+$ && "$available" =~ ^[0-9]+$ && "$total" -gt 0 ]]
+}
+
+normalize_text() {
+  local encoding heuristic=0 remainder stored converted_size total available budget read_limit=1048577
+  encoding=$(od -An -tu1 -v -- "$temporary" | awk '
+    {
+      for (i = 1; i <= NF; i++) {
+        if (count == 0) first = $i
+        if (count == 1) second = $i
+        if ($i == 0) { if (count % 2) odd++; else even++ }
+        count++
+      }
+    }
+    END {
+      if ((first == 255 && second == 254) || (first == 254 && second == 255)) print "UTF-16"
+      else if (count > 0 && count % 2 == 0 && odd * 4 >= count / 2 * 3 && even * 4 < count / 2) print "UTF-16LE"
+      else if (count > 0 && count % 2 == 0 && even * 4 >= count / 2 * 3 && odd * 4 < count / 2) print "UTF-16BE"
+      else if (even + odd > 0) print "invalid"
+      else print "UTF-8"
+    }') || return 1
+  [[ "$encoding" != invalid ]] || return 1
+  if [[ "$encoding" == UTF-8 ]]; then
+    iconv -f UTF-8 -t UTF-8 -- "$temporary" > /dev/null 2>&1
+    return
+  fi
+  [[ "$encoding" == UTF-16 ]] || heuristic=1
+  runtime_space || return 1
+  budget=$((available - (total + 3) / 4))
+  (( budget >= 0 )) || budget=0
+  (( read_limit <= budget )) || read_limit=$budget
+  normalized=$(mktemp "$root/.entry.XXXXXX") || return 1
+  remainder=$(iconv -f "$encoding" -t UTF-8 -- "$temporary" 2>/dev/null | {
+    head -c "$read_limit" > "$normalized"
+    wc -c
+  }) || return 1
+  stored=$(stat -c %s -- "$normalized") || return 1
+  converted_size=$((stored + remainder))
+  if (( converted_size > 1048576 || remainder > 0 )); then
+    size=$converted_size
+    return 1
+  fi
+  # BOM-less detection must not turn arbitrary NUL-separated bytes into control text.
+  od -An -tu1 -v -- "$normalized" | awk -v heuristic="$heuristic" '
+    { for (i = 1; i <= NF; i++) if ($i == 0 || (heuristic && ($i <= 8 || ($i >= 14 && $i <= 26) || ($i >= 28 && $i <= 31)))) invalid=1 }
+    END { exit invalid }' || return 1
+  size=$converted_size
+  rm -f -- "$temporary" || return 1
+  temporary=$normalized
+  normalized=''
+  runtime_space || return 1
+  (( available - size >= (total + 3) / 4 ))
+}
+
+store_entry() {
+  local type="$1" limit=1048576 total available budget read_limit remainder size stored listing
+  # cliphist owns these states; do not spool sensitive bytes or prevent a clear under low space.
+  if [[ "${CLIPBOARD_STATE:-}" == sensitive || "${CLIPBOARD_STATE:-}" == clear ]]; then
+    wc -c > /dev/null
+    history store < /dev/null
+    listing=$(history_list)
+    prune_previews "$listing"
+    return
+  fi
+  # cliphist 0.7.0 itself silently rejects more than 5,000,000 bytes (not 5 MiB).
+  [[ "$type" != image/png ]] || limit=5000000
+  runtime_space
+  budget=$((available - (total + 3) / 4))
+  (( budget >= 0 )) || budget=0
+  read_limit=$((limit + 1))
+  # Leave room for the eventual database write as well as this staging file.
+  (( read_limit <= budget / 2 )) || read_limit=$((budget / 2))
+  temporary=$(mktemp "$root/.entry.XXXXXX")
+  head -c "$read_limit" > "$temporary"
+  remainder=$(wc -c)
+  stored=$(stat -c %s -- "$temporary")
+  size=$((stored + remainder))
+  runtime_space
+  if (( size > limit || remainder > 0 || available - size < (total + 3) / 4 )); then
+    printf 'type=%s size=%s\n' "$type" "$size" >&2
+    return
+  fi
+  if [[ "$type" == text ]] && ! normalize_text; then
+    printf 'type=%s size=%s\n' "$type" "$size" >&2
+    return
+  fi
+  history store < "$temporary"
+}
+
+decode_entry() {
+  temporary=$(mktemp "$root/.entry.XXXXXX")
+  history decode "$1" > "$temporary"
+}
+
+is_png() {
+  [[ "$(od -An -tx1 -N8 -- "$temporary" | tr -d ' \n')" == 89504e470d0a1a0a ]]
+}
+
+preview_entry() {
+  local id="$1"
+  is_png || { printf 'Entry is not a PNG image.\n' >&2; return 2; }
+  mv -fT -- "$temporary" "$root/previews/$id.png"
+  temporary=''
+  printf '%s\n' "$root/previews/$id.png"
+}
+
+copy_entry() {
+  local type='text/plain;charset=utf-8'
+  decode_entry "$1"
+  if is_png; then type=image/png; fi
+  wl-copy --type "$type" < "$temporary" 9>&-
+}
+
+launch_open_target() {
+  local target="$1" handler
+  local launcher=(xdg-open)
+  # Only database/file preparation is serialized; an external app must never hold the history lock.
+  flock -u 9 || return 1
+  exec 9>&-
+  if [[ "$target" == "$root/open/"* ]]; then
+    handler=$(timeout --kill-after=2s 10s xdg-mime query default text/plain < /dev/null) || return 1
+    [[ "$handler" == *.desktop && "$handler" != -* && "$handler" != */* && "$handler" != *:* &&
+       "$handler" != *$'\n'* && "$handler" != *$'\r'* ]] || return 1
+    launcher=(uwsm app -t service -- "$handler")
+  fi
+  timeout --kill-after=2s 10s "${launcher[@]}" "$target" < /dev/null
+}
+
+open_entry() {
+  local id="$1" target url='' text domain_pattern url_pattern
+  decode_entry "$id"
+  if is_png; then
+    target=$(preview_entry "$id")
+    temporary=''
+  else
+    text=$(< "$temporary")
+    # First HTTP(S) URL anywhere in the entry, otherwise a domain-only entry.
+    url_pattern="https?://[^[:space:]\"'<>]+"
+    # No match is normal; head also closes the pipe once the first URL is found.
+    url=$(grep -Eo "$url_pattern" <<< "$text" | head -n 1) || :
+    domain_pattern='^[[:space:]]*([[:alnum:]][[:alnum:].-]+\.[[:alpha:]]{2,}(/[^[:space:]]*)?)[[:space:]]*$'
+    if [[ -z "$url" && "$text" =~ $domain_pattern ]]; then url="https://${BASH_REMATCH[1]}"; fi
+    if [[ -n "$url" ]]; then
+      target="$url"
+    else
+      mv -fT -- "$temporary" "$root/open/$id.txt"
+      temporary=''
+      target="$root/open/$id.txt"
+    fi
+  fi
+  if ! launch_open_target "$target" > /dev/null 2>&1; then
+    notify-send --urgency=normal --hint=int:transient:1 'Clipboard entry could not be opened' \
+      'Next action: check the default handler in mimeapps.list and the terminal configuration, then retry.'
+    return 1
+  fi
+}
+
+case "$command" in
+  store) store_entry "$2" ;;
+  list) list_entries ;;
+  decode) history decode "$2" ;;
+  copy) copy_entry "$2" ;;
+  delete)
+    printf '%s\n' "$2" | history delete
+    rm -f -- "$root/previews/$2.png" "$root/open/$2.txt"
+    listing=$(history_list)
+    prune_previews "$listing"
+    ;;
+  clear)
+    history wipe
+    rm -f -- "$root"/previews/*.png "$root"/open/*.txt
+    ;;
+  preview) decode_entry "$2"; preview_entry "$2" ;;
+  open) open_entry "$2" ;;
+  pick)
+    listing=$(list_entries)
+    flock -u 9
+    selection=$(printf '%s\n' "$listing" | fzf --delimiter='\t' --with-nth=2.. 9>&-) || exit "$?"
+    id=${selection%%$'\t'*}
+    [[ "$id" =~ ^[0-9]{1,19}$ ]] || exit 2
+    flock 9
+    copy_entry "$id"
+    ;;
+esac

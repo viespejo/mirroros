@@ -1,0 +1,19 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and the selected user.
+# Context: CONFIGURE_CONTEXT, TARGET_USER, STEP_DIR and shared helpers.
+# Postconditions: clipboard-history and both graphical-session watcher units are delivered and enabled.
+# Enable only; capture begins at the next graphical login, never during configure.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_tracked_file "$STEP_DIR/clipboard-history" /usr/share/mirroros/clipboard/clipboard-history 0755
+for name in text image; do
+  unit="mirroros-clipboard-$name.service"
+  path="/etc/systemd/user/$unit"
+  cfg_tracked_file "$STEP_DIR/$unit" "$path" 0644
+  cfg_user_unit_enable "$unit" "$path" graphical-session.target
+  cfg_require cfg_tracked_file_present "$path"
+  cfg_require cfg_user_unit_enabled "$unit" graphical-session.target
+done
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_tracked_file_present /usr/share/mirroros/clipboard/clipboard-history

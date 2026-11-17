@@ -217,7 +217,7 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the twenty-four-step configuration converges in the target and reruns without transactions" {
+@test "the twenty-five-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
@@ -239,21 +239,23 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/24 visual/theme =='* ]]
-  [[ "$output" == *'== 2/24 visual/gtk4 =='* ]]
-  [[ "$output" == *'== 3/24 visual/gtk3 =='* ]]
-  [[ "$output" == *'== 5/24 desktop/portal =='* ]]
-  [[ "$output" == *'== 6/24 desktop/files =='* ]]
-  [[ "$output" == *'== 12/24 system/audio =='* ]]
-  [[ "$output" == *'== 13/24 system/bluetooth =='* ]]
-  [[ "$output" == *'== 14/24 system/power =='* ]]
-  [[ "$output" == *'== 15/24 system/fingerprint =='* ]]
-  [[ "$output" == *'== 16/24 system/network =='* ]]
-  [[ "$output" == *'== 17/24 system/vpn =='* ]]
-  [[ "$output" == *'== 20/24 desktop/reminders =='* ]]
-  [[ "$output" == *'== 22/24 visual/branding =='* ]]
-  [[ "$output" == *'== 23/24 system/boot-splash =='* ]]
-  [[ "$output" == *'== 24/24 desktop/login =='* ]]
+  [[ "$output" == *'== 1/25 visual/theme =='* ]]
+  [[ "$output" == *'== 2/25 visual/gtk4 =='* ]]
+  [[ "$output" == *'== 3/25 visual/gtk3 =='* ]]
+  [[ "$output" == *'== 5/25 desktop/portal =='* ]]
+  [[ "$output" == *'== 6/25 desktop/files =='* ]]
+  [[ "$output" == *'== 12/25 system/audio =='* ]]
+  [[ "$output" == *'== 13/25 system/bluetooth =='* ]]
+  [[ "$output" == *'== 14/25 system/power =='* ]]
+  [[ "$output" == *'== 15/25 system/fingerprint =='* ]]
+  [[ "$output" == *'== 16/25 system/network =='* ]]
+  [[ "$output" == *'== 17/25 system/vpn =='* ]]
+  [[ "$output" == *'== 19/25 desktop/clipboard =='* ]]
+  [[ "$output" == *'== 20/25 desktop/shell =='* ]]
+  [[ "$output" == *'== 21/25 desktop/reminders =='* ]]
+  [[ "$output" == *'== 23/25 visual/branding =='* ]]
+  [[ "$output" == *'== 24/25 system/boot-splash =='* ]]
+  [[ "$output" == *'== 25/25 desktop/login =='* ]]
   cmp "$CFG_SOURCE_ROOT/capabilities/system/fingerprint/polkit-1" "$CFG_TEST_TARGET_ROOT/etc/pam.d/polkit-1"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/base.css" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/gtk3/base.css"
@@ -283,6 +285,15 @@ NODE
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/shell"
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/shell/systemd/mirroros-shell.service" \
     "$CFG_TEST_TARGET_ROOT/etc/systemd/user/mirroros-shell.service"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/clipboard/clipboard-history" \
+    "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/clipboard/clipboard-history"
+  [ -e "$CFG_TEST_INSTALLED/cliphist" ]
+  for name in text image; do
+    cmp "$CFG_SOURCE_ROOT/capabilities/desktop/clipboard/mirroros-clipboard-$name.service" \
+      "$CFG_TEST_TARGET_ROOT/etc/systemd/user/mirroros-clipboard-$name.service"
+    [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-clipboard-$name.service")" = \
+      "/etc/systemd/user/mirroros-clipboard-$name.service" ]
+  done
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/reminders/reminder" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/reminders/reminder"
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/lock/systemd/10-mirroros.conf" \
@@ -322,7 +333,7 @@ NODE
   : > "$CFG_TEST_CALLS"
   run target_run
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 24 ]
+  [ "$(printf '%s\n' "$output" | grep -c ': unchanged$')" -eq 25 ]
   cfg_test_no_install
   run grep -qE 'rsvg-convert --width' "$CFG_TEST_CALLS"
   [ "$status" -eq 1 ]

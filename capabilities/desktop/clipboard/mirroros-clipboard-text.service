@@ -1,0 +1,13 @@
+# managed by MirrorOS configure
+[Unit]
+Description=MirrorOS text clipboard history watcher
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/wl-paste --type text --watch /usr/share/mirroros/clipboard/clipboard-history store text
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
