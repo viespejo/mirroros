@@ -101,6 +101,21 @@ band states, diagnostics and the browser requirement for captive portals. The pl
 `v4.5.0` (DEC-050 in the [network interview log](../technical-interviews/story-4-4-network-panel_log.md)).
 Its VPN section (plan 02-30) opens `vpn-connect` in Foot; see [Connect and disconnect](hardware.md#connect-and-disconnect).
 
+## Clipboard history
+
+Plan 02-38 adds the on-demand clipboard picker over the owned `clipboard-history` command. `SUPER+CTRL+V`
+toggles it through `mirroros:clipboard`; native IPC is
+`qs ipc -p /usr/share/mirroros/shell call clipboard open` or `toggle`. Enter copies and closes without pasting;
+Alt+Enter opens, Delete removes an entry, Shift+Delete asks to clear history, and Escape clears the filter or
+closes. Text renders as plain summarized text; PNG previews are decoded on demand under the user runtime tree.
+
+The first-party `mirroros.clipboard` service requests one list per opening and does no polling, file watching or
+capture. The separate `desktop/clipboard` capability owns cliphist's RAM database and the two approved
+`wl-paste --watch` user units; configure enables them without starting. External copies appear on the next
+picker opening. See the [clipboard procedure](../procedures/clipboard.md) for the universal copy/paste keys,
+terminal `pick` fallback, capture limits, runtime/swap privacy caveats, manual watcher control and session checks.
+Live acceptance remains pending the plan's blocking reference-VM checkpoint.
+
 ## Bar additions
 
 Plan 02-31 adds three bar pieces adapted from Omarchy `v4.5.0` (see `UPSTREAM.md`); none starts a process.

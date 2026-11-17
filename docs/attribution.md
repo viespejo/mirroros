@@ -144,6 +144,13 @@ Keep this index stable and concise. Record changing tags, commits, package versi
 - **License text:** Omarchy's MIT text retained unchanged at `capabilities/desktop/shell/LICENSE.omarchy`
 - **Detailed provenance:** [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md#story-45-portal-additions)
 
+### Omarchy clipboard integration
+
+- **License (SPDX):** `MIT`
+- **Incorporated material:** `default/hypr/bindings/clipboard.lua` adapted into `capabilities/desktop/compositor/providers/hyprland/clipboard-bindings.lua`, with the Foot-only terminal tag rule following `default/hypr/apps/terminals.lua`; `shell/plugins/clipboard/Clipboard.qml` and `ClipboardHistory.js` adapted into `capabilities/desktop/shell/clipboard/{ClipboardPicker.qml,ClipboardHistoryModel.js}`; `shell/Ui/ConfirmDialog.qml`, `SizedImage.qml` and the used English strings adapted into the owned shell. The URL/domain heuristic from `bin/omarchy-clipboard-open` and the UTF-16 detection heuristic from `shell/plugins/clipboard/capture.sh` are independently reimplemented in `capabilities/desktop/clipboard/clipboard-history` with shell tools, without copying those scripts or using Perl; no capture script, JSON store or auto-paste is incorporated
+- **License text:** Omarchy's MIT text (David Heinemeier Hansson) retained unchanged at `capabilities/desktop/shell/LICENSE.omarchy`
+- **Detailed provenance:** [Clipboard sources](../capabilities/desktop/clipboard/sources.md), [Desktop shell upstream record](../capabilities/desktop/shell/UPSTREAM.md), [Shell sources](../capabilities/desktop/shell/sources.md#clipboard-picker-plan-02-38) and [Hyprland bindings upstream record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md#story-45-clipboard-additions)
+
 ### Omarchy polkit agent and fingerprint integration
 
 - **License (SPDX):** `MIT`

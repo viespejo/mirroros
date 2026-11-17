@@ -145,7 +145,7 @@ with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
 ## Consequential effects
 
-The twenty-four steps run in this order:
+The twenty-five steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -167,6 +167,7 @@ The twenty-four steps run in this order:
 | `system/network` | NetworkManager/systemd-resolved backend and stub, resolver enablement, private migration/recovery and isolated target DNS; no provider/profile edits |
 | `system/vpn` | NetworkManager OpenConnect plugin, with an offline registration check; no corporate profile or connection |
 | `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 and hardware bindings, runtime-only display helper, the greeter layout indicator, Wayland greeter, one uwsm session entry, the file manager chords, and the Hyprland portal backend with `grim`, `hyprland-portals.conf`, the user `xdph.conf` and the portal-dialog window rules |
+| `desktop/clipboard` | cliphist, wl-clipboard and fzf; the owned runtime-only `clipboard-history` command and two approved text/PNG watcher user units, enabled without starting for `graphical-session.target` ([clipboard procedure](../procedures/clipboard.md)) |
 | `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell` with its hosted polkit agent, its user unit enabled for the selected user, and the read-only `polkit-check` command; fails while a listed competing polkit agent is started for the user |
 | `desktop/reminders` | jq and sound-theme-freedesktop, and the owned `reminder` command with its Omarchy licence under `/usr/share/mirroros/reminders`; no unit, daemon or user state ([sources](../../capabilities/desktop/reminders/sources.md)) |
 | `desktop/lock` | hyprlock and hypridle, native lock and idle configuration, a hypridle drop-in, and hypridle enabled for the selected user |
@@ -300,7 +301,13 @@ Managed destinations are:
   `/etc/systemd/user/mirroros-fingerprint-invite.service`: owned commands and a oneshot user unit enabled for the
   selected user's `graphical-session.target`, never started by configure. Configure never starts fprintd, reads
   no reader and enrolls nothing; enrollment is user-run. See the [hardware procedure](hardware.md#fingerprint).
-- `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`, `hardware-bindings.lua`: the approved key table and the registry the
+- `/usr/share/mirroros/clipboard/clipboard-history` and `/etc/systemd/user/mirroros-clipboard-{text,image}.service`:
+  tracked command (0755) and approved text/PNG watcher units, enabled for the selected user's
+  `graphical-session.target` without starting. History and its previews/open files stay under
+  `$XDG_RUNTIME_DIR/mirroros/clipboard/`; bare `cliphist` still defaults to disk. The shell hosts the copy-only
+  picker and `clipboard` IPC (`open`, `toggle`). See the [clipboard procedure](../procedures/clipboard.md) for
+  capture limits, manual watcher control, privacy risks and session checks.
+- `/usr/share/mirroros/hypr/shell-bindings.lua`, `window-bindings.lua`, `hardware-bindings.lua`, `clipboard-bindings.lua`: the approved key table and the registry the
   shell's keyboard help reads (`$XDG_RUNTIME_DIR/mirroros-keybindings.tsv`). Nothing is unbound at runtime. See
   [Hyprland bindings provenance](../../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md).
 - `/usr/share/mirroros/hypr/keyboard.lua`: runtime layout resolution for the greeter.
@@ -352,7 +359,7 @@ context. A missing Bluetooth subsystem is reported unavailable with the service 
 Bluetooth must be active. Battery and backlight absence are reported without failing configure. Audio delivery
 and VPN plugin registration do not prove audible output or authentication. No profile or secret is created by
 `system/vpn`. See the [hardware validation matrix](hardware.md#validation-matrix) for pending real-machine checks.
-Configure never starts, restarts or reloads user audio, the power watcher, shell, hypridle or desktop.
+Configure never starts, restarts or reloads user audio, the power watcher, clipboard watchers, shell, hypridle or desktop.
 
 SDDM is enabled, **never started or restarted**; `graphical.target` becomes the default. Postconditions check the
 SDDM display-manager alias, the absence of another enabled display manager, and the default target. Configure
