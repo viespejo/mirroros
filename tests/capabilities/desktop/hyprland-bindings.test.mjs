@@ -38,7 +38,7 @@ hl = {
     local text = type(dispatcher) == "function" and "function" or (dispatcher.command or dispatcher.kind)
     out[#out + 1] = keys .. "\\t" .. tostring(opts and opts.description) .. "\\t" .. table.concat(flags, ",") .. "\\t" .. text
   end,
-  config = function() end, dispatch = function() end, get_config = function() end,
+  config = function() end, dispatch = function() end, get_config = function() end, layer_rule = function() end,
 }
 local mode = arg[1]
 for load = 1, 2 do
@@ -49,6 +49,7 @@ for load = 1, 2 do
   dofile(arg[2] .. "/window-bindings.lua")
   dofile(arg[2] .. "/hardware-bindings.lua")
   dofile(arg[2] .. "/clipboard-bindings.lua")
+  dofile(arg[2] .. "/omasnap/screenshot-bindings.lua")
   if mode == "duplicate-id" then MirrorOSKeys.bind("audio.raise", "SUPER + F11", "Duplicate id", "x") end
   if mode == "hardware-duplicate" then MirrorOSKeys.bind("extra.hardware", "ALT + SUPER + slash", "Duplicate", "x") end
   if mode == "replacement" or mode == "replacement-invalid" then
@@ -110,7 +111,7 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 170);
+  assert.equal(bindings.length, 173);
   for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'clipboard-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
@@ -190,7 +191,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 170);
+  assert.equal(replaced.stdout.trim().split('\n').length, 173);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -212,6 +213,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
     'CTRL+SUPER+R', 'ALT+CTRL+SUPER+R', 'CTRL+SHIFT+SUPER+R',
     'SHIFT+SUPER+F', 'ALT+SHIFT+SUPER+F',
     'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V',
+    'PRINT', 'ALT+CTRL+SUPER+C', 'CTRL+SUPER+C',
   ];
   for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
@@ -236,7 +238,7 @@ test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua
   const unbound = [
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
     'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
-    'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
+    'ALT+PRINT', 'SUPER+PRINT', 'CTRL+SUPER+PRINT',
     'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N',
     'CTRL+SUPER+W', 'CTRL+SUPER+CODE:19', 'SUPER+O',
     'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
@@ -271,8 +273,8 @@ test('file manager bindings open Strata and the owned working-directory command'
   assert.equal(byChord.get('ALT+SHIFT+SUPER+F').description, 'File manager (cwd)');
   assert.match(loaded.registry, /^files\.open\tSUPER \+ SHIFT \+ F\tFile manager$/m);
   assert.match(loaded.registry, /^files\.cwd\tSUPER \+ ALT \+ SHIFT \+ F\tFile manager \(cwd\)$/m);
-  // Story 4.5 browser, editor and capture keys stay reserved.
-  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT'])
+  // Story 4.5 browser, editor and future capture-extra keys stay reserved.
+  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'ALT+PRINT', 'SUPER+PRINT'])
     assert.ok(!byChord.has(key), 'unexpected ' + key);
 });
 
@@ -291,6 +293,48 @@ test('clipboard bindings export the five approved actions and deliver before per
   const apply = fs.readFileSync(path.join(provider, 'apply'), 'utf8');
   assert.ok(apply.includes('cfg_tracked_file "$STEP_DIR/clipboard-bindings.lua" /usr/share/mirroros/hypr/clipboard-bindings.lua 0644'));
   assert.ok(apply.includes('cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/clipboard-bindings.lua'));
+});
+
+test('screenshot bindings register neutral capture and the existing Capture menu route before personal layers', { skip: !lua && 'no Lua interpreter' }, () => {
+  for (const keys of ['PRINT', 'ALT+CTRL+SUPER+C']) {
+    assert.equal(byChord.get(keys).action, '/usr/share/mirroros/screenshot/screenshot');
+    assert.equal(byChord.get(keys).description, 'Screenshot');
+  }
+  assert.equal(byChord.get('CTRL+SUPER+C').action, 'qs ipc -p /usr/share/mirroros/shell call menu open capture');
+  assert.match(loaded.registry, /^screenshot\.capture\tPRINT\tScreenshot$/m);
+  assert.match(loaded.registry, /^menu\.capture\tSUPER \+ CTRL \+ C\tCapture menu$/m);
+  const entry = fs.readFileSync(path.join(provider, 'hyprland.lua'), 'utf8');
+  assert.ok(entry.indexOf('/hypr/screenshot-bindings.lua') < entry.indexOf('/hypr/personal-loader.lua'));
+  const code = fs.readFileSync(path.join(provider, 'omasnap/screenshot-bindings.lua'), 'utf8');
+  assert.match(code, /namespace = "\^omasnap\$"/);
+  assert.match(code, /no_anim = true/);
+  assert.match(code, /animation = "none"/);
+  assert.doesNotMatch(code, /no_screen_share/);
+});
+
+test('screenshot layer rules disable only capture and menu animations without excluding screen sharing', { skip: !lua && 'no Lua interpreter' }, () => {
+  execFileSync(lua, ['-e', `
+    local rules = {}
+    MirrorOSKeys = { staged = true, bind = function() end }
+    hl = {
+      dsp = { exec_cmd = function(command) return command end },
+      layer_rule = function(rule) rules[#rules + 1] = rule end,
+    }
+    dofile(${JSON.stringify(path.join(provider, 'omasnap/screenshot-bindings.lua'))})
+    assert(#rules == 2)
+    local expected = { ['^omasnap$'] = true, ['^mirroros-menu$'] = true }
+    for _, rule in ipairs(rules) do
+      assert(expected[rule.match.namespace])
+      expected[rule.match.namespace] = nil
+      assert(rule.no_anim == true and rule.animation == 'none')
+      assert(rule.no_screen_share == nil)
+      for key in pairs(rule) do
+        assert(key == 'match' or key == 'no_anim' or key == 'animation')
+      end
+      for key in pairs(rule.match) do assert(key == 'namespace') end
+    end
+    assert(next(expected) == nil)
+  `], { encoding: 'utf8' });
 });
 
 test('clipboard mapping sends down then a 50 ms deferred up to the focused surface', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -386,7 +430,7 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 162);
+  assert.equal(rows.length, 165);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));
@@ -397,7 +441,7 @@ test('Lua sources parse', { skip: !lua && 'no Lua interpreter' }, () => {
   const luac = ['luac5.4', 'luac'].find(name => spawnSync(name, ['-v']).status === 0);
   if (!luac) return;
   execFileSync(luac, ['-p', ...['hyprland.lua', 'defaults.lua', 'personal-loader.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'clipboard-bindings.lua',
-    'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
+    'omasnap/screenshot-bindings.lua', 'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
 });
 
 test('session and greeter reload shared monitor rules and session sets GDK scale', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -414,7 +458,8 @@ test('session and greeter reload shared monitor rules and session sets GDK scale
       assert(file == '/usr/share/mirroros/hypr/shell-bindings.lua'
         or file == '/usr/share/mirroros/hypr/window-bindings.lua'
         or file == '/usr/share/mirroros/hypr/hardware-bindings.lua'
-        or file == '/usr/share/mirroros/hypr/clipboard-bindings.lua', file)
+        or file == '/usr/share/mirroros/hypr/clipboard-bindings.lua'
+        or file == '/usr/share/mirroros/hypr/screenshot-bindings.lua', file)
     end
     hl = {
       config = function() end, bind = function() end, on = function() end, window_rule = function() end,

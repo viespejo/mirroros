@@ -1,0 +1,86 @@
+# Maintainer: Tobi Lütke <tobi@lutke.com>
+# Derived from omacom/omarchy-pkgs c73cd8aa4d12a9b3ad4b8451b153bd36294bc6b1, 1.26.2-4.
+# MirrorOS: pkgrel 4.2, x86_64 only; omit check() and clang checkdepends.
+# Save As uses the desktop portal on every launch path (reviewed local patch below).
+# Upstream CI runs the unmodified smoke suite: omacom/omasnap .github/workflows/test.yml.
+# Source: v1.26.2, commit 6150151846b0ddc2ca8e6b107324de8b0c7240ae.
+
+pkgname=omasnap
+pkgver=1.26.2
+pkgrel=4.2
+pkgdesc="Native Wayland screenshot and annotation overlay for Hyprland"
+arch=('x86_64')
+url="https://github.com/omacom/omasnap"
+license=('MIT' 'OFL-1.1')
+depends=(
+  'hyprland'
+  'layer-shell-qt'
+  'libdeflate'
+  'qt6-base'
+  'tesseract'
+  'tesseract-data-eng'
+  'wayland'
+  'wl-clipboard'
+  'xdg-utils'
+  'xdg-desktop-portal'
+)
+makedepends=(
+  'cmake'
+  'ninja'
+  'pkgconf'
+  'wayland-protocols'
+)
+options=('!debug')
+
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('e173edd4f2e797273c967513f24c360b6f00733792b9708757a82c39fbc43bf9')
+
+prepare() {
+  cd "$pkgname-$pkgver" || return
+  # Kept inline because configure transmits this self-contained recipe to the builder.
+  patch -Np1 --fuzz=0 <<'PATCH'
+--- a/src/editor-save-as.cpp
++++ b/src/editor-save-as.cpp
+@@ -105,7 +105,6 @@
+   dialog->setAttribute(Qt::WA_DeleteOnClose);
+   // The overlay is hidden until the chooser has finished closing.
+   dialog->setAttribute(Qt::WA_QuitOnClose, false);
+-  dialog->setOption(QFileDialog::DontUseNativeDialog);
+   dialog->setAcceptMode(QFileDialog::AcceptSave);
+   dialog->setFileMode(QFileDialog::AnyFile);
+   dialog->setDefaultSuffix(QStringLiteral("png"));
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -145,12 +145,5 @@
+   qunsetenv("QT_WAYLAND_SHELL_INTEGRATION");
+-  // Omarchy exports QT_QPA_PLATFORMTHEME=gtk3 session-wide. Honouring it
+-  // loads the qgtk3 plugin, which initialises GTK inside this process
+-  // (measured 81-112 ms of QApplication construction, plus ~20-24 MiB of
+-  // RSS) for hand-painted chrome and Qt's own file chooser.
+-  // Qt's built-in generic theme is all it needs, so select it by name
+-  // (an empty value would let Qt pick a theme from XDG_CURRENT_DESKTOP
+-  // instead). The chrome font is pinned in chromeFont() rather than taken
+-  // from the theme. `-platformtheme gtk3` on the command line still
+-  // overrides this for debugging.
+-  qputenv("QT_QPA_PLATFORMTHEME", "generic");
++  // Use the desktop portal for Save As on every launch path, without
++  // loading GTK into the capture process. Chrome keeps its pinned font.
++  qputenv("QT_QPA_PLATFORMTHEME", "xdgdesktopportal");
+   QGuiApplication::setDesktopFileName(QStringLiteral("omasnap"));
+PATCH
+}
+
+build() {
+  cmake -S "$pkgname-$pkgver" -B build -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX=/usr
+  cmake --build build --parallel
+}
+
+package() {
+  cmake --install build --prefix "$pkgdir/usr"
+  install -Dm644 "$pkgname-$pkgver/README.md" \
+    "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 "$pkgname-$pkgver/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

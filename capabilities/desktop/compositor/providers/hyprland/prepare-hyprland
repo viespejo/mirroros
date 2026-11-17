@@ -7,6 +7,7 @@ readonly jade_legacy=4f77f9fd2dc4b8260fb7fde5d5b073b9ab0420515a23da5dfa92752d55a
 readonly theme_legacy=9c7ac92d0345509d2c0fe25cabf8f80f192af4ac68de218cec0a053a20a14d27
 readonly layers_legacy=0275ff2835bcd0fe6983fdc1bddf2420a8d16d29ce1bfff2ad38d3b5dd4ca924
 readonly hardware_legacy=996c1273d5ad4ac3ecd69dcd3264eb3cb352a03afa2418b973ca48577a2546b3
+readonly clipboard_legacy=558563b2cbf771e1f399e9233fba2482bb6669e86085391f5bcb113489c62a61
 dest="$HOME/.config/hypr/hyprland.lua"
 old="$HOME/.config/hypr/hyprland.conf"
 if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) || -e "$old" || -L "$old" ]]; then
@@ -23,7 +24,7 @@ if [[ -f "$dest" ]]; then
     exit 0
   fi
   current=$(sha256sum < "$dest")
-  if [[ ${current%% *} != "$legacy" && ${current%% *} != "$jade_legacy" && ${current%% *} != "$theme_legacy" && ${current%% *} != "$layers_legacy" && ${current%% *} != "$hardware_legacy" ]]; then
+  if [[ ${current%% *} != "$legacy" && ${current%% *} != "$jade_legacy" && ${current%% *} != "$theme_legacy" && ${current%% *} != "$layers_legacy" && ${current%% *} != "$hardware_legacy" && ${current%% *} != "$clipboard_legacy" ]]; then
     printf 'unchanged user-owned: .config/hypr/hyprland configuration; left untouched\n'
     exit 0
   fi

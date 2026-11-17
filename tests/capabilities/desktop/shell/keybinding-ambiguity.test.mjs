@@ -13,8 +13,9 @@ const buildRecords = source.slice(start, end).trim();
 function build(binds) {
   const root = {
     bindsJson: binds,
-    parseRegistry: () => ({ byKeys: { 'SUPER+D': 'menu.apps', 'SUPER+C': 'clipboard.copy', 'SUPER+V': 'clipboard.paste' }, entries: [] }),
-    keysFor: bind => bind.key ? `SUPER + ${bind.key}` : 'SUPER + ',
+    parseRegistry: () => ({ byKeys: { 'SUPER+D': 'menu.apps', 'SUPER+C': 'clipboard.copy', 'SUPER+V': 'clipboard.paste',
+      PRINT: 'screenshot.capture', 'SUPER+CTRL+ALT+C': 'screenshot.capture-alt', 'SUPER+CTRL+C': 'menu.capture' }, entries: [] }),
+    keysFor: bind => bind.keys || (bind.key ? `SUPER + ${bind.key}` : 'SUPER + '),
     canonicalKeys: keys => keys.replaceAll(' ', '').toUpperCase(),
     matchWithoutKey: bind => bind.description === 'Workspace' ? { id: 'workspace.2', keys: 'SUPER + code:11' } : null,
   };
@@ -38,6 +39,22 @@ test('clipboard help lists unique actions but disables ambiguous copy and paste 
   ]);
   assert.equal(duplicate.length, 4);
   for (const row of duplicate) assert.deepEqual([row.id, row.launchable], ['', false]);
+});
+
+test('screenshot help lists unique capture actions and refuses duplicate chords', () => {
+  const binds = [
+    { key: 'PRINT', keys: 'PRINT', description: 'Screenshot' },
+    { key: 'C', keys: 'SUPER + CTRL + ALT + C', description: 'Screenshot' },
+    { key: 'C', keys: 'SUPER + CTRL + C', description: 'Capture menu' },
+  ];
+  assert.deepEqual(build(binds).map(row => [row.id, row.launchable]), [
+    ['screenshot.capture', true], ['screenshot.capture-alt', true], ['menu.capture', true],
+  ]);
+  for (const bind of binds) {
+    const rows = build([bind, { ...bind, description: 'Personal capture' }]);
+    assert.equal(rows.length, 2);
+    for (const row of rows) assert.deepEqual([row.id, row.launchable], ['', false]);
+  }
 });
 
 test('duplicate keyless matches are not launchable; unique matches remain launchable', () => {

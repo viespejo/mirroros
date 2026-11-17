@@ -8,6 +8,21 @@ import { spawnSync } from 'node:child_process';
 
 const hyprland = '/usr/bin/Hyprland';
 
+test('screenshot registry rejects duplicate capture chords', () => {
+  const provider = new URL('../../../../capabilities/desktop/compositor/providers/hyprland/', import.meta.url).pathname;
+  for (const keys of ['PRINT', 'ALT + CTRL + SUPER + C', 'CTRL + SUPER + C']) {
+    const result = spawnSync('lua', ['-e', `
+      hl = { dsp = { exec_cmd = function() return {} end, global = function() return {} end },
+        bind = function() end, layer_rule = function() end }
+      MirrorOSStageBindings = true
+      dofile(arg[1] .. '/shell-bindings.lua')
+      dofile(arg[1] .. '/omasnap/screenshot-bindings.lua')
+      assert(not pcall(MirrorOSKeys.bind, 'personal.duplicate', arg[2], 'Duplicate', {}))
+    `, '-', provider, keys], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  }
+});
+
 test('Hyprland verifier accepts duplicate clipboard chords', { skip: !existsSync(hyprland) }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mirroros-hypr-duplicate-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

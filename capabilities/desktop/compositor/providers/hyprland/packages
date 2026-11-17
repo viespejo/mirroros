@@ -5,3 +5,19 @@ xdg-desktop-portal-hyprland extra
 grim extra
 # Runtime display actions parse and validate Hyprland monitor JSON.
 jq extra
+# Reviewed Omasnap source recipe: runtime dependencies (hyprland is declared above).
+layer-shell-qt extra
+libdeflate extra
+qt6-base extra
+tesseract extra
+tesseract-data-eng extra
+wayland extra
+wl-clipboard extra
+xdg-utils extra
+xdg-desktop-portal extra
+# Unprivileged makepkg build, without dependency installation from the builder.
+base-devel core
+cmake extra
+ninja extra
+pkgconf core
+wayland-protocols extra

@@ -1,0 +1,32 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Hyprland implementation of the neutral screenshot command; diagnostics go to its supervising wrapper.
+set -Eeuo pipefail
+
+mode=smart
+seen_mode=false
+edit=false
+usage() { printf 'Usage: screenshot-backend [smart|region|window|full|scroll] [--edit]\n' >&2; exit 2; }
+for argument in "$@"; do
+  case "$argument" in
+    smart|region|window|full|scroll)
+      [[ "$seen_mode" == false ]] || usage
+      mode="$argument"; seen_mode=true ;;
+    --edit) [[ "$edit" == false ]] || usage; edit=true ;;
+    *) usage ;;
+  esac
+done
+
+[[ "${XDG_RUNTIME_DIR:-}" == /* && -d "$XDG_RUNTIME_DIR" && -w "$XDG_RUNTIME_DIR" ]] || {
+  printf 'A writable XDG_RUNTIME_DIR is required; log in to a fresh graphical session.\n' >&2
+  exit 1
+}
+export OMASNAP_RECENT_DIR="$XDG_RUNTIME_DIR/omasnap/recent"
+case "$mode" in
+  window) arguments=(windows) ;;
+  full) arguments=(fullscreen) ;;
+  scroll) arguments=(--scroll) ;;
+  *) arguments=("$mode") ;;
+esac
+[[ "$edit" == false ]] || arguments+=(--editor overlay)
+exec omasnap "${arguments[@]}"

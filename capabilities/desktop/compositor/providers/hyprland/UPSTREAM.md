@@ -1,5 +1,18 @@
 # Hyprland bindings upstream record
 
+## Screenshot core additions (plan 02-40)
+
+`omasnap/screenshot-bindings.lua` adapts PRINT, SUPER+CTRL+ALT+C and SUPER+CTRL+C from Omarchy
+`520c3ed969d30b58defe03eb19d603f32b4cb002`, `default/hypr/bindings/utilities.lua` (MIT, David Heinemeier Hansson).
+MirrorOSKeys and the neutral screenshot command replace Omarchy helpers; Capture uses existing `menu open capture`
+IPC. The Omasnap layer rule follows v1.26.2's README, without `no_screen_share`. The exact `^mirroros-menu$`
+rule adapts `default/hypr/apps/omarchy-shell.lua` at the same Omarchy revision: `no_anim=true`, `animation="none"`.
+It prevents a closing-menu fade from entering the capture in the approved bounded VM selector/export check,
+without a menu dispatch delay or global animation change. The provider owns the reviewed
+Omasnap recipe with the explicitly approved two-file Save As portal patch, backend, user INI and runtime recent-document environment; see
+[omasnap/sources.md](omasnap/sources.md) for source/recipe pins, Arch dependency observations, license and theme
+contract/update requirements. Live campaign acceptance is pending; no screenshot qualification is implied here.
+
 ## Origin and scope
 
 - **Project:** [Omarchy](https://github.com/omacom/omarchy).

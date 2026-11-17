@@ -6,6 +6,15 @@
 set -Eeuo pipefail
 
 cfg_packages_ensure "$STEP_DIR/packages"
+cfg_local_package_ensure omasnap "$STEP_DIR/omasnap/PKGBUILD" "$STEP_DIR/omasnap/build-omasnap"
+cfg_source_record omasnap 'https://github.com/omacom/omasnap/archive/refs/tags/v1.26.2.tar.gz' \
+  v1.26.2 6150151846b0ddc2ca8e6b107324de8b0c7240ae "$(cfg_recipe_version "$STEP_DIR/omasnap/PKGBUILD")"
+cfg_system_file "$STEP_DIR/omasnap/screenshot-backend" /usr/share/mirroros/compositor/screenshot-backend 0755
+cfg_system_file "$STEP_DIR/omasnap/60-mirroros-omasnap.conf" /etc/environment.d/60-mirroros-omasnap.conf 0644
+cfg_user_file "$STEP_DIR/omasnap/omasnap.conf" .config/omasnap/omasnap.conf
+if [[ "$CONFIGURE_CONTEXT" == target ]]; then session=--default; else session=--session; fi
+cfg_user_script "$CAPABILITIES_DIR/visual/theme/omarchy-bridge" apply "$session" || exit 4
+cfg_tracked_file "$STEP_DIR/omasnap/screenshot-bindings.lua" /usr/share/mirroros/hypr/screenshot-bindings.lua 0644
 cfg_system_file "$STEP_DIR/keyboard.lua" /usr/share/mirroros/hypr/keyboard.lua 0644
 cfg_system_file "$STEP_DIR/layouts.lua" /usr/share/mirroros/hypr/layouts.lua 0644
 cfg_system_file "$STEP_DIR/monitors.lua" /usr/share/mirroros/hypr/monitors.lua 0644
@@ -33,6 +42,12 @@ cfg_system_file "$STEP_DIR/hyprland-portals.conf" /etc/xdg/xdg-desktop-portal/hy
 cfg_user_file "$STEP_DIR/xdph.conf" .config/hypr/xdph.conf
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_local_package_present omasnap "$STEP_DIR/omasnap/PKGBUILD"
+cfg_require cfg_system_file_present /usr/share/mirroros/compositor/screenshot-backend
+cfg_require cfg_system_file_present /etc/environment.d/60-mirroros-omasnap.conf
+cfg_require cfg_user_file_present .config/omasnap/omasnap.conf
+cfg_require cfg_user_script "$CAPABILITIES_DIR/visual/theme/omarchy-bridge" check "$session"
+cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/screenshot-bindings.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/hypr/keyboard.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/hypr/layouts.lua
 cfg_require cfg_system_file_present /usr/share/mirroros/hypr/monitors.lua

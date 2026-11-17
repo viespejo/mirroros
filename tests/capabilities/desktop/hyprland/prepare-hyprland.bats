@@ -90,7 +90,7 @@ apply_config() { HOME="$home" bash "$script" "$encoded"; }
 
 @test "migrates the exact previous hardware entry point and preserves edits and links" {
   local hardware="$BATS_TEST_TMPDIR/hyprland-hardware-legacy.lua"
-  grep -v 'dofile("/usr/share/mirroros/hypr/clipboard-bindings.lua")' "$config" > "$hardware"
+  grep -vE 'dofile\("/usr/share/mirroros/hypr/(clipboard|screenshot)-bindings.lua"\)' "$config" > "$hardware"
   [ "$(sha256sum < "$hardware" | cut -d ' ' -f 1)" = 996c1273d5ad4ac3ecd69dcd3264eb3cb352a03afa2418b973ca48577a2546b3 ]
   cp "$hardware" "$home/.config/hypr/hyprland.lua"
   run apply_config
@@ -111,6 +111,31 @@ apply_config() { HOME="$home" bash "$script" "$encoded"; }
   [[ "$output" == 'unchanged user-owned:'* ]]
   [ -L "$home/.config/hypr/hyprland.lua" ]
   cmp "$hardware" "$home/.config/hypr/hyprland.lua"
+}
+
+@test "migrates the exact previous clipboard entry point and preserves edits and links" {
+  local clipboard="$BATS_TEST_TMPDIR/hyprland-clipboard-legacy.lua"
+  grep -v 'dofile("/usr/share/mirroros/hypr/screenshot-bindings.lua")' "$config" > "$clipboard"
+  [ "$(sha256sum < "$clipboard" | cut -d ' ' -f 1)" = 558563b2cbf771e1f399e9233fba2482bb6669e86085391f5bcb113489c62a61 ]
+  cp "$clipboard" "$home/.config/hypr/hyprland.lua"
+  run apply_config
+  [ "$status" -eq 0 ]
+  [ "$output" = changed ]
+  cmp "$config" "$home/.config/hypr/hyprland.lua"
+  run apply_config
+  [ "$output" = unchanged ]
+  cp "$clipboard" "$home/.config/hypr/hyprland.lua"
+  printf '\n-- personal edit\n' >> "$home/.config/hypr/hyprland.lua"
+  cp "$home/.config/hypr/hyprland.lua" "$BATS_TEST_TMPDIR/personal-clipboard"
+  run apply_config
+  [[ "$output" == 'unchanged user-owned:'* ]]
+  cmp "$BATS_TEST_TMPDIR/personal-clipboard" "$home/.config/hypr/hyprland.lua"
+  rm "$home/.config/hypr/hyprland.lua"
+  ln -s "$clipboard" "$home/.config/hypr/hyprland.lua"
+  run apply_config
+  [[ "$output" == 'unchanged user-owned:'* ]]
+  [ -L "$home/.config/hypr/hyprland.lua" ]
+  cmp "$clipboard" "$home/.config/hypr/hyprland.lua"
 }
 
 @test "preserves edits to the current configuration including monitor settings" {
