@@ -1,5 +1,62 @@
 # Desktop shell sources and configuration ownership
 
+## Apps visibility policy
+
+`launcher.hides` owns a bounded launcher-only hide list: `uuctl`, `foot-server` and `footclient`.
+This is a MirrorOS-selected subset of Omarchy v4.5.0's `default/omarchy/launcher.hides`
+(commit `ac2690cd7be4f47e4a255f5e2e78d904d436b068`, MIT), not an import of its complete policy.
+`services/AppLibrary.qml` reuses that revision's unchanged `loadConfiguredHides` parser and adapts its FileView
+watcher: the path becomes `Quickshell.shellPath("launcher.hides")`, and `onFileChanged` calls `reload()`.
+Reference VM `quickshell 0.3.2-1`: the original upstream change handler reused cached text and failed a
+live-edit check; explicit reload follows the existing ShellConfig reader and lets `onLoaded` apply new bytes.
+The delivered file is
+`/usr/share/mirroros/shell/launcher.hides`, one desktop id per line, with the optional `.desktop` suffix
+normalized away. Load and change events replace the configured hide set and emit `appsChanged`;
+a failed read clears only that set. No user-specific hide-list loader or Omarchy path dependency is added.
+The shared library excludes these ids from Apps and application search while retaining the standard desktop
+visibility filters. Regular Foot stays visible; no package, desktop file, launch command or association changes.
+Reference VM package inspection (`pacman -Qo` and installed desktop entries): `uwsm 0.27.1-1` owns
+`uuctl.desktop` (user systemd unit manager); `foot 1.28.0-2` owns `foot.desktop`, `foot-server.desktop` and
+`footclient.desktop` (normal terminal, server and client). These facts come from the VM, not the development host.
+Synthetic regressions: `tests/capabilities/desktop/shell/app-library.test.mjs` covers the external list,
+normalization, replacement, empty/failure state, change notification and retained desktop visibility filters.
+Verification: 239 shell Node tests passed, 11 skipped; six install-runtime contracts passed; provenance covers
+153 files. VM qmllint: 92 QML files, 2511 reviewed diagnostics, no new or stale entries. A temporary real-library
+instance passed initial visibility, hiding Foot after a list edit, and restoring Foot after restoring the list,
+without restarting Quickshell; Omasnap remained visible and the three technical entries remained hidden.
+The UTF-8 run emitted no QML warnings or errors. Only the temporary test list was edited for this check.
+
+## Apps launcher grid
+
+Apps now follows the application grid in the latest stable Omarchy release, v4.5.0
+(`ac2690cd7be4f47e4a255f5e2e78d904d436b068`), checked through GitHub's latest-release API and the pinned
+repository sources, not development-host package contents. See [UPSTREAM.md](UPSTREAM.md#apps-grid-omarchy-450).
+The root Apps row and direct routes (SUPER+D and SUPER+ALT+SPACE) share the same centered, screen-bounded
+seven-column/four-row grid. Search keeps the card centered; names wrap to two lines. Arrows move by cell or
+column count and clamp at either end; Enter launches, Escape clears a filter before closing, and empty-filter
+Backspace retains menu back-navigation. Provider updates retain selection by app identity. No dock or software
+removal is added; root search, other submenus and selectors remain lists.
+
+Synthetic checks cover geometry, route gating, selection, centering and the omission of list peeks/scrims.
+Host verification: shell Node tests 234 passed, 11 skipped, zero failures; menu model 16/16; provenance covers
+152 runtime files; catalog key coverage and integration-script syntax passed. These are synthetic/source checks,
+not graphical acceptance. The integration script now compares direct/tree Apps geometry and search centering.
+Reference VM validation: QML lint passes for 92 files with 2511 reviewed diagnostics, including 17 new
+Style QObject token-resolution warnings reviewed for this change; no categories are disabled. The isolated menu
+checks pass every new direct/tree geometry and search-centering assertion. The complete script retains exactly
+the same six failures before and after this change: two stale Trigger/root-navigation expectations and four
+missing-theme fixture warnings. These pre-existing test issues are not repaired or reported as passing here.
+A menu-only temporary preview using the VM's real app library loaded without QML warnings. Both routes showed
+19 apps in seven columns, a 901-by-526 logical-unit centered card; filtering to Foot returned three apps without
+moving/resizing it. A captured tree-route view was inspected for icon/label layout and absence of list scrims.
+The bounded candidate was then built from the installed runtime plus only the Apps files and their provenance,
+published through install-runtime after a clean integrity check, and mirroros-shell.service restarted. Its manifest
+check returned 0, the service remained active and loaded without QML errors, and installed direct/tree routes
+both reported the same centered grid geometry. Sudo ran in a maintainer-authenticated tmux window which closed
+automatically on successful completion. SSH IPC checks imported the graphical session's WAYLAND_DISPLAY.
+No keyboard/pointer injection or application launch was performed. Attended keyboard/pointer launch, scrolling
+beyond four rows, empty/unavailable states and screen changes remain unverified.
+
 ## Screenshot command consumer (plan 02-40)
 
 Trigger → Capture extends the existing menu with Screenshot and Screenshot with annotation. Both use closed action

@@ -119,8 +119,9 @@ Item {
   readonly property real rowReservedBorderRight: Border.right(selectedBorderSpec)
   readonly property int cornerRadius: Style.cornerRadius
   property int contentMargin: Style.spacing.panelPadding
-  property int headerHeight: Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
-  property int contentSpacing: Style.spacing.md
+  readonly property bool appsView: !root.dmenuActive && root.activeMenu === "apps"
+  property int headerHeight: root.appsView ? appsGrid.headerHeight : Math.max(Style.space(34), Style.font.title + Style.spacing.controlPaddingY * 2)
+  property int contentSpacing: root.appsView ? appsGrid.headerSpacing : Style.spacing.md
   property int baseRowHeight: Math.max(Style.space(50), Style.font.body + Style.spacing.rowPaddingX * 2)
   property int detailRowHeight: Math.max(Style.space(58), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
   property int pinnedRowHeight: detailRowHeight + Math.round(Style.font.bodySmall * 1.4)
@@ -131,9 +132,9 @@ Item {
   property int dividerHeight: Style.space(17)
   property bool searchDivider: false
   property int layoutSerial: 0
-  property int cardWidth: Math.min(root.dmenuActive ? Style.space(root.dmenuWidth) : Style.space(root.activeMenu === "trigger.capture" ? 440 : 300), panel.width - Style.gapsOut * 2)
-  property int visibleRowsHeight: root.dmenuActive ? dmenuRowListHeight(layoutSerial, displayModel.count, filterText) : rowListHeight(layoutSerial, displayModel.count, filterText, searchDivider)
-  property int cardHeight: root.dmenuActive
+  property int cardWidth: root.appsView ? appsGrid.cardWidth : Math.min(root.dmenuActive ? Style.space(root.dmenuWidth) : Style.space(root.activeMenu === "trigger.capture" ? 440 : 300), panel.width - Style.gapsOut * 2)
+  property int visibleRowsHeight: root.appsView ? appsGrid.viewportHeight : (root.dmenuActive ? dmenuRowListHeight(layoutSerial, displayModel.count, filterText) : rowListHeight(layoutSerial, displayModel.count, filterText, searchDivider))
+  property int cardHeight: root.appsView ? appsGrid.cardHeight : root.dmenuActive
     ? Math.min(contentMargin * 2 + headerHeight + (mode === "input" ? 0 : contentSpacing + visibleRowsHeight), panel.height - Style.gapsOut * 2)
     : Math.min(contentMargin * 2 + headerHeight + contentSpacing + visibleRowsHeight, panel.height - Style.gapsOut * 2)
 
@@ -743,6 +744,10 @@ Item {
   // hidden row peeking past the cursor in the direction of travel.
   function revealCursor() {
     if (displayModel.count === 0) return
+    if (root.appsView) {
+      appsGrid.reveal(root.selectedIndex)
+      return
+    }
     resultList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
 
     var item = resultList.itemAtIndex(root.selectedIndex)
@@ -774,6 +779,16 @@ Item {
     revealCursor()
   }
 
+  // Omarchy's grid clamps at either end rather than wrapping like the list.
+  function selectGrid(delta) {
+    if (displayModel.count === 0) return
+    root.disarmPointer()
+    root.selectedIndex = Math.max(0, Math.min(displayModel.count - 1, root.selectedIndex + delta))
+    root.selectedId = displayModel.get(root.selectedIndex).itemId
+    root.cursorActive = true
+    root.revealCursor()
+  }
+
   function setFilter(nextFilter) {
     panel.freezeCardTop()
     root.filterText = nextFilter
@@ -786,7 +801,8 @@ Item {
   }
 
   function setActiveMenu(id, pushHistory, fromPointer) {
-    panel.freezeCardTop()
+    if (id === "apps" || root.appsView) panel.cardTop = -1
+    else panel.freezeCardTop()
     if (!root.item(id)) id = "root"
     if (pushHistory && id !== root.activeMenu) root.navStack = root.navStack.concat([root.activeMenu])
     root.activeMenu = id
@@ -1228,7 +1244,13 @@ Item {
         prompt: root.dmenuPrompt,
         requestActive: root.requestActive,
         dmenuSelected: root.dmenuSelected,
-        rows: rows
+        rows: rows,
+        appsView: root.appsView,
+        columns: root.appsView ? appsGrid.columns : 1,
+        cardWidth: card.width,
+        cardHeight: card.height,
+        cardTop: card.y,
+        panelHeight: panel.height
       })
     }
   }
@@ -1245,12 +1267,13 @@ Item {
     // starting menu's rows; with the three-row MirrorOS root that clipped
     // System and Apps, so only the top is frozen and the card may grow down
     // to the screen edge. Closing or changing screens unfreezes the top.
+    // Apps instead follows the centered v4.5.0 grid, including while filtering.
     property int cardTop: -1
     property int maxRowsHeight: -1
     readonly property int centeredTop: Math.max(Style.gapsOut, Math.round((height - root.cardHeight) / 2))
-    readonly property int effectiveCardTop: cardTop >= 0 ? cardTop : centeredTop
+    readonly property int effectiveCardTop: !root.appsView && cardTop >= 0 ? cardTop : centeredTop
     function freezeCardTop() {
-      if (shown && cardTop < 0) {
+      if (shown && !root.appsView && cardTop < 0) {
         cardTop = effectiveCardTop
       }
     }
@@ -1294,20 +1317,27 @@ Item {
           } else if (Util.editsFilter(event, root.filterText)) {
             root.setFilter(Util.editedFilter(event, root.filterText))
             event.accepted = true
+          } else if (root.appsView && (Util.readingKey(event) === Qt.Key_Left || Util.readingKey(event) === Qt.Key_Right)) {
+            root.selectGrid(Util.readingKey(event) === Qt.Key_Left ? -1 : 1)
+            event.accepted = true
           } else if ((event.key === Qt.Key_Backspace || Util.readingKey(event) === Qt.Key_Left) && !root.filterText) {
             root.goBack()
             event.accepted = true
           } else if (event.key === Qt.Key_Up) {
-            root.select(-1)
+            if (root.appsView) root.selectGrid(-appsGrid.columns)
+            else root.select(-1)
             event.accepted = true
           } else if (event.key === Qt.Key_Down) {
-            root.select(1)
+            if (root.appsView) root.selectGrid(appsGrid.columns)
+            else root.select(1)
             event.accepted = true
           } else if (event.key === Qt.Key_PageUp) {
-            root.select(-6)
+            if (root.appsView) root.selectGrid(-appsGrid.columns * 4)
+            else root.select(-6)
             event.accepted = true
           } else if (event.key === Qt.Key_PageDown) {
-            root.select(6)
+            if (root.appsView) root.selectGrid(appsGrid.columns * 4)
+            else root.select(6)
             event.accepted = true
           } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || Util.readingKey(event) === Qt.Key_Right) {
             if (root.dmenuActive) {
@@ -1332,12 +1362,14 @@ Item {
           width: parent.width
           height: root.headerHeight
           radius: root.cornerRadius
-          color: "transparent"
+          color: root.appsView ? Util.alpha(root.foreground, 0.06) : "transparent"
 
           FilterInput {
             id: filterInput
             anchors.left: parent.left
             anchors.right: parent.right
+            anchors.leftMargin: root.appsView ? Style.spacing.controlPaddingX : 0
+            anchors.rightMargin: root.appsView ? Style.spacing.controlPaddingX : 0
             anchors.verticalCenter: parent.verticalCenter
             keyHandler: keyCatcher
             color: root.foreground
@@ -1351,7 +1383,7 @@ Item {
             anchors.fill: filterInput
             verticalAlignment: Text.AlignVCenter
             visible: !root.filterText && !filterInput.preeditText
-            text: root.dmenuActive ? (root.dmenuPrompt + "…") : ((root.item(root.activeMenu) ? (root.item(root.activeMenu).title || root.item(root.activeMenu).label) : "Go") + "…")
+            text: root.appsView ? Commons.I18n.t("dock.searchApps") : (root.dmenuActive ? (root.dmenuPrompt + "…") : ((root.item(root.activeMenu) ? (root.item(root.activeMenu).title || root.item(root.activeMenu).label) : "Go") + "…"))
             color: root.foreground
             opacity: 0.58
             font.family: root.fontFamily
@@ -1365,8 +1397,21 @@ Item {
           width: parent.width
           height: root.visibleRowsHeight
 
+          AppGrid {
+            id: appsGrid
+            visible: root.appsView
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(gridWidth, parent.width)
+            height: parent.height
+            menu: root
+            model: root.appsView ? displayModel : null
+            screenWidth: panel.width
+            screenHeight: panel.height
+          }
+
           ListView {
             id: resultList
+            visible: !root.appsView
             anchors.fill: parent
             model: displayModel
             clip: true
@@ -1581,7 +1626,7 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             height: Math.min(Style.space(28), parent.height / 2)
-            visible: opacity > 0
+            visible: !root.appsView && opacity > 0
             opacity: resultList.contentHeight > resultList.height
               ? Math.max(0, Math.min(1, (resultList.contentY - resultList.originY) / height))
               : 0
@@ -1596,7 +1641,7 @@ Item {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: Math.min(Style.space(28), parent.height / 2)
-            visible: opacity > 0
+            visible: !root.appsView && opacity > 0
             opacity: resultList.contentHeight > resultList.height
               ? Math.max(0, Math.min(1, (resultList.originY + resultList.contentHeight - resultList.height - resultList.contentY) / height))
               : 0

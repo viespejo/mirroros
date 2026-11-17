@@ -101,6 +101,30 @@ band states, diagnostics and the browser requirement for captive portals. The pl
 `v4.5.0` (DEC-050 in the [network interview log](../technical-interviews/story-4-4-network-panel_log.md)).
 Its VPN section (plan 02-30) opens `vpn-connect` in Foot; see [Connect and disconnect](hardware.md#connect-and-disconnect).
 
+## Apps launcher
+
+Apps follows Omarchy v4.5.0's application grid rather than its menu-list presentation. Both the root Apps row
+and SUPER+D (also SUPER+ALT+SPACE) open the same centered, screen-bounded card with up to seven columns and
+four visible rows. Names wrap to two lines; search does not move or shrink the card. Left/Right move one cell,
+Up/Down move one row, PageUp/PageDown move four rows, and selection clamps at the ends. Enter or a click
+launches an app. Escape clears a filter before closing; Backspace with no filter returns to the parent menu.
+No dock, app pinning or uninstall actions are included. Root search results remain in the regular menu list.
+See [source and validation limits](../../capabilities/desktop/shell/sources.md#apps-launcher-grid).
+
+The shared application library reads `launcher.hides` beside `shell.qml` (delivered under
+`/usr/share/mirroros/shell/`), using Omarchy's parser and file-change watcher. It contains one desktop id per
+line and hides `uuctl`, `foot-server` and `footclient` from Apps and application search. Maintain this product
+list in `capabilities/desktop/shell/launcher.hides`, not by editing the delivered manifest-managed runtime.
+List edits are reloaded by the watcher; introducing the reader itself requires one shell restart.
+This presentation policy does not modify desktop files, packages, associations or other consumers;
+regular Foot remains visible. To hide another application for one user, copy its `.desktop` file from
+`/usr/share/applications/` to `~/.local/share/applications/` with the same filename and set `NoDisplay=true`
+in its `[Desktop Entry]` group. That standard desktop override is independent of the internal list and can affect other desktop-file consumers.
+
+Before runtime acceptance in a disposable guest, compare both entry routes, filtering and clearing, arrow and
+pointer selection, long labels, scrolling beyond four rows, no matches, provider unavailable/refresh and screen
+changes. Verify the card remains centered and inside the screen with no menu-list fades over app names.
+
 ## Capture menu
 
 Plan 02-40 adds Trigger → Capture to the existing menu. SUPER+CTRL+C opens it through the existing
@@ -622,6 +646,7 @@ node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/reminders.test.mjs \
     tests/capabilities/desktop/shell/shell-lifecycle.test.mjs
 node tests/capabilities/desktop/shell/menu-model.test.mjs [<omarchy-src>]
+node --test tests/capabilities/desktop/shell/app-grid.test.mjs
 node tests/capabilities/desktop/shell/check-i18n.mjs
 node tests/capabilities/desktop/shell/i18n-subset.mjs <omarchy-src> --check
 node tests/capabilities/desktop/shell/check-provenance.mjs <omarchy-clone>

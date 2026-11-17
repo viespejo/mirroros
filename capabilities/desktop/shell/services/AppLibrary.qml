@@ -7,7 +7,10 @@ import "AppSearch.js" as AppSearch
 // Adapted from Omarchy shell/services/AppLibrary.qml at 7075b61c6aaa5d8589f6e816867508fc96dc49d9
 // (MIT, Copyright (c) David Heinemeier Hansson). Kept: sorted entry list,
 // hidden-entry filtering, icon fallback index. Removed: launch-feedback OSD,
-// entry removal, launcher.hides, OMARCHY_PATH, gtk-launch and omarchy-launch-tui.
+// entry removal, OMARCHY_PATH, gtk-launch and omarchy-launch-tui.
+// Configured hide-list loader and watcher reused from Omarchy v4.5.0
+// (ac2690cd7be4f47e4a255f5e2e78d904d436b068), with a shell-local path and
+// explicit reload on file changes (Quickshell 0.3.2 otherwise reuses old text).
 // New: launch through `uwsm app`, and a settled/unavailable state.
 
 // Shared desktop-application library: the sorted entry list with hidden-entry
@@ -16,6 +19,7 @@ import "AppSearch.js" as AppSearch
 Item {
   id: root
 
+  property var configuredHiddenEntryIds: ({})
   property var desktopHiddenEntryIds: ({})
 
   // Maps an icon name to a file on disk (e.g. "omacut" -> ".../apps/omacut.svg").
@@ -56,7 +60,7 @@ Item {
 
   function isHiddenEntry(entry) {
     var id = String((entry && entry.id) || "")
-    return root.desktopHiddenEntryIds[id] === true
+    return root.configuredHiddenEntryIds[id] === true || root.desktopHiddenEntryIds[id] === true
   }
 
   function sortedEntries(query) {
@@ -98,6 +102,17 @@ Item {
     var value = String(id || "").trim()
     if (value.slice(-8) === ".desktop") value = value.slice(0, -8)
     return value
+  }
+
+  function loadConfiguredHides(rawText) {
+    var next = ({})
+    var lines = String(rawText || "").split(/\n/)
+    for (var i = 0; i < lines.length; i++) {
+      var id = root.normalizeDesktopId(lines[i])
+      if (id.length > 0) next[id] = true
+    }
+    root.configuredHiddenEntryIds = next
+    root.appsChanged()
   }
 
   function loadDesktopHiddenEntries(rawText) {
@@ -191,6 +206,15 @@ Item {
     interval: 1500
     running: true
     onTriggered: root.settled = true
+  }
+
+  FileView {
+    path: Quickshell.shellPath("launcher.hides")
+    watchChanges: true
+    printErrors: false
+    onLoaded: root.loadConfiguredHides(text())
+    onFileChanged: reload()
+    onLoadFailed: root.loadConfiguredHides("")
   }
 
   Connections {

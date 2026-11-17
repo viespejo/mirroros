@@ -196,6 +196,15 @@ check "close: unmapped" "$(expected=0 wait_for layer_count)" 0
 ipc open apps >/dev/null
 check "apps direct: opens Apps without root" "$(field 's.menu+":"+s.depth')" "apps:0"
 check "apps direct: alphabetical app rows" "$(eventually 's.labels.join("|")' 'Synthetic Alpha|Synthetic Beta')" "Synthetic Alpha|Synthetic Beta"
+check "apps direct: grid centered" "$(field 's.appsView && Math.abs(s.cardTop-(s.panelHeight-s.cardHeight)/2)<=1')" true
+apps_geometry=$(field 's.cardWidth+":"+s.cardHeight+":"+s.columns')
+ipc open root >/dev/null
+ipc activate >/dev/null
+check "apps tree: opens the same grid" "$(field 's.menu+":"+s.depth+":"+s.appsView')" "apps:1:true"
+check "apps tree: same dimensions as direct" "$(field 's.cardWidth+":"+s.cardHeight+":"+s.columns')" "$apps_geometry"
+check "apps tree: grid centered" "$(field 'Math.abs(s.cardTop-(s.panelHeight-s.cardHeight)/2)<=1')" true
+ipc setFilter Alpha >/dev/null
+check "apps search: still centered" "$(field 'Math.abs(s.cardTop-(s.panelHeight-s.cardHeight)/2)<=1')" true
 ipc open applications >/dev/null
 check "apps alias route" "$(field 's.menu')" apps
 ipc back >/dev/null

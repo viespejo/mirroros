@@ -73,7 +73,11 @@ Delete sensitive entries from the picker and separately handle current clipboard
 
 ## Ownership and recovery
 
-Configure builds `omasnap 1.26.2-4.2` unprivileged from the reviewed local recipe, caches the result under
+Apps lists the application as **Omasnap**, using a Name-only patch to the packaged `omasnap.desktop`.
+Its desktop id, icon, launch command and MIME associations stay upstream-owned; Capture's descriptive action
+labels and the neutral screenshot command are unchanged.
+
+Configure builds `omasnap 1.26.2-4.3` unprivileged from the reviewed local recipe, caches the result under
 `${XDG_CACHE_HOME:-$HOME/.cache}/mirroros/omasnap`, then installs it with privileges. An unchanged recipe version
 and managed state should produce an unchanged rerun. It does not enable Omarchy repositories.
 

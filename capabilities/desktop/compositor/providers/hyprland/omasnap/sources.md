@@ -6,11 +6,11 @@
   `6150151846b0ddc2ca8e6b107324de8b0c7240ae` (MIT; bundled fonts OFL-1.1; Lucide assets ISC).
 - Recipe: https://github.com/omacom/omarchy-pkgs/blob/c73cd8aa4d12a9b3ad4b8451b153bd36294bc6b1/pkgbuilds/omasnap/PKGBUILD,
   `1.26.2-4`, retaining Tobi Lütke's maintainer line.
-- MirrorOS package: `omasnap 1.26.2-4.2`, x86_64 only, with the explicitly approved local portal patch below. No Omarchy repository is enabled.
+- MirrorOS package: `omasnap 1.26.2-4.3`, x86_64 only, with the explicitly approved local portal and launcher-name patches below. No Omarchy repository is enabled.
 - Archive: `https://github.com/omacom/omasnap/archive/refs/tags/v1.26.2.tar.gz`;
   SHA-256 `e173edd4f2e797273c967513f24c360b6f00733792b9708757a82c39fbc43bf9`.
   Downloaded through GitHub's codeload tag endpoint and verified during Task 2; makepkg verifies it again.
-- Reviewed recipe differences: release `4` → `4.2`, remove aarch64, remove `check()` and `checkdepends=('clang')`,
+- Reviewed recipe differences: release `4` → `4.3`, remove aarch64, remove `check()` and `checkdepends=('clang')`,
   add the self-contained `prepare()` patch and direct runtime dependency `xdg-desktop-portal`.
   Build/package functions and upstream dependencies are otherwise unchanged. The inherited recipe lists MIT and OFL-1.1;
   upstream CMake also installs Lucide-ISC.txt, alongside Neucha-OFL.txt, JetBrainsMono-OFL.txt and Inter-OFL.txt. DEC-004 accepts relying on upstream's
@@ -20,10 +20,30 @@
   staging cleanup and package output under `${XDG_CACHE_HOME:-$HOME/.cache}/mirroros/omasnap`.
   `cfg_local_package_ensure` installs with privileges only after building and compares the exact recipe version.
 
+## Launcher application name
+
+At the maintainer's request, release `4.3` changes only `Name=Screenshot` to `Name=Omasnap` in the pinned
+upstream `omasnap.desktop`, through the recipe's inline prepare patch. Apps and other desktop-entry consumers
+therefore show the application's name without a shell-specific alias or a shadow desktop entry. The desktop id,
+Exec, Icon, MIME associations and capture behavior stay unchanged; the neutral screenshot command and descriptive
+Capture menu actions are not renamed.
+
+Reference VM observation: `/usr/share/applications/omasnap.desktop` is owned by `omasnap 1.26.2-4.2`, with
+SHA-256 `6dc0b0d043d60d2e32c6f6a8b0795cf229794e545d0daad9f6adcf2f9c371805` and `Name=Screenshot`.
+The pinned repository tree confirms the source path is `omasnap.desktop`. The contract compares the prepared
+entry with that source after the single Name substitution, preserving every other field.
+
+Validation: all nine provider contracts, nine neutral-command contracts and four theme contracts passed with the
+checksum-verified v1.26.2 sources. The VM built release `4.3` unprivileged through build-omasnap; its packaged
+entry matched the previous installed entry byte-for-byte except for Name. Installation used pacman in a
+maintainer-authenticated tmux window, which closed successfully. The running shell retained the old cached label
+until mirroros-shell.service was restarted; afterward its Apps snapshot contained Omasnap and no Screenshot row.
+The service remained active. No capture, Open With or Save As interaction was repeated for this label-only change.
+
 ## Approved Save As portal patch
 
 During the attended campaign, the maintainer explicitly amended DEC-004's no-source-patches boundary after an
-isolated prototype succeeded. The inline unified diff in PKGBUILD changes only two pinned source files:
+isolated prototype succeeded. The portal portion of the inline unified diff in PKGBUILD changes only two pinned source files:
 
 - `src/editor-save-as.cpp`: remove `QFileDialog::DontUseNativeDialog` so Save As can use the native chooser.
 - `src/main.cpp`: select `QT_QPA_PLATFORMTHEME=xdgdesktopportal` instead of forced `generic`, updating the related
@@ -40,7 +60,7 @@ Reference VM package observations (2026-11-17): `pacman -Qo` identifies
 Qt package in that VM; the portal frontend is declared directly. Existing portal routing remains owned by the
 provider/files capabilities, not patched here. The maintainer reports the isolated one-line prototype with explicit
 `-platformtheme xdgdesktopportal` completed the full Strata Save As cycle without perceptible delay. The final
-package's two-file patch still requires attended retesting across launch paths, cancellation, focus and overwrite.
+package's portal patch still requires attended retesting across launch paths, cancellation, focus and overwrite.
 
 ## Arch dependency observations
 
