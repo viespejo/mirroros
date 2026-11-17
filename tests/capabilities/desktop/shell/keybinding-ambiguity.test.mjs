@@ -13,7 +13,7 @@ const buildRecords = source.slice(start, end).trim();
 function build(binds) {
   const root = {
     bindsJson: binds,
-    parseRegistry: () => ({ byKeys: { 'SUPER+D': 'menu.apps' }, entries: [] }),
+    parseRegistry: () => ({ byKeys: { 'SUPER+D': 'menu.apps', 'SUPER+C': 'clipboard.copy', 'SUPER+V': 'clipboard.paste' }, entries: [] }),
     keysFor: bind => bind.key ? `SUPER + ${bind.key}` : 'SUPER + ',
     canonicalKeys: keys => keys.replaceAll(' ', '').toUpperCase(),
     matchWithoutKey: bind => bind.description === 'Workspace' ? { id: 'workspace.2', keys: 'SUPER + code:11' } : null,
@@ -27,6 +27,17 @@ test('duplicate keyed rows remain visible but cannot dispatch the registered act
   assert.deepEqual(rows.map(row => [row.description, row.id, row.launchable]), [
     ['Apps', '', false], ['Personal', '', false], ['Other', '', false],
   ]);
+});
+
+test('clipboard help lists unique actions but disables ambiguous copy and paste chords', () => {
+  const unique = build([{ key: 'C', description: 'Universal copy' }, { key: 'V', description: 'Universal paste' }]);
+  assert.deepEqual(unique.map(row => [row.id, row.launchable]), [['clipboard.copy', true], ['clipboard.paste', true]]);
+  const duplicate = build([
+    { key: 'C', description: 'Universal copy' }, { key: 'C', description: 'Personal copy' },
+    { key: 'V', description: 'Universal paste' }, { key: 'V', description: 'Personal paste' },
+  ]);
+  assert.equal(duplicate.length, 4);
+  for (const row of duplicate) assert.deepEqual([row.id, row.launchable], ['', false]);
 });
 
 test('duplicate keyless matches are not launchable; unique matches remain launchable', () => {
@@ -46,7 +57,9 @@ test('keyless bar panel chords resolve to their own entry beside workspace digit
   runInNewContext(['canonicalKeys', 'canonicalModifiers', 'matchWithoutKey']
     .map(name => `root.${name} = ${qmlFunction(name).replace(/^function \w+/, 'function')};`).join('\n'), { root });
   const entries = [{ id: 'panel.bluetooth', keys: 'SUPER + CTRL + B', description: 'Bluetooth',
-    modifiers: root.canonicalModifiers(root.canonicalKeys('SUPER + CTRL + B')) }];
+    modifiers: root.canonicalModifiers(root.canonicalKeys('SUPER + CTRL + B')) },
+  { id: 'clipboard.history', keys: 'SUPER + CTRL + V', description: 'Clipboard history',
+    modifiers: root.canonicalModifiers(root.canonicalKeys('SUPER + CTRL + V')) }];
   for (let n = 1; n <= 9; n++) {
     for (const [id, keys, description] of [
       [`panel.at-${n}`, `SUPER + CTRL + code:${n + 9}`, `Bar panel ${n}`],
@@ -61,6 +74,7 @@ test('keyless bar panel chords resolve to their own entry beside workspace digit
     assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: `Bar panel ${n}` } }).id, `panel.at-${n}`);
   }
   assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: 'Bluetooth' } }).id, 'panel.bluetooth');
+  assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: 'Clipboard history' } }).id, 'clipboard.history');
   root.keysFor = () => 'SUPER + ';
   assert.equal(runInNewContext('root.matchWithoutKey(bind, entries)', { root, entries, bind: { description: 'Bar panel 1' } }), null);
 });

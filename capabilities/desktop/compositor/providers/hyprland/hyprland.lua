@@ -2,6 +2,7 @@
 -- Product defaults load before optional personal files in ~/.config/hypr/.
 dofile("/usr/share/mirroros/hypr/defaults.lua")
 dofile("/usr/share/mirroros/hypr/hardware-bindings.lua")
+dofile("/usr/share/mirroros/hypr/clipboard-bindings.lua")
 local ok, loader = pcall(dofile, "/usr/share/mirroros/hypr/personal-loader.lua")
 local home = os.getenv("HOME")
 if ok and type(loader) == "function" and home and home ~= "" then

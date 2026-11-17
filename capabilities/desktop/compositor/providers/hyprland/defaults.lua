@@ -44,6 +44,13 @@ hl.window_rule({
     size = { 875, 600 },
 })
 
+-- Only Foot receives the terminal clipboard mapping; dynamic tags are reported with a trailing "*".
+hl.window_rule({
+    name = "mirroros-terminal",
+    match = { class = "^(foot|org\\.codeberg\\.dnkl\\.foot)$" },
+    tag = "+terminal",
+})
+
 -- Approved Story 4.3 bindings. dofile runs them again at every configuration load; nothing is unbound at runtime.
 MirrorOSStageBindings = true
 dofile("/usr/share/mirroros/hypr/shell-bindings.lua")

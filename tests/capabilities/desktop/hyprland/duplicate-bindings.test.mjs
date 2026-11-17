@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process';
 
 const hyprland = '/usr/bin/Hyprland';
 
-test('Hyprland verifier accepts duplicate chords', { skip: !existsSync(hyprland) }, (t) => {
+test('Hyprland verifier accepts duplicate clipboard chords', { skip: !existsSync(hyprland) }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mirroros-hypr-duplicate-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const home = join(dir, 'home');
@@ -16,8 +16,8 @@ test('Hyprland verifier accepts duplicate chords', { skip: !existsSync(hyprland)
   mkdirSync(home, { mode: 0o700 });
   mkdirSync(runtime, { mode: 0o700 });
   const config = join(dir, 'hyprland.lua');
-  writeFileSync(config, 'hl.bind("SUPER + F12", hl.dsp.exec_cmd("true"), { description = "First" })\n' +
-    'hl.bind("SUPER + F12", hl.dsp.exec_cmd("false"), { description = "Second" })\n');
+  writeFileSync(config, 'hl.bind("SUPER + C", hl.dsp.exec_cmd("true"), { description = "Universal copy" })\n' +
+    'hl.bind("SUPER + C", hl.dsp.exec_cmd("false"), { description = "Personal copy" })\n');
   const result = spawnSync(hyprland, ['--verify-config', '--config', config], {
     cwd: dir,
     env: { HOME: home, USER: process.env.USER || 'test', PATH: '/usr/bin:/bin', XDG_RUNTIME_DIR: runtime,

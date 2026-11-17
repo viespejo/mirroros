@@ -48,6 +48,7 @@ for load = 1, 2 do
   if mode == "duplicate" then MirrorOSKeys.bind("extra.duplicate", "SHIFT + SUPER + i", "Duplicate", "x") end
   dofile(arg[2] .. "/window-bindings.lua")
   dofile(arg[2] .. "/hardware-bindings.lua")
+  dofile(arg[2] .. "/clipboard-bindings.lua")
   if mode == "duplicate-id" then MirrorOSKeys.bind("audio.raise", "SUPER + F11", "Duplicate id", "x") end
   if mode == "hardware-duplicate" then MirrorOSKeys.bind("extra.hardware", "ALT + SUPER + slash", "Duplicate", "x") end
   if mode == "replacement" or mode == "replacement-invalid" then
@@ -109,8 +110,8 @@ const byChord = new Map(bindings.map(binding => [binding.chord, binding]));
 
 test('the bindings load twice without error and no source unbinds at runtime', { skip: !lua && 'no Lua interpreter' }, () => {
   assert.equal(loaded.status, 0, loaded.stderr);
-  assert.equal(bindings.length, 165);
-  for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
+  assert.equal(bindings.length, 170);
+  for (const file of ['shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'clipboard-bindings.lua', 'hyprland.lua', 'defaults.lua']) {
     const code = fs.readFileSync(path.join(provider, file), 'utf8').split('\n').filter(line => !/^\s*--/.test(line)).join('\n');
     assert.doesNotMatch(code, /unbind/, file);
     assert.doesNotMatch(code, /\brequire\s*\(\s*["'][^"']*bindings/, file);
@@ -189,7 +190,7 @@ test('staged replacements bind once and export the selected action', { skip: !lu
   const replaced = load('replacement');
   assert.equal(replaced.status, 0, replaced.stderr);
   assert.match(replaced.stdout, /^SUPER \+ W\tPersonal close action\t\tpersonal-command$/m);
-  assert.equal(replaced.stdout.trim().split('\n').length, 165);
+  assert.equal(replaced.stdout.trim().split('\n').length, 170);
   assert.match(replaced.registry, /^window\.close\tSUPER \+ W\tPersonal close action$/m);
   const invalid = load('replacement-invalid');
   assert.equal(invalid.status, 0, invalid.stderr);
@@ -210,6 +211,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
     'ALT+CTRL+SUPER+D', 'ALT+CTRL+SUPER+W', 'ALT+CTRL+SUPER+E',
     'CTRL+SUPER+R', 'ALT+CTRL+SUPER+R', 'CTRL+SHIFT+SUPER+R',
     'SHIFT+SUPER+F', 'ALT+SHIFT+SUPER+F',
+    'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V',
   ];
   for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
@@ -234,7 +236,7 @@ test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua
   const unbound = [
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
     'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
-    'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V', 'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
+    'CTRL+SUPER+C', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT',
     'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N',
     'CTRL+SUPER+W', 'CTRL+SUPER+CODE:19', 'SUPER+O',
     'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
@@ -269,9 +271,78 @@ test('file manager bindings open Strata and the owned working-directory command'
   assert.equal(byChord.get('ALT+SHIFT+SUPER+F').description, 'File manager (cwd)');
   assert.match(loaded.registry, /^files\.open\tSUPER \+ SHIFT \+ F\tFile manager$/m);
   assert.match(loaded.registry, /^files\.cwd\tSUPER \+ ALT \+ SHIFT \+ F\tFile manager \(cwd\)$/m);
-  // Story 4.5 browser, editor, clipboard and capture keys stay reserved.
-  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'SUPER+C', 'SUPER+V', 'CTRL+SUPER+V', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT'])
+  // Story 4.5 browser, editor and capture keys stay reserved.
+  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'PRINT', 'ALT+PRINT', 'SUPER+PRINT'])
     assert.ok(!byChord.has(key), 'unexpected ' + key);
+});
+
+test('clipboard bindings export the five approved actions and deliver before personal layers', { skip: !lua && 'no Lua interpreter' }, () => {
+  const expected = [
+    ['select-all', 'SUPER + A', 'Select all'], ['copy', 'SUPER + C', 'Universal copy'],
+    ['paste', 'SUPER + V', 'Universal paste'], ['cut', 'SUPER + X', 'Universal cut'],
+    ['history', 'SUPER + CTRL + V', 'Clipboard history'],
+  ];
+  for (const [id, keys, description] of expected)
+    assert.ok(loaded.registry.split('\n').includes(`clipboard.${id}\t${keys}\t${description}`));
+  assert.equal(byChord.get('CTRL+SUPER+V').action, 'global mirroros:clipboard');
+  const entry = fs.readFileSync(path.join(provider, 'hyprland.lua'), 'utf8');
+  assert.ok(entry.indexOf('/hypr/hardware-bindings.lua') < entry.indexOf('/hypr/clipboard-bindings.lua'));
+  assert.ok(entry.indexOf('/hypr/clipboard-bindings.lua') < entry.indexOf('/hypr/personal-loader.lua'));
+  const apply = fs.readFileSync(path.join(provider, 'apply'), 'utf8');
+  assert.ok(apply.includes('cfg_tracked_file "$STEP_DIR/clipboard-bindings.lua" /usr/share/mirroros/hypr/clipboard-bindings.lua 0644'));
+  assert.ok(apply.includes('cfg_require cfg_tracked_file_present /usr/share/mirroros/hypr/clipboard-bindings.lua'));
+});
+
+test('clipboard mapping sends down then a 50 ms deferred up to the focused surface', { skip: !lua && 'no Lua interpreter' }, () => {
+  const result = execFileSync(lua, ['-e', `
+    local entries, sent, pending, active = {}, {}, nil, nil
+    MirrorOSKeys = {
+      staged = true,
+      bind = function(id, keys, description, dispatcher) entries[id] = dispatcher end,
+    }
+    hl = {
+      dsp = {
+        send_key_state = function(args)
+          local count = 0
+          for _ in pairs(args) do count = count + 1 end
+          assert(count == 3 and args.window == nil)
+          return args
+        end,
+        global = function(name) assert(name == 'mirroros:clipboard'); return {} end,
+      },
+      dispatch = function(args) sent[#sent + 1] = args end,
+      get_active_window = function() return active end,
+      timer = function(callback, options)
+        assert(pending == nil and options.timeout == 50 and options.type == 'oneshot')
+        pending = callback
+      end,
+    }
+    dofile(arg[1])
+    local function check(id, key, mods)
+      sent, pending = {}, nil
+      entries['clipboard.' .. id]()
+      assert(#sent == 1 and sent[1].state == 'down')
+      assert(sent[1].mods == mods and sent[1].key == key)
+      assert(type(pending) == 'function')
+      pending()
+      assert(#sent == 2 and sent[2].state == 'up')
+      assert(sent[2].mods == mods and sent[2].key == key)
+    end
+    for _, scenario in ipairs({ 'panel', 'untagged', 'gui', 'terminal', 'dynamic', 'not-terminal' }) do
+      if scenario == 'panel' then active = nil
+      elseif scenario == 'untagged' then active = {}
+      elseif scenario == 'gui' then active = { tags = { 'browser' } }
+      elseif scenario == 'terminal' then active = { tags = { 'terminal' } }
+      elseif scenario == 'dynamic' then active = { tags = { 'other', 'terminal*' } }
+      else active = { tags = { 'not-terminal', 'terminal**' } } end
+      local mods = (scenario == 'terminal' or scenario == 'dynamic') and 'CTRL SHIFT' or 'CTRL'
+      check('copy', 'C', mods)
+      check('paste', 'V', mods)
+      check('cut', 'X', 'CTRL')
+      check('select-all', 'A', 'CTRL')
+    end
+  `, '-', path.join(provider, 'clipboard-bindings.lua')], { input: '', encoding: 'utf8' });
+  assert.equal(result, '');
 });
 
 test('reminder bindings open the prompt and run the owned reminder command', { skip: !lua && 'no Lua interpreter' }, () => {
@@ -299,6 +370,8 @@ test('global shortcut bindings name shortcuts the shell registers', { skip: !lua
       positional.push(Number(indexed[1]));
       continue;
     }
+    // The clipboard shortcut's shell consumer is delivered by plan 02-38 Task 3.
+    if (action === 'global mirroros:clipboard') continue;
     const match = action.match(/^global mirroros:(panel\.[a-z]+)$/);
     assert.ok(match, action);
     assert.match(source, new RegExp(`appid: "mirroros"\\n\\s+name: "${match[1].replace('.', '\\.')}"`), action);
@@ -313,7 +386,7 @@ test('the registry lists launchable entries for the current instance and leaves 
   const rows = lines.slice(1).map(line => line.split('\t'));
   const ids = rows.map(row => row[0]);
   assert.deepEqual(ids, [...ids].sort());
-  assert.equal(rows.length, 157);
+  assert.equal(rows.length, 162);
   for (const row of rows) assert.equal(row.length, 3);
   for (const hidden of ['mouse.move', 'mouse.resize', 'workspace.scroll-next', 'group.scroll-prev', 'display.lid-close', 'display.lid-open']) assert.ok(!ids.includes(hidden));
   assert.ok(ids.includes('help.keybindings') && ids.includes('terminal.open'));
@@ -323,7 +396,7 @@ test('the registry lists launchable entries for the current instance and leaves 
 test('Lua sources parse', { skip: !lua && 'no Lua interpreter' }, () => {
   const luac = ['luac5.4', 'luac'].find(name => spawnSync(name, ['-v']).status === 0);
   if (!luac) return;
-  execFileSync(luac, ['-p', ...['hyprland.lua', 'defaults.lua', 'personal-loader.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua',
+  execFileSync(luac, ['-p', ...['hyprland.lua', 'defaults.lua', 'personal-loader.lua', 'keyboard.lua', 'layouts.lua', 'monitors.lua', 'shell-bindings.lua', 'window-bindings.lua', 'hardware-bindings.lua', 'clipboard-bindings.lua',
     'greeter/hyprland.lua'].map(file => path.join(provider, file))]);
 });
 
@@ -340,7 +413,8 @@ test('session and greeter reload shared monitor rules and session sets GDK scale
       if file == '/usr/share/mirroros/hypr/theme-runtime.lua' then return function() return nil end end
       assert(file == '/usr/share/mirroros/hypr/shell-bindings.lua'
         or file == '/usr/share/mirroros/hypr/window-bindings.lua'
-        or file == '/usr/share/mirroros/hypr/hardware-bindings.lua', file)
+        or file == '/usr/share/mirroros/hypr/hardware-bindings.lua'
+        or file == '/usr/share/mirroros/hypr/clipboard-bindings.lua', file)
     end
     hl = {
       config = function() end, bind = function() end, on = function() end, window_rule = function() end,
@@ -379,6 +453,15 @@ test('session defaults disable only update news on every configuration load', { 
     hl = {
       env = function() end,
       window_rule = function(rule)
+        if rule.name == 'mirroros-terminal' then
+          assert(rule.match.class == '^(foot|org\\\\.codeberg\\\\.dnkl\\\\.foot)$')
+          assert(rule.tag == '+terminal')
+          local count = 0
+          for _ in pairs(rule) do count = count + 1 end
+          assert(count == 3)
+          rules = rules + 1
+          return
+        end
         if rule.name == 'mirroros-portal-gtk-size' then
           assert(rule.match.class == '^(xdg-desktop-portal-gtk)$')
           assert(rule.size[1] == 875 and rule.size[2] == 600 and rule.float == nil)
@@ -405,7 +488,7 @@ test('session defaults disable only update news on every configuration load', { 
     }
     for reload = 1, 2 do original_dofile(arg[1]) end
     assert(deliveries == 2)
-    assert(rules == 4)
+    assert(rules == 6)
   `, '-', path.join(provider, 'defaults.lua')], { input: '', encoding: 'utf8' });
   assert.equal(result, '');
 });

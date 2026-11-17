@@ -19,6 +19,7 @@
 |---|---|---|---|
 | `shell-bindings.lua` | Adapted | `default/hypr/bindings/utilities.lua` 1-2, 7-10, 24-28, 130; `default/hypr/bindings/input-method.lua` 19-20 | Keys and descriptions for menus, help, notifications and lock; MirrorOS registry helper, native `qs ipc` targets on the installed shell, XKB layout switching instead of fcitx, `loginctl lock-session`. SUPER+D (Apps) and the SUPER+apostrophe / SUPER+Alt+apostrophe Ferris Sweep forms are MirrorOS additions. Panel chords SUPER+Ctrl+A/B/D/N/P and SUPER+Ctrl+1..9 follow Omarchy v4.5.0 (`ac2690c`) `default/hypr/bindings/utilities.lua` 113-115, 118, 119, 122-131, dispatched through `hl.dsp.global("mirroros:<name>")` to the shell's GlobalShortcut set instead of `omarchy-shell`; SUPER+Ctrl+Alt+comma (notification panel) is a MirrorOS assignment (Omarchy 4.5 uses it for silencing). SUPER+Ctrl+Alt+D (calendar, plan 02-32) follows the same file, line 116; SUPER+Ctrl+Alt+E (world clock, plan 02-33) follows the same file, line 117; SUPER+Ctrl+Alt+W (weather panel) is a MirrorOS assignment (Omarchy 4.5 line 110 sends a weather notification through `omarchy-*`). SUPER+Ctrl+R, SUPER+Ctrl+Alt+R and SUPER+Shift+Ctrl+R (set, show and clear reminders, plan 02-34) follow the same file, lines 104-106: set opens the shell's `reminders` IPC prompt instead of the Omarchy menu, and show/clear run the owned `/usr/share/mirroros/reminders/reminder` instead of `omarchy-reminder`. |
 | `window-bindings.lua` | Adapted | `default/hypr/bindings/tiling.lua` 1-2, 5-8, 10, 17-20, 23-27, 30-34, 40-61, 63-76, 78-99, 101-103; `default/hypr/bindings/utilities.lua` 121-128; `default/hypr/bindings/applications.lua` 2, 12; `bin/omarchy-launch-terminal-tmux`; `applications.lua` 4-5 and `bin/omarchy-cmd-terminal-cwd` at `origin/quattro` `2d33fd5973eb349c3f7e3ae56e6c293516cc4e18` | Keys, descriptions and dispatcher shapes; the file manager keys run Strata through `uwsm app` and the owned `/usr/share/mirroros/files/files-cwd` (desktop/files) instead of Omarchy commands; workspaces are global with native dispatchers instead of the per-monitor helper; monitor moves use a direction selector; SUPER+Tab is back-and-forth (`previous`); SUPER+Shift+Tab and SUPER+Ctrl+Tab are not bound; terminals run Foot through `uwsm app`; Alt+Tab and Alt+Shift+Tab are one Lua function each (cycle, then bring to top). |
+| `clipboard-bindings.lua` | Adapted | `default/hypr/bindings/clipboard.lua` at `quattro` `520c3ed969d30b58defe03eb19d603f32b4cb002` (MIT) | Universal SUPER+A/C/V/X and SUPER+Ctrl+V; explicit `send_key_state` down/up with a 50 ms oneshot timer and no window target; terminal tag detection strips one trailing `*`. MirrorOS registry ids replace `o.bind`; history dispatches `hl.dsp.global("mirroros:clipboard")` instead of an Omarchy panel; no Omarchy universal-paste export. |
 
 `hyprland.lua`, `defaults.lua` and `personal-loader.lua` are original MirrorOS configuration. The provider's `dwindle.preserve_split = true` follows the observed need of
 SUPER+J (togglesplit) and matches Omarchy `default/hypr/looknfeel.lua` 93-95. The active border uses the
@@ -147,6 +148,30 @@ layers finalize it. `prepare-hyprland` additionally migrates only the exact prio
 user-owned. This narrowly scoped migration lets existing managed sessions load the delivered hardware bindings
 at their next configuration load without configure triggering that load.
 
+## Story 4.5 clipboard additions
+
+`clipboard-bindings.lua` follows the separate Omarchy revision in its per-file row, under the MIT attribution
+above. The `mirroros-terminal` window rule in `defaults.lua` follows that revision's
+`default/hypr/apps/terminals.lua` `+terminal` tag convention, but matches only
+`^(foot|org\.codeberg\.dnkl\.foot)$`; no other terminal is selected. The binding module loads with `dofile`
+after hardware bindings and before personal layers finalize and export the staged registry.
+
+SUPER+A/C/V/X and SUPER+Ctrl+V are now bound as `clipboard.select-all`, `clipboard.copy`, `clipboard.paste`,
+`clipboard.cut` and `clipboard.history`. Copy and paste send CTRL+SHIFT+C/V to terminal-tagged windows and
+CTRL+C/V otherwise; select-all and cut always send CTRL+A/X. Omitting the window target also reaches focused
+shell panels. The shell clipboard consumer is delivered separately in plan 02-38 Task 3.
+
+`prepare-hyprland` migrates only the exact previous hardware entry point (SHA-256
+`996c1273d5ad4ac3ecd69dcd3264eb3cb352a03afa2418b973ca48577a2546b3`) in addition to its earlier reviewed
+hashes. Edited configurations and symbolic links remain user-owned; configure does not reload the session.
+
+Known risk (#114): a Hyprland update can cause stuck synthetic modifiers or key-not-found errors. Release and
+re-press the modifiers; if necessary, run `hyprctl reload`. Native CTRL+C/V and Foot CTRL+SHIFT+C/V remain the
+permanent fallback. The down/up split follows upstream's workaround for
+[Hyprland discussion #14099](https://github.com/hyprwm/Hyprland/discussions/14099), not a runtime guarantee.
+Automated tests cover mapping, deferred release, registry export and exact migration; graphical behavior in Foot,
+applications and shell panel fields remains subject to the plan's laboratory checkpoint.
+
 ## Update news
 
 `defaults.lua` sets `ecosystem.no_update_news = true` to suppress Hyprland's own update-news popup in the
@@ -176,7 +201,7 @@ no upstream configuration is copied. See
 
 The prototype loaded these files into a running session with `hyprctl eval` and removed them with
 `MirrorOSKeys.unbind_all()`, which crashed Hyprland 0.56.2 once (cause unknown). Production registers them at
-configuration time instead: the managed `hyprland.lua` loads provider `defaults.lua`, which runs shell and window bindings with `dofile` at every configuration load; the entry point then runs hardware bindings with `dofile` before personal layers.
+configuration time instead: the managed `hyprland.lua` loads provider `defaults.lua`, which runs shell and window bindings with `dofile` at every configuration load; the entry point then runs hardware and clipboard bindings with `dofile` before personal layers.
 The registry table is created empty at each load; session bindings are staged until the personal binding layer finishes, and nothing is unbound by MirrorOS. Basis: the prototype observed
 that runtime bindings do not survive a configuration reload, and Omarchy's `default/hypr/bootstrap.lua` clears its
 own modules from `package.loaded` at each load, which indicates that the Lua state persists across reloads; `dofile`
@@ -189,7 +214,7 @@ only by the separately authorized session test, not by these sources.
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
 SUPER+L / SUPER+Alt+L (workspace layout cycling), and the Story 4.5
-browser, editor, clipboard and capture keys. The file manager keys SUPER+Shift+F and SUPER+Alt+Shift+F are bound
+browser, editor and capture keys. The file manager keys SUPER+Shift+F and SUPER+Alt+Shift+F are bound
 to Strata (plan 02-35, DEC-015). SUPER+Ctrl+B is bound to the Bluetooth panel (plan 02-29,
 last reserved Story 4.4 panel chord). SUPER+Ctrl+N is bound to the network panel (plan 02-28; DEC-038 replaces
 DEC-006's W with N, as in Omarchy 4.5); SUPER+Ctrl+W stays unbound. Hardware exclusions remain unbound:
