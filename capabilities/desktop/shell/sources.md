@@ -163,6 +163,51 @@ When logind answers `challenge` for a session action, `services/SessionActions.q
 agent unit, never handles credentials and neither retries nor reports a cancelled or denied prompt (fail-closed,
 ADR 0012). Coverage: `tests/capabilities/desktop/shell/check-menu.sh`.
 
+## Clipboard picker (plan 02-38)
+
+The clipboard surface and pure model adapt Omarchy quattro
+`520c3ed969d30b58defe03eb19d603f32b4cb002` (MIT, David Heinemeier Hansson),
+`shell/plugins/clipboard/Clipboard.qml` and `ClipboardHistory.js`. The confirmation
+and bounded raster image components derive from `shell/Ui/ConfirmDialog.qml` and
+`SizedImage.qml` at the same revision. Per-file changes are in [UPSTREAM.md](UPSTREAM.md).
+
+- `shell.qml` composes one `services/Clipboard.qml`, exposed as `mirroros.clipboard`,
+  and one picker. `mirroros:clipboard` toggles it; native IPC target `clipboard`
+  accepts `open` and `toggle`.
+- Every history operation uses `/usr/share/mirroros/clipboard/clipboard-history`
+  with separate argv elements. The capability's [sources](../clipboard/sources.md)
+  govern provider versions, RAM storage, approved resident watchers and drop rules.
+  The shell neither starts watchers nor reads a database or file directly.
+- Each opening requests one `list`. Filtering and successful delete/clear updates
+  are local; external copies become visible on the next opening. There is no
+  polling, FileView, file watching or startup process in the clipboard service.
+  Close discards the in-memory list and preview paths; generation checks ignore
+  stale results after reopening. Failed list/mutation operations show a retry
+  message without logging content.
+- Display uses cliphist's summarized list text, capped at 8192 characters per row;
+  the text preview is that summary, not a full decode. All text is plain. Enter
+  copies and closes without pasting; Alt+Enter delegates opening to the command.
+  Shift+Enter does nothing. Shift+Delete asks for confirmation with Cancel selected.
+- PNG previews are requested only for selected or visible rows, deduplicated per
+  opening and decoded serially through `preview <id>`. Only the expected path
+  under `$XDG_RUNTIME_DIR/mirroros/clipboard/previews/` is accepted. The command
+  owns pruning; QML writes nothing and uses no persistent image cache of its own.
+  Image decoding is bounded to the displayed physical-pixel size; very thin
+  images have no special retry fallback in this PNG-only component.
+- The pure model and command-adapter behavior have Node contract coverage in
+  `tests/capabilities/desktop/shell/clipboard-model.test.mjs`. Live keyboard,
+  focus, image and open-handler acceptance belongs to the reference-VM campaign.
+- Corrective Task 3 warning review uses the reference VM's qt6-declarative
+  6.12.0-4 (`qmllint` 6.12.0) and quickshell 0.3.2-1. The service uses explicit
+  root process-property access without duplicate object ids and block-local
+  constants; those avoidable diagnostics are not baseline exceptions. The 17
+  remaining style diagnostics name members declared in the QtObject-typed
+  `Commons/Style.qml` font/spacing and `Commons/Color.qml` menu objects. Keep
+  those reactive bindings rather than replacing tokens or changing shared types.
+  The added GlobalShortcut has the existing Quickshell.Hyprland re-export
+  limitation; the existing PostReloadHook diagnostic only moves its context key.
+  Each retained diagnostic is recorded in the test baseline; no category is disabled.
+
 ## Delivery and lifecycle
 
 The `desktop/shell` configure step (`apply`) installs `packages`, publishes the

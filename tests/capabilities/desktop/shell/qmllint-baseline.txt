@@ -45,6 +45,31 @@
 # Omarchy 7075b61) entries are untyped Style/Commons.Color.polkit members, the undeclared AuthFlow type of
 # polkitAgent.flow, unqualified root members and PanelWindow, as in menu/Menu.qml; shell.qml's PostReloadHook
 # [import] key moves its context line next to the new agent instance; no new category.
+# Clipboard (plan 02-38 corrective Task 3): reviewed on reference VM qt6-declarative 6.12.0-4,
+# qmllint 6.12.0 and quickshell 0.3.2-1. The 17 missing-property diagnostics below are existing
+# members of QtObject-typed Style.font (family/title/caption/menuFamily/heading), Style.spacing (md)
+# and Commons.Color.menu (scrim/border), verified in their declarations; keep reactive token bindings.
+# One added GlobalShortcut has the existing Quickshell.Hyprland re-export limitation. The existing
+# PostReloadHook import diagnostic changes only its source-context key. No new category; avoidable
+# block-scoped var and Process id/property-shadow diagnostics were fixed, not added to this baseline.
+adapt ["Ui/ConfirmDialog.qml","Member \"family\" not found on type \"QObject\" [missing-property]","property string fontFamily: Style.font.family"]
+adapt ["Ui/ConfirmDialog.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["Ui/ConfirmDialog.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.caption"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"scrim\" not found on type \"QObject\" [missing-property]","Rectangle { anchors.fill: parent; color: Commons.Color.menu.scrim }"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"menu\", \"border\", Commons.Color.menu.border, Math.max(1, Style.space(2)))"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"md\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.md"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"md\" not found on type \"QObject\" [missing-property]","height: parent.height - root.headerHeight - Style.spacing.md"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -1722,7 +1747,7 @@ adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\"
 adapt ["services/ShellConfig.qml","Member \"busy\" not found on type \"Process\" [missing-property]","onLoaded: if (!root.writer.busy) root.applyUserText(text(), true)"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","GlobalShortcut {"]
 adapt ["shell.qml","Component is missing required property modelData from GlobalShortcut [required]","Variants {"]
-adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","property Osd osdService: Osd { }"]
+adapt ["shell.qml","PostReloadHook was not found. Did you add all imports and dependencies? [import]","}"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]

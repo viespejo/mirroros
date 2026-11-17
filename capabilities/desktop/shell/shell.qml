@@ -9,6 +9,7 @@ import "bar"
 import "notifications" as Notifications
 import "osd"
 import "reminders"
+import "clipboard"
 import "polkit" as Polkit
 
 // MirrorOS desktop shell entry point. Composes the shell surfaces directly;
@@ -37,6 +38,10 @@ ShellRoot {
     window: desktopShell.bar ? desktopShell.bar.liveWindow : null
   }
   property Reminders remindersService: Reminders { }
+  property Clipboard clipboardService: Clipboard { }
+  property ClipboardPicker clipboardPicker: ClipboardPicker {
+    service: desktopShell.clipboardService
+  }
   property WallpaperLibrary wallpaperLibrary: WallpaperLibrary { }
   property WallpaperActions wallpaperActions: WallpaperActions {
     picker: desktopShell.wallpaperPicker
@@ -68,6 +73,7 @@ ShellRoot {
   function firstPartyServiceFor(id) {
     if (id === "mirroros.stay-awake") return stayAwakeService
     if (id === "mirroros.reminders") return remindersService
+    if (id === "mirroros.clipboard") return clipboardService
     return id === "omarchy.notifications" ? notificationService : null
   }
 
@@ -92,6 +98,12 @@ ShellRoot {
   // on Omarchy v4.5.0 shell/shell.qml GlobalShortcut usage, without its
   // shortcuts file. The panel chords toggle with the bar's focused-monitor
   // routing; panel-at-N toggles the Nth panel of the right section.
+  GlobalShortcut {
+    appid: "mirroros"
+    name: "clipboard"
+    description: "Toggle clipboard history"
+    onPressed: desktopShell.clipboardPicker.toggle()
+  }
   GlobalShortcut {
     appid: "mirroros"
     name: "panel.bluetooth"
@@ -172,6 +184,20 @@ ShellRoot {
   // Polkit authentication agent (ADR 0030): an isolated sibling. It receives no
   // shell references and exposes none; no other component reaches it.
   Polkit.PolkitAgent { }
+
+  IpcHandler {
+    target: "clipboard"
+
+    function open(): string {
+      desktopShell.clipboardPicker.open()
+      return "ok"
+    }
+
+    function toggle(): string {
+      desktopShell.clipboardPicker.toggle()
+      return "ok"
+    }
+  }
 
   // Native IPC for the reminder command: `reminder -i` opens the prompt, and
   // the command asks for a refresh after it sets, delivers or clears a
