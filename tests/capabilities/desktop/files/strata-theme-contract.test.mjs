@@ -7,7 +7,7 @@
 // capabilities/desktop/files/sources.md.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,10 +35,8 @@ test('the bridge provides exactly the paths Strata reads, resolving to the Mirro
   const current = join(home, '.local/state/mirroros/current');
   mkdirSync(current, { recursive: true });
   symlinkSync(theme, join(current, 'theme'));
-  // The offer marker already exists, so prepare-strata does not run Strata here.
-  mkdirSync(join(home, '.config/strata'), { recursive: true });
-  writeFileSync(join(home, '.config/strata/portal-opt-in-v1'), '1\n');
-  const result = spawnSync('bash', [join(files, 'prepare-strata'), 'apply', '--default'], {
+  const bridge = join(root, 'capabilities/visual/theme/omarchy-bridge');
+  const result = spawnSync('bash', [bridge, 'apply', '--default'], {
     encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home },
   });
   assert.equal(result.status, 0, result.stderr);
@@ -48,7 +46,7 @@ test('the bridge provides exactly the paths Strata reads, resolving to the Mirro
   for (const path of readPaths) assert.ok(existsSync(join(state, path)), path);
   assert.equal(realpathSync(join(state, 'theme/colors.toml')), join(theme, 'colors.toml'));
   assert.equal(readFileSync(join(state, 'theme.name'), 'utf8').trim(), 'osaka-jade');
-  const again = spawnSync('bash', [join(files, 'prepare-strata'), 'apply', '--default'], {
+  const again = spawnSync('bash', [bridge, 'apply', '--default'], {
     encoding: 'utf8', env: { PATH: process.env.PATH, HOME: home },
   });
   assert.equal(again.stdout, 'unchanged\n', again.stderr);

@@ -6,7 +6,7 @@ setup() {
   cfg_test_setup
   printf 'CFG_STEPS=(desktop/files)\n' > "$CFG_TEST_DIR/code/capabilities/configure-steps"
   export CFG_TEST_USER_ENVIRONMENT=$'WAYLAND_DISPLAY=wayland-1\nXDG_CURRENT_DESKTOP=Hyprland'
-  # The user manager environment read by prepare-strata --session; any other systemctl use is unexpected.
+  # The user manager environment read by both preparations; any other systemctl use is unexpected.
   cat > "$CFG_TEST_DIR/bin/systemctl" <<'EOF'
 #!/usr/bin/bash
 printf 'systemctl %s\n' "$*" >> "$CFG_TEST_CALLS"
@@ -107,7 +107,7 @@ files_bridge_is() {
   printf 'kept\n' > "$CFG_TEST_HOME/.config/strata/portal-opt-in-v1"
   run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/conflict"
   [ "$status" -eq 4 ]
-  grep -qF "Conflict: $CFG_TEST_HOME/.local/state/omarchy is not the MirrorOS theme bridge for Strata" \
+  grep -qF "Conflict: $CFG_TEST_HOME/.local/state/omarchy is not the MirrorOS theme bridge" \
     "$CFG_TEST_DIR/conflict/configure.log"
   [ "$(< "$CFG_TEST_HOME/.local/state/omarchy/current/theme.name")" = tokyo-night ]
   [ ! -e "$CFG_TEST_HOME/.local/state/omarchy/current/theme" ]
@@ -141,6 +141,29 @@ files_bridge_is() {
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 0 ]
   [[ "$output" == *'desktop/files: '* ]]
+}
+
+@test "Strata preparation manages only its offer marker independently of the shared bridge" {
+  local preparation="$CFG_SOURCE_ROOT/capabilities/desktop/files/prepare-strata"
+  run env HOME="$CFG_TEST_HOME" bash "$preparation" check --default
+  [ "$status" -eq 1 ]
+  run env HOME="$CFG_TEST_HOME" bash "$preparation" apply --default
+  [ "$status" -eq 0 ]
+  [ "$output" = changed ]
+  [ -f "$CFG_TEST_HOME/.config/strata/portal-opt-in-v1" ]
+  [ ! -e "$CFG_TEST_HOME/.local/state/omarchy" ]
+  mkdir -p "$CFG_TEST_HOME/.local/state/omarchy"
+  printf 'personal\n' > "$CFG_TEST_HOME/.local/state/omarchy/keep"
+  : > "$CFG_TEST_CALLS"
+  run env HOME="$CFG_TEST_HOME" bash "$preparation" apply --default
+  [ "$status" -eq 0 ]
+  [ "$output" = unchanged ]
+  run env HOME="$CFG_TEST_HOME" bash "$preparation" check --default
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ "$(< "$CFG_TEST_HOME/.local/state/omarchy/keep")" = personal ]
+  [ ! -e "$CFG_TEST_HOME/.config/strata/settings.toml" ]
+  ! grep -q '^strata ' "$CFG_TEST_CALLS"
 }
 
 @test "a missing Strata FileManager1 activation file fails the postcondition" {

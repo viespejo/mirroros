@@ -19,9 +19,11 @@ cfg_source_record strata 'https://github.com/lgse/strata/releases/download/v1.2.
   v1.2.1 491e6ba9735e821f9f49910ffd2582076196865c "$(cfg_recipe_version "$STEP_DIR/strata/PKGBUILD")"
 cfg_tracked_file "$STEP_DIR/files-cwd" /usr/share/mirroros/files/files-cwd 0755
 cfg_user_script "$STEP_DIR/prepare-strata" apply "$session" || exit 4
+cfg_user_script "$CAPABILITIES_DIR/visual/theme/omarchy-bridge" apply "$session" || exit 4
 
 cfg_require cfg_packages_present "$STEP_DIR/packages"
 cfg_require cfg_local_package_present strata-bin "$STEP_DIR/strata/PKGBUILD"
 cfg_require cfg_dbus_service_owner_unique org.freedesktop.FileManager1 "$file_manager"
 cfg_require cfg_tracked_file_present /usr/share/mirroros/files/files-cwd
 cfg_require cfg_user_script "$STEP_DIR/prepare-strata" check "$session"
+cfg_require cfg_user_script "$CAPABILITIES_DIR/visual/theme/omarchy-bridge" check "$session"

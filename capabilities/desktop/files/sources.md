@@ -104,8 +104,10 @@ is never written (DEC-007). An existing marker is left untouched.
 
 Strata follows Omarchy's theme state only: `$HOME/.local/state/omarchy/current/theme.name` and
 `.../current/theme/colors.toml` (`src/ui/theme/omarchy_state.rs`, which ignores `XDG_STATE_HOME`), live and by default
-on first launch. As a deliberate, documented exception to keeping Omarchy paths out of MirrorOS, `prepare-strata`
-creates the minimal bridge (DEC-007):
+on first launch. As a deliberate, documented exception to keeping Omarchy paths out of MirrorOS,
+[`visual/theme/omarchy-bridge`](../../visual/theme/sources.md#shared-theme-bridge) creates the minimal bridge
+(DEC-007; extracted by screenshot plan 02-40, DEC-010). `desktop/files` invokes both preparations through
+`cfg_user_script` and checks the bridge and Strata's offer marker independently:
 
 | Path | Target |
 |---|---|

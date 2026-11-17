@@ -82,6 +82,22 @@ so it is checked like the rest of the tree. Its first consumer is Strata's theme
 the selected theme; Story 4.8 theme selection changes the theme and its name together. Every future theme must
 publish this file.
 
+## Shared theme bridge
+
+`omarchy-bridge` is MirrorOS-owned code extracted from `desktop/files/prepare-strata` by screenshot plan 02-40
+(DEC-010), preserving the existing initialize-only bridge algorithm. Consumers invoke the reviewed source through
+`cfg_user_script` with `apply|check --session|--default`; no installed helper or shared-helper change is needed.
+`desktop/files` invokes it independently of `prepare-strata`, which retains only first-launch offer suppression.
+Each consumer must ensure and check the bridge rather than rely on another application being configured.
+
+The fixed upstream lookup home is `~/.local/state/omarchy`: its only entries are `current/theme` linking to
+`<MirrorOS state>/mirroros/current/theme` and `current/theme.name` linking to that theme's `theme.name`.
+Session state/configuration homes come from the target user's manager environment; target configuration uses
+the XDG defaults, never the administrator's environment. Relative homes are rejected. An absent bridge is staged
+beside its destination and atomically published; an identical bridge is unchanged. Any conflicting file,
+directory, symlink or extra entry is preserved and reported with exit 4. `check` does not create state.
+Bridge tests cover the shared contract; the Strata theme contract continues to pin its upstream paths and keys.
+
 ## Lock colors
 
 The MirrorOS-owned `default/hyprlock.conf` defines only five hyprlock color variables for the lock screen
