@@ -3,11 +3,11 @@ load support
 setup() { cfg_test_setup; }
 teardown() { cfg_test_teardown; }
 
-@test "clipboard is step 19 of 25 immediately before shell and enables watchers without direct execution" {
-  run bash -c 'source "$1"; printf "%s\n" "${#CFG_STEPS[@]}" "${CFG_STEPS[18]}" "${CFG_STEPS[19]}"' \
+@test "screenshot follows the provider and clipboard is step 20 of 26 before shell with enable-only watchers" {
+  run bash -c 'source "$1"; printf "%s\n" "${#CFG_STEPS[@]}" "${CFG_STEPS[17]}" "${CFG_STEPS[18]}" "${CFG_STEPS[19]}" "${CFG_STEPS[20]}"' \
     bash "$CFG_SOURCE_ROOT/capabilities/configure-steps"
   [ "$status" -eq 0 ]
-  [ "$output" = $'25\ndesktop/clipboard\ndesktop/shell' ]
+  [ "$output" = $'26\ndesktop/compositor/providers/hyprland\ndesktop/screenshot\ndesktop/clipboard\ndesktop/shell' ]
   local apply="$CFG_SOURCE_ROOT/capabilities/desktop/clipboard/apply"
   grep -q 'cfg_user_unit_enable.*graphical-session.target' "$apply"
   ! grep -qE 'cfg_exec|cfg_unit_start|cfg_session_agent_unique|systemctl' "$apply"

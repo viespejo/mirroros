@@ -1,0 +1,54 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure — provider-neutral screenshot command.
+set -Eeuo pipefail
+
+usage() {
+  printf 'Usage: screenshot [smart|region|window|full|scroll] [--edit]\n' >&2
+  exit 2
+}
+
+mode=smart
+mode_seen=false
+edit=false
+for arg in "$@"; do
+  case "$arg" in
+    smart|region|window|full|scroll)
+      [[ "$mode_seen" == false ]] || usage
+      mode="$arg" mode_seen=true ;;
+    --edit)
+      [[ "$edit" == false ]] || usage
+      edit=true ;;
+    *) usage ;;
+  esac
+done
+
+notify_failure() {
+  printf '%s\n' "$1" >&2
+  # Notification delivery must not replace the capture status (for example outside a session bus).
+  notify-send --urgency=normal --hint=int:transient:1 'Screenshot failed' "$1" || :
+}
+
+backend=/usr/share/mirroros/compositor/screenshot-backend
+if [[ ! -x "$backend" ]]; then
+  notify_failure 'Screenshot backend is missing. Rerun mirroros-configure, then try again.'
+  exit 1
+fi
+
+args=("$mode")
+[[ "$edit" == false ]] || args+=(--edit)
+# Supervise rather than exec: inspect the backend status independently of journal delivery.
+# Only backend diagnostics are forwarded; no capture data or command arguments are added.
+set +e
+"$backend" "${args[@]}" 2>&1 | systemd-cat --identifier=mirroros-screenshot
+statuses=("${PIPESTATUS[@]}")
+set -e
+status="${statuses[0]}"
+if (( statuses[1] != 0 )); then
+  printf 'Screenshot diagnostics could not reach the journal. Check the user journal service.\n' >&2
+fi
+case "$status" in
+  0|2) exit "$status" ;;
+  *)
+    notify_failure 'Capture failed. Check journalctl --user -t mirroros-screenshot for diagnostics, then try again.'
+    exit 1 ;;
+esac

@@ -28,14 +28,21 @@ dependency graph, or resume state. The current order is:
 16. `system/network`: NetworkManager/systemd-resolved DNS integration, local stub, private migration/recovery and isolated target DNS; profiles and public provider unchanged ([ADR 0024](../docs/adr/0024-networkmanager-resolved-dns-integration.md)).
 17. `system/vpn`: NetworkManager OpenConnect plugin and registration check; no corporate profile or authentication.
 18. `desktop/compositor/providers/hyprland`: session, keyboard module, hardware bindings, runtime-only display command, greeter, session selection, the Hyprland portal backend with its `hyprland-portals.conf` preferences, and the portal-dialog window rules.
-19. `desktop/clipboard`: cliphist, wl-clipboard and fzf; the RAM-only `clipboard-history` command and two enable-only user watchers bound to `graphical-session.target`.
-20. `desktop/shell`: Quickshell, the reviewed shell runtime with its hosted polkit authentication agent ([ADR 0030](../docs/adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)) and its user unit enabled for the selected user, and the read-only `polkit-check` command; it fails while a listed competing polkit agent is started by an active autostart entry or an enabled user unit.
-21. `desktop/reminders`: jq, the freedesktop sound theme and the owned `reminder` command over transient user timers.
-22. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
-23. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
-24. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
+19. `desktop/screenshot`: the tracked provider-neutral screenshot command, argument validation, backend supervision, journal diagnostics and actionable failure notifications.
+20. `desktop/clipboard`: cliphist, wl-clipboard and fzf; the RAM-only `clipboard-history` command and two enable-only user watchers bound to `graphical-session.target`.
+21. `desktop/shell`: Quickshell, the reviewed shell runtime with its hosted polkit authentication agent ([ADR 0030](../docs/adr/0030-shell-hosted-polkit-agent-and-fingerprint.md)) and its user unit enabled for the selected user, and the read-only `polkit-check` command; it fails while a listed competing polkit agent is started by an active autostart entry or an enabled user unit.
+22. `desktop/reminders`: jq, the freedesktop sound theme and the owned `reminder` command over transient user timers.
+23. `desktop/lock`: hyprlock and hypridle with native lock and idle configuration, enabled for the selected user.
+24. `visual/branding`: the shared MirrorOS wordmark SVG and the PNG rendered from it under `/usr/share/mirroros/branding`.
+25. `system/boot-splash`: Plymouth, the static MirrorOS theme, the `plymouth` hook drop-in, the `quiet splash`
     overlay of the recognized boot configuration, and the regenerated boot images ([ADR 0014](../docs/adr/0014-native-login-and-boot-presentation.md)).
-25. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+26. `desktop/login`: SDDM with the MirrorOS theme, uwsm, an explicit generic font provider, and enable-only graphical login.
+
+`visual/theme/omarchy-bridge` is a shared initialize-only preparation invoked by theme consumers through
+`cfg_user_script`, independently of Strata's first-launch marker. It creates an absent bridge atomically, accepts
+an identical bridge unchanged and preserves conflicting state with failure. The neutral screenshot command
+supervises the provider-owned `/usr/share/mirroros/compositor/screenshot-backend`; see
+[screenshot sources](desktop/screenshot/sources.md) for its interface and diagnostic contract.
 
 The [hardware procedure](../docs/procedures/hardware.md) records terminal paths, effects, recovery and the
 three-environment validation matrix. The system steps precede their Hyprland bindings. Running checks

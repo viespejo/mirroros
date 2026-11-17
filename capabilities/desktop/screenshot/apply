@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# Prerequisites: validated packages and the selected compositor provider configured earlier.
+# Context: CONFIGURE_CONTEXT, STEP_DIR and shared helpers.
+# Postconditions: runtime packages and the tracked neutral screenshot command are delivered.
+# Backend readiness belongs to the provider; no capture or session activation occurs during configure.
+set -Eeuo pipefail
+
+cfg_packages_ensure "$STEP_DIR/packages"
+cfg_tracked_file "$STEP_DIR/screenshot" /usr/share/mirroros/screenshot/screenshot 0755
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require cfg_tracked_file_present /usr/share/mirroros/screenshot/screenshot

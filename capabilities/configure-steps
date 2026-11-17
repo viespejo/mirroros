@@ -18,6 +18,7 @@ CFG_STEPS=(
   system/network
   system/vpn
   desktop/compositor/providers/hyprland
+  desktop/screenshot
   desktop/clipboard
   desktop/shell
   desktop/reminders
