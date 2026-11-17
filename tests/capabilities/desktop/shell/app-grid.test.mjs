@@ -84,3 +84,39 @@ test('grid selection clamps at either end and preserves the stable app identity'
   assert.match(grid, /maximumLineCount: 2/);
   assert.match(grid, /onClicked: root.menu.activateIndex\(cell.index, true\)/);
 });
+
+test('catalog refresh restores bounded scroll independently of the selected identity', () => {
+  const restoreBody = grid.match(/function restorePosition\(position\) \{([\s\S]*?)\n  \}/)[1];
+  const restore = new Function('grid', 'position', restoreBody);
+  let layouts = 0;
+  const view = { originY: 20, contentHeight: 1200, height: 400, contentY: 0, forceLayout() { layouts++; } };
+  restore(view, 320);
+  assert.equal(view.contentY, 340);
+  restore(view, 2000);
+  assert.equal(view.contentY, 820);
+  view.contentHeight = 100;
+  restore(view, 320);
+  assert.equal(view.contentY, 20);
+  assert.equal(layouts, 3);
+  assert.match(body('mergeAppRows'), /root.rebuildDisplay\(true\)/);
+  assert.match(body('rebuildDisplay'), /if \(revision !== root.displayRevision\) return/);
+  assert.match(body('rebuildDisplay'), /appsGrid.restorePosition\(appsPosition\)\s*return/);
+  assert.match(body('rebuildDisplay'), /appsGrid.resetPosition\(\)/);
+  assert.match(body('setFilter'), /root.rebuildDisplay\(\)/);
+});
+
+test('identical Apps rows retain the model; label, icon, visibility or order changes invalidate it', () => {
+  const matches = new Function('displayModel', 'rows', body('displayMatchesRows'));
+  const rows = [{ itemId: 'apps.foot', label: 'Foot', appIcon: 'foot', disabled: false },
+    { itemId: 'apps.omasnap', label: 'Omasnap', appIcon: 'omasnap', disabled: false }];
+  const model = { count: rows.length, get: index => ({ ...rows[index] }) };
+  assert.equal(matches(model, structuredClone(rows)), true);
+  assert.equal(matches(model, rows.slice(0, 1)), false);
+  assert.equal(matches(model, [...rows].reverse()), false);
+  for (const key of ['itemId', 'label', 'appIcon', 'disabled']) {
+    const changed = structuredClone(rows);
+    changed[0][key] = key === 'disabled' ? true : 'changed';
+    assert.equal(matches(model, changed), false, key);
+  }
+  assert.match(body('rebuildDisplay'), /if \(!root.appsView \|\| !root.displayMatchesRows\(rows\)\) \{\s*displayModel.clear\(\)/);
+});

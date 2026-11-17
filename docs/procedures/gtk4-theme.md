@@ -72,14 +72,15 @@ org.gnome.desktop.interface gtk-theme` restores the MirrorOS default.
 The neutral default-device check is shared the same way. `visual/gtk4` publishes the native icon theme
 `/usr/share/icons/MirrorOS-default` (an `index.theme` inheriting Adwaita and hicolor, plus the three reviewed
 `emblem-default` SVG variants) and `desktop/portal` adds `icon-theme='MirrorOS-default'` to the same key file.
-Every other icon name resolves through Adwaita as before; no application alias is shared globally and no packaged
-icon file is overwritten. Any consumer requesting `emblem-default` in this theme gets the check, not only
+At that initial check-only delivery, every other icon name resolved through Adwaita. The folder/device and
+application additions below now override their declared names; no packaged icon file is overwritten. Any consumer requesting `emblem-default` in this theme gets the check, not only
 pavucontrol. On 2026-11-13 a running configure of the lab candidate changed only `visual/gtk4` and `desktop/portal`;
 the rerun left all 23 steps unchanged. Without a new login the Settings portal answered `icon-theme`
 `'MirrorOS-default'`; windowless GTK 4.24.1 and GTK 3.24.52 probes in the session received that name, resolved
 `emblem-default` and its symbolic name from `/usr/share/icons/MirrorOS-default` in 24 lookups each (sizes 16/24/32,
 scales 1/2, ordinary/forced symbolic) and 444 other lookup paths identical to Adwaita. Qt 6.12 in the shell's
-environment (no `QT_*` variables) uses `hicolor` and ignores this key, so the shell is unaffected. Rendering of
+environment (no `QT_*` variables) uses `hicolor` and ignores this key. Apps now explicitly reads the GTK preference
+through its bounded native-theme index; this does not change Qt's global theme or other shell consumers. Rendering of
 the check in installed applications other than the accepted pavucontrol preview has not been reviewed.
 To return a user to the packaged icons, run as that user `gsettings set org.gnome.desktop.interface icon-theme
 Adwaita`; `gsettings reset org.gnome.desktop.interface icon-theme` restores the MirrorOS default.
@@ -96,6 +97,38 @@ chooser on 2026-11-13. A running configure of the committed lab candidate then c
 returned 0 for the icon theme and the runtime, and the rerun left all 23 steps unchanged. The maintainer reviewed
 the installed icons in the GTK3 file chooser, including Other Locations, and in pavucontrol's device list, and
 accepted them. The `gsettings` commands above also remove or restore these icons.
+
+The native theme additionally contains 97 reviewed application icons: 86 Omarchy Papercraft templates and eleven
+original MirrorOS Papercraft-inspired designs. Apps, GTK3 and GTK4 use the same `scalable/apps` resources, with
+Adwaita/hicolor inheritance for other names. Existing folders, MIME types, devices, printer and check artwork are
+unchanged. Regenerate with `node capabilities/visual/gtk4/icon-sources/generate.mjs`; configure publishes committed
+resources and licenses only, never the development tools. See [application provenance and tests](../../capabilities/visual/gtk4/sources.md#application-icons).
+A loose resource edit is detected by Apps at its next scan/open; fresh GTK processes are used for publication
+checks because running applications may cache icons. No desktop-file identity, command or association changes.
+
+### Application icon publication checkpoint
+
+The reference VM received the application icon and Apps candidate through the bounded `install-runtime`
+publishers, under the configure lock, with root-private backups in `/var/tmp/mirroros-apps-rollback.*`.
+Only `/usr/share/icons/MirrorOS-default` and `/usr/share/mirroros/shell` were published; no full configure,
+package transaction, user appearance change or compositor restart was performed. The attended sudo tmux window
+closed automatically. An explicit user-service restart loaded the installed shell without journal warnings.
+Both installed manifest checks returned 0 again after runtime probes.
+
+Local verification passed 261 Node tests (12 skips) and 27 shell/GTK4 publication/configure contracts.
+With the graphical session environment and NVM PATH imported, all 20 guest Apps tests passed, including the
+real-QML scroll/clamping, selection and delegate-identity fixture; qmllint reported no new or stale diagnostics.
+Fresh GTK3/GTK4 probes and an AppLibrary probe using installed service code resolved all 97 application SVGs
+under `/usr/share/icons/MirrorOS-default/scalable/apps`. A captured installed Apps grid showed the new artwork
+and Omasnap label. The isolated complete menu script retained six known failures: two stale Trigger/navigation
+expectations and four missing-theme fixture warnings. A first run with the installed menu still open added two
+layer-count failures; closing that menu before repeating removed both. Initial incomplete SSH environments
+also produced a blocked Node invocation and a failed QML fixture; those runs are not passing evidence.
+
+Evidence remains temporary in `/tmp/mirroros-apps-publish-*` on the host and VM. Keyboard/pointer launching,
+both actual entry shortcuts, fresh graphical GTK applications, live native-theme changes and screen changes
+still require attended acceptance. The pavucontrol non-symbolic check issue remains unchanged; no CSS workaround
+or check artwork change was published. Backups were retained, but rollback was not exercised.
 
 ### Selection prototype
 

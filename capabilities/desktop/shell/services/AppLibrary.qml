@@ -11,7 +11,9 @@ import "AppSearch.js" as AppSearch
 // Configured hide-list loader and watcher reused from Omarchy v4.5.0
 // (ac2690cd7be4f47e4a255f5e2e78d904d436b068), with a shell-local path and
 // explicit reload on file changes (Quickshell 0.3.2 otherwise reuses old text).
-// New: launch through `uwsm app`, and a settled/unavailable state.
+// Queued icon refresh adapted from Omarchy 520c3ed969d30b58defe03eb19d603f32b4cb002.
+// Native GTK theme indexing and per-file cache signatures replace its global scan
+// and Omarchy-specific theme revision file. Launch/state remain MirrorOS-owned.
 
 // Shared desktop-application library: the sorted entry list with hidden-entry
 // filtering and the icon fallback index. Injected as shell.appLibrary; the
@@ -22,12 +24,13 @@ Item {
   property var configuredHiddenEntryIds: ({})
   property var desktopHiddenEntryIds: ({})
 
-  // Maps an icon name to a file on disk (e.g. "omacut" -> ".../apps/omacut.svg").
+  // Maps an icon name to a file URL with a content-stat cache signature.
   // Used as a fallback for icons that Qt's themed lookup misses because they were
   // installed after this process started (its icon cache never re-scans). Refreshed
   // whenever the app list changes, so newly installed apps get their icon live.
   property var iconIndex: ({})
   property var pendingIconIndex: ({})
+  property bool iconRescanQueued: false
 
   // DesktopEntries fills in asynchronously, from zero, once something binds to
   // it. The binding below starts the scan; `settled` turns true once the list
@@ -76,7 +79,7 @@ Item {
     // Prefer the context-limited app/device index. An unconstrained themed
     // lookup can resolve an app name such as "zoom" to an action icon instead.
     var found = root.iconIndex[value]
-    if (found) return Util.fileUrl(found)
+    if (found) return found
     var themed = Quickshell.iconPath(value, true)
     if (themed.length > 0) return themed
     return Quickshell.iconPath("application-x-executable", true)
@@ -85,7 +88,8 @@ Item {
   // The shell may start before first-install packages have finished placing
   // their icons; consumers call this when they open so icons appear live.
   function refreshIcons() {
-    if (!iconIndexScan.running) iconIndexScan.running = true
+    if (iconIndexScan.running) root.iconRescanQueued = true
+    else iconIndexScan.running = true
   }
 
   // Launch through uwsm so each app gets its own systemd scope under
@@ -126,32 +130,19 @@ Item {
     root.appsChanged()
   }
 
-  function iconIndexScanCommand() {
-    // List app/device icons across the XDG icon dirs and /usr/share/pixmaps as
-    // "<path>" lines. Some desktop entries, such as Print Settings, use device
-    // icons like "printer" instead of app icons. SVGs are emitted before PNGs
-    // so the parser, which keeps the first hit per name, prefers scalable icons.
-    return [
-      'dirs="$HOME/.icons $HOME/.local/share/icons";',
-      'IFS=":"; for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do dirs="$dirs $d/icons"; done; unset IFS;',
-      '{',
-      '  for base in $dirs; do',
-      '    [[ -d $base ]] && find "$base" \\( -path "*/apps/*" -o -path "*/devices/*" \\) \\( -name "*.svg" -o -name "*.png" \\) 2>/dev/null;',
-      '  done;',
-      '  find /usr/share/pixmaps -maxdepth 1 \\( -name "*.svg" -o -name "*.png" \\) 2>/dev/null;',
-      '} | awk \'/\\.svg$/ { print; next } { png[++n] = $0 } END { for (i = 1; i <= n; i++) print png[i] }\''
-    ].join(' ')
-  }
-
   function indexIconLine(path) {
-    var value = String(path || "").trim()
-    if (value.length === 0) return
+    var line = String(path || "")
+    var tab = line.indexOf("\t")
+    if (tab < 1) return
+    var signature = line.slice(0, tab)
+    var value = line.slice(tab + 1)
+    if (value.charAt(0) !== "/") return
     var slash = value.lastIndexOf("/")
     var file = slash >= 0 ? value.slice(slash + 1) : value
     var dot = file.lastIndexOf(".")
     var name = dot > 0 ? file.slice(0, dot) : file
     if (name.length > 0 && root.pendingIconIndex[name] === undefined)
-      root.pendingIconIndex[name] = value
+      root.pendingIconIndex[name] = Util.fileUrl(value) + "?v=" + encodeURIComponent(signature)
   }
 
   function hiddenEntryScanCommand() {
@@ -185,12 +176,18 @@ Item {
 
   Process {
     id: iconIndexScan
-    command: ["bash", "-c", root.iconIndexScanCommand()]
+    command: ["bash", Quickshell.shellPath("services/app-icons")]
     stdout: SplitParser { onRead: function(line) { root.indexIconLine(line) } }
     onStarted: root.pendingIconIndex = ({})
     // Swapping the property re-evaluates every iconSource() binding, so
     // newly found icons appear without rebuilding the list.
-    onExited: root.iconIndex = root.pendingIconIndex
+    onExited: function(exitCode) {
+      if (exitCode === 0) root.iconIndex = root.pendingIconIndex
+      if (root.iconRescanQueued) {
+        root.iconRescanQueued = false
+        root.refreshIcons()
+      }
+    }
   }
 
   // Coalesces bursts of app-list changes (a package install touches many
@@ -198,7 +195,14 @@ Item {
   Timer {
     id: iconIndexDebounce
     interval: 750
-    onTriggered: if (!iconIndexScan.running) iconIndexScan.running = true
+    onTriggered: root.refreshIcons()
+  }
+
+  // Observe the same native preference as GTK3/GTK4; never write settings.
+  Process {
+    command: ["gsettings", "monitor", "org.gnome.desktop.interface", "icon-theme"]
+    running: true
+    stdout: SplitParser { onRead: function(line) { root.refreshIcons() } }
   }
 
   Timer {

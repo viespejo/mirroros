@@ -18,6 +18,7 @@ const revisions = {
   [revision]: revision,
   'v4.0.6': '237f1b4071a0bff2296c6d740ba2b9fd695ebfa0',
   'v4.5.0': 'ac2690cd7be4f47e4a255f5e2e78d904d436b068',
+  '520c3ed969d30b58defe03eb19d603f32b4cb002': '520c3ed969d30b58defe03eb19d603f32b4cb002',
 };
 for (const [rev, commit] of Object.entries(revisions))
   if (execFileSync('git', ['-C', upstream, 'rev-parse', '--verify', `${rev}^{commit}`], { encoding: 'utf8' }).trim() !== commit)

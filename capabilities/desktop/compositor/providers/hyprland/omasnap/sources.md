@@ -6,11 +6,11 @@
   `6150151846b0ddc2ca8e6b107324de8b0c7240ae` (MIT; bundled fonts OFL-1.1; Lucide assets ISC).
 - Recipe: https://github.com/omacom/omarchy-pkgs/blob/c73cd8aa4d12a9b3ad4b8451b153bd36294bc6b1/pkgbuilds/omasnap/PKGBUILD,
   `1.26.2-4`, retaining Tobi Lütke's maintainer line.
-- MirrorOS package: `omasnap 1.26.2-4.3`, x86_64 only, with the explicitly approved local portal and launcher-name patches below. No Omarchy repository is enabled.
+- MirrorOS package: `omasnap 1.26.2-4.4`, x86_64 only, with the explicitly approved local portal and launcher-name patches below. No Omarchy repository is enabled.
 - Archive: `https://github.com/omacom/omasnap/archive/refs/tags/v1.26.2.tar.gz`;
   SHA-256 `e173edd4f2e797273c967513f24c360b6f00733792b9708757a82c39fbc43bf9`.
   Downloaded through GitHub's codeload tag endpoint and verified during Task 2; makepkg verifies it again.
-- Reviewed recipe differences: release `4` → `4.3`, remove aarch64, remove `check()` and `checkdepends=('clang')`,
+- Reviewed recipe differences: release `4` → `4.4`, remove aarch64, remove `check()` and `checkdepends=('clang')`,
   add the self-contained `prepare()` patch and direct runtime dependency `xdg-desktop-portal`.
   Build/package functions and upstream dependencies are otherwise unchanged. The inherited recipe lists MIT and OFL-1.1;
   upstream CMake also installs Lucide-ISC.txt, alongside Neucha-OFL.txt, JetBrainsMono-OFL.txt and Inter-OFL.txt. DEC-004 accepts relying on upstream's
@@ -30,8 +30,10 @@ Capture menu actions are not renamed.
 
 Reference VM observation: `/usr/share/applications/omasnap.desktop` is owned by `omasnap 1.26.2-4.2`, with
 SHA-256 `6dc0b0d043d60d2e32c6f6a8b0795cf229794e545d0daad9f6adcf2f9c371805` and `Name=Screenshot`.
-The pinned repository tree confirms the source path is `omasnap.desktop`. The contract compares the prepared
-entry with that source after the single Name substitution, preserving every other field.
+The pinned repository tree confirms the source path is `omasnap.desktop`. Release `4.4` additionally inserts
+`Keywords=screenshot;capture;screen capture;`, retaining descriptive Apps searches while displaying Omasnap.
+The contract compares the prepared entry with that source after the Name substitution and Keywords insertion,
+preserving every other field. AppSearch already matches desktop-entry keywords; no shell-specific alias is added.
 
 Validation: all nine provider contracts, nine neutral-command contracts and four theme contracts passed with the
 checksum-verified v1.26.2 sources. The VM built release `4.3` unprivileged through build-omasnap; its packaged
@@ -39,6 +41,13 @@ entry matched the previous installed entry byte-for-byte except for Name. Instal
 maintainer-authenticated tmux window, which closed successfully. The running shell retained the old cached label
 until mirroros-shell.service was restarted; afterward its Apps snapshot contained Omasnap and no Screenshot row.
 The service remained active. No capture, Open With or Save As interaction was repeated for this label-only change.
+
+Release `4.4` validation: all nine provider contracts passed against the pinned sources, and all eight AppLibrary
+regressions passed, including keyword searches derived from the recipe. The VM built the package unprivileged;
+its desktop entry differed from installed `4.3` only by the Keywords line. Maintainer-authenticated tmux/pacman
+installation completed successfully and the window closed automatically. After an explicit shell restart, a
+real-QML probe using installed AppLibrary services and the real desktop catalogue returned Omasnap for `omasnap`,
+`screenshot`, `capture` and `screen capture`. The service remained active. No capture or Save As retest was performed.
 
 ## Approved Save As portal patch
 

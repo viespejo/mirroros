@@ -52,7 +52,7 @@ for entry in "$STEP_DIR"/entries/*/; do
     "manifest-sha256:$(sha256sum < "$entry_dest/.mirroros-manifest" | cut -d' ' -f1)"
 done
 # Each icons/<theme> is the native icon theme MirrorOS-<theme> under /usr/share/icons: the neutral default-device
-# check and the committed output of icon-sources/generate.mjs (folders, file types, devices), inheriting every other
+# check and the committed output of icon-sources/generate.mjs (folders, file types, devices, apps), inheriting every other
 # name from Adwaita; its manifest sits at the theme root.
 cfg_run_host bash "$parent_helper" "$root" "$uid" "$gid" system-icons || exit 4
 for icons in "$STEP_DIR"/icons/*/; do
@@ -85,3 +85,5 @@ cfg_source_record lucide-gtk4-icons https://github.com/lucide-icons/lucide 1.35.
   a79d711591318eaced16eeb9bbc923d0128cc3a1 ''
 cfg_source_record catppuccin-gtk4-icons https://github.com/catppuccin/vscode-icons v1.26.0 \
   b6915da9f6889b683a110aa747de96c2820a537d ''
+cfg_source_record omarchy-papercraft-icons https://github.com/omacom/omarchy '' \
+  c0c63402abee6e8335f9bd3c6da85348b9269b11 ''

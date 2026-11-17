@@ -57,6 +57,40 @@ automatically on successful completion. SSH IPC checks imported the graphical se
 No keyboard/pointer injection or application launch was performed. Attended keyboard/pointer launch, scrolling
 beyond four rows, empty/unavailable states and screen changes remain unverified.
 
+## Native application icons and passive updates
+
+Apps reads the same `org.gnome.desktop.interface icon-theme` preference as GTK3/GTK4, including user overrides.
+The `services/app-icons` Bash helper indexes application/device contexts in the selected theme, its recursive
+inheritance chain, hicolor and pixmaps, in that order. XDG user/system roots are honored without splitting paths
+on spaces; unrelated themes and action contexts are excluded. Within a theme root, SVG precedes PNG and larger
+nominal PNG sizes precede smaller ones. This ordering and queued rescans adapt Omarchy
+`520c3ed969d30b58defe03eb19d603f32b4cb002`; see [UPSTREAM.md](UPSTREAM.md#native-application-icons-and-stable-refresh).
+File mtime/ctime/size signatures on image URLs reload changed resources without restarting Qt. Opening the menu
+and catalog changes rescan; gsettings monitor observes theme preference changes read-only. Loose image edits
+while the menu remains open are picked up at the next scan, not watched individually. Explicit dependency:
+`glib2` provides gsettings and `gsettings-desktop-schemas` provides the native interface schema (reference VM:
+`glib2 2.90.1-1`, `gsettings-desktop-schemas 51.0-1`, inspected with pacman -Qo/-Si). No preference is written.
+The shared artwork is owned by [visual/gtk4](../../visual/gtk4/sources.md#application-icons).
+
+Passive app/availability updates preserve bounded scroll without forcing the selected row back into view.
+Selection continues to follow identity; removing it disables activation until another row is selected. Opening
+or changing the search resets the grid to the beginning. Stale deferred rebuild callbacks cannot restore an older
+view. Equal rendered Apps rows retain the ListModel and its delegates/images, including on reopening; changed
+labels, icons, order or visibility rebuild it. This is bounded reuse, not a second catalog cache or an unmeasured
+latency claim. Other menu lists and selectors retain their behavior. Tests cover theme precedence, inheritance,
+PNG sizes, paths with spaces, symlinks, signatures, queued scans, row equality and bounded scroll.
+
+Validation: host Node suites passed 261 tests, skipped 12 environment-dependent tests, zero failures; all 15 GTK4
+configure/shell-publication contracts passed. Provenance covers 154 runtime files; i18n, ShellCheck and whitespace
+checks passed. Reference VM: all 20 Apps tests passed, including a real 80-entry QML fixture that checked delegate
+identity on unchanged refresh and reopening, scroll preservation/clamping, search reset, stable selection and
+no activation after removal. QML lint retained exactly 2511 reviewed diagnostics across 92 files. GTK3, GTK4 and
+AppLibrary resolved all 97 application names to identical candidate SVGs. The complete isolated menu script under
+C.UTF-8 passed every Apps assertion and retained the six previously recorded failures (two stale root/navigation
+expectations and four missing-theme fixture warnings). An initial non-UTF-8 SSH run was stopped because Qt locale
+warnings polluted its JSON transport; its temporary process was stopped before rerunning. The installed shell
+was not replaced or restarted for these checks; product publication and attended real launch remain pending.
+
 ## Screenshot command consumer (plan 02-40)
 
 Trigger → Capture extends the existing menu with Screenshot and Screenshot with annotation. Both use closed action

@@ -1,13 +1,13 @@
 # Maintainer: Tobi Lütke <tobi@lutke.com>
 # Derived from omacom/omarchy-pkgs c73cd8aa4d12a9b3ad4b8451b153bd36294bc6b1, 1.26.2-4.
-# MirrorOS: pkgrel 4.3, x86_64 only; omit check() and clang checkdepends.
+# MirrorOS: pkgrel 4.4, x86_64 only; omit check() and clang checkdepends.
 # Save As uses the desktop portal; the launcher displays Omasnap (local patches below).
 # Upstream CI runs the unmodified smoke suite: omacom/omasnap .github/workflows/test.yml.
 # Source: v1.26.2, commit 6150151846b0ddc2ca8e6b107324de8b0c7240ae.
 
 pkgname=omasnap
 pkgver=1.26.2
-pkgrel=4.3
+pkgrel=4.4
 pkgdesc="Native Wayland screenshot and annotation overlay for Hyprland"
 arch=('x86_64')
 url="https://github.com/omacom/omasnap"
@@ -69,11 +69,12 @@ prepare() {
    QGuiApplication::setDesktopFileName(QStringLiteral("omasnap"));
 --- a/omasnap.desktop
 +++ b/omasnap.desktop
-@@ -1,6 +1,6 @@
+@@ -1,6 +1,7 @@
  [Desktop Entry]
  Type=Application
 -Name=Screenshot
 +Name=Omasnap
++Keywords=screenshot;capture;screen capture;
  Comment=Capture and annotate a screenshot
  Exec=omasnap %f
  Icon=omasnap

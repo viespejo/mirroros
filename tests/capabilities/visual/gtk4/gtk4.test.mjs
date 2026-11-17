@@ -121,12 +121,15 @@ test('each native icon theme MirrorOS-<theme> holds the neutral check and exactl
     assert.deepEqual(files(icons).map(path => path.slice(icons.length + 1)).sort(), [...check, ...generated.keys()].sort());
     for (const [path, content] of generated) assert.equal(read(join(icons, path)), content, path);
     const palette = new Set(Object.values(generator.parseColors(read(join(theme, name, 'colors.toml')))));
+    const applicationPalette = new Set(Object.values(generator.applicationPalette(name)).map(value => value.toLowerCase()));
     for (const path of generated.keys()) {
       if (!path.endsWith('.svg')) continue;
-      assert.match(path, /^scalable\/(places|mimetypes|devices)\/[a-zA-Z0-9._-]+\.svg$/, path);
+      assert.match(path, /^scalable\/(places|mimetypes|devices|apps)\/[a-zA-Z0-9._-]+\.svg$/, path);
       const text = generated.get(path);
       assert.doesNotMatch(text, /var\(|currentColor/, path);
-      for (const [hex] of text.matchAll(/#[0-9a-fA-F]{6}\b/g)) assert.ok(palette.has(hex.toLowerCase()), `${path}: ${hex}`);
+      const allowed = path.startsWith('scalable/apps/') ? applicationPalette : palette;
+      assert.doesNotMatch(text, /\{\{|\}\}/, path);
+      for (const [hex] of text.matchAll(/#[0-9a-fA-F]{6}\b/g)) assert.ok(allowed.has(hex.toLowerCase()), `${path}: ${hex}`);
     }
     // The reviewed original drawing, identical in every variant.
     for (const path of check) {
@@ -137,21 +140,37 @@ test('each native icon theme MirrorOS-<theme> holds the neutral check and exactl
     const sections = new Map([...index.matchAll(/^\[([^\]]+)\]\n((?:[A-Za-z]+=.*\n)+)/gm)]
       .map(match => [match[1], Object.fromEntries(match[2].trim().split('\n').map(line => line.split('=')))]));
     assert.deepEqual(sections.get('Icon Theme'), {
-      Name: `MirrorOS-${name}`, Comment: 'MirrorOS check, folders, file types and devices over Adwaita',
+      Name: `MirrorOS-${name}`, Comment: 'MirrorOS check, folders, file types, devices and applications over Adwaita',
       Inherits: 'Adwaita,hicolor',
-      Directories: '16x16/status,scalable/status,symbolic/status,scalable/places,scalable/mimetypes,scalable/devices',
+      Directories: '16x16/status,scalable/status,symbolic/status,scalable/places,scalable/mimetypes,scalable/devices,scalable/apps',
     });
     assert.deepEqual(sections.get('16x16/status'), { Context: 'Status', Size: '16', Type: 'Fixed' });
     assert.deepEqual(sections.get('scalable/status'),
       { Context: 'Status', Size: '128', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
     assert.deepEqual(sections.get('symbolic/status'),
       { Context: 'Status', Size: '16', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
-    for (const [dir, context] of [['scalable/places', 'Places'], ['scalable/mimetypes', 'MimeTypes'], ['scalable/devices', 'Devices']])
+    for (const [dir, context] of [['scalable/places', 'Places'], ['scalable/mimetypes', 'MimeTypes'], ['scalable/devices', 'Devices'], ['scalable/apps', 'Applications']])
       assert.deepEqual(sections.get(dir), { Context: context, Size: '128', MinSize: '8', MaxSize: '512', Type: 'Scalable' });
-    assert.equal(sections.size, 7);
+    assert.equal(sections.size, 8);
+    const apps = [...generated.keys()].filter(path => path.startsWith('scalable/apps/'));
+    assert.equal(apps.length, 97);
+    assert.ok(!apps.includes('scalable/apps/printer.svg'));
+    for (const icon of ['foot', 'omasnap', 'org.pulseaudio.pavucontrol', 'io.github.lgse.Strata'])
+      assert.ok(apps.includes(`scalable/apps/${icon}.svg`));
   }
   assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/icons/);
   assert.match(read(join(runtime, 'install-runtime')), /-o -path \.\/icon-sources/);
+});
+
+test('application source hashes and distributed licenses retain the reviewed inputs', () => {
+  const sources = join(runtime, 'icon-sources');
+  const sums = read(join(sources, 'application-sources.sha256')).trim().split('\n').map(line => line.split(/  /));
+  const inputs = files(sources).map(path => path.slice(sources.length + 1))
+    .filter(path => /^(papercraft|papercraft-tools)\//.test(path) && !path.endsWith('ATTRIBUTION.md'));
+  assert.deepEqual(sums.map(([, path]) => path).sort(), inputs.sort());
+  for (const [hash, path] of sums) assert.equal(sha256(readFileSync(join(sources, path))), hash, path);
+  assert.match(read(join(runtime, 'icons/default/licenses/papercraft/ATTRIBUTION.md')), /Lennard Hofmann, CC BY-SA 4.0/);
+  assert.match(read(join(runtime, 'icons/default/licenses/papercraft/ATTRIBUTION.md')), /Jason Long, CC BY 3.0/);
 });
 
 test('icon sources are the pinned unmodified upstream files and every drawn color keeps its contrast', async () => {

@@ -72,23 +72,68 @@ entries are conflicts. The naming rule is recorded in [theme sources](../theme/s
 `/usr/share/icons/MirrorOS-<theme>`, with its manifest at the theme root (GTK ignores it). It contains:
 
 - an original `index.theme` (`Inherits=Adwaita,hicolor`; `16x16/status`, `scalable/status` and `symbolic/status`
-  with the same sizes and types as the packaged Adwaita 51 index, plus scalable `places`, `mimetypes` and `devices`);
+  with the same sizes and types as the packaged Adwaita 51 index, plus scalable `places`, `mimetypes`, `devices` and `apps`);
 - the three neutral `emblem-default` SVG variants, the reviewed original MirrorOS drawing, identical in every
   variant (GPL-3.0-only); Adwaita 51 has no `emblem-default`, so the replaced check is AdwaitaLegacy's PNG;
 - 14 folder, 30 file-type and 26 device icons and their `licenses/`, generated from pinned upstream sources with
-  the theme's palette, as described under [Generated icon sources](#generated-icon-sources).
+  the theme's palette, as described under [Generated icon sources](#generated-icon-sources);
+- 97 application icons and the Papercraft notices described under [Application icons](#application-icons).
 
-Every other name, including all `-symbolic` icons, application icons and emblems other than the check, resolves
+Every other name, including other symbolic icons and emblems other than the check, resolves
 through Adwaita exactly as before. No packaged file or Adwaita index is copied or overwritten, and no application
 icon alias is shared globally. Only `MirrorOS-default` exists. `desktop/portal` selects it as the system dconf
 `icon-theme` default; a user `icon-theme` value takes precedence and then drops all of these icons. Modified,
 unknown or linked trees are conflicts.
 
+## Application icons
+
+The maintainer authorized product integration after reviewing temporary Apps/GTK3/GTK4 previews in the reference
+VM. `icon-sources/papercraft/` holds 86 byte-identical SVG templates from local Omarchy
+`c0c63402abee6e8335f9bd3c6da85348b9269b11`, `icons/papercraft/` (MIT, David Heinemeier Hansson).
+The one excluded upstream template is `printer.svg.tpl`: the existing MirrorOS device drawing keeps that name.
+`papercraft-tools/omarchy-theme-color` and `omarchy-theme-icon-palette` are unchanged from the same revision.
+`application-sources.sha256` pins the imported templates/tools and retained license texts. They are development
+inputs only and are never published as session executables. Their color-role resolution and simple template
+substitution reproduce the reviewed SVGs using `visual/theme/<theme>/colors.toml`.
+
+`icon-sources/mirroros-apps/` contains eleven original MirrorOS templates (GPL-3.0-only), described as
+Papercraft-inspired, not upstream artwork: CMakeSetup, LimineSnapperSync, io.github.lgse.Strata, org.gtk.Demo4,
+org.gtk.PrintEditor4, org.gtk.WidgetFactory4, org.gtk.gtk4.NodeEditor, org.pulseaudio.pavucontrol, qv4l2, qvidcap and
+stoken-gui. Pavucontrol has only three vertically expanded raised sliders, without a speaker or indicators.
+The shared generator emits these and the 86 upstream icons into `icons/default/scalable/apps/`; GTK3, GTK4 and
+Apps consume the same native theme resources. No desktop identity, launch command or association changes.
+
+Foot's footprint is by Lennard Hofmann (CC BY-SA 4.0); Neovim's mark is by Jason Long (CC BY 3.0), as declared in
+the retained template descriptions. The MIT license, both CC texts and `ATTRIBUTION.md` are distributed under
+`icons/default/licenses/papercraft/`. The legal texts were retrieved from
+https://creativecommons.org/licenses/by-sa/4.0/legalcode.txt and
+https://creativecommons.org/licenses/by/3.0/legalcode.txt. These terms are retained; MirrorOS does not relicense
+upstream artwork as GPL. Rendering applies the MirrorOS palette to upstream's adaptations. Every other name falls
+back to the theme inheritance chain. The neutral check, folder, file-type and device SVGs are unchanged.
+
+Validation uses `tests/capabilities/visual/gtk4/gtk4.test.mjs`: source digests, exact regenerated output, 97 app
+resources, role colors, no unresolved placeholders, no printer collision, retained check digest and license
+coverage. The first integration reproduced all 97 preview SVGs byte-for-byte apart from their generated provenance
+comment. Reference-VM GTK3 3.24.52, GTK4 4.24.1 and the actual AppLibrary resolved all 97 names to the same
+candidate SVGs without changing session preferences. Configure/publication contracts passed with unchanged
+reruns and conflict protection. Attended visual review is not replaced by these checks; installation is pending.
+
+### Default-device check limitation
+
+The maintainer reported a black check in both toggle states in pavucontrol `1:6.2-2`. A read-only GTK4 probe in
+the reference VM confirmed that the installed `emblem-default.svg` resolves as non-symbolic, whereas
+`emblem-default-symbolic.svg` and adjacent `audio-volume-muted-symbolic`/`changes-prevent-symbolic` resolve as
+symbolic. Thus the ordinary SVG's currentColor does not follow the widget's foreground. A temporary alias to
+the symbolic file still resolved as non-symbolic under the ordinary name. Changing its static fill would not
+provide state-dependent colors. A proposed toggle-image CSS preference was withdrawn; pavucontrol CSS and all
+three check SVGs remain byte-identical. A correction must arrange for the consumer to request symbolic artwork;
+no fix or graphical acceptance is claimed here.
+
 ## Generated icon sources
 
 The maintainer approved on 2026-11-13, after attended review of a temporary VM prototype in the GTK3 file chooser,
 palette-colored folder, file-type and device icons in the style of Strata's file browser, replacing Adwaita's
-full-color blue folders. `icon-sources/` holds only the upstream files used, unmodified, with their licenses;
+full-color blue folders. `icon-sources/lucide/` and `icon-sources/catppuccin/` hold only the upstream files used, unmodified, with their licenses;
 `SHA256SUMS` lists each file's digest and a test checks it. It is a delivery input, excluded from every published tree.
 
 | Project | Revision | License | Files |

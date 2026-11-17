@@ -1,0 +1,70 @@
+#!/usr/bin/bash
+# Index only application/device icons in the selected native GTK theme and its
+# inheritance chain. Output: file signature<TAB>path, preferred candidates first.
+# Largest-PNG ordering follows Omarchy 520c3ed969d30b58defe03eb19d603f32b4cb002,
+# shell/services/AppLibrary.qml (MIT, Copyright (c) David Heinemeier Hansson).
+set -Eeuo pipefail
+export LC_ALL=C
+
+theme="$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null || true)"
+theme="${theme#\'}"
+theme="${theme%\'}"
+[[ -n "$theme" && "$theme" != */* && "$theme" != . && "$theme" != .. ]] || theme=MirrorOS-default
+
+bases=("$HOME/.icons" "${XDG_DATA_HOME:-$HOME/.local/share}/icons")
+IFS=: read -r -a data_dirs <<< "${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+for dir in "${data_dirs[@]}"; do
+  [[ -n "$dir" ]] && bases+=("$dir/icons")
+done
+
+declare -A visited=()
+priority=0
+
+scan_theme() {
+  local name="$1" base index directory child root_priority=0 current
+  local -a inherited=()
+  [[ -n "$name" && "$name" != */* && "$name" != . && "$name" != .. ]] || return 0
+  [[ ! ${visited[$name]+present} ]] || return 0
+  visited[$name]=1
+  current=$priority
+  priority=$((priority + 1))
+  for base in "${bases[@]}"; do
+    index="$base/$name/index.theme"
+    if [[ -f "$index" ]]; then
+      # Only declared app/device contexts are eligible: action icons with the
+      # same name must never shadow the application's icon.
+      while IFS= read -r directory; do
+        [[ -n "$directory" && "$directory" != /* && "/$directory/" != */../* ]] || continue
+        [[ -d "$base/$name/$directory" ]] || continue
+        find -L "$base/$name/$directory" -type f \( -name '*.svg' -o -name '*.png' \) \
+          -printf '%T@:%C@:%s\t%p\n' 2>/dev/null |
+          awk -v theme="$current" -v root="$root_priority" -F '\t' -v OFS='\t' '
+            { png = ($2 !~ /\.svg$/); size = (match($2, /\/[0-9]+x[0-9]+[@\/]/) ? substr($2, RSTART + 1) + 0 : 0);
+              print theme, root, png, size, $0 }' || true
+      done < <(awk '
+        /^\[/ { section=$0; sub(/^\[/, "", section); sub(/\]\r?$/, "", section) }
+        /^Context[[:space:]]*=/ { value=$0; sub(/^[^=]*=[[:space:]]*/, "", value); sub(/[[:space:]]*$/, "", value);
+          if (value == "Applications" || value == "Devices") print section }
+      ' "$index")
+      while IFS= read -r child; do inherited+=("$child"); done < <(awk '
+        /^\[/ { main=($0 ~ /^\[Icon Theme\]\r?$/) }
+        main && /^Inherits[[:space:]]*=/ { sub(/^[^=]*=/, ""); gsub(/\r/, ""); n=split($0, names, ",");
+          for (i=1; i<=n; i++) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", names[i]); print names[i] } }
+      ' "$index")
+    fi
+    root_priority=$((root_priority + 1))
+  done
+  for name in "${inherited[@]}"; do scan_theme "$name"; done
+}
+
+{
+  scan_theme "$theme"
+  scan_theme hicolor
+  for dir in "${data_dirs[@]}"; do
+    [[ -d "$dir/pixmaps" ]] || continue
+    find -L "$dir/pixmaps" -maxdepth 1 -type f \( -name '*.svg' -o -name '*.png' \) \
+      -printf '%T@:%C@:%s\t%p\n' 2>/dev/null |
+      awk -v priority="$priority" -F '\t' -v OFS='\t' '{ print priority, 0, ($2 !~ /\.svg$/), 0, $0 }' || true
+    priority=$((priority + 1))
+  done
+} | sort -s -t $'\t' -k1,1n -k2,2n -k3,3n -k4,4nr | cut -f 5-

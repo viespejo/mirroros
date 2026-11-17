@@ -18,7 +18,7 @@ set -Eeuo pipefail
 printf 'makepkg %s\n' "$*" >> "$CFG_TEST_CALLS"
 [[ "$PWD" == "$CFG_TEST_HOME/.cache/mirroros/omasnap/.build."* && -f PKGBUILD ]] || exit 97
 [[ "$PKGDEST" == "$CFG_TEST_HOME/.cache/mirroros/omasnap" && "$SRCDEST" == "$PWD/sources" && "$BUILDDIR" == "$PWD/build" ]] || exit 97
-package="$PKGDEST/omasnap-1.26.2-4.3-x86_64.pkg.tar.zst"
+package="$PKGDEST/omasnap-1.26.2-4.4-x86_64.pkg.tar.zst"
 case "$*" in
   --packagelist) printf '%s\n' "$package" ;;
   '--force --noconfirm --nocolor')
@@ -40,9 +40,9 @@ teardown() { cfg_test_teardown; }
 @test "Omasnap configure installs reviewed package and managed payloads, then reruns unchanged" {
   run "$CFG_TEST_ENTRY" --output "$CFG_TEST_DIR/first"
   [ "$status" -eq 0 ] || { cat "$CFG_TEST_DIR/first/configure.log" >&3; return 1; }
-  [ "$(< "$CFG_TEST_INSTALLED/omasnap")" = 1.26.2-4.3 ]
-  grep -qxF "pacman -U --needed --noconfirm -- $CFG_TEST_HOME/.cache/mirroros/omasnap/omasnap-1.26.2-4.3-x86_64.pkg.tar.zst" "$CFG_TEST_CALLS"
-  grep -q $'^omasnap\t.*\tv1.26.2\t6150151846b0ddc2ca8e6b107324de8b0c7240ae\t1.26.2-4.3$' "$CFG_TEST_DIR/first/sources.tsv"
+  [ "$(< "$CFG_TEST_INSTALLED/omasnap")" = 1.26.2-4.4 ]
+  grep -qxF "pacman -U --needed --noconfirm -- $CFG_TEST_HOME/.cache/mirroros/omasnap/omasnap-1.26.2-4.4-x86_64.pkg.tar.zst" "$CFG_TEST_CALLS"
+  grep -q $'^omasnap\t.*\tv1.26.2\t6150151846b0ddc2ca8e6b107324de8b0c7240ae\t1.26.2-4.4$' "$CFG_TEST_DIR/first/sources.tsv"
   cmp "$PROVIDER/omasnap/omasnap.conf" "$CFG_TEST_HOME/.config/omasnap/omasnap.conf"
   cmp "$PROVIDER/omasnap/60-mirroros-omasnap.conf" "$MIRROROS_CONFIGURE_ROOT/etc/environment.d/60-mirroros-omasnap.conf"
   cmp "$PROVIDER/omasnap/screenshot-bindings.lua" "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/hypr/screenshot-bindings.lua"
@@ -134,14 +134,15 @@ teardown() { cfg_test_teardown; }
   ! grep -q 'platformtheme' "$PROVIDER/omasnap/screenshot-backend"
   local desktop
   desktop=$(< "$MIRROROS_OMASNAP_SOURCE/omasnap.desktop")
-  printf '%s\n' "${desktop/Name=Screenshot/Name=Omasnap}" > "$CFG_TEST_DIR/expected.desktop"
+  printf '%s\n' "${desktop/Name=Screenshot/$'Name=Omasnap\nKeywords=screenshot;capture;screen capture;'}" > "$CFG_TEST_DIR/expected.desktop"
   cmp "$CFG_TEST_DIR/expected.desktop" "$CFG_TEST_DIR/patch/omasnap-1.26.2/omasnap.desktop"
 }
 
 @test "Omasnap recipe and INI keep the pinned archive and output defaults" {
-  run bash -e -c 'source "$1"; [[ "$pkgname $pkgver $pkgrel ${arch[*]}" == "omasnap 1.26.2 4.3 x86_64" ]]; [[ "${sha256sums[0]}" == e173edd4f2e797273c967513f24c360b6f00733792b9708757a82c39fbc43bf9 ]]; ! declare -F check; [[ ! -v checkdepends ]]' bash "$PROVIDER/omasnap/PKGBUILD"
+  run bash -e -c 'source "$1"; [[ "$pkgname $pkgver $pkgrel ${arch[*]}" == "omasnap 1.26.2 4.4 x86_64" ]]; [[ "${sha256sums[0]}" == e173edd4f2e797273c967513f24c360b6f00733792b9708757a82c39fbc43bf9 ]]; ! declare -F check; [[ ! -v checkdepends ]]' bash "$PROVIDER/omasnap/PKGBUILD"
   [ "$status" -eq 0 ]
   grep -qxF '+Name=Omasnap' "$PROVIDER/omasnap/PKGBUILD"
+  grep -qxF '+Keywords=screenshot;capture;screen capture;' "$PROVIDER/omasnap/PKGBUILD"
   run bash -e -c 'source "$1"; for name in "${depends[@]}" "${makedepends[@]}" base-devel; do grep -qE "^$name (core|extra)$" "$2"; done' bash "$PROVIDER/omasnap/PKGBUILD" "$PROVIDER/packages"
   [ "$status" -eq 0 ]
   [ "$(grep -vcE '^(;|\[output\]|$)' "$PROVIDER/omasnap/omasnap.conf")" -eq 1 ]

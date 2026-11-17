@@ -385,7 +385,7 @@ Item {
     var merged = MenuModel.mergeAppRows(root.items, root.itemOrder, appRows)
     root.items = merged.items
     root.itemOrder = merged.itemOrder
-    if (root.opened) root.rebuildDisplay()
+    if (root.opened) root.rebuildDisplay(true)
   }
 
   function startProviderForMenu(id) {
@@ -660,15 +660,33 @@ Item {
     }
   }
 
-  function rebuildDisplay() {
+  property int displayRevision: 0
+
+  function displayMatchesRows(rows) {
+    if (displayModel.count !== rows.length) return false
+    for (var i = 0; i < rows.length; i++) {
+      var current = displayModel.get(i)
+      for (var key in rows[i]) {
+        if (current[key] !== rows[i][key]) return false
+      }
+    }
+    return true
+  }
+
+  function rebuildDisplay(preserveAppsPosition) {
+    root.displayRevision += 1
     if (root.dmenuActive) {
       root.rebuildDmenuDisplay()
       return
     }
 
-    displayModel.clear()
+    var revision = root.displayRevision
+    var appsPosition = preserveAppsPosition && root.appsView ? appsGrid.scrollPosition() : -1
 
-    if (!root.rowsLoaded) return
+    if (!root.rowsLoaded) {
+      displayModel.clear()
+      return
+    }
 
     var active = root.item(root.activeMenu) ? root.activeMenu : "root"
     root.activeMenu = active
@@ -729,12 +747,25 @@ Item {
       }
     }
 
-    for (var k = 0; k < rows.length; k++) displayModel.append(rows[k])
-    layoutSerial += 1
+    // DesktopEntries may reorder unchanged entries, including on launch.
+    // Keep the existing cells and their loaded images when the rows match.
+    if (!root.appsView || !root.displayMatchesRows(rows)) {
+      displayModel.clear()
+      for (var k = 0; k < rows.length; k++) displayModel.append(rows[k])
+      layoutSerial += 1
+    }
 
     root.settleCursor()
 
     Qt.callLater(function() {
+      if (revision !== root.displayRevision) return
+      if (root.appsView) {
+        if (appsPosition >= 0) {
+          appsGrid.restorePosition(appsPosition)
+          return
+        }
+        appsGrid.resetPosition()
+      }
       if (displayModel.count > 0) root.revealCursor()
     })
   }
@@ -1133,7 +1164,7 @@ Item {
       next[id] = (entry && entry.when === guard) ? visible : root.whenResults[id]
     }
     root.whenResults = next
-    if (root.opened && !root.dmenuActive) root.rebuildDisplay()
+    if (root.opened && !root.dmenuActive) root.rebuildDisplay(true)
   }
 
   function refreshGuards() {
@@ -1149,7 +1180,7 @@ Item {
   Connections {
     target: root.sessionActions
     function onRevisionChanged() {
-      if (root.opened && !root.dmenuActive) root.rebuildDisplay()
+      if (root.opened && !root.dmenuActive) root.rebuildDisplay(true)
     }
   }
 

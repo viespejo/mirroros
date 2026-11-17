@@ -111,6 +111,15 @@ launches an app. Escape clears a filter before closing; Backspace with no filter
 No dock, app pinning or uninstall actions are included. Root search results remain in the regular menu list.
 See [source and validation limits](../../capabilities/desktop/shell/sources.md#apps-launcher-grid).
 
+Apps now resolves application/device artwork from the native GTK icon-theme preference and its inheritance
+chain, shared with GTK3/GTK4. Theme selection changes trigger a scan; opening the menu also rescans so newly
+published resources reload through file-signature cache keys. No settings or desktop entries are rewritten.
+Catalog updates preserve scroll and identity-based selection, without moving a manually scrolled view to the
+selected row. New searches/openings reset scroll. Identical rendered Apps rows retain their cells and images.
+See [native icon/update ownership](../../capabilities/desktop/shell/sources.md#native-application-icons-and-passive-updates).
+The [shared application artwork](../../capabilities/visual/gtk4/sources.md#application-icons) is generated at
+development time; runtime Apps needs no Omarchy tools or temporary search-path override.
+
 The shared application library reads `launcher.hides` beside `shell.qml` (delivered under
 `/usr/share/mirroros/shell/`), using Omarchy's parser and file-change watcher. It contains one desktop id per
 line and hides `uuctl`, `foot-server` and `footclient` from Apps and application search. Maintain this product

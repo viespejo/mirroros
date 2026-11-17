@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Strata</title>
+  <desc>Original MirrorOS design study. A layered folder with a divided file-browser face: an original application-specific study, not a recoloring of the Strata logo. Papercraft-inspired palette and hard shadows; not an upstream Papercraft icon.</desc>
+  <defs><linearGradient id="main" x1="0" y1="0" x2="1" y2="1"><stop stop-color="{{ icon_main_end }}"/><stop offset="1" stop-color="{{ icon_main }}"/></linearGradient></defs>
+  <g transform="translate(256 256) scale(1.1) translate(-256 -256)">
+    <path d="M66 156Q66 134 88 134H214L244 170H424Q446 170 446 192V388Q446 412 422 412H90Q66 412 66 388Z" fill="{{ icon_shadow }}" transform="translate(0 10)"/>
+    <path d="M66 146Q66 124 88 124H214L244 160H424Q446 160 446 182V378Q446 402 422 402H90Q66 402 66 378Z" fill="{{ icon_paper }}"/>
+    <rect x="66" y="202" width="380" height="208" rx="22" fill="{{ icon_shadow }}"/>
+    <rect x="66" y="194" width="380" height="208" rx="22" fill="url(#main)"/>
+    <rect x="92" y="222" width="78" height="150" rx="10" fill="{{ icon_body }}"/>
+    <path d="M114 248H148M114 278H138" stroke="{{ icon_ink }}" stroke-width="10" stroke-linecap="round"/>
+    <rect x="196" y="222" width="222" height="150" rx="10" fill="{{ icon_body }}"/>
+    <rect x="222" y="248" width="58" height="86" rx="8" fill="{{ icon_paper }}"/>
+    <path d="M306 260H388M306 290H368M306 320H380" stroke="{{ icon_ink }}" stroke-width="10" stroke-linecap="round"/>
+  </g>
+</svg>

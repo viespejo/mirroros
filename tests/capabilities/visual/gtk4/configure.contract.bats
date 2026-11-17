@@ -36,6 +36,8 @@ teardown() { cfg_test_teardown; }
     "$CFG_TEST_DIR/first/sources.tsv"
   grep -qxF $'catppuccin-gtk4-icons\thttps://github.com/catppuccin/vscode-icons\tv1.26.0\tb6915da9f6889b683a110aa747de96c2820a537d\t' \
     "$CFG_TEST_DIR/first/sources.tsv"
+  grep -qxF $'omarchy-papercraft-icons\thttps://github.com/omacom/omarchy\t\tc0c63402abee6e8335f9bd3c6da85348b9269b11\t' \
+    "$CFG_TEST_DIR/first/sources.tsv"
   [ ! -e "$dest/entries" ]
   local entry="$MIRROROS_CONFIGURE_ROOT/usr/share/themes/MirrorOS-default/gtk-4.0"
   bash "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/install-runtime" check \
@@ -55,9 +57,15 @@ teardown() { cfg_test_teardown; }
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/symbolic/status/emblem-default-symbolic.svg" \
     "$icons/symbolic/status/emblem-default-symbolic.svg"
   for file in scalable/places/folder.svg scalable/mimetypes/text-x-generic.svg scalable/devices/drive-harddisk.svg \
-    licenses/LICENSE.lucide licenses/LICENSE.catppuccin licenses/STRATA-LICENSE; do
+    licenses/LICENSE.lucide licenses/LICENSE.catppuccin licenses/STRATA-LICENSE \
+    scalable/apps/foot.svg scalable/apps/omasnap.svg scalable/apps/org.pulseaudio.pavucontrol.svg \
+    licenses/papercraft/LICENSE licenses/papercraft/CC-BY-SA-4.0.txt licenses/papercraft/CC-BY-3.0.txt \
+    licenses/papercraft/ATTRIBUTION.md; do
     cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk4/icons/default/$file" "$icons/$file"
   done
+  [ "$(find "$icons/scalable/apps" -type f -name '*.svg' | wc -l)" -eq 97 ]
+  [ ! -e "$icons/scalable/apps/printer.svg" ]
+  [ ! -e "$icons/papercraft-tools" ]
   [ ! -e "$icons/generate.mjs" ]
   [ "$(stat -c %a "$icons/index.theme")" = 644 ]
   [ ! -e "$MIRROROS_CONFIGURE_ROOT/usr/share/icons/Adwaita" ]

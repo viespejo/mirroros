@@ -32,6 +32,19 @@ Item {
   readonly property int cardHeight: Math.max(1, Math.min(root.screenHeight - root.screenMargin * 2, root.inset * 2 + root.headerHeight + root.headerSpacing + 4 * root.cellHeight))
   readonly property int viewportHeight: Math.max(0, root.cardHeight - root.inset * 2 - root.headerHeight - root.headerSpacing)
 
+  function scrollPosition() {
+    return grid.contentY - grid.originY
+  }
+
+  function restorePosition(position) {
+    grid.forceLayout()
+    grid.contentY = grid.originY + Math.max(0, Math.min(position, grid.contentHeight - grid.height))
+  }
+
+  function resetPosition() {
+    grid.positionViewAtBeginning()
+  }
+
   function reveal(index) {
     grid.positionViewAtIndex(index, GridView.Contain)
   }

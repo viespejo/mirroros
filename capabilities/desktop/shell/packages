@@ -1,5 +1,8 @@
 # Quickshell runtime; its package pulls Qt, Wayland and PipeWire libraries.
 quickshell extra
+# Native GTK icon-theme preference and read-only change monitor (gsettings).
+glib2 core
+gsettings-desktop-schemas extra
 # Wallpaper thumbnail cache locks (flock) and image generation (vipsthumbnail).
 util-linux core
 libvips extra
