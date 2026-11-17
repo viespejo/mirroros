@@ -143,9 +143,26 @@ partial upgrade. Configure never uses that operation. `--refresh` can upgrade th
 chosen deliberately. If no declared package is missing, there is no package transaction, sync, or upgrade even
 with `--refresh`; read-only validation and evidence queries still invoke pacman.
 
+## Screenshot provider and command (plan 02-40)
+
+The Hyprland provider builds `omasnap 1.26.2-4.2` with the approved local Save As portal patch as the target user from a reviewed local recipe, then
+installs it with privileges. Dependencies are declared in the provider; makepkg does not install them. The cache is
+`${XDG_CACHE_HOME:-$HOME/.cache}/mirroros/omasnap`. It installs the neutral dispatch backend, tracked capture bindings,
+the managed `/etc/environment.d/60-mirroros-omasnap.conf` and a minimal semicolon-marked user `omasnap.conf`. Unmarked
+user INI files/links are preserved and can restore application slugs. Both the provider and desktop/files independently
+ensure the shared theme bridge; conflicts are preserved and fail configure. No shared helper behavior changes.
+
+`desktop/screenshot` immediately follows the provider, before `desktop/clipboard`, and installs the provider-neutral
+command plus its direct runtime dependencies. A fresh graphical session with a new user manager is required for
+recent-document environment inheritance. Graphical logout alone can retain a pre-delivery manager while SSH/other
+sessions remain; a coordinated reboot established the new environment in the VM. Check the expanded value before
+capture; do not infer launcher/terminal/Open With coverage from a configure pass. No service restart or desktop
+entry override is performed. The authorized Task 3 campaign must observe configure idempotence, runtime-only recent
+sources/logs, metadata, output, failures and attended capture behavior. See [screenshots](screenshots.md).
+
 ## Consequential effects
 
-The twenty-five steps run in this order:
+The twenty-six steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -167,6 +184,7 @@ The twenty-five steps run in this order:
 | `system/network` | NetworkManager/systemd-resolved backend and stub, resolver enablement, private migration/recovery and isolated target DNS; no provider/profile edits |
 | `system/vpn` | NetworkManager OpenConnect plugin, with an offline registration check; no corporate profile or connection |
 | `desktop/compositor/providers/hyprland` | Session and greeter with the shared resolved-first layout list (`us,es` declared), the approved Story 4.3 and hardware bindings, runtime-only display helper, the greeter layout indicator, Wayland greeter, one uwsm session entry, the file manager chords, and the Hyprland portal backend with `grim`, `hyprland-portals.conf`, the user `xdph.conf` and the portal-dialog window rules |
+| `desktop/screenshot` | Provider-neutral screenshot command with validated modes and optional pre-output annotation, backend status supervision, actionable failures and journal diagnostics ([screenshots](screenshots.md)) |
 | `desktop/clipboard` | cliphist, wl-clipboard and fzf; the owned runtime-only `clipboard-history` command and two approved text/PNG watcher user units, enabled without starting for `graphical-session.target` ([clipboard procedure](../procedures/clipboard.md)) |
 | `desktop/shell` | Quickshell and the shell's dependencies, the reviewed shell runtime under `/usr/share/mirroros/shell` with its hosted polkit agent, its user unit enabled for the selected user, and the read-only `polkit-check` command; fails while a listed competing polkit agent is started for the user |
 | `desktop/reminders` | jq and sound-theme-freedesktop, and the owned `reminder` command with its Omarchy licence under `/usr/share/mirroros/reminders`; no unit, daemon or user state ([sources](../../capabilities/desktop/reminders/sources.md)) |

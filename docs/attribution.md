@@ -1,5 +1,20 @@
 # Attribution
 
+## Screenshot core
+
+- **Projects:** [Omasnap](https://github.com/omacom/omasnap),
+  [Omarchy packages](https://github.com/omacom/omarchy-pkgs), [Omarchy](https://github.com/omacom/omarchy).
+- **Licenses (SPDX):** `MIT`; Omasnap's bundled fonts retain `OFL-1.1`, and its Lucide assets retain `ISC`.
+- **Incorporated material:** Omasnap's reviewed local PKGBUILD derived from Omarchy packages, retaining its maintainer
+  line; Omasnap source downloaded/checksummed during build with upstream license installation and the explicitly
+  approved local two-file Save As portal patch (`editor-save-as.cpp`, `main.cpp`) embedded in the recipe. The
+  recommended layer rule follows Omasnap's README. Capture key choices, descriptions and menu rows adapt Omarchy's
+  utilities.lua and omarchy-menu.jsonc; annotation row and fixed neutral dispatch are MirrorOS additions.
+- **Notices and provenance:** Omarchy's MIT text remains in the shell's `LICENSE.omarchy`; the package installs
+  Omasnap/font license notices through upstream CMake. Exact source/recipe revisions, deviations and update contract:
+  [provider sources](../capabilities/desktop/compositor/providers/hyprland/omasnap/sources.md);
+  [shell record](../capabilities/desktop/shell/UPSTREAM.md#capture-menu-additions-plan-02-40).
+
 ## Policy
 
 This index covers all externally incorporated material in the repository. Each entry records the project, its SPDX license identifier, the material incorporated into MirrorOS, and a link to a detailed provenance record. Version-specific values belong in that provenance record and are not duplicated in this index.

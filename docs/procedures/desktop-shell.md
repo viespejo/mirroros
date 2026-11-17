@@ -101,6 +101,20 @@ band states, diagnostics and the browser requirement for captive portals. The pl
 `v4.5.0` (DEC-050 in the [network interview log](../technical-interviews/story-4-4-network-panel_log.md)).
 Its VPN section (plan 02-30) opens `vpn-connect` in Foot; see [Connect and disconnect](hardware.md#connect-and-disconnect).
 
+## Capture menu
+
+Plan 02-40 adds Trigger → Capture to the existing menu. SUPER+CTRL+C opens it through the existing
+`qs ipc -p /usr/share/mirroros/shell call menu open capture` route (aliases: capture, screenshot).
+Screenshot calls the neutral screenshot command; Screenshot with annotation adds `--edit` to redact before explicit
+output. PRINT and SUPER+CTRL+ALT+C invoke smart capture and dismiss a running overlay on a second press; all three
+chords appear in keybinding help. Normal capture saves/copies before its native preview: editing afterward does not
+erase originals. A/E toggles annotation in the selector without changing defaults. The Capture card alone is wider
+and screen-clamped; capture dispatch runs immediately after closing the menu, without an added delay or a wait for
+surface removal. The reported menu in the frozen capture background remains under investigation. Close/move previews and pins or wait for expiry before
+later captures if they cover content.
+See [screenshots](screenshots.md) for modes, English OCR, RAM recent documents, history limits and privacy.
+No shell capture service or second surface is introduced; the authorized VM checkpoint remains pending.
+
 ## Clipboard history
 
 Plan 02-38 adds the on-demand clipboard picker over the owned `clipboard-history` command. `SUPER+CTRL+V`
