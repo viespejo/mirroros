@@ -1,5 +1,21 @@
 # Desktop shell sources and configuration ownership
 
+## Screenshot command consumer (plan 02-40)
+
+Trigger → Capture extends the existing menu with Screenshot and Screenshot with annotation. Both use closed action
+ids and fixed argv to `/usr/share/mirroros/screenshot/screenshot`, with only the second adding `--edit`. The existing
+menu IPC accepts `capture`, `screenshot` and `trigger.capture`; no second menu mechanism or capture daemon exists.
+The English catalog owns these four new labels. Keyboard help reads the provider's existing MirrorOSKeys registry,
+including both capture shortcuts and the Capture menu chord. Color/QR and their reserved keys stay deferred to
+02-41; recording is excluded. Capture alone has a screen-clamped 440-unit card. Actions close the menu and dispatch
+immediately, without a capture timer or backing-window wait. The Hyprland provider applies Omarchy's menu-only
+no-animation rule after a viewer-keyboard trial reproduced the faded menu in the exported PNG; one repeated
+Screenshot selector/export check passed with the rule and the maintainer approved adoption. Repeated reliability
+and annotation were not separately retested in that comparison. Earlier VM launch-path checks observed runtime
+recent inheritance after a new user manager; overall Task 3 delivery closure remains pending.
+See [UPSTREAM.md](UPSTREAM.md#capture-menu-additions-plan-02-40) and the
+[screenshots procedure](../../../docs/procedures/screenshots.md).
+
 ## Upstream material
 
 Per-file provenance, licenses and the pinned Omarchy revision are recorded in

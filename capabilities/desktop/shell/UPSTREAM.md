@@ -1,5 +1,21 @@
 # Desktop shell fragments upstream record
 
+## Capture menu additions (plan 02-40)
+
+`menu/MirrorMenu.js` adapts `trigger`, `trigger.capture` and `trigger.capture.screenshot` from Omarchy
+`520c3ed969d30b58defe03eb19d603f32b4cb002`, `default/omarchy/omarchy-menu.jsonc` (MIT, David Heinemeier Hansson;
+notice retained in LICENSE.omarchy). Retained: labels, icons, hierarchy and capture/screenshot aliases. Removed:
+recording aliases and all other Trigger rows. MirrorOS adds Screenshot with annotation. Closed actions
+`screenshot:capture` and `screenshot:edit` map to fixed neutral command argv in Menu.qml, never shell text.
+The four new English `menu.*` labels are owned catalog additions, not unchanged upstream shell.json strings.
+The Capture submenu alone uses a 440-unit card width, still screen-clamped, to show its annotation label.
+Capture actions dispatch fixed argv immediately after closing the menu. The experimental backing-window wait and
+100 ms delay were removed at the maintainer's request. The provider now adapts Omarchy's `mirroros-menu`
+no-animation policy (upstream namespace `omarchy-menu`) after a reproduced faded-menu export and a passing
+bounded VM selector/export comparison; see the provider provenance for the source and validation limits.
+No new surface, provider, daemon or IPC mechanism is introduced. See the compositor provider's
+[Omasnap sources](../compositor/providers/hyprland/omasnap/sources.md) and the screenshots procedure.
+
 ## Origin and scope
 
 - **Project:** [Omarchy](https://github.com/omacom/omarchy).

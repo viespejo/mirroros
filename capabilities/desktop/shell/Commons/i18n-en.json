@@ -78,13 +78,17 @@
   "elsewhen.whereAreYou": "Where are you?",
   "elsewhen.world": "World",
   "elsewhen.worldClock": "World clock",
+  "menu.capture": "Capture",
   "menu.inputPrompt": "Input",
   "menu.nothingHere": "Nothing here yet",
+  "menu.screenshot": "Screenshot",
+  "menu.screenshotAnnotation": "Screenshot with annotation",
   "menu.selectPrompt": "Select",
   "menu.selectedCount": {
     "one": "%1 selected",
     "other": "%1 selected"
   },
+  "menu.trigger": "Trigger",
   "monitor.brightness": "BRIGHTNESS",
   "monitor.display": "Display",
   "monitor.displayFocused": "%1 · focused",

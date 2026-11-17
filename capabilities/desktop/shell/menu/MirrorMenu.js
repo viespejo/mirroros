@@ -1,7 +1,8 @@
 // MirrorOS-owned menu model. Same item schema, ids, labels, aliases, icons and
 // order as the matching rows of Omarchy default/omarchy/omarchy-menu.jsonc at
 // 7075b61c6aaa5d8589f6e816867508fc96dc49d9, restricted to Apps, Learn >
-// Keybindings, Setup > Security > Fingerprint and System, plus the approved background rows from the installed
+// Keybindings, Setup > Security > Fingerprint and System, plus Trigger > Capture (520c3ed96)
+// and the approved background rows from the installed
 // reference recorded in UPSTREAM.md. Not a user-editable file: there is no extension file
 // and no new configuration format.
 //
@@ -23,6 +24,7 @@ var ITEMS = [
   ["apps", { icon: "\u{F003B}", label: "Apps", aliases: ["app", "applications"], provider: "apps" }],
   ["learn", { icon: "\u{F09D1}", label: "Learn" }],
   ["style", { icon: "\uEBCF", label: "Style" }],
+  ["trigger", { icon: "\u{F14DE}", label: "Trigger" }],
   ["setup", { icon: "\uE615", label: "Setup", aliases: ["settings"] }],
   ["install", { icon: "\u{F0249}", label: "Install" }],
   ["system", { icon: "\uF011", label: "System", aliases: ["power-menu"] }],
@@ -33,6 +35,10 @@ var ITEMS = [
   ["system.logout", { icon: "\u{F0343}", label: "Logout", action: "session:logout" }],
   ["system.reboot", { icon: "\u{F0709}", label: "Reboot", action: "session:reboot" }],
   ["system.shutdown", { icon: "\u{F0425}", label: "Shutdown", action: "session:shutdown" }],
+
+  ["trigger.capture", { icon: "\uF030", label: "Capture", aliases: ["capture", "screenshot"] }],
+  ["trigger.capture.screenshot", { icon: "\uF030", label: "Screenshot", action: "screenshot:capture" }],
+  ["trigger.capture.annotation", { icon: "\uF030", label: "Screenshot with annotation", action: "screenshot:edit" }],
 
   ["setup.security", { icon: "\uEB11", label: "Security" }],
   ["setup.security.fingerprint", { icon: "\u{F0237}", label: "Fingerprint", when: "fingerprint-reader", action: "fingerprint:setup" }],
@@ -46,7 +52,7 @@ var ITEMS = [
 // Closed action table: the only values an item's `action` may hold.
 var ACTIONS = ["session:lock", "session:suspend", "session:hibernate", "session:logout",
   "session:reboot", "session:shutdown", "help:keybindings", "wallpaper:open", "wallpaper:install",
-  "fingerprint:setup"]
+  "fingerprint:setup", "screenshot:capture", "screenshot:edit"]
 
 // Closed guard table: the only values an item's `when` may hold.
 var GUARDS = ["fingerprint-reader"]

@@ -14,7 +14,10 @@ const require = createRequire(import.meta.url);
 const MenuModel = require(path.join(shellDir, 'menu/MenuModel.js'));
 const MirrorMenu = require(path.join(shellDir, 'menu/MirrorMenu.js'));
 let passed = 0;
-const test = (name, fn) => { fn(); passed += 1; console.log(`PASS ${name}`); };
+const test = (name, fn) => {
+  if (process.env.MIRROROS_TEST_NAME_PATTERN && !new RegExp(process.env.MIRROROS_TEST_NAME_PATTERN).test(name)) return;
+  fn(); passed += 1; console.log(`PASS ${name}`);
+};
 
 const normalized = MirrorMenu.rawItems().map(([id, raw]) => MenuModel.normalizeItem(id, raw));
 const { items, itemOrder } = MenuModel.mergeMenuSources(normalized, [], 'Go');
@@ -25,7 +28,7 @@ test('model: root injected with upstream label and first in order', () => {
 });
 
 test('model: approved root groups retain upstream order', () => {
-  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'root'), ['apps', 'learn', 'style', 'setup', 'install', 'system']);
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'root'), ['apps', 'learn', 'style', 'trigger', 'setup', 'install', 'system']);
 });
 
 test('model: Setup > Security > Fingerprint is guarded by the closed reader probe', () => {
@@ -83,6 +86,53 @@ test('routing: ids and aliases, unknown falls through', () => {
   assert.deepEqual(itemOrder.filter(id => items[id].parent === 'install'), ['install.style']);
   assert.equal(MenuModel.resolveRoute(items, itemOrder, ''), 'root');
   assert.equal(MenuModel.resolveRoute(items, itemOrder, 'nope'), 'nope');
+});
+
+test('capture: existing routes, closed actions, fixed argv and English labels', () => {
+  for (const alias of ['capture', 'screenshot', 'trigger.capture'])
+    assert.equal(MenuModel.resolveRoute(items, itemOrder, alias), 'trigger.capture');
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'trigger'), ['trigger.capture']);
+  assert.deepEqual(itemOrder.filter(id => items[id].parent === 'trigger.capture'),
+    ['trigger.capture.screenshot', 'trigger.capture.annotation']);
+  assert.equal(items['trigger.capture.screenshot'].action, 'screenshot:capture');
+  assert.equal(items['trigger.capture.annotation'].action, 'screenshot:edit');
+  const qml = fs.readFileSync(path.join(shellDir, 'menu/Menu.qml'), 'utf8');
+  assert.match(qml, /command === "screenshot:capture"\) \{\s+Quickshell\.execDetached\(\["\/usr\/share\/mirroros\/screenshot\/screenshot"\]\)/);
+  assert.match(qml, /command === "screenshot:edit"\) \{\s+Quickshell\.execDetached\(\["\/usr\/share\/mirroros\/screenshot\/screenshot", "--edit"\]\)/);
+  const catalog = JSON.parse(fs.readFileSync(path.join(shellDir, 'Commons/i18n-en.json'), 'utf8'));
+  for (const [key, value] of Object.entries({ trigger: 'Trigger', capture: 'Capture', screenshot: 'Screenshot', screenshotAnnotation: 'Screenshot with annotation' })) {
+    assert.equal(catalog['menu.' + key], value);
+    assert.ok(qml.includes(`Commons.I18n.t("menu.${key}")`));
+  }
+  for (const action of ['screenshot:capture', 'screenshot:edit']) assert.ok(MirrorMenu.isKnownAction(action));
+  assert.equal(MirrorMenu.isKnownAction('screenshot:region'), false);
+});
+
+test('capture: submenu width preserves other menus, dmenu and screen bounds', () => {
+  const qml = fs.readFileSync(path.join(shellDir, 'menu/Menu.qml'), 'utf8');
+  const expression = qml.match(/property int cardWidth: (.*)/)[1];
+  const width = new Function('root', 'Style', 'panel', `return ${expression}`);
+  const style = { space: value => value, gapsOut: 10 };
+  const root = { dmenuActive: false, activeMenu: 'trigger.capture', dmenuWidth: 800 };
+  assert.equal(width(root, style, { width: 1000 }), 440);
+  assert.equal(width({ ...root, activeMenu: 'system' }, style, { width: 1000 }), 300);
+  assert.equal(width({ ...root, dmenuActive: true }, style, { width: 1000 }), 800);
+  assert.equal(width(root, style, { width: 400 }), 380);
+});
+
+test('capture: close before immediate fixed argv dispatch without capture delay', () => {
+  const qml = fs.readFileSync(path.join(shellDir, 'menu/Menu.qml'), 'utf8');
+  const body = name => qml.match(new RegExp(`function ${name}\\([^)]*\\) \\{([\\s\\S]*?)\\n  \\}`))[1];
+  const run = new Function('root', 'MirrorMenu', 'Quickshell', 'action', body('runAction'));
+  const calls = [];
+  const quickshell = { execDetached: argv => calls.push(argv) };
+  const root = { opened: false };
+  run(root, MirrorMenu, quickshell, 'screenshot:edit');
+  assert.deepEqual(calls, [['/usr/share/mirroros/screenshot/screenshot', '--edit']]);
+  run(root, MirrorMenu, quickshell, 'screenshot:capture');
+  assert.deepEqual(calls[1], ['/usr/share/mirroros/screenshot/screenshot']);
+  assert.match(body('applySelected'), /opened = false[\s\S]*root\.runAction\(action\)/);
+  assert.doesNotMatch(qml, /pendingCaptureAction|launchPendingCapture|backingWindowVisible|interval: 100/);
 });
 
 test('apps: merged rows are children of apps and never routable', () => {

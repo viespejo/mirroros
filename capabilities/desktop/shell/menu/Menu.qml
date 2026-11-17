@@ -131,7 +131,7 @@ Item {
   property int dividerHeight: Style.space(17)
   property bool searchDivider: false
   property int layoutSerial: 0
-  property int cardWidth: Math.min(root.dmenuActive ? Style.space(root.dmenuWidth) : Style.space(300), panel.width - Style.gapsOut * 2)
+  property int cardWidth: Math.min(root.dmenuActive ? Style.space(root.dmenuWidth) : Style.space(root.activeMenu === "trigger.capture" ? 440 : 300), panel.width - Style.gapsOut * 2)
   property int visibleRowsHeight: root.dmenuActive ? dmenuRowListHeight(layoutSerial, displayModel.count, filterText) : rowListHeight(layoutSerial, displayModel.count, filterText, searchDivider)
   property int cardHeight: root.dmenuActive
     ? Math.min(contentMargin * 2 + headerHeight + (mode === "input" ? 0 : contentSpacing + visibleRowsHeight), panel.height - Style.gapsOut * 2)
@@ -193,6 +193,10 @@ Item {
       root.wallpaperActions.install()
     } else if (command.indexOf("session:") === 0 && root.sessionActions) {
       root.sessionActions.run(command.substring(8))
+    } else if (command === "screenshot:capture") {
+      Quickshell.execDetached(["/usr/share/mirroros/screenshot/screenshot"])
+    } else if (command === "screenshot:edit") {
+      Quickshell.execDetached(["/usr/share/mirroros/screenshot/screenshot", "--edit"])
     } else if (command === "fingerprint:setup") {
       Quickshell.execDetached(["uwsm", "app", "--", "foot", "-e", "/usr/share/mirroros/hardware/fingerprint-setup"])
     }
@@ -291,7 +295,12 @@ Item {
   }
 
   function normalizeItem(id, raw) {
-    return MenuModel.normalizeItem(id, raw)
+    var entry = MenuModel.normalizeItem(id, raw)
+    if (id === "trigger") entry.label = Commons.I18n.t("menu.trigger")
+    else if (id === "trigger.capture") entry.label = Commons.I18n.t("menu.capture")
+    else if (id === "trigger.capture.screenshot") entry.label = Commons.I18n.t("menu.screenshot")
+    else if (id === "trigger.capture.annotation") entry.label = Commons.I18n.t("menu.screenshotAnnotation")
+    return entry
   }
 
   // The owned model replaces the JSONC files: same normalization and merge as
