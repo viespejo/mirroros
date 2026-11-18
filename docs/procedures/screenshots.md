@@ -50,6 +50,9 @@ existing text clipboard history when copied. The direct OCR language settings be
   Cancellation is silent; a region without a QR code produces a content-free notification. Neither case
   replaces the current clipboard.
 
+Existing Text, QR Code and Color notifications use the same icons as the Capture menu and never include the
+captured result. Color remains silent on success.
+
 The commands `/usr/share/mirroros/screenshot/{color,ocr,qr}` take no arguments. Rerun `mirroros-configure` if a
 backend is missing or after changing the installed language or regional formats. Configure reads `/etc/locale.conf`
 (not the session locale or keyboard layout), ensures the English model, and adds Spanish when the installed

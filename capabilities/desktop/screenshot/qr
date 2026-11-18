@@ -9,7 +9,9 @@ backend=/usr/share/mirroros/compositor/qr-backend
 if [[ ! -x "$backend" ]]; then
   message='QR backend is missing. Rerun mirroros-configure, then try again.'
   printf '%s\n' "$message" >&2
-  notify-send --urgency=normal --hint=int:transient:1 'QR capture failed' "$message" > /dev/null 2>&1 || :
+  # Capture menu QR Code glyph (U+F0432), encoded as UTF-8 regardless of locale.
+  notify-send --urgency=normal --hint=int:transient:1 --hint=$'string:omarchy-glyph:\xF3\xB0\x90\xB2' \
+    'QR capture failed' "$message" > /dev/null 2>&1 || :
   exit 1
 fi
 

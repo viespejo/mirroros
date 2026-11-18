@@ -52,13 +52,19 @@ EOF
   done
 }
 
-@test "capture extras advise configure for missing backends despite notification failure" {
+@test "capture extras advise configure with the matching glyph for missing backends despite notification failure" {
+  export LC_ALL=C
   for action in color ocr qr; do
+    case "$action" in
+      color) title='Color failed'; glyph=$'\363\260\203\211' ;;
+      ocr) title='OCR failed'; glyph=$'\363\260\264\221' ;;
+      qr) title='QR capture failed'; glyph=$'\363\260\220\262' ;;
+    esac
     : > "$CALLS"
     rm "$work/$action-backend"
     run bash "$work/$action"
     [ "$status" -eq 1 ]
     [[ "$output" == *'Rerun mirroros-configure'* && "$output" != *synthetic* ]]
-    grep -q '^notify .*Rerun mirroros-configure' "$CALLS"
+    [ "$(< "$CALLS")" = "notify --urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:$glyph $title $output" ]
   done
 }

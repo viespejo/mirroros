@@ -48,4 +48,6 @@ text="$(grim -g "$selection" - 2>/dev/null | tesseract stdin stdout --oem 1 --ps
   -l "$languages" --dpi 300 -c preserve_interword_spaces=1 2>/dev/null)" 2>/dev/null || fail 'OCR recognition failed.'
 [[ -n "$text" ]] || fail 'No text recognized in the selected region.'
 { printf '%s' "$text" | wl-copy; } > /dev/null 2>&1 || fail 'Could not copy OCR text.'
-notify-send --urgency=normal --hint=int:transient:1 'Text copied to clipboard' > /dev/null 2>&1 || :
+# Capture menu Text glyph (U+F0D11), encoded as UTF-8 regardless of locale.
+notify-send --urgency=normal --hint=int:transient:1 --hint=$'string:omarchy-glyph:\xF3\xB0\xB4\x91' \
+  'Text copied to clipboard' > /dev/null 2>&1 || :

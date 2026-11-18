@@ -9,7 +9,9 @@ backend=/usr/share/mirroros/compositor/ocr-backend
 if [[ ! -x "$backend" ]]; then
   message='OCR backend is missing. Rerun mirroros-configure, then try again.'
   printf '%s\n' "$message" >&2
-  notify-send --urgency=normal --hint=int:transient:1 'OCR failed' "$message" > /dev/null 2>&1 || :
+  # Capture menu Text glyph (U+F0D11), encoded as UTF-8 regardless of locale.
+  notify-send --urgency=normal --hint=int:transient:1 --hint=$'string:omarchy-glyph:\xF3\xB0\xB4\x91' \
+    'OCR failed' "$message" > /dev/null 2>&1 || :
   exit 1
 fi
 

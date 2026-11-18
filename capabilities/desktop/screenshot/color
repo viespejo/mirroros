@@ -9,7 +9,9 @@ backend=/usr/share/mirroros/compositor/color-backend
 if [[ ! -x "$backend" ]]; then
   message='Color backend is missing. Rerun mirroros-configure, then try again.'
   printf '%s\n' "$message" >&2
-  notify-send --urgency=normal --hint=int:transient:1 'Color failed' "$message" > /dev/null 2>&1 || :
+  # Capture menu Color glyph (U+F00C9), encoded as UTF-8 regardless of locale.
+  notify-send --urgency=normal --hint=int:transient:1 --hint=$'string:omarchy-glyph:\xF3\xB0\x83\x89' \
+    'Color failed' "$message" > /dev/null 2>&1 || :
   exit 1
 fi
 

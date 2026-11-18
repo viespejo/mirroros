@@ -41,6 +41,11 @@ backend paths. They return 0 for completion or cancellation, 2 for misuse and 1 
 failure. They do not relay backend output. The Hyprland backends send only controlled diagnostics to
 `mirroros-screenshot`; see the [provider record](../compositor/providers/hyprland/UPSTREAM.md#direct-capture-extras-plan-02-41).
 
+Existing notices pass the glyphs from the [Capture menu](../shell/menu/MirrorMenu.js) through `notify-send`
+using the legacy `omarchy-glyph` string hint: Text `U+F0D11`, QR Code `U+F0432` and Color `U+F00C9`. The
+commands use fixed UTF-8 bytes to send the same glyph regardless of locale, without invoking the desktop shell.
+The notices contain no capture results; Color still only notifies when its backend is missing.
+
 Configure always selects English OCR data and adds Spanish only for `es_ES.UTF-8` in the installed `LANG` or
 an installer-managed format category (`LC_TIME`, `LC_NUMERIC`, `LC_MONETARY`, `LC_MEASUREMENT`). A single
 preflight selection drives resolution, the partial-upgrade guard, installation and package postconditions.
