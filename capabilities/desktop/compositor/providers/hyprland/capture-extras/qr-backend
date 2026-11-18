@@ -38,7 +38,7 @@ result="$(
 glyph_hint=$'string:omarchy-glyph:\xF3\xB0\x90\xB2'
 if (( status == 4 )); then
   notify-send --urgency=normal --hint=int:transient:1 --hint="$glyph_hint" \
-    'No QR code found in the selected region' > /dev/null 2>&1 || :
+    'No QR code found' 'Try selecting a region that includes the entire code.' > /dev/null 2>&1 || :
   fail 'No QR code found in the selected region.'
 fi
 (( status == 0 )) && [[ -n "$result" ]] || fail 'QR decoding failed.'
@@ -46,4 +46,4 @@ fi
 # Keep the decoded value out of the journal, notifications and history.
 { printf '%s' "$result" | wl-copy --sensitive; } > /dev/null 2>&1 || fail 'Could not copy the QR result.'
 notify-send --urgency=normal --hint=int:transient:1 --hint="$glyph_hint" \
-  'QR result copied to clipboard' > /dev/null 2>&1 || :
+  'QR code copied' 'Paste the result where you need it.' > /dev/null 2>&1 || :

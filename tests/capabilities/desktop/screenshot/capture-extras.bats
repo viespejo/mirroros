@@ -56,7 +56,7 @@ EOF
   export LC_ALL=C
   for action in color ocr qr; do
     case "$action" in
-      color) title='Color failed'; glyph=$'\363\260\203\211' ;;
+      color) title='Color unavailable'; glyph=$'\363\260\203\211' ;;
       ocr) title='OCR failed'; glyph=$'\363\260\264\221' ;;
       qr) title='QR capture failed'; glyph=$'\363\260\220\262' ;;
     esac
@@ -65,6 +65,10 @@ EOF
     run bash "$work/$action"
     [ "$status" -eq 1 ]
     [[ "$output" == *'Rerun mirroros-configure'* && "$output" != *synthetic* ]]
-    [ "$(< "$CALLS")" = "notify --urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:$glyph $title $output" ]
+    body=$output
+    if [[ "$action" == color ]]; then
+      body='Rerun mirroros-configure to restore the missing backend.'
+    fi
+    [ "$(< "$CALLS")" = "notify --urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:$glyph $title $body" ]
   done
 }

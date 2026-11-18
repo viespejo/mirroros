@@ -11,7 +11,7 @@ if [[ ! -x "$backend" ]]; then
   printf '%s\n' "$message" >&2
   # Capture menu Color glyph (U+F00C9), encoded as UTF-8 regardless of locale.
   notify-send --urgency=normal --hint=int:transient:1 --hint=$'string:omarchy-glyph:\xF3\xB0\x83\x89' \
-    'Color failed' "$message" > /dev/null 2>&1 || :
+    'Color unavailable' 'Rerun mirroros-configure to restore the missing backend.' > /dev/null 2>&1 || :
   exit 1
 fi
 
