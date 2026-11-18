@@ -10,7 +10,7 @@ const hyprland = '/usr/bin/Hyprland';
 
 test('screenshot registry rejects duplicate capture chords', () => {
   const provider = new URL('../../../../capabilities/desktop/compositor/providers/hyprland/', import.meta.url).pathname;
-  for (const keys of ['PRINT', 'ALT + CTRL + SUPER + C', 'CTRL + SUPER + C']) {
+  for (const keys of ['PRINT', 'ALT + CTRL + SUPER + C', 'CTRL + SUPER + C', 'SUPER + PRINT', 'CTRL + SUPER + PRINT']) {
     const result = spawnSync('lua', ['-e', `
       hl = { dsp = { exec_cmd = function() return {} end, global = function() return {} end },
         bind = function() end, layer_rule = function() end }

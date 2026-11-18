@@ -13,6 +13,24 @@ Omasnap recipe with the explicitly approved two-file Save As portal patch, backe
 [omasnap/sources.md](omasnap/sources.md) for source/recipe pins, Arch dependency observations, license and theme
 contract/update requirements. Live campaign acceptance is pending; no screenshot qualification is implied here.
 
+## Direct capture extras (plan 02-41)
+
+`capture-extras/{ocr,qr}-backend` adapt Omarchy's `bin/omarchy-capture-text` and `bin/omarchy-capture-qr` at
+[`520c3ed969d30b58defe03eb19d603f32b4cb002`](https://github.com/omacom/omarchy/tree/520c3ed969d30b58defe03eb19d603f32b4cb002).
+They retain separate `hyprpicker -r -z`, startup wait, `slurp` and streamed `grim` flows, with cleanup on exit.
+MirrorOS checks tool and copy failures, uses controlled journal messages and notifications, validates the selected
+Tesseract models, and disables zbar D-Bus output. QR decoding is QR-only and never opens the result; the
+clipboard copy remains sensitive. OCR uses the ordinary clipboard and preserves upstream recognition options.
+
+`capture-extras/color-backend` retains `pkill hyprpicker || hyprpicker -a` from
+`default/hypr/bindings/utilities.lua` (toggle introduced by
+[`7540bddee`](https://github.com/omacom/omarchy/commit/7540bddee1503a79c213bb667cdf749bb55608cd)).
+This toggle can also stop the freeze process used by OCR or QR; the cross-tool behavior requires live verification.
+`omasnap/screenshot-bindings.lua` adapts SUPER+PRINT (Color) and SUPER+CTRL+PRINT (direct OCR) from the
+same upstream bindings file, registering them through MirrorOSKeys and dispatching the neutral commands.
+QR is menu-only. Existing screenshot bindings and layer rules are unchanged.
+See [MIT notice](capture-extras/LICENSE.omarchy) and [capture command sources](../../../screenshot/sources.md).
+
 ## Origin and scope
 
 - **Project:** [Omarchy](https://github.com/omacom/omarchy).
@@ -227,7 +245,7 @@ only by the separately authorized session test, not by these sources.
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
 SUPER+L / SUPER+Alt+L (workspace layout cycling), and the Story 4.5
-browser, editor and capture keys. The file manager keys SUPER+Shift+F and SUPER+Alt+Shift+F are bound
+browser and editor keys and ALT+PRINT. The file manager keys SUPER+Shift+F and SUPER+Alt+Shift+F are bound
 to Strata (plan 02-35, DEC-015). SUPER+Ctrl+B is bound to the Bluetooth panel (plan 02-29,
 last reserved Story 4.4 panel chord). SUPER+Ctrl+N is bound to the network panel (plan 02-28; DEC-038 replaces
 DEC-006's W with N, as in Omarchy 4.5); SUPER+Ctrl+W stays unbound. Hardware exclusions remain unbound:

@@ -14,7 +14,8 @@ function build(binds) {
   const root = {
     bindsJson: binds,
     parseRegistry: () => ({ byKeys: { 'SUPER+D': 'menu.apps', 'SUPER+C': 'clipboard.copy', 'SUPER+V': 'clipboard.paste',
-      PRINT: 'screenshot.capture', 'SUPER+CTRL+ALT+C': 'screenshot.capture-alt', 'SUPER+CTRL+C': 'menu.capture' }, entries: [] }),
+      PRINT: 'screenshot.capture', 'SUPER+CTRL+ALT+C': 'screenshot.capture-alt', 'SUPER+CTRL+C': 'menu.capture',
+      'SUPER+PRINT': 'screenshot.color', 'SUPER+CTRL+PRINT': 'screenshot.ocr' }, entries: [] }),
     keysFor: bind => bind.keys || (bind.key ? `SUPER + ${bind.key}` : 'SUPER + '),
     canonicalKeys: keys => keys.replaceAll(' ', '').toUpperCase(),
     matchWithoutKey: bind => bind.description === 'Workspace' ? { id: 'workspace.2', keys: 'SUPER + code:11' } : null,
@@ -46,9 +47,12 @@ test('screenshot help lists unique capture actions and refuses duplicate chords'
     { key: 'PRINT', keys: 'PRINT', description: 'Screenshot' },
     { key: 'C', keys: 'SUPER + CTRL + ALT + C', description: 'Screenshot' },
     { key: 'C', keys: 'SUPER + CTRL + C', description: 'Capture menu' },
+    { key: 'PRINT', keys: 'SUPER + PRINT', description: 'Color' },
+    { key: 'PRINT', keys: 'SUPER + CTRL + PRINT', description: 'Text' },
   ];
   assert.deepEqual(build(binds).map(row => [row.id, row.launchable]), [
     ['screenshot.capture', true], ['screenshot.capture-alt', true], ['menu.capture', true],
+    ['screenshot.color', true], ['screenshot.ocr', true],
   ]);
   for (const bind of binds) {
     const rows = build([bind, { ...bind, description: 'Personal capture' }]);

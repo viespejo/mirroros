@@ -93,18 +93,25 @@ test('capture: existing routes, closed actions, fixed argv and English labels', 
     assert.equal(MenuModel.resolveRoute(items, itemOrder, alias), 'trigger.capture');
   assert.deepEqual(itemOrder.filter(id => items[id].parent === 'trigger'), ['trigger.capture']);
   assert.deepEqual(itemOrder.filter(id => items[id].parent === 'trigger.capture'),
-    ['trigger.capture.screenshot', 'trigger.capture.annotation']);
+    ['trigger.capture.screenshot', 'trigger.capture.annotation', 'trigger.capture.text', 'trigger.capture.qr', 'trigger.capture.color']);
   assert.equal(items['trigger.capture.screenshot'].action, 'screenshot:capture');
   assert.equal(items['trigger.capture.annotation'].action, 'screenshot:edit');
+  for (const [id, command, label] of [['text', 'ocr', 'Text'], ['qr', 'qr', 'QR Code'], ['color', 'color', 'Color']]) {
+    const item = items[`trigger.capture.${id}`];
+    assert.equal(item.action, `screenshot:${command}`);
+    assert.equal(item.label, label);
+  }
   const qml = fs.readFileSync(path.join(shellDir, 'menu/Menu.qml'), 'utf8');
   assert.match(qml, /command === "screenshot:capture"\) \{\s+Quickshell\.execDetached\(\["\/usr\/share\/mirroros\/screenshot\/screenshot"\]\)/);
   assert.match(qml, /command === "screenshot:edit"\) \{\s+Quickshell\.execDetached\(\["\/usr\/share\/mirroros\/screenshot\/screenshot", "--edit"\]\)/);
   const catalog = JSON.parse(fs.readFileSync(path.join(shellDir, 'Commons/i18n-en.json'), 'utf8'));
-  for (const [key, value] of Object.entries({ trigger: 'Trigger', capture: 'Capture', screenshot: 'Screenshot', screenshotAnnotation: 'Screenshot with annotation' })) {
+  for (const [key, value] of Object.entries({ trigger: 'Trigger', capture: 'Capture', screenshot: 'Screenshot', screenshotAnnotation: 'Screenshot with annotation',
+    captureText: 'Text', captureQr: 'QR Code', captureColor: 'Color' })) {
     assert.equal(catalog['menu.' + key], value);
     assert.ok(qml.includes(`Commons.I18n.t("menu.${key}")`));
   }
-  for (const action of ['screenshot:capture', 'screenshot:edit']) assert.ok(MirrorMenu.isKnownAction(action));
+  for (const action of ['screenshot:capture', 'screenshot:edit', 'screenshot:ocr', 'screenshot:qr', 'screenshot:color'])
+    assert.ok(MirrorMenu.isKnownAction(action));
   assert.equal(MirrorMenu.isKnownAction('screenshot:region'), false);
 });
 
@@ -131,6 +138,12 @@ test('capture: close before immediate fixed argv dispatch without capture delay'
   assert.deepEqual(calls, [['/usr/share/mirroros/screenshot/screenshot', '--edit']]);
   run(root, MirrorMenu, quickshell, 'screenshot:capture');
   assert.deepEqual(calls[1], ['/usr/share/mirroros/screenshot/screenshot']);
+  for (const command of ['ocr', 'qr', 'color']) {
+    run(root, MirrorMenu, quickshell, `screenshot:${command}`);
+    assert.deepEqual(calls.at(-1), [`/usr/share/mirroros/screenshot/${command}`]);
+  }
+  run(root, MirrorMenu, quickshell, 'screenshot:ocr --edit');
+  assert.equal(calls.length, 5);
   assert.match(body('applySelected'), /opened = false[\s\S]*root\.runAction\(action\)/);
   assert.doesNotMatch(qml, /pendingCaptureAction|launchPendingCapture|backingWindowVisible|interval: 100/);
 });

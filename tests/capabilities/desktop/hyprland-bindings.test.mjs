@@ -213,7 +213,7 @@ test('every approved Story 4.3 key is bound with a description', { skip: !lua &&
     'CTRL+SUPER+R', 'ALT+CTRL+SUPER+R', 'CTRL+SHIFT+SUPER+R',
     'SHIFT+SUPER+F', 'ALT+SHIFT+SUPER+F',
     'SUPER+A', 'SUPER+C', 'SUPER+V', 'SUPER+X', 'CTRL+SUPER+V',
-    'PRINT', 'ALT+CTRL+SUPER+C', 'CTRL+SUPER+C',
+    'PRINT', 'ALT+CTRL+SUPER+C', 'CTRL+SUPER+C', 'SUPER+PRINT', 'CTRL+SUPER+PRINT',
   ];
   for (let n = 1; n <= 9; n++) required.push(`CTRL+SUPER+CODE:${n + 9}`);
   for (const direction of ['LEFT', 'RIGHT', 'UP', 'DOWN'])
@@ -238,7 +238,7 @@ test('reserved, excluded and retired keys stay unbound', { skip: !lua && 'no Lua
   const unbound = [
     'SHIFT+SUPER+Q', 'SHIFT+SUPER+E', 'SHIFT+SUPER+SPACE', 'CTRL+SUPER+I', 'SHIFT+SUPER+T', 'SUPER+L', 'ALT+SUPER+L',
     'SHIFT+SUPER+TAB', 'CTRL+SUPER+TAB', 'SUPER+F1', 'SUPER+H',
-    'ALT+PRINT', 'SUPER+PRINT', 'CTRL+SUPER+PRINT',
+    'ALT+PRINT',
     'SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N',
     'CTRL+SUPER+W', 'CTRL+SUPER+CODE:19', 'SUPER+O',
     'SHIFT+XF86AUDIOPAUSE', 'SHIFT+XF86AUDIOPLAY', 'XF86EJECT',
@@ -273,8 +273,8 @@ test('file manager bindings open Strata and the owned working-directory command'
   assert.equal(byChord.get('ALT+SHIFT+SUPER+F').description, 'File manager (cwd)');
   assert.match(loaded.registry, /^files\.open\tSUPER \+ SHIFT \+ F\tFile manager$/m);
   assert.match(loaded.registry, /^files\.cwd\tSUPER \+ ALT \+ SHIFT \+ F\tFile manager \(cwd\)$/m);
-  // Story 4.5 browser, editor and future capture-extra keys stay reserved.
-  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'ALT+PRINT', 'SUPER+PRINT'])
+  // The remaining Story 4.5 browser, editor and capture keys stay reserved.
+  for (const key of ['SHIFT+SUPER+RETURN', 'SHIFT+SUPER+B', 'SHIFT+SUPER+N', 'ALT+PRINT'])
     assert.ok(!byChord.has(key), 'unexpected ' + key);
 });
 
@@ -303,6 +303,16 @@ test('screenshot bindings register neutral capture and the existing Capture menu
   assert.equal(byChord.get('CTRL+SUPER+C').action, 'qs ipc -p /usr/share/mirroros/shell call menu open capture');
   assert.match(loaded.registry, /^screenshot\.capture\tPRINT\tScreenshot$/m);
   assert.match(loaded.registry, /^menu\.capture\tSUPER \+ CTRL \+ C\tCapture menu$/m);
+  for (const [chord, keys, command, description] of [
+    ['SUPER+PRINT', 'SUPER + PRINT', 'color', 'Color'],
+    ['CTRL+SUPER+PRINT', 'SUPER + CTRL + PRINT', 'ocr', 'Text'],
+  ]) {
+    assert.equal(byChord.get(chord).action, `/usr/share/mirroros/screenshot/${command}`);
+    assert.equal(byChord.get(chord).description, description);
+    assert.ok(loaded.registry.split('\n').includes(`screenshot.${command}\t${keys}\t${description}`));
+  }
+  assert.ok(!bindings.some(binding => binding.action.includes('/usr/share/mirroros/screenshot/qr')));
+  assert.doesNotMatch(loaded.registry, /^screenshot\.qr\t/m);
   const entry = fs.readFileSync(path.join(provider, 'hyprland.lua'), 'utf8');
   assert.ok(entry.indexOf('/hypr/screenshot-bindings.lua') < entry.indexOf('/hypr/personal-loader.lua'));
   const code = fs.readFileSync(path.join(provider, 'omasnap/screenshot-bindings.lua'), 'utf8');

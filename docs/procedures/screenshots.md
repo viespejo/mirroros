@@ -1,7 +1,7 @@
 # Screenshots
 
-Story 4.5 screenshot core (plan 02-40). The implementation is a candidate until the authorized reference-VM
-campaign and explicit maintainer approval; automated contracts do not establish live qualification.
+Story 4.5 screenshot core (plan 02-40) and capture extras (plan 02-41). Automated contracts do not establish live
+qualification; the capture extras require an authorized reference-VM campaign and explicit maintainer approval.
 
 ## Capture
 
@@ -14,8 +14,9 @@ excess arguments return 2. The command waits for the active compositor backend: 
 second-press dismissal; 1 means capture failure; 2 means usage error. Success and cancellation add no notification.
 
 - PRINT or SUPER+CTRL+ALT+C opens smart capture; pressing again dismisses a running overlay.
-- SUPER+CTRL+C opens Capture in the existing session menu. Trigger → Capture contains **Screenshot** and
-  **Screenshot with annotation**. The aliases `capture` and `screenshot` resolve to the submenu. Capture has a wider,
+- SUPER+CTRL+C opens Capture in the existing session menu. Trigger → Capture contains **Screenshot**,
+  **Screenshot with annotation**, **Text**, **QR Code** and **Color**, in that order. The aliases `capture`
+  and `screenshot` resolve to the submenu. Capture has a wider,
   screen-clamped card; its actions close the menu and immediately dispatch fixed argv. The Hyprland provider
   disables animations only for `mirroros-menu`, following Omarchy, so a closing-menu fade does not enter the capture.
   There is no capture timer or global animation change.
@@ -23,7 +24,7 @@ second-press dismissal; 1 means capture failure; 2 means usage error. Success an
   region, window, full-screen and scrolling capture without additional shortcuts. Scroll selects a region and
   direction, stitches the scrolled content, then allows annotation. In the selector, `A` or `E` toggles annotation
   before output; the guide shows whether it is enabled. Defaults remain automatic save/copy without annotation.
-- SUPER+PRINT and SUPER+CTRL+PRINT remain unbound, reserved for later plan 02-41. No recording shortcut is added.
+- SUPER+PRINT opens Color and SUPER+CTRL+PRINT starts direct OCR. QR Code has no dedicated shortcut. Recording is excluded.
 
 Normal capture uses upstream autosave and copy defaults: a flattened PNG in the XDG Pictures directory's
 `Screenshots` child (normally `~/Pictures/Screenshots`), plus the current clipboard. The managed filename is
@@ -34,8 +35,30 @@ browser. Existing previews and pins **can appear in subsequent captures**: close
 unpinned preview to expire. Expiry does not remove the saved file.
 
 The editor provides annotations, redaction and built-in English OCR (`O` in the editor). OCR text enters the
-existing text clipboard history when copied. No extra language data, standalone OCR mode, QR, colour picker or
-recording is introduced by this plan.
+existing text clipboard history when copied. The direct OCR language settings below do not change Omasnap.
+
+## Color, direct OCR and QR Code
+
+- **Color** opens the picker and copies the selected color value. A second invocation dismisses the active
+  picker. MirrorOS retains Omarchy's `pkill hyprpicker || hyprpicker -a` toggle. Because direct OCR and QR also
+  use `hyprpicker` to freeze the screen during selection, Color can stop that process; the resulting selection
+  and output behavior has not been verified on the reference VM.
+- **Text** runs direct OCR on a selected region without opening Omasnap or saving an image. Paste the result
+  from the ordinary clipboard; it can also appear in the existing text clipboard history.
+- **QR Code** decodes only QR codes in the selected region and copies the result as sensitive. It is pasteable
+  but excluded from MirrorOS clipboard history. MirrorOS does not save the image or open the decoded result.
+  Cancellation is silent; a region without a QR code produces a content-free notification. Neither case
+  replaces the current clipboard.
+
+The commands `/usr/share/mirroros/screenshot/{color,ocr,qr}` take no arguments. Rerun `mirroros-configure` if a
+backend is missing or after changing the installed language or regional formats. Configure reads `/etc/locale.conf`
+(not the session locale or keyboard layout), ensures the English model, and adds Spanish when the installed
+language or installer-managed formats are Spanish. The managed default is `eng` or `eng+spa`, respectively.
+Override it for one direct OCR invocation using already installed Tesseract models, for example:
+
+```bash
+MIRROROS_OCR_LANGS=spa /usr/share/mirroros/screenshot/ocr
+```
 
 ## Sensitive annotation: redact before output
 

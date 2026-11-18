@@ -16,6 +16,16 @@
   [provider sources](../capabilities/desktop/compositor/providers/hyprland/omasnap/sources.md);
   [shell record](../capabilities/desktop/shell/UPSTREAM.md#capture-menu-additions-plan-02-40).
 
+## Direct capture extras
+
+- **Project:** [Omarchy](https://github.com/omacom/omarchy), `MIT`.
+- **Incorporated material:** Direct region OCR and QR scripts, the Color picker toggle, the Color and OCR
+  shortcut choices, and the Text, QR Code and Color menu rows. MirrorOS adds neutral dispatch, managed model
+  selection, and content-free diagnostics and notifications.
+- **Notices and provenance:** [Provider record](../capabilities/desktop/compositor/providers/hyprland/UPSTREAM.md#direct-capture-extras-plan-02-41),
+  [shell record](../capabilities/desktop/shell/UPSTREAM.md#capture-extras-plan-02-41), and
+  [MIT notice](../capabilities/desktop/compositor/providers/hyprland/capture-extras/LICENSE.omarchy).
+
 ## Policy
 
 This index covers all externally incorporated material in the repository. Each entry records the project, its SPDX license identifier, the material incorporated into MirrorOS, and a link to a detailed provenance record. Version-specific values belong in that provenance record and are not duplicated in this index.

@@ -39,6 +39,9 @@ var ITEMS = [
   ["trigger.capture", { icon: "\uF030", label: "Capture", aliases: ["capture", "screenshot"] }],
   ["trigger.capture.screenshot", { icon: "\uF030", label: "Screenshot", action: "screenshot:capture" }],
   ["trigger.capture.annotation", { icon: "\uF030", label: "Screenshot with annotation", action: "screenshot:edit" }],
+  ["trigger.capture.text", { icon: "\u{F0D11}", label: "Text", action: "screenshot:ocr" }],
+  ["trigger.capture.qr", { icon: "\u{F0432}", label: "QR Code", action: "screenshot:qr" }],
+  ["trigger.capture.color", { icon: "\u{F00C9}", label: "Color", action: "screenshot:color" }],
 
   ["setup.security", { icon: "\uEB11", label: "Security" }],
   ["setup.security.fingerprint", { icon: "\u{F0237}", label: "Fingerprint", when: "fingerprint-reader", action: "fingerprint:setup" }],
@@ -52,7 +55,7 @@ var ITEMS = [
 // Closed action table: the only values an item's `action` may hold.
 var ACTIONS = ["session:lock", "session:suspend", "session:hibernate", "session:logout",
   "session:reboot", "session:shutdown", "help:keybindings", "wallpaper:open", "wallpaper:install",
-  "fingerprint:setup", "screenshot:capture", "screenshot:edit"]
+  "fingerprint:setup", "screenshot:capture", "screenshot:edit", "screenshot:ocr", "screenshot:qr", "screenshot:color"]
 
 // Closed guard table: the only values an item's `when` may hold.
 var GUARDS = ["fingerprint-reader"]

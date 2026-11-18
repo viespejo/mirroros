@@ -5,6 +5,8 @@ assert(type(MirrorOSKeys) == "table" and MirrorOSKeys.bind, "load shell-bindings
 MirrorOSKeys.bind("screenshot.capture", "PRINT", "Screenshot", hl.dsp.exec_cmd("/usr/share/mirroros/screenshot/screenshot"))
 MirrorOSKeys.bind("screenshot.capture-alt", "SUPER + CTRL + ALT + C", "Screenshot", hl.dsp.exec_cmd("/usr/share/mirroros/screenshot/screenshot"))
 MirrorOSKeys.bind("menu.capture", "SUPER + CTRL + C", "Capture menu", hl.dsp.exec_cmd("qs ipc -p /usr/share/mirroros/shell call menu open capture"))
+MirrorOSKeys.bind("screenshot.color", "SUPER + PRINT", "Color", hl.dsp.exec_cmd("/usr/share/mirroros/screenshot/color"))
+MirrorOSKeys.bind("screenshot.ocr", "SUPER + CTRL + PRINT", "Text", hl.dsp.exec_cmd("/usr/share/mirroros/screenshot/ocr"))
 
 hl.layer_rule({
   match = { namespace = "^omasnap$" },

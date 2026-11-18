@@ -48,6 +48,14 @@ bounded VM selector/export comparison; see the provider provenance for the sourc
 No new surface, provider, daemon or IPC mechanism is introduced. See the compositor provider's
 [Omasnap sources](../compositor/providers/hyprland/omasnap/sources.md) and the screenshots procedure.
 
+## Capture extras (plan 02-41)
+
+`menu/MirrorMenu.js` adapts the Text, QR Code and Color rows, including their labels and icons, from
+Omarchy `520c3ed969d30b58defe03eb19d603f32b4cb002`, `default/omarchy/omarchy-menu.jsonc` (MIT;
+see [LICENSE.omarchy](LICENSE.omarchy)). The rows follow the two existing Screenshot actions.
+`menu/Menu.qml` replaces the upstream commands with closed action IDs mapped to fixed argv for the neutral
+`ocr`, `qr` and `color` commands. Menu close, immediate dispatch and screen-clamped layout are unchanged.
+
 ## Origin and scope
 
 - **Project:** [Omarchy](https://github.com/omacom/omarchy).

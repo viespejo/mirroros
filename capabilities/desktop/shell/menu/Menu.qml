@@ -198,6 +198,12 @@ Item {
       Quickshell.execDetached(["/usr/share/mirroros/screenshot/screenshot"])
     } else if (command === "screenshot:edit") {
       Quickshell.execDetached(["/usr/share/mirroros/screenshot/screenshot", "--edit"])
+    } else if (command === "screenshot:ocr") {
+      Quickshell.execDetached(["/usr/share/mirroros/screenshot/ocr"])
+    } else if (command === "screenshot:qr") {
+      Quickshell.execDetached(["/usr/share/mirroros/screenshot/qr"])
+    } else if (command === "screenshot:color") {
+      Quickshell.execDetached(["/usr/share/mirroros/screenshot/color"])
     } else if (command === "fingerprint:setup") {
       Quickshell.execDetached(["uwsm", "app", "--", "foot", "-e", "/usr/share/mirroros/hardware/fingerprint-setup"])
     }
@@ -301,6 +307,9 @@ Item {
     else if (id === "trigger.capture") entry.label = Commons.I18n.t("menu.capture")
     else if (id === "trigger.capture.screenshot") entry.label = Commons.I18n.t("menu.screenshot")
     else if (id === "trigger.capture.annotation") entry.label = Commons.I18n.t("menu.screenshotAnnotation")
+    else if (id === "trigger.capture.text") entry.label = Commons.I18n.t("menu.captureText")
+    else if (id === "trigger.capture.qr") entry.label = Commons.I18n.t("menu.captureQr")
+    else if (id === "trigger.capture.color") entry.label = Commons.I18n.t("menu.captureColor")
     return entry
   }
 
