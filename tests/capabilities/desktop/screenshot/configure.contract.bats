@@ -9,15 +9,18 @@ setup() {
 teardown() { cfg_test_teardown; }
 
 screenshot_delivery() {
-  local root="$1" path=/usr/share/mirroros/screenshot/screenshot
-  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/screenshot/screenshot" "$root$path"
-  [ "$(stat -c %a "$root$path")" = 755 ]
-  [ -f "$root/var/lib/mirroros/configure/delivered$path.sha256" ]
+  local root="$1" action path
+  for action in screenshot color ocr qr; do
+    path="/usr/share/mirroros/screenshot/$action"
+    cmp "$CFG_SOURCE_ROOT/capabilities/desktop/screenshot/$action" "$root$path"
+    [ "$(stat -c %a "$root$path")" = 755 ]
+    [ -f "$root/var/lib/mirroros/configure/delivered$path.sha256" ]
+    [ ! -e "$root/usr/share/mirroros/compositor/$action-backend" ]
+  done
   [ -e "$CFG_TEST_INSTALLED/bash" ]
   [ -e "$CFG_TEST_INSTALLED/systemd" ]
   [ -e "$CFG_TEST_INSTALLED/libnotify" ]
-  [ ! -e "$root/usr/share/mirroros/compositor/screenshot-backend" ]
-  ! grep -qE '^(systemctl|notify-send|systemd-cat|screenshot) ' "$CFG_TEST_CALLS"
+  ! grep -qE '^(systemctl|notify-send|systemd-cat|screenshot|color|ocr|qr) ' "$CFG_TEST_CALLS"
 }
 
 @test "running configure delivers screenshot without a backend and reruns unchanged" {

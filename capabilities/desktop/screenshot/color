@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure — provider-neutral color picker.
+if (( $# )); then
+  printf 'Usage: color\n' >&2
+  exit 2
+fi
+
+backend=/usr/share/mirroros/compositor/color-backend
+if [[ ! -x "$backend" ]]; then
+  message='Color backend is missing. Rerun mirroros-configure, then try again.'
+  printf '%s\n' "$message" >&2
+  notify-send --urgency=normal --hint=int:transient:1 'Color failed' "$message" > /dev/null 2>&1 || :
+  exit 1
+fi
+
+"$backend" > /dev/null 2>&1 && exit 0
+printf 'Color failed. Check journalctl --user -t mirroros-screenshot.\n' >&2
+exit 1

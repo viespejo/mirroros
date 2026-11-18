@@ -1,0 +1,51 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure — Hyprland direct region OCR.
+# Adapted from Omarchy; see LICENSE.omarchy and ../UPSTREAM.md.
+set -o pipefail
+(( $# == 0 )) || exit 2
+
+fail() {
+  systemd-cat --identifier=mirroros-screenshot <<< "$1" > /dev/null 2>&1 || :
+  exit 1
+}
+
+if [[ -v MIRROROS_OCR_LANGS ]]; then
+  languages="$MIRROROS_OCR_LANGS"
+else
+  language_file=/usr/share/mirroros/compositor/ocr-languages
+  { languages="$(< "$language_file")"; } 2>/dev/null || fail 'OCR language default is missing. Rerun mirroros-configure.'
+  if [[ "$languages" != eng && "$languages" != eng+spa ]] ||
+    ! cmp -s -- "$language_file" <(printf '%s\n' "$languages"); then
+    fail 'OCR language default is invalid. Rerun mirroros-configure.'
+  fi
+fi
+model='(script/)?[a-zA-Z0-9_][a-zA-Z0-9_-]*'
+[[ "$languages" =~ ^$model(\+$model)*$ ]] || fail 'Invalid OCR language selection.'
+available="$(tesseract --list-langs 2>/dev/null)" || fail 'Could not list OCR models.'
+IFS=+ read -ra models <<< "$languages"
+for language in "${models[@]}"; do
+  grep -Fxq -- "$language" <<< "$available" || fail 'A requested OCR model is unavailable.'
+done
+
+# Keep the freeze overlay alive through grim capture.
+cleanup_freeze() {
+  kill "$freeze_pid" 2>/dev/null || :
+  wait "$freeze_pid" 2>/dev/null || :
+}
+hyprpicker -r -z > /dev/null 2>&1 &
+freeze_pid=$!
+trap cleanup_freeze EXIT
+trap 'exit 1' HUP INT TERM
+sleep .1
+kill -0 "$freeze_pid" 2>/dev/null || fail 'Could not freeze the screen for OCR.'
+selection="$(slurp </dev/null 2>&1)" || {
+  [[ "$?" == 1 && ( -z "$selection" || "$selection" == 'selection cancelled' ) ]] && exit 0
+  fail 'OCR region selection failed.'
+}
+[[ "$selection" =~ ^-?[0-9]+,-?[0-9]+\ [0-9]+x[0-9]+$ ]] || fail 'OCR region selection returned invalid geometry.'
+
+text="$(grim -g "$selection" - 2>/dev/null | tesseract stdin stdout --oem 1 --psm 6 \
+  -l "$languages" --dpi 300 -c preserve_interword_spaces=1 2>/dev/null)" 2>/dev/null || fail 'OCR recognition failed.'
+[[ -n "$text" ]] || fail 'No text recognized in the selected region.'
+{ printf '%s' "$text" | wl-copy; } > /dev/null 2>&1 || fail 'Could not copy OCR text.'
+notify-send --urgency=normal --hint=int:transient:1 'Text copied to clipboard' > /dev/null 2>&1 || :

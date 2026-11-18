@@ -1,22 +1,50 @@
 #!/usr/bin/bash
 # shellcheck disable=SC2034 # The last read field deliberately consumes unused declaration columns.
+cfg_hyprland_ocr_languages() {
+  local locale_file status=0
+  locale_file="$(cfg_path /etc/locale.conf)"
+  # The installer writes a regular file; do not follow a link out of a target root.
+  [[ ! -L "$locale_file" && ( ! -e "$locale_file" || -f "$locale_file" ) ]] || return 1
+  if [[ -f "$locale_file" ]]; then
+    grep -Eq "^[[:space:]]*(LANG|LC_TIME|LC_NUMERIC|LC_MONETARY|LC_MEASUREMENT)=(es_ES\.UTF-8|\"es_ES\.UTF-8\"|'es_ES\.UTF-8')[[:space:]]*$" \
+      "$locale_file" || status=$?
+    case "$status" in
+      0) printf 'eng+spa\n'; return ;;
+      1) ;;
+      *) return 1 ;;
+    esac
+  fi
+  printf 'eng\n'
+}
+
+cfg_effective_packages() {
+  local manifest="$1"
+  cat -- "$manifest" || return
+  if [[ "$manifest" == "$CAPABILITIES_DIR/desktop/compositor/providers/hyprland/packages" &&
+    "${CFG_HYPRLAND_OCR_LANGUAGES:-eng}" == eng+spa ]]; then
+    printf '\ntesseract-data-spa extra\n'
+  fi
+}
+
 cfg_packages_present() {
-  local name repository extra
+  local name repository extra effective
   cfg_context
+  effective="$(cfg_effective_packages "$1")" || return 1
   while read -r name repository extra || [[ -n "$name" ]]; do
     [[ -n "$name" && "$name" != \#* ]] || continue
     [[ "${CFG_INSTALLED[$name]:-0}" == 1 ]] || return 1
-  done < "$1"
+  done <<< "$effective"
 }
 
 cfg_packages_ensure() {
-  local name repository extra mode=-S installed_version
+  local name repository extra mode=-S installed_version effective
   local missing=()
   cfg_context
+  effective="$(cfg_effective_packages "$1")" || return 5
   while read -r name repository extra || [[ -n "$name" ]]; do
     [[ -n "$name" && "$name" != \#* ]] || continue
     if [[ "${CFG_INSTALLED[$name]:-0}" != 1 ]]; then missing+=("$repository/$name"); fi
-  done < "$1"
+  done <<< "$effective"
   if (( ${#missing[@]} )); then
     if (( CFG_REFRESH )) && [[ ! -e "$CFG_OUTPUT/.transaction" ]]; then mode=-Syu; fi
     if [[ "$CONFIGURE_CONTEXT" == target ]]; then
@@ -33,7 +61,7 @@ cfg_packages_ensure() {
       CFG_INSTALLED["$name"]=1
       # Record the installed version, including after a refresh, not the preflight candidate.
       cfg_package_record "$name" "${installed_version#* }" "$repository"
-    done < "$1"
+    done <<< "$effective"
   fi
 }
 

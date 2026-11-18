@@ -1,0 +1,45 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure — Hyprland region QR decoding.
+# Adapted from Omarchy; see LICENSE.omarchy and ../UPSTREAM.md.
+set -o pipefail
+(( $# == 0 )) || exit 2
+
+fail() {
+  systemd-cat --identifier=mirroros-screenshot <<< "$1" > /dev/null 2>&1 || :
+  exit 1
+}
+
+# Keep the freeze overlay alive through grim capture.
+cleanup_freeze() {
+  kill "$freeze_pid" 2>/dev/null || :
+  wait "$freeze_pid" 2>/dev/null || :
+}
+hyprpicker -r -z > /dev/null 2>&1 &
+freeze_pid=$!
+trap cleanup_freeze EXIT
+trap 'exit 1' HUP INT TERM
+sleep .1
+kill -0 "$freeze_pid" 2>/dev/null || fail 'Could not freeze the screen for QR decoding.'
+selection="$(slurp </dev/null 2>&1)" || {
+  [[ "$?" == 1 && ( -z "$selection" || "$selection" == 'selection cancelled' ) ]] && exit 0
+  fail 'QR region selection failed.'
+}
+[[ "$selection" =~ ^-?[0-9]+,-?[0-9]+\ [0-9]+x[0-9]+$ ]] || fail 'QR region selection returned invalid geometry.'
+
+# zbarimg returns 4 when no QR is found. A failed grim must not look like that case.
+status=0
+result="$(
+  grim -g "$selection" - 2>/dev/null | zbarimg -q --raw --nodbus -Sdisable -Sqrcode.enable - 2>/dev/null
+  statuses=("${PIPESTATUS[@]}")
+  (( statuses[0] == 0 )) || exit 1
+  exit "${statuses[1]}"
+)" 2>/dev/null || status=$?
+if (( status == 4 )); then
+  notify-send --urgency=normal --hint=int:transient:1 'No QR code found in the selected region' > /dev/null 2>&1 || :
+  fail 'No QR code found in the selected region.'
+fi
+(( status == 0 )) && [[ -n "$result" ]] || fail 'QR decoding failed.'
+
+# Keep the decoded value out of the journal, notifications and history.
+{ printf '%s' "$result" | wl-copy --sensitive; } > /dev/null 2>&1 || fail 'Could not copy the QR result.'
+notify-send --urgency=normal --hint=int:transient:1 'QR result copied to clipboard' > /dev/null 2>&1 || :

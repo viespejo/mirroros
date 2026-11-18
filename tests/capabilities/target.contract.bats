@@ -346,6 +346,38 @@ NODE
   ! grep -qE 'systemctl (start|restart)' "$CFG_TEST_CALLS"
 }
 
+@test "target Hyprland OCR selection uses only installer-managed target locale formats" {
+  local step=desktop/compositor/providers/hyprland category
+  printf 'CFG_STEPS=(%s)\n' "$step" > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions"
+  printf '[Desktop Entry]\nExec=uwsm start hyprland.desktop\n' > "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions/hyprland-uwsm.desktop"
+  printf '1.26.2-4.4\n' > "$CFG_TEST_INSTALLED/omasnap"
+  local locale_conf="$CFG_TEST_TARGET_ROOT/etc/locale.conf"
+  local default="$CFG_TEST_TARGET_ROOT/usr/share/mirroros/compositor/ocr-languages"
+  printf 'LANG=en_US.UTF-8\nLC_ALL=es_ES.UTF-8\n# LC_TIME=es_ES.UTF-8\n' > "$locale_conf"
+  printf 'LC_NUMERIC=$(touch %s)\n' "$CFG_TEST_DIR/locale-sourced" >> "$locale_conf"
+  run env LANG=es_ES.UTF-8 "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
+  [ "$status" -eq 0 ]
+  cmp -s "$default" <(printf 'eng\n')
+  ! grep -q 'tesseract-data-spa' "$CFG_TEST_CALLS"
+  [ ! -e "$CFG_TEST_DIR/locale-sourced" ]
+  export CFG_TEST_UPGRADES='example 1 -> 2'
+  for category in LC_TIME LC_NUMERIC LC_MONETARY LC_MEASUREMENT; do
+    printf 'LANG=en_US.UTF-8\n%s=es_ES.UTF-8\n' "$category" > "$locale_conf"
+    : > "$CFG_TEST_CALLS"
+    run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
+    [ "$status" -eq 2 ]
+    [[ "$output" == *'Packages are missing while upgrades are pending'* ]]
+    grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT pacman -Sp --print-format %r %n %v -- extra/tesseract-data-spa" "$CFG_TEST_CALLS"
+    cfg_test_no_install
+  done
+  : > "$CFG_TEST_CALLS"
+  run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice --refresh
+  [ "$status" -eq 0 ]
+  grep -qxF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -Syu --needed --noconfirm -- extra/tesseract-data-spa" "$CFG_TEST_CALLS"
+  cmp -s "$default" <(printf 'eng+spa\n')
+}
+
 @test "target refresh skips snap-pac on the first full upgrade and subsequent install" {
   cfg_test_step second
   printf 'second extra\n' > "$CFG_TEST_DIR/code/capabilities/second/packages"

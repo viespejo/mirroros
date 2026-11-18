@@ -174,6 +174,35 @@ cfg_unit_reload systemd-logind /etc/power-key.conf'
   cfg_test_no_install
 }
 
+@test "the partial-upgrade guard sees the conditional Hyprland Spanish OCR package" {
+  local step=desktop/compositor/providers/hyprland
+  printf 'CFG_STEPS=(%s)\n' "$step" > "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  printf 'tesseract-data-eng extra\n' > "$CFG_TEST_DIR/code/capabilities/$step/packages"
+  printf 'cfg_packages_ensure "$STEP_DIR/packages"\ncfg_require cfg_packages_present "$STEP_DIR/packages"\n' \
+    > "$CFG_TEST_DIR/code/capabilities/$step/apply"
+  : > "$CFG_TEST_INSTALLED/tesseract-data-eng"
+  export CFG_TEST_UPGRADES='example 1 -> 2'
+  printf 'LANG=en_US.UTF-8\nLC_TIME=en_US.UTF-8\n' > "$MIRROROS_CONFIGURE_ROOT/etc/locale.conf"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  ! grep -qE 'tesseract-data-spa|^pacman -Qu$' "$CFG_TEST_CALLS"
+  cfg_test_no_install
+  printf 'LANG=en_US.UTF-8\nLC_TIME=es_ES.UTF-8\n' > "$MIRROROS_CONFIGURE_ROOT/etc/locale.conf"
+  : > "$CFG_TEST_CALLS"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *'Packages are missing while upgrades are pending'* ]]
+  grep -qxF 'pacman -Sp --print-format %r %n %v -- extra/tesseract-data-spa' "$CFG_TEST_CALLS"
+  grep -qxF 'pacman -Q -- tesseract-data-spa' "$CFG_TEST_CALLS"
+  grep -qxF 'pacman -Qu' "$CFG_TEST_CALLS"
+  cfg_test_no_install
+  : > "$CFG_TEST_CALLS"
+  run "$CFG_TEST_ENTRY" --refresh
+  [ "$status" -eq 0 ]
+  grep -qxF 'pacman -Syu --needed --noconfirm -- extra/tesseract-data-spa' "$CFG_TEST_CALLS"
+  [ "$(grep -c '^pacman -Q -- tesseract-data-spa$' "$CFG_TEST_CALLS")" -eq 2 ]
+}
+
 @test "missing XKB data is rejected before package mutation" {
   cfg_test_step
   rm "$MIRROROS_CONFIGURE_ROOT/usr/share/X11/xkb/rules/base.lst"
@@ -458,7 +487,7 @@ cfg_unit_reload systemd-logind /etc/power-key.conf'
 
 @test "apply scripts never invoke effectful base commands directly" {
   while IFS= read -r -d '' script; do
-    ! grep -vE '^[[:space:]]*#' "$script" |
+    ! grep -vE '^[[:space:]]*(#|cfg_run_host install )' "$script" |
       grep -En '(^|[;&|()[:space:]])((/usr)?/bin/)?(pacman|systemctl|install|runuser)([[:space:]]|$)'
   done < <(find "$CFG_SOURCE_ROOT/capabilities" -type f -name apply -print0)
 }

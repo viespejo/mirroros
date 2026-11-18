@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure — Hyprland color picker.
+# Adapted from Omarchy; see LICENSE.omarchy and ../UPSTREAM.md.
+(( $# == 0 )) || exit 2
+
+# Preserve the upstream toggle; do not stack another picker.
+if { pkill hyprpicker || hyprpicker -a; } > /dev/null 2>&1; then
+  exit 0
+fi
+systemd-cat --identifier=mirroros-screenshot <<< 'Color picker failed.' > /dev/null 2>&1 || :
+exit 1

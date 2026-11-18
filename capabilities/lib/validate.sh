@@ -87,7 +87,7 @@ cfg_lock() {
 }
 
 cfg_validate() {
-  local tool uid='' user_uid='' step name repository extra resolved actual_name version actual_repository
+  local tool uid='' user_uid='' step name repository extra resolved actual_name version actual_repository effective
   local missing=0 upgrades='' query_status=0 tools_ok=1 resolved_match=0 context_ok=1
   if ! uid="$(id -u)" || [[ "$uid" != 0 ]]; then cfg_problem 'Run configure as root using sudo.'; fi
   if [[ "$CONFIGURE_CONTEXT" == target ]]; then
@@ -164,6 +164,14 @@ cfg_validate() {
   fi
   if (( context_ok )) && cfg_exec bash -c 'command -v pacman' > /dev/null 2>&1; then
     for step in "${CFG_STEPS[@]}"; do
+      if [[ "$step" == desktop/compositor/providers/hyprland ]] &&
+        ! CFG_HYPRLAND_OCR_LANGUAGES="$(cfg_hyprland_ocr_languages)"; then
+        cfg_problem 'Cannot read the installed locale configuration; check /etc/locale.conf before rerunning.'
+      fi
+      if ! effective="$(cfg_effective_packages "$CAPABILITIES_DIR/$step/packages")"; then
+        cfg_problem "Cannot read package declarations in $step/packages."
+        continue
+      fi
       while read -r name repository extra || [[ -n "$name" ]]; do
         [[ -n "$name" && "$name" != \#* ]] || continue
         if [[ ! "$name" =~ ^[a-zA-Z0-9@._+-]+$ || ! "$repository" =~ ^(core|extra|multilib)$ || -n "$extra" ]]; then
@@ -190,7 +198,7 @@ cfg_validate() {
           CFG_INSTALLED["$name"]=0
           missing=1
         fi
-      done < "$CAPABILITIES_DIR/$step/packages"
+      done <<< "$effective"
     done
     if (( missing && ! CFG_REFRESH )); then
       upgrades="$(cfg_exec pacman -Qu 2>&1)" || query_status=$?

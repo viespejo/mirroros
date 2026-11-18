@@ -3,6 +3,10 @@ hyprland extra
 xdg-desktop-portal-hyprland extra
 # Required by xdg-desktop-portal-hyprland for the Screenshot portal to function; not a capture tool.
 grim extra
+# Direct capture tools; Spanish OCR data is selected by configure for Spanish locales.
+hyprpicker extra
+slurp extra
+zbar extra
 # Runtime display actions parse and validate Hyprland monitor JSON.
 jq extra
 # Reviewed Omasnap source recipe: runtime dependencies (hyprland is declared above).
