@@ -32,7 +32,7 @@ it does not transcode the payload. The watcher remains unchanged; `store text` n
 
 The same VM reports `xdg-utils 1.2.1-2` (required by `qt6-base` and `openconnect`, as well as laboratory Chromium)
 and `util-linux 2.42.4-1`. `xdg-open` is supplied by `xdg-utils` in the configured desktop's dependency closure;
-`notify-send` is already owned by `system/power` (`libnotify`). `flock` comes from `util-linux` (also declared by
+`flock` comes from `util-linux` (also declared by
 `desktop/shell`); Bash,
 coreutils, grep and awk are base-system tools. A further read-only VM query during the laboratory confirmed
 `/usr/bin/iconv` belongs to `glibc 2.44+r50+g1848099f063e-1`, `/usr/bin/od` to `coreutils 9.12-2`, and `/usr/bin/awk`
@@ -109,8 +109,10 @@ association using `uwsm app -t service`, as approved above. Empty, option-like, 
 multiline handler responses are rejected rather than executed. Both the MIME query and application launcher have
 a 10-second timeout with a further 2-second kill grace; stdin is `/dev/null` and the history lock/descriptor is
 released before either operation. Listing and capture remain available while an opener is busy. Missing handlers,
-query/launch failures or timeouts trigger a normal-urgency transient notification with the next action (check the
-handler in `mimeapps.list` and the terminal configuration), and return nonzero. No association or named
+query/launch failures or timeouts return 1 and send a normal-urgency transient notification with the next action
+(check the handler in `mimeapps.list` and the terminal configuration). Plan 02-42 adopts the reviewed Quattro
+policy: use the internal MirrorOS sender and its default `mirroros-action` identity so explicit open failures
+bypass Do Not Disturb. Sender failure does not change the exit status; successful opens stay silent. No association or named
 browser/editor/viewer fallback is installed. A successful service start does not guarantee later application
 health. External handlers own their subsequent behavior; this command cannot prevent an application from saving
 a file or URL to its own state.

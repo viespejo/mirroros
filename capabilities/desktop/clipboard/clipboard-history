@@ -216,8 +216,9 @@ open_entry() {
     fi
   fi
   if ! launch_open_target "$target" > /dev/null 2>&1; then
-    notify-send --urgency=normal --hint=int:transient:1 'Clipboard entry could not be opened' \
-      'Next action: check the default handler in mimeapps.list and the terminal configuration, then retry.'
+    /usr/share/mirroros/shell/notifications/mirroros-notification-send -u normal --transient -- \
+      'Clipboard entry could not be opened' \
+      'Next action: check the default handler in mimeapps.list and the terminal configuration, then retry.' > /dev/null 2>&1 || :
     return 1
   fi
 }

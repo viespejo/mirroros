@@ -2,8 +2,11 @@
 # Disposable clipboard fixtures only; no compositor, real history or opener is used.
 
 setup() {
-  CLIPBOARD_COMMAND="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/clipboard/clipboard-history"
+  local source="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/clipboard/clipboard-history"
   CLIP_TEST_DIR=$(mktemp -d)
+  CLIPBOARD_COMMAND="$CLIP_TEST_DIR/clipboard-history"
+  sed "s|/usr/share/mirroros/shell/notifications/mirroros-notification-send|$CLIP_TEST_DIR/bin/mirroros-notification-send|" \
+    "$source" > "$CLIPBOARD_COMMAND"
   export CLIP_TEST_DIR
   CLIP_TEST_REAL_TIMEOUT=$(command -v timeout)
   export CLIP_TEST_REAL_TIMEOUT
@@ -117,7 +120,7 @@ if [[ "${CLIP_TEST_SHORT_TIMEOUT:-0}" == 1 ]]; then
 fi
 exec "$CLIP_TEST_REAL_TIMEOUT" "$@"
 DOUBLE
-  cat > "$CLIP_TEST_DIR/bin/notify-send" <<'DOUBLE'
+  cat > "$CLIP_TEST_DIR/bin/mirroros-notification-send" <<'DOUBLE'
 #!/usr/bin/bash
 printf '%s\n' "$@" > "$CLIP_TEST_DIR/notification"
 DOUBLE
@@ -436,11 +439,22 @@ cb() { bash "$CLIPBOARD_COMMAND" "$@"; }
   [ ! -e "$CLIP_TEST_DIR/mime-query" ]
   export CLIP_TEST_OPEN_EXIT=3
   run cb open 1
-  [ "$status" -ne 0 ]
-  grep -qxF -- '--urgency=normal' "$CLIP_TEST_DIR/notification"
-  grep -qxF -- '--hint=int:transient:1' "$CLIP_TEST_DIR/notification"
-  grep -q 'Next action:.*mimeapps.list' "$CLIP_TEST_DIR/notification"
-  ! grep -q 'disposable text' "$CLIP_TEST_DIR/notification"
+  [ "$status" -eq 1 ]
+  [ "$(< "$CLIP_TEST_DIR/notification")" = "$(printf '%s\n' -u normal --transient -- \
+    'Clipboard entry could not be opened' \
+    'Next action: check the default handler in mimeapps.list and the terminal configuration, then retry.')" ]
+}
+
+@test "missing sender preserves silent success and the open failure status" {
+  rm -- "$CLIP_TEST_DIR/bin/mirroros-notification-send"
+  run cb open 1
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  export CLIP_TEST_OPEN_EXIT=7
+  run cb open 1
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+  [ ! -e "$CLIP_TEST_DIR/notification" ]
 }
 
 @test "text open uses the existing desktop association without selecting an application" {
