@@ -46,6 +46,10 @@ autostart_entry() {
   [ "$status" -eq 0 ]
   [[ "$output" == *'desktop/shell: changed'* ]]
   runtime_current "$MIRROROS_CONFIGURE_ROOT"
+  local sender=/usr/share/mirroros/shell/notifications/mirroros-notification-send
+  cmp "$SHELL_CODE/notifications/mirroros-notification-send" "$MIRROROS_CONFIGURE_ROOT$sender"
+  [ "$(stat -c %a "$MIRROROS_CONFIGURE_ROOT$sender")" = 755 ]
+  [ "$(readlink "$MIRROROS_CONFIGURE_ROOT/usr/bin/mirroros-notification-send")" = "$sender" ]
   cmp "$SHELL_CODE/systemd/mirroros-shell.service" "$MIRROROS_CONFIGURE_ROOT/etc/systemd/user/mirroros-shell.service"
   [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/mirroros-shell.service")" = \
     /etc/systemd/user/mirroros-shell.service ]
@@ -70,6 +74,22 @@ autostart_entry() {
   [[ "$output" == *'desktop/shell: unchanged'* ]]
   cfg_test_no_install
   shell_private_unchanged
+}
+
+@test "configure leaves an occupied sender alias untouched" {
+  local alias="$MIRROROS_CONFIGURE_ROOT/usr/bin/mirroros-notification-send"
+  mkdir -p "$(dirname "$alias")"
+  printf 'foreign sender\n' > "$alias"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [ ! -L "$alias" ]
+  [ "$(<"$alias")" = 'foreign sender' ]
+  rm "$alias"
+  ln -s /synthetic/missing-sender "$alias"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [ "$(readlink "$alias")" = /synthetic/missing-sender ]
+  [ -x "$MIRROROS_CONFIGURE_ROOT/usr/share/mirroros/shell/notifications/mirroros-notification-send" ]
 }
 
 @test "a changed source is delivered while preferences and private state stay untouched" {

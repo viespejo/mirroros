@@ -8,6 +8,10 @@ checkout used for this integration. The notification rows in [UPSTREAM.md](UPSTR
 Quattro commit `520c3ed969d30b58defe03eb19d603f32b4cb002` as their per-file comparison reference,
 not as a replacement for the candidate pin. The original Omapager notice and license are retained.
 
+The shared `notifications/mirroros-notification-send` adapts the reviewed Plan 02-42 prototype sender.
+`configure` publishes it inside the shell runtime, with an optional `/usr/bin/mirroros-notification-send`
+symlink. An occupied alias is left untouched; first-party callers use the internal runtime path.
+
 ## Apps visibility policy
 
 `launcher.hides` owns a bounded launcher-only hide list: `uuctl`, `foot-server` and `footclient`.

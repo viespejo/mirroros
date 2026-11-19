@@ -546,6 +546,11 @@ migration: move the setting by hand into `bar.widgets.<id>` and delete the `bar.
   the contextual action; Super+Shift+, dismisses all; Super+Ctrl+, enters keyboard navigation;
   Super+Alt+, dismisses the newest; Super+Shift+Alt+, replays history; Super+Ctrl+Alt+, toggles Do Not
   Disturb. None opens a notification panel.
+- **Shared notification sender:** first-party callers use `/usr/share/mirroros/shell/notifications/mirroros-notification-send`.
+  `configure` exposes `/usr/bin/mirroros-notification-send` if that path is free. The sender uses the
+  caller's session bus; `mirroros-action` bypasses DND by default, while `--app-name` selects ordinary
+  named delivery. Put options before `--` to send literal headline and body text. The sender has no
+  executable options or wait mode.
 - **Notification actions:** only live D-Bus notices have sender actions. Clicking a card body invokes its
   live `default` action if present, then closes the card. There is no window or URL fallback. A direct click
   on a validated inline link opens that link. Executable hints and stored command fields are ignored.

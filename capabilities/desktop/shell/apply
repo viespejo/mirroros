@@ -22,6 +22,7 @@ case "$status" in
     cfg_changed ;;
   *) exit 4 ;;
 esac
+cfg_system_link "$runtime/notifications/mirroros-notification-send" /usr/bin/mirroros-notification-send
 cfg_source_record mirroros-shell-runtime capabilities/desktop/shell '' '' \
   "manifest-sha256:$(bash "$STEP_DIR/install-runtime" digest "$STEP_DIR")"
 cfg_tracked_file "$STEP_DIR/systemd/mirroros-shell.service" "$unit" 0644
