@@ -2,12 +2,22 @@
 load ../support
 load hardware-support
 
-setup() { hardware_setup; }
+setup() {
+  hardware_setup
+  cat > "$CFG_TEST_DIR/bin/mirroros-notification-send" <<'EOF'
+#!/usr/bin/bash
+printf 'mirroros-notification-send %s\n' "$*" >> "$CFG_TEST_CALLS"
+exit "${HW_NOTIFY_FAIL:-0}"
+EOF
+  chmod 0755 "$CFG_TEST_DIR/bin/mirroros-notification-send"
+}
 teardown() { cfg_test_teardown; }
 
 watch_refreshes() {
   /usr/bin/bash -Eeuo pipefail -c '
     source "$1/capabilities/system/power/power-watch"
+    [[ "$sender" == /usr/share/mirroros/shell/notifications/mirroros-notification-send ]]
+    sender="$CFG_TEST_DIR/bin/mirroros-notification-send"
     power_watch_profile() { printf "profile autodetect\n" >> "$CFG_TEST_CALLS"; }
     last_source=""
     warned=0
@@ -107,7 +117,7 @@ export HW_ON_BATTERY=false
 power_watch_refresh'
   [ "$status" -eq 0 ]
   [ "$(grep -c '^profile autodetect$' "$CFG_TEST_CALLS")" -eq 3 ]
-  ! grep -q '^notify-send ' "$CFG_TEST_CALLS"
+  ! grep -q '^mirroros-notification-send ' "$CFG_TEST_CALLS"
 }
 
 @test "watcher sends one warning at 10 percent and rearms after leaving low discharge" {
@@ -121,7 +131,7 @@ power_watch_refresh
 export HW_BATTERY_PERCENT=10
 power_watch_refresh'
   [ "$status" -eq 0 ]
-  [ "$(grep -c '^notify-send --urgency=critical --expire-time=30000 ' "$CFG_TEST_CALLS")" -eq 2 ]
+  [ "$(grep -Fxc 'mirroros-notification-send -u normal -g 󱐋 -i battery-caution -t 30000 -- Low battery Battery at or below 10%; connect AC power.' "$CFG_TEST_CALLS")" -eq 2 ]
 }
 
 @test "charging rearms warnings and low AC or absent batteries never warn" {
@@ -134,7 +144,7 @@ power_watch_refresh
 export HW_BATTERY_PRESENT=false
 power_watch_refresh'
   [ "$status" -eq 0 ]
-  [ "$(grep -c '^notify-send ' "$CFG_TEST_CALLS")" -eq 2 ]
+  [ "$(grep -c '^mirroros-notification-send ' "$CFG_TEST_CALLS")" -eq 2 ]
   [[ "$output" == *'Battery unavailable'* ]]
 }
 
@@ -143,7 +153,7 @@ power_watch_refresh'
 power_watch_refresh'
   [ "$status" -eq 0 ]
   [[ "$output" == *'invalid percentage'* ]]
-  ! grep -q '^notify-send ' "$CFG_TEST_CALLS"
+  ! grep -q '^mirroros-notification-send ' "$CFG_TEST_CALLS"
 }
 
 @test "watcher monitor failure propagates for service restart" {
@@ -162,7 +172,19 @@ export HW_NOTIFY_FAIL=0
 power_watch_refresh
 power_watch_refresh'
   [ "$status" -eq 0 ]
-  [ "$(grep -c '^notify-send ' "$CFG_TEST_CALLS")" -eq 2 ]
+  [ "$(grep -c '^mirroros-notification-send ' "$CFG_TEST_CALLS")" -eq 2 ]
+}
+
+@test "missing sender leaves the watcher running and the warning pending" {
+  run watch_refreshes 'export HW_BATTERY_PRESENT=true HW_ON_BATTERY=true HW_BATTERY_PERCENT=5
+sender+=.missing
+power_watch_refresh
+[[ "$warned" == 0 ]]
+export HW_ON_BATTERY=false
+power_watch_refresh'
+  [ "$status" -eq 0 ]
+  [ "$(grep -c "^profile autodetect$" "$CFG_TEST_CALLS")" -eq 2 ]
+  ! grep -q '^mirroros-notification-send ' "$CFG_TEST_CALLS"
 }
 
 battery_fixture() {

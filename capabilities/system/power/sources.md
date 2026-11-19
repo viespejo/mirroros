@@ -3,7 +3,7 @@
 ## Packages and interfaces
 
 `upower`, `power-profiles-daemon`, `brightnessctl` and `libnotify` are official Arch `extra` packages; configure
-records resolved versions in `packages.tsv`. libnotify supplies the watcher's `notify-send`. D-Bus tools are
+records resolved versions in `packages.tsv`. Fingerprint still uses libnotify's `notify-send --wait`. D-Bus tools are
 provided by the base systemd installation. PPD is driven over `net.hadess.PowerProfiles` with `busctl`, avoiding
 powerprofilesctl's optional Python dependency. UPower owns power-source and battery state. Brightnessctl controls
 a display backlight from the active seat; it never selects keyboard LEDs.
@@ -30,8 +30,11 @@ full), `rate` (W, unsigned, preferring the instantaneous sysfs `power_now` or `c
 UPower is read in the C locale, since a decimal-comma `LC_NUMERIC` would otherwise drop `size` and `time`.
 Keys without a reading are omitted rather than fabricated. No system battery or inaccessible UPower exits 4.
 
-The watcher applies autodetect at login and queries UPower on monitor events. It sends one critical, 30-second
-notification per at-or-below-10% discharging episode, rearmed after leaving that state. Absent batteries are
+The watcher applies autodetect at login and queries UPower on monitor events. Following the reviewed Quattro
+`bin/omarchy-battery-low` behavior, it sends one normal-urgency, 30-second notification per at-or-below-10%
+discharging episode through the internal MirrorOS sender. It uses the `󱐋` glyph, the `battery-caution` theme
+icon and the default `mirroros-action` identity to bypass Do Not Disturb. A failed or unavailable sender is
+retried on the next refresh; a successful warning rearms only after leaving the low-discharge state. Absent batteries are
 reported unavailable. UPower monitor failure reaches systemd's restart policy. The user service is enabled for
 `graphical-session.target`, never started by configure. PPD is system-enabled and started only if inactive.
 

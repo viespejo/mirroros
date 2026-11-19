@@ -3,6 +3,8 @@
 # UPower event trigger is independent of the shell; 10% episode policy follows Omarchy 4.0.6 (MIT).
 set -Eeuo pipefail
 
+sender=/usr/share/mirroros/shell/notifications/mirroros-notification-send
+
 power_watch_profile() { /usr/share/mirroros/hardware/power-profile set autodetect; }
 
 power_watch_refresh() {
@@ -37,7 +39,7 @@ power_watch_refresh() {
   if [[ "$source" == 'b true' && "$state" == 'u 2' ]] &&
     awk -v value="$percentage" 'BEGIN { exit !(value >= 0 && value <= 10) }'; then
     if (( warned == 0 )); then
-      if notify-send --urgency=critical --expire-time=30000 'Low battery' 'Battery at or below 10%; connect AC power.'; then
+      if "$sender" -u normal -g '󱐋' -i battery-caution -t 30000 -- 'Low battery' 'Battery at or below 10%; connect AC power.'; then
         warned=1
       fi
     fi
