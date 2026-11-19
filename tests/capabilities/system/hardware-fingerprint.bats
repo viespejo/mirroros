@@ -147,7 +147,7 @@ fp_no_escalation() { ! grep -Eq '^(sudo|pacman|systemctl) ' "$CFG_TEST_CALLS"; }
   HW_NOTIFY_ACTION=setup run "$FP_DIR/fingerprint-invite"
   [ "$status" -eq 0 ]
   [ -e "$XDG_STATE_HOME/mirroros/fingerprint-invited" ]
-  grep -qxF 'notify-send --wait -u critical -A setup=Set up Fingerprint reader Use your fingerprint for sudo and authorization prompts.' "$CFG_TEST_CALLS"
+  grep -qxF 'notify-send --wait -u critical -h string:mirroros-glyph:󰈷 -A setup=Set up Fingerprint reader Use your fingerprint for sudo and authorization prompts.' "$CFG_TEST_CALLS"
   grep -qxF 'uwsm app -- foot -e /usr/share/mirroros/hardware/fingerprint-setup' "$CFG_TEST_CALLS"
   : > "$CFG_TEST_CALLS"
   HW_NOTIFY_ACTION=setup run "$FP_DIR/fingerprint-invite"
