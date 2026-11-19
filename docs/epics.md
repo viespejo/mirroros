@@ -867,6 +867,8 @@ As the MirrorOS maintainer,
 I want the post-installation update path to be reviewed and bounded,
 So that the installed system's supply chain stays reviewable after first login.
 
+Chrome's update path is governed by [ADR 0032](adr/0032-chrome-supply-chain-and-update-flow.md).
+
 **Acceptance Criteria:**
 
 **Given** the installed system needs AUR packages

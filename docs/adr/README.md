@@ -84,6 +84,12 @@ ADR 0021 for one fingerprint prompt line. The maintainer accepted it on 2026-11-
 explicitly authorized the fifth patch at Task 8's DEC-007 checkpoint; amended-package and laboratory gates remain
 required before plan 02-39 adoption.
 
+## Browser supply chain and update flow
+
+[ADR 0032: Chrome Supply Chain and Update Flow](0032-chrome-supply-chain-and-update-flow.md) is Proposed. It
+records the verified local Chrome build and user-authorized update flow owned by Story 4.5 and inherited by
+Story 4.7. Plan 02-43 implementation remains blocked until maintainer acceptance.
+
 ## Numbering and filenames
 
 Use four digits and a short descriptive title: `NNNN-short-title.md`. Allocate the next unused number when creating an ADR. Do not reuse a number, even if an ADR is later rejected or superseded.
