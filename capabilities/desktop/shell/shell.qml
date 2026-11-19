@@ -155,8 +155,7 @@ ShellRoot {
   GlobalShortcut {
     appid: "mirroros"
     name: "panel.notifications"
-    description: "Toggle the notification panel"
-    onPressed: desktopShell.notificationService.requestPanel("toggle")
+    description: "Reserved notification shortcut"
   }
   Variants {
     model: [1, 2, 3, 4, 5, 6, 7, 8, 9]

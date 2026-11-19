@@ -1,5 +1,13 @@
 # Desktop shell sources and configuration ownership
 
+## Quattro notification engine
+
+Plan 02-42 integrates the reviewed Quattro notification candidate. The plan records the candidate source
+pin `e6aec9716dbb8748e0d4e66ff927cb7b04a2e17a`; that object was not available in the local Omarchy
+checkout used for this integration. The notification rows in [UPSTREAM.md](UPSTREAM.md) use local
+Quattro commit `520c3ed969d30b58defe03eb19d603f32b4cb002` as their per-file comparison reference,
+not as a replacement for the candidate pin. The original Omapager notice and license are retained.
+
 ## Apps visibility policy
 
 `launcher.hides` owns a bounded launcher-only hide list: `uuctl`, `foot-server` and `footclient`.

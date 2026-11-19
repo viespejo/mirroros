@@ -1,75 +1,6 @@
 # qmllint from qt6-declarative 6.12.0-2
 # Reviewed prototype diagnostics; copy keys are file:line:column.
 # Adapted/new keys are [file, message, trimmed source]. Duplicate keys count.
-# Exception (maintainer-approved, plan 02-27): the shell.qml [required] entries are qmllint false positives.
-# GlobalShortcut is re-exported by Quickshell.Hyprland from _GlobalShortcuts and stays unresolved for
-# qmllint, so the Variants delegate is reported without modelData; the runtime registers all shortcuts.
-# Audio panel (plan 02-27 Task 6, maintainer-approved): bar/widgets/Audio.qml entries follow the v4.5.0
-# inline-component pattern (root access from SinkRow/SourceRow/StreamRow and delegates) and untyped bar/Style/
-# loadedContent members, as in Ui/Panel.qml and Ui/PanelSlider.qml; no new category.
-# Display and power panels (plan 02-27 Task 7, maintainer-approved): bar/widgets/Monitor.qml and
-# bar/widgets/Power.qml entries follow the same v4.5.0 inline-component pattern (root access from ScalePill/
-# MonitorRow/InfoPair and delegates, upstream block-scoped var) and untyped bar/Style/loadedContent members.
-# Display panel mirror toggle (plan 02-27, ADR 0027, maintainer-approved): MirrorRow entries in
-# bar/widgets/Monitor.qml follow the same inline-component pattern as MonitorRow; no new category.
-# Network panel (plan 02-28 Task 5): bar/widgets/Network.qml entries follow the same v4.5.0 inline-component
-# pattern (root access from row delegates) and untyped bar/Style members; Ui/TextField.qml (v4.5.0 copy) has
-# untyped Style members; shell.qml gains one GlobalShortcut (panel.network); no new category.
-# Bluetooth panel (plan 02-29 laboratory checkpoint): bar/widgets/Bluetooth.qml entries follow the same v4.5.0
-# inline-component pattern (root access from row delegates) and untyped bar/Style/loadedContent members;
-# shell.qml gains one GlobalShortcut (panel.bluetooth); no new category.
-# VPN section (plan 02-30 laboratory checkpoint): bar/widgets/Network.qml VpnRow and vpn focus entries follow
-# the same inline-component pattern (root access from row delegates) and untyped bar/Style members; no new category.
-# Bar additions (plan 02-31 laboratory checkpoint): bar/widgets/ActiveWindow.qml and bar/widgets/Microphone.qml
-# entries are untyped bar/Style/Pipewire.nodes members, as in bar/widgets/Audio.qml; the shell.qml PostReloadHook
-# key moved with the stayAwakeService lines; the bar/widgets/Network.qml list height entry is 02-30 drift (line
-# changed after that laboratory capture); no new category.
-# Calendar and weather (plan 02-32 laboratory checkpoint, maintainer-approved): panels/clock/Panel.qml (v4.5.0
-# copy) and panels/weather/Panel.qml entries follow the v4.5.0 inline-component pattern (root and Suggestions host
-# access from delegates) and untyped bar/Style/shell members; bar/widgets/Clock.qml and bar/widgets/Weather.qml
-# entries are untyped Loader.item panel members (injectPanel pattern) and Style.bar; the bar/Bar.qml entry is the
-# per-widget settings Binding; the weather saved-locations separator and section header and the weather list
-# keys follow the same pattern; shell.qml gains the panel.clock and panel.weather GlobalShortcut entries;
-# no new category.
-# World clock (plan 02-33 laboratory checkpoint, maintainer-approved): the panels/elsewhen v4.5.0 copies (ArcText,
-# CityMatches, CitySearch, DaylightStrip, HeroTitle) and the adapted Panel.qml, CityRow.qml and MiniGlobe.qml
-# entries follow the v4.5.0 inline-component pattern (root access from delegates) and untyped Style/Commons
-# members; bar/widgets/WorldClock.qml entries are untyped Loader.item panel members (injectPanel pattern) and
-# Style.bar; shell.qml gains the panel.worldclock GlobalShortcut entry. New category id-shadows-member (2 keys):
-# Panel.qml's scrollContent alias and id share a name, unchanged from v4.5.0. Panel.qml's Keys.onTabPressed and
-# Keys.onBacktabPressed in both CitySearch instances (4 keys) are the same root access from a nested instance.
-# Quick reminders (plan 02-34 laboratory checkpoint, maintainer-approved): reminders/ReminderFlow.qml (adapted
-# v4.5.0) entries are untyped Style/Commons.Color.menu members and the upstream block-scoped var; shell.qml's
-# PostReloadHook [import] key moves its context line next to the new reminders service; no new category.
-# Polkit agent (plan 02-37 laboratory checkpoint, ADR 0030, maintainer-approved): polkit/PolkitAgent.qml (adapted
-# Omarchy 7075b61) entries are untyped Style/Commons.Color.polkit members, the undeclared AuthFlow type of
-# polkitAgent.flow, unqualified root members and PanelWindow, as in menu/Menu.qml; shell.qml's PostReloadHook
-# [import] key moves its context line next to the new agent instance; no new category.
-# Clipboard (plan 02-38 corrective Task 3): reviewed on reference VM qt6-declarative 6.12.0-4,
-# qmllint 6.12.0 and quickshell 0.3.2-1. The 17 missing-property diagnostics below are existing
-# members of QtObject-typed Style.font (family/title/caption/menuFamily/heading), Style.spacing (md)
-# and Commons.Color.menu (scrim/border), verified in their declarations; keep reactive token bindings.
-# One added GlobalShortcut has the existing Quickshell.Hyprland re-export limitation. The existing
-# PostReloadHook import diagnostic changes only its source-context key. No new category; avoidable
-# block-scoped var and Process id/property-shadow diagnostics were fixed, not added to this baseline.
-adapt ["Ui/ConfirmDialog.qml","Member \"family\" not found on type \"QObject\" [missing-property]","property string fontFamily: Style.font.family"]
-adapt ["Ui/ConfirmDialog.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
-adapt ["Ui/ConfirmDialog.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.caption"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"scrim\" not found on type \"QObject\" [missing-property]","Rectangle { anchors.fill: parent; color: Commons.Color.menu.scrim }"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"menu\", \"border\", Commons.Color.menu.border, Math.max(1, Style.space(2)))"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"md\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.md"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"md\" not found on type \"QObject\" [missing-property]","height: parent.height - root.headerHeight - Style.spacing.md"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
-adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
-adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["Commons/I18n.qml","Type I18n not declared as singleton in qmldir but using pragma Singleton [import]",""]
 adapt ["Commons/I18n.qml","var declaration in block scope is hoisted to function scope Replace it with const or let to silence the warning [block-scope-var-declaration]","var parsed = JSON.parse(raw || \"{}\")"]
 adapt ["Commons/Style.qml","Type Style not declared as singleton in qmldir but using pragma Singleton [import]",""]
@@ -82,6 +13,9 @@ adapt ["Ui/BarIconButton.qml","Member \"iconSlot\" not found on type \"QObject\"
 adapt ["Ui/BarIndicator.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","fontSize: Style.font.caption"]
 adapt ["Ui/BarIndicator.qml","Member \"statusSlot\" not found on type \"QObject\" [missing-property]","fixedHeight: vertical ? Style.bar.statusSlot : -1"]
 adapt ["Ui/BarIndicator.qml","Member \"statusSlot\" not found on type \"QObject\" [missing-property]","fixedWidth: vertical ? -1 : Style.bar.statusSlot"]
+adapt ["Ui/ConfirmDialog.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.caption"]
+adapt ["Ui/ConfirmDialog.qml","Member \"family\" not found on type \"QObject\" [missing-property]","property string fontFamily: Style.font.family"]
+adapt ["Ui/ConfirmDialog.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
 adapt ["Ui/Panel.qml","Member \"barForeground\" not found on type \"QObject\" [missing-property]","readonly property color barForeground: bar ? bar.barForeground : Commons.Color.foreground"]
 adapt ["Ui/Panel.qml","Member \"switchPanelFrom\" not found on type \"QObject\" [missing-property]","if (bar && typeof bar.switchPanelFrom === \"function\") return bar.switchPanelFrom(root, direction)"]
 adapt ["Ui/Panel.qml","Member \"switchPanelFrom\" not found on type \"QObject\" [missing-property]","if (bar && typeof bar.switchPanelFrom === \"function\") return bar.switchPanelFrom(root, direction)"]
@@ -154,11 +88,6 @@ adapt ["bar/Bar.qml","Unqualified access [unqualified]","} else if (root.positio
 adapt ["bar/Bar.qml","Unqualified access [unqualified]","} else if (root.position === \"right\") {"]
 adapt ["bar/BluetoothState.qml","Member \"values\" not found on type \"UntypedObjectModel\" [missing-property]","readonly property var devices: Bluetooth.devices ? Bluetooth.devices.values : []"]
 adapt ["bar/BluetoothState.qml","Type \"BluetoothAdapter\" of property \"defaultAdapter\" not found. This is likely due to a missing dependency entry or a type not being exposed declaratively. [unresolved-type]","readonly property var adapter: Bluetooth.defaultAdapter"]
-adapt ["bar/indicators/Dnd.qml","Member \"iconFont\" not found on type \"QObject\" [missing-property]","font.pixelSize: Math.round(Style.bar.iconFont * 0.6)"]
-adapt ["bar/indicators/Dnd.qml","Member \"openSettings\" not found on type \"QObject\" [missing-property]","if (action === \"settings\") panel.openSettings()"]
-adapt ["bar/indicators/Dnd.qml","Member \"open\" not found on type \"QObject\" [missing-property]","else panel.open()"]
-adapt ["bar/indicators/Dnd.qml","Member \"screen\" not found on type \"QObject\" [missing-property]","return window && window.screen ? String(window.screen.name || \"\") : \"\""]
-adapt ["bar/indicators/Dnd.qml","Member \"screen\" not found on type \"QObject\" [missing-property]","return window && window.screen ? String(window.screen.name || \"\") : \"\""]
 adapt ["bar/widgets/ActiveWindow.qml","Member \"barForeground\" not found on type \"QObject\" [missing-property]","color: root.bar ? root.bar.barForeground : Commons.Color.foreground"]
 adapt ["bar/widgets/ActiveWindow.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["bar/widgets/ActiveWindow.qml","Member \"controlPaddingX\" not found on type \"QObject\" [missing-property]","implicitWidth: visible ? Math.min(maxLabelWidth, Math.ceil(labelMetrics.advanceWidth)) + Style.spacing.controlPaddingX * 2 : 0"]
@@ -1356,6 +1285,20 @@ adapt ["bar/widgets/WorldClock.qml","Member \"settings\" not found on type QQuic
 adapt ["bar/widgets/WorldClock.qml","Member \"statusSlot\" not found on type \"QObject\" [missing-property]","slotSize: Style.bar.statusSlot"]
 adapt ["bar/widgets/WorldClock.qml","Member \"toggle\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()"]
 adapt ["bar/widgets/WorldClock.qml","Member \"toggle\" not found on type \"QObject\" [missing-property]","if (panelLoader.item && panelLoader.item.toggle) panelLoader.item.toggle()"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"menu\", \"border\", Commons.Color.menu.border, Math.max(1, Style.space(2)))"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"heading\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.heading"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"md\" not found on type \"QObject\" [missing-property]","height: parent.height - root.headerHeight - Style.spacing.md"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"md\" not found on type \"QObject\" [missing-property]","spacing: Style.spacing.md"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"menuFamily\" not found on type \"QObject\" [missing-property]","font.family: Style.font.menuFamily"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"scrim\" not found on type \"QObject\" [missing-property]","Rectangle { anchors.fill: parent; color: Commons.Color.menu.scrim }"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["clipboard/ClipboardPicker.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
 adapt ["menu/AppGrid.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["menu/AppGrid.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
 adapt ["menu/AppGrid.qml","Member \"controlPaddingY\" not found on type \"QObject\" [missing-property]","readonly property int headerHeight: Math.max(Style.space(36), Style.font.heading + Style.spacing.controlPaddingY * 2)"]
@@ -1386,45 +1329,113 @@ adapt ["menu/Menu.qml","Member \"iconLarge\" not found on type \"QObject\" [miss
 adapt ["menu/Menu.qml","Member \"iconLarge\" not found on type \"QObject\" [missing-property]","height: Style.font.iconLarge"]
 adapt ["menu/Menu.qml","Member \"iconLarge\" not found on type \"QObject\" [missing-property]","width: Style.font.iconLarge"]
 adapt ["menu/Menu.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& (service.stacking !== \"source\" || service.openDeck === Layout.deckKeyFor(model, service.stacking))"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& (service.stacking !== \"source\" || service.openDeck === Layout.deckKeyFor(model, service.stacking))"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& (service.stacking !== \"source\" || service.openDeck === Layout.deckKeyFor(model, service.stacking))"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","&& service.openDeck === Layout.groupKeyFor(model)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","Component.onCompleted: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","Component.onCompleted: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","actions: service.actionsOf(model.key, service.refsRevision)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","actions: service.actionsOf(model.key, service.refsRevision)"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","actionsAlign: service.actionsAlign"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","actionsActive: service.actionsActiveFor(model, false)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","actionsClickable: service.actionsActiveFor(model, true)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","cardWidth: deck.width"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","collapseGrace.stop()"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","collapseGrace.stop()"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","drawnHeight: service.at(model.key, \"height\")"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","expanded: service.expanded"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","fontScale: service.fontScale"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","hoverX: service.hoverX"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","hoverY: service.hoverY"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","hovered: service.hoverKey === model.key"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","iconOverrides: service.iconOverrides"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","if (service.stacking !== \"source\") return"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","if (group.key !== service.openDeck || !group.rows.length) continue"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","if (index >= 0 && Layout.groupKeyFor(toasts.get(index)) === service.openDeck)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","if (index >= 0 && Layout.groupKeyFor(toasts.get(index)) === service.openDeck)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","model: toasts"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","now: service.nowTick"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActionInvoked: function(identifier) { service.invokeAction(model.key, identifier) }"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActivated: service.activate(model.key)"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","onDismissed: service.closeToast(model.key, \"dismissed\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActionInvoked: function(identifier) { service.stopKeyboard(); service.invokeAction(model.key, identifier) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActionInvoked: function(identifier) { service.stopKeyboard(); service.invokeAction(model.key, identifier) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActivated: { service.stopKeyboard(); service.activate(model.key) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onActivated: { service.stopKeyboard(); service.activate(model.key) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onCodeCopied: function(code) { service.stopKeyboard(); service.copyCode(code, model.key) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onCodeCopied: function(code) { service.stopKeyboard(); service.copyCode(code, model.key) }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onDismissed: { service.stopKeyboard(); service.closeToast(model.key, \"dismissed\") }"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onDismissed: { service.stopKeyboard(); service.closeToast(model.key, \"dismissed\") }"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","onExpired: service.closeToast(model.key, \"expired\")"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","onOfferTaken: function(kind, value) { service.takeOffer(kind, value, model.key) }"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","onSilenceRequested: service.setDoNotDisturb(true)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","onLinkOpened: service.stopKeyboard()"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","onTargetHeightChanged: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","onTargetHeightChanged: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","paused: service.expanded"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","place: service.placements[model.key]"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","scene: service"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.pointerEntered(decks[i].key)"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.snoozeSource(String(model.groupKey || \"\"),"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","showCountdown: service.showCountdown"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","snoozeOptions: service.snoozeOptions"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","selected: service.keyboardMode && service.keyboardKey === model.key"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","selected: service.keyboardMode && service.keyboardKey === model.key"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.exitActionKey = \"\""]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.exitActionKey = \"\""]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.hoverKey = \"\""]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.hoverKey = found"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.hoverX = point.x"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.hoverY = point.y"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.openHoveredDeck()"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.openHoveredDeck()"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.pointerIn = containsMouse"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.pointerLeft()"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","service.pointerLeft()"]
 adapt ["notifications/Service.qml","Unqualified access [unqualified]","sole: toasts.count === 1"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","target: sceneRun"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","var bottom = top + (service.heights[first.key] || Style.space(58))"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","var decks = service.layout.decks"]
-adapt ["notifications/Service.qml","Unqualified access [unqualified]","var place = service.layout.placements[first.key]"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","target: service"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var bottom = top + service.at(key, \"height\") * scale"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var groupBottom = service.at(last, \"y\") + service.at(last, \"height\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var groupBottom = service.at(last, \"y\") + service.at(last, \"height\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var groupTop = service.at(group.rows[0].key, \"y\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var groups = service.layout.decks"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var index = service.rowIndexFor(found)"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var places = service.placements"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var scale = service.at(key, \"scale\")"]
+adapt ["notifications/Service.qml","Unqualified access [unqualified]","var top = service.at(key, \"y\")"]
+adapt ["notifications/Toast.qml","Member \"bodySmall\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.bodySmall"]
+adapt ["notifications/Toast.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
+adapt ["notifications/Toast.qml","Member \"body\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.body"]
+adapt ["notifications/Toast.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Math.round(Style.font.caption * 1.44)"]
+adapt ["notifications/Toast.qml","Member \"caption\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.caption"]
+adapt ["notifications/Toast.qml","Member \"controlHeight\" not found on type \"QObject\" [missing-property]","readonly property real segmentHeight: Style.spacing.controlHeight + Style.space(6)"]
+adapt ["notifications/Toast.qml","Member \"countdown\" not found on type \"QObject\" [missing-property]","linkColor: Commons.Color.notifications.countdown"]
+adapt ["notifications/Toast.qml","Member \"displayLarge\" not found on type \"QObject\" [missing-property]","font.pixelSize: (thumb.compact ? Style.font.icon : Style.font.displayLarge)"]
+adapt ["notifications/Toast.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Delivery.omarchyGlyph(card.row.glyph) ? \"omarchy\" : Style.font.family"]
+adapt ["notifications/Toast.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Style.font.family"]
+adapt ["notifications/Toast.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Style.font.family"]
+adapt ["notifications/Toast.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Style.font.family"]
+adapt ["notifications/Toast.qml","Member \"family\" not found on type \"QObject\" [missing-property]","font.family: Style.font.family"]
+adapt ["notifications/Toast.qml","Member \"icon\" not found on type \"QObject\" [missing-property]","font.pixelSize: (thumb.compact ? Style.font.icon : Style.font.displayLarge)"]
+adapt ["notifications/Toast.qml","Member \"sm\" not found on type \"QObject\" [missing-property]","width: countText.implicitWidth + Style.spacing.sm * 2"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.notifications.text"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.notifications.text"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Commons.Color.notifications.text"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Style.normalFillFor(Commons.Color.notifications.text, card.accentColor, Commons.Color.urgent)"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: Style.normalFillFor(Commons.Color.notifications.text, card.accentColor,"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","color: shut.hot ? Commons.Color.notifications.text : card.dimColor"]
+adapt ["notifications/Toast.qml","Member \"text\" not found on type \"QObject\" [missing-property]","colorizationColor: Commons.Color.notifications.text"]
+adapt ["notifications/Toast.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["notifications/Toast.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["notifications/Toast.qml","Member \"title\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.title"]
+adapt ["notifications/Toast.qml","Member \"xxs\" not found on type \"QObject\" [missing-property]","height: countText.implicitHeight + Style.spacing.xxs * 2"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]",": card.allDeeds.length - line * deedArea.columns"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]",": card.allDeeds.length - line * deedArea.columns"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","brightness: thumb.mono ? 1.0 : 0.0"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","colorization: thumb.mono ? 1.0 : 0.0"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","height: deedArea.rule + deedArea.segmentHeight"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","height: deedArea.rule + deedArea.segmentHeight"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","hint: card.selected && index < 9 ? String(index + 1) : \"\""]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","maskEnabled: picture.rounded"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","maskSource: mask"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","readonly property int line: Math.floor(index / deedArea.columns)"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","readonly property int perLine: line < deedArea.rows - 1 ? deedArea.columns"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","readonly property int perLine: line < deedArea.rows - 1 ? deedArea.columns"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","readonly property int slot: index % deedArea.columns"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","readonly property real start: Math.round(slot * deedRow.width / perLine)"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","rule: deedArea.rule"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","ruleColor: deedArea.ruleColor"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","toast: card"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","width: Math.round((slot + 1) * deedRow.width / perLine) - start"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","x: card.LayoutMirroring.enabled ? deedRow.width - start - width : start"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","x: card.LayoutMirroring.enabled ? deedRow.width - start - width : start"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","y: line * (deedArea.rule + deedArea.segmentHeight)"]
+adapt ["notifications/Toast.qml","Unqualified access [unqualified]","y: line * (deedArea.rule + deedArea.segmentHeight)"]
 adapt ["osd/Osd.qml","Member \"border\" not found on type \"QObject\" [missing-property]","borderSpec: Border.surfaceSpec(\"popups\", \"border\", Commons.Color.popups.border, Math.max(1, Style.space(2)))"]
 adapt ["osd/Osd.qml","Member \"displayLarge\" not found on type \"QObject\" [missing-property]","font.pixelSize: Style.font.displayLarge"]
 adapt ["osd/Osd.qml","Member \"displayLarge\" not found on type \"QObject\" [missing-property]","height: card.borderTop + root.pad + Style.font.displayLarge + root.pad + card.borderBottom"]
@@ -1775,6 +1786,7 @@ adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolv
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
+adapt ["shell.qml","Type GlobalShortcut is used but it is not resolved [unresolved-type]","GlobalShortcut {"]
 copy Commons/InputDevices.qml:0:0
 copy Ui/BarIconContent.qml:11:17
 copy Ui/BarIconContent.qml:23:18
@@ -2057,316 +2069,13 @@ copy bar/widgets/Tray.qml:894:67
 copy bar/widgets/Tray.qml:894:84
 copy bar/widgets/Tray.qml:895:21
 copy bar/widgets/Tray.qml:895:31
-copy notifications/DeedButton.qml:23:26
-copy notifications/DeedButton.qml:30:43
-copy notifications/DeedButton.qml:31:26
-copy notifications/DeedButton.qml:32:24
-copy notifications/NotificationPanel.qml:235:25
-copy notifications/NotificationPanel.qml:237:13
-copy notifications/NotificationPanel.qml:237:46
-copy notifications/NotificationPanel.qml:238:46
-copy notifications/NotificationPanel.qml:238:71
-copy notifications/NotificationPanel.qml:238:9
-copy notifications/NotificationPanel.qml:239:9
-copy notifications/NotificationPanel.qml:244:13
-copy notifications/NotificationPanel.qml:244:35
-copy notifications/NotificationPanel.qml:244:54
-copy notifications/NotificationPanel.qml:244:71
-copy notifications/NotificationPanel.qml:245:19
-copy notifications/NotificationPanel.qml:245:32
-copy notifications/NotificationPanel.qml:246:28
-copy notifications/NotificationPanel.qml:246:9
-copy notifications/NotificationPanel.qml:249:14
-copy notifications/NotificationPanel.qml:249:35
-copy notifications/NotificationPanel.qml:249:54
-copy notifications/NotificationPanel.qml:249:70
-copy notifications/NotificationPanel.qml:249:93
-copy notifications/NotificationPanel.qml:250:11
-copy notifications/NotificationPanel.qml:250:33
-copy notifications/NotificationPanel.qml:250:46
-copy notifications/NotificationPanel.qml:270:22
-copy notifications/NotificationPanel.qml:272:36
-copy notifications/NotificationPanel.qml:278:27
-copy notifications/NotificationPanel.qml:279:27
-copy notifications/NotificationPanel.qml:284:30
-copy notifications/NotificationPanel.qml:291:38
-copy notifications/NotificationPanel.qml:296:24
-copy notifications/NotificationPanel.qml:297:26
-copy notifications/NotificationPanel.qml:298:29
-copy notifications/NotificationPanel.qml:299:29
-copy notifications/NotificationPanel.qml:300:45
-copy notifications/NotificationPanel.qml:303:28
-copy notifications/NotificationPanel.qml:306:42
-copy notifications/NotificationPanel.qml:310:38
-copy notifications/NotificationPanel.qml:315:24
-copy notifications/NotificationPanel.qml:316:26
-copy notifications/NotificationPanel.qml:317:29
-copy notifications/NotificationPanel.qml:318:29
-copy notifications/NotificationPanel.qml:319:49
-copy notifications/NotificationPanel.qml:319:63
-copy notifications/NotificationPanel.qml:322:28
-copy notifications/NotificationPanel.qml:325:42
-copy notifications/NotificationPanel.qml:330:24
-copy notifications/NotificationPanel.qml:331:30
-copy notifications/NotificationPanel.qml:331:44
-copy notifications/NotificationPanel.qml:331:80
-copy notifications/NotificationPanel.qml:337:24
-copy notifications/NotificationPanel.qml:338:30
-copy notifications/NotificationPanel.qml:338:44
-copy notifications/NotificationPanel.qml:338:86
-copy notifications/NotificationPanel.qml:343:21
-copy notifications/NotificationPanel.qml:343:38
-copy notifications/NotificationPanel.qml:346:24
-copy notifications/NotificationPanel.qml:347:30
-copy notifications/NotificationPanel.qml:347:44
-copy notifications/NotificationPanel.qml:347:94
-copy notifications/NotificationPanel.qml:353:23
-copy notifications/NotificationPanel.qml:361:21
-copy notifications/NotificationPanel.qml:362:27
-copy notifications/NotificationPanel.qml:363:27
-copy notifications/NotificationPanel.qml:364:28
-copy notifications/NotificationPanel.qml:368:34
-copy notifications/NotificationPanel.qml:369:35
-copy notifications/NotificationPanel.qml:374:27
-copy notifications/NotificationPanel.qml:374:43
-copy notifications/NotificationPanel.qml:375:28
-copy notifications/NotificationPanel.qml:375:50
-copy notifications/NotificationPanel.qml:375:77
-copy notifications/NotificationPanel.qml:376:27
-copy notifications/NotificationPanel.qml:377:28
-copy notifications/NotificationPanel.qml:377:44
-copy notifications/NotificationPanel.qml:378:29
-copy notifications/NotificationPanel.qml:378:51
-copy notifications/NotificationPanel.qml:378:78
-copy notifications/NotificationPanel.qml:379:28
-copy notifications/NotificationPanel.qml:380:34
-copy notifications/NotificationPanel.qml:381:37
-copy notifications/NotificationPanel.qml:392:30
-copy notifications/NotificationPanel.qml:392:47
-copy notifications/NotificationPanel.qml:394:31
-copy notifications/NotificationPanel.qml:394:54
-copy notifications/NotificationPanel.qml:394:70
-copy notifications/NotificationPanel.qml:395:34
-copy notifications/NotificationPanel.qml:398:33
-copy notifications/NotificationPanel.qml:398:56
-copy notifications/NotificationPanel.qml:398:71
-copy notifications/NotificationPanel.qml:399:36
-copy notifications/NotificationPanel.qml:399:50
-copy notifications/NotificationPanel.qml:399:84
-copy notifications/NotificationPanel.qml:404:31
-copy notifications/NotificationPanel.qml:404:52
-copy notifications/NotificationPanel.qml:404:64
-copy notifications/NotificationPanel.qml:405:34
-copy notifications/NotificationPanel.qml:406:33
-copy notifications/NotificationPanel.qml:406:54
-copy notifications/NotificationPanel.qml:406:75
-copy notifications/NotificationPanel.qml:408:27
-copy notifications/NotificationPanel.qml:408:47
-copy notifications/NotificationPanel.qml:408:69
-copy notifications/NotificationPanel.qml:409:28
-copy notifications/NotificationPanel.qml:409:51
-copy notifications/NotificationPanel.qml:417:32
-copy notifications/NotificationPanel.qml:423:31
-copy notifications/NotificationPanel.qml:424:33
-copy notifications/NotificationPanel.qml:425:32
-copy notifications/NotificationPanel.qml:433:24
-copy notifications/NotificationPanel.qml:437:56
-copy notifications/NotificationPanel.qml:450:26
-copy notifications/NotificationPanel.qml:451:32
-copy notifications/NotificationPanel.qml:452:46
-copy notifications/NotificationPanel.qml:466:28
-copy notifications/NotificationPanel.qml:466:44
-copy notifications/NotificationPanel.qml:470:29
-copy notifications/NotificationPanel.qml:471:34
-copy notifications/NotificationPanel.qml:477:36
-copy notifications/NotificationPanel.qml:477:50
-copy notifications/NotificationPanel.qml:487:24
-copy notifications/NotificationPanel.qml:487:48
-copy notifications/NotificationPanel.qml:490:26
-copy notifications/NotificationPanel.qml:499:26
-copy notifications/NotificationPanel.qml:499:49
-copy notifications/NotificationPanel.qml:499:64
-copy notifications/NotificationPanel.qml:504:32
-copy notifications/NotificationPanel.qml:511:40
-copy notifications/NotificationPanel.qml:511:64
-copy notifications/NotificationPanel.qml:514:25
-copy notifications/NotificationPanel.qml:515:80
-copy notifications/NotificationPanel.qml:516:25
-copy notifications/NotificationPanel.qml:519:26
-copy notifications/NotificationPanel.qml:519:49
-copy notifications/NotificationPanel.qml:523:25
-copy notifications/NotificationPanel.qml:523:39
-copy notifications/NotificationPanel.qml:523:62
-copy notifications/NotificationPanel.qml:528:25
-copy notifications/NotificationPanel.qml:528:39
-copy notifications/NotificationPanel.qml:530:38
-copy notifications/NotificationPanel.qml:533:25
-copy notifications/NotificationPanel.qml:533:47
-copy notifications/NotificationPanel.qml:533:61
-copy notifications/NotificationPanel.qml:533:83
-copy notifications/NotificationPanel.qml:543:42
-copy notifications/NotificationPanel.qml:546:21
-copy notifications/NotificationPanel.qml:547:27
-copy notifications/NotificationPanel.qml:548:27
-copy notifications/NotificationPanel.qml:552:24
-copy notifications/NotificationPanel.qml:553:21
-copy notifications/NotificationPanel.qml:558:38
-copy notifications/NotificationPanel.qml:561:24
-copy notifications/NotificationPanel.qml:567:52
-copy notifications/NotificationPanel.qml:575:99
-copy notifications/NotificationPanel.qml:576:32
-copy notifications/NotificationPanel.qml:576:51
-copy notifications/NotificationPanel.qml:577:33
-copy notifications/NotificationPanel.qml:583:76
-copy notifications/NotificationPanel.qml:589:32
-copy notifications/NotificationPanel.qml:590:38
-copy notifications/NotificationPanel.qml:591:52
-copy notifications/NotificationPanel.qml:598:48
-copy notifications/NotificationPanel.qml:604:33
-copy notifications/NotificationPanel.qml:605:34
-copy notifications/NotificationPanel.qml:606:40
-copy notifications/NotificationPanel.qml:607:65
-copy notifications/NotificationPanel.qml:612:33
-copy notifications/NotificationPanel.qml:613:34
-copy notifications/NotificationPanel.qml:637:25
-copy notifications/NotificationPanel.qml:640:25
-copy notifications/NotificationPanel.qml:642:34
-copy notifications/NotificationPanel.qml:649:46
-copy notifications/NotificationPanel.qml:652:48
-copy notifications/NotificationPanel.qml:656:51
-copy notifications/NotificationPanel.qml:656:66
-copy notifications/NotificationPanel.qml:663:31
-copy notifications/NotificationPanel.qml:663:57
-copy notifications/NotificationPanel.qml:663:77
-copy notifications/NotificationPanel.qml:665:31
-copy notifications/NotificationPanel.qml:673:51
-copy notifications/NotificationPanel.qml:673:68
-copy notifications/NotificationPanel.qml:675:36
-copy notifications/NotificationPanel.qml:687:35
-copy notifications/NotificationPanel.qml:689:36
-copy notifications/NotificationPanel.qml:697:85
-copy notifications/NotificationPanel.qml:704:59
-copy notifications/NotificationPanel.qml:705:70
-copy notifications/NotificationPanel.qml:706:40
-copy notifications/NotificationPanel.qml:707:46
-copy notifications/NotificationPanel.qml:716:40
-copy notifications/NotificationPanel.qml:733:42
-copy notifications/NotificationPanel.qml:736:81
-copy notifications/NotificationPanel.qml:737:25
-copy notifications/NotificationPanel.qml:740:26
-copy notifications/NotificationPanel.qml:740:50
-copy notifications/NotificationPanel.qml:744:24
-copy notifications/NotificationPanel.qml:744:48
-copy notifications/NotificationPanel.qml:749:24
-copy notifications/NotificationPanel.qml:751:38
-copy notifications/NotificationPanel.qml:755:25
-copy notifications/NotificationPanel.qml:755:46
-copy notifications/NotificationPanel.qml:755:69
-copy notifications/NotificationPanel.qml:766:25
-copy notifications/NotificationPanel.qml:766:39
-copy notifications/NotificationPanel.qml:770:27
-copy notifications/NotificationPanel.qml:771:27
-copy notifications/NotificationPanel.qml:772:36
-copy notifications/NotificationPanel.qml:774:22
-copy notifications/NotificationPanel.qml:775:17
-copy notifications/NotificationPanel.qml:776:17
-copy notifications/NotificationPanel.qml:789:12
-copy notifications/NotificationPanel.qml:790:18
-copy notifications/NotificationPanel.qml:791:32
-copy notifications/NotificationPanel.qml:797:12
-copy notifications/NotificationPanel.qml:798:18
-copy notifications/NotificationPanel.qml:799:32
-copy notifications/NotificationPanel.qml:803:17
-copy notifications/NotificationPanel.qml:804:17
-copy notifications/NotificationPanel.qml:809:17
-copy notifications/NotificationPanel.qml:810:17
-copy notifications/NotificationPanel.qml:811:26
-copy notifications/NotificationPanel.qml:812:36
-copy notifications/NotificationPanel.qml:822:28
-copy notifications/NotificationPanel.qml:826:30
-copy notifications/NotificationPanel.qml:833:16
-copy notifications/NotificationPanel.qml:834:22
-copy notifications/NotificationPanel.qml:835:36
-copy notifications/NotificationPanel.qml:843:21
-copy notifications/NotificationPanel.qml:867:19
-copy notifications/NotificationPanel.qml:868:19
-copy notifications/NotificationPanel.qml:883:36
-copy notifications/NotificationPanel.qml:883:53
-copy notifications/NotificationPanel.qml:897:32
-copy notifications/NotificationPanel.qml:898:33
-copy notifications/NotificationPanel.qml:899:31
-copy notifications/NotificationPanel.qml:900:34
-copy notifications/NotificationPanel.qml:903:32
-copy notifications/NotificationPanel.qml:904:46
-copy notifications/NotificationPanel.qml:921:30
-copy notifications/NotificationPanel.qml:926:17
-copy notifications/NotificationPanel.qml:934:16
-copy notifications/NotificationPanel.qml:936:36
-copy notifications/NotificationPanel.qml:946:26
-copy notifications/NotificationPanel.qml:948:36
-copy notifications/Picker.qml:100:28
-copy notifications/Picker.qml:103:35
-copy notifications/Picker.qml:109:30
-copy notifications/Picker.qml:117:42
-copy notifications/Picker.qml:117:83
-copy notifications/Picker.qml:118:18
-copy notifications/Picker.qml:119:33
-copy notifications/Picker.qml:121:61
-copy notifications/Picker.qml:127:47
-copy notifications/Picker.qml:128:48
-copy notifications/Picker.qml:130:19
-copy notifications/Picker.qml:132:109
-copy notifications/Picker.qml:132:66
-copy notifications/Picker.qml:133:26
-copy notifications/Picker.qml:134:40
-copy notifications/Picker.qml:144:15
-copy notifications/Picker.qml:145:15
-copy notifications/Picker.qml:145:29
-copy notifications/Picker.qml:31:32
-copy notifications/Picker.qml:32:60
-copy notifications/Picker.qml:37:28
-copy notifications/Picker.qml:45:34
-copy notifications/Picker.qml:64:64
-copy notifications/Picker.qml:65:44
-copy notifications/Picker.qml:71:36
-copy notifications/Picker.qml:78:66
-copy notifications/Picker.qml:83:36
-copy notifications/Picker.qml:98:61
-copy notifications/Toast.qml:367:66
-copy notifications/Toast.qml:374:37
-copy notifications/Toast.qml:375:40
-copy notifications/Toast.qml:386:46
-copy notifications/Toast.qml:387:35
-copy notifications/Toast.qml:388:55
-copy notifications/Toast.qml:388:73
-copy notifications/Toast.qml:412:26
-copy notifications/Toast.qml:413:25
-copy notifications/Toast.qml:414:25
-copy notifications/Toast.qml:415:27
-copy notifications/Toast.qml:416:60
-copy notifications/Toast.qml:455:87
-copy notifications/Toast.qml:457:40
-copy notifications/Toast.qml:481:52
-copy notifications/Toast.qml:483:41
-copy notifications/Toast.qml:484:44
-copy notifications/Toast.qml:484:51
-copy notifications/Toast.qml:496:60
-copy notifications/Toast.qml:497:62
-copy notifications/Toast.qml:499:68
-copy notifications/Toast.qml:508:39
-copy notifications/Toast.qml:509:42
-copy notifications/Toast.qml:534:41
-copy notifications/Toast.qml:535:44
-copy notifications/Toast.qml:555:65
-copy notifications/Toast.qml:556:57
-copy notifications/Toast.qml:577:38
-copy notifications/Toast.qml:610:73
-copy notifications/Toast.qml:613:40
-copy notifications/Toast.qml:629:40
-copy notifications/Toast.qml:674:24
-copy notifications/Toast.qml:707:29
-copy notifications/Toast.qml:745:55
-copy notifications/Toast.qml:752:16
+copy notifications/DeedButton.qml:33:72
+copy notifications/DeedButton.qml:58:31
+copy notifications/DeedButton.qml:59:34
+copy notifications/DeedButton.qml:75:100
+copy notifications/DeedButton.qml:75:55
+copy notifications/DeedButton.qml:76:31
+copy notifications/DeedButton.qml:77:34
 copy panels/clock/Panel.qml:169:30
 copy panels/clock/Panel.qml:169:55
 copy panels/clock/Panel.qml:170:16

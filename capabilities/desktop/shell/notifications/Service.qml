@@ -10,7 +10,6 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Services.Notifications
-import Quickshell.Services.Pipewire
 import qs.Commons
 import qs.Commons as Commons
 
@@ -19,169 +18,48 @@ import "Security.js" as Security
 import "Layout.js" as Layout
 import "Markup.js" as Markup
 import "Delivery.js" as Delivery
-import "Settings.js" as Settings
-import "WhileAway.js" as WhileAway
+import "Icons.js" as Icons
 
-// Adapted from Omarchy shell/plugins/notifications/Service.qml at
-// 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, David Heinemeier Hansson).
-// Direct composition and native IPC; private per-user state only. No legacy
-// state, icon-override directory, upstream cleanup or focus-app script.
 Item {
   id: service
 
+  // Injected by the product shell.
   property var shell: null
-
-  // ------------------------------------------------------------- settings
-  //
-  // shell.json's `notifications` object; Settings.resolve fills every default.
-  readonly property var preferences: Settings.resolve(shell && shell.shellConfig ? shell.shellConfig.notifications : null)
-
-  function setSetting(key, value) {
-    var values = {}
-    values[key] = value
-    setSettings(values)
-  }
-
-  function setSettings(values) {
-    if (!shell || typeof shell.mutateShellConfig !== "function") return
-    shell.mutateShellConfig(function(config) {
-      if (!Util.isPlainObject(config.notifications)) config.notifications = {}
-      for (var key in values) config.notifications[key] = values[key]
-    })
-  }
-
-  readonly property string stacking: preferences.stacking
-  readonly property real fontScale: preferences.fontScale / 100
-  readonly property string actionsAlign: preferences.actionsAlign
-  readonly property bool hideSettingsAction: preferences.hideSettingsAction
-  readonly property bool showCountdown: preferences.showCountdown
-  readonly property bool smartRaise: preferences.smartRaise
-  readonly property bool allowDefaultActionOnCardClick: preferences.allowDefaultActionOnCardClick
-  readonly property int clipboardTimeout: preferences.clipboardTimeout
-  readonly property int edgeSpacing: preferences.edgeSpacing === null ? Style.gapsOut : preferences.edgeSpacing
-  readonly property int sourceLimit: preferences.sourceLimit
-  readonly property int heldPerSource: preferences.heldPerSource
-  readonly property int recentCount: preferences.recentCount
-  readonly property string displayMode: preferences.displayMode
-  readonly property string displayName: preferences.displayName
-  readonly property string fullscreenOverlay: preferences.fullscreenOverlay
-  readonly property bool offerSnoozeWhenSharing: preferences.offerSnoozeWhenSharing
-
-  // Deferred: the layout binding reads stacking, and retargeting from inside
-  // that evaluation would be a binding loop.
-  onStackingChanged: Qt.callLater(retarget)
-  onFullscreenOverlayChanged: hyprRefresh.restart()
-
-  // An explicit codesBypassQuiet in shell.json wins over the panel's persisted toggle.
-  readonly property var configuredCodesBypassQuiet: preferences.codesBypassQuiet
-  onConfiguredCodesBypassQuietChanged: {
-    if (configuredCodesBypassQuiet !== null) setCodesBypassQuiet(configuredCodesBypassQuiet)
-  }
-
-  // A shorter retention applies at once to what is already kept.
-  readonly property int historyHours: preferences.historyHours
-  onHistoryHoursChanged: currentHistory()
 
   // ------------------------------------------------------------- displays
   //
-  // "active" places a new deck on the focused output and keeps it there;
-  // "specific" pins one output; "all" mirrors the deck on every output.
+  // A new deck lands on the focused output and stays there until it empties.
   property string deckDisplayName: ""
   readonly property var displayNames: Quickshell.screens.map(function(screen) { return screen.name })
   readonly property string focusedDisplayName: {
     var name = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
     return displayNames.indexOf(name) >= 0 ? name : (displayNames[0] || "")
   }
-  readonly property string configuredDisplayName: displayMode === "specific" && displayNames.indexOf(displayName) >= 0
-    ? displayName : focusedDisplayName
-  readonly property string targetDisplayName: {
-    var wanted = focusedDisplayName
-    if (displayMode === "specific" && displayNames.indexOf(displayName) >= 0) wanted = configuredDisplayName
-    else if (displayNames.indexOf(deckDisplayName) >= 0) wanted = deckDisplayName
-    return routeAround(wanted)
-  }
+  readonly property string targetDisplayName: displayNames.indexOf(deckDisplayName) >= 0 ? deckDisplayName : focusedDisplayName
   onDisplayNamesChanged: {
     if (deckDisplayName && displayNames.indexOf(deckDisplayName) < 0)
-      deckDisplayName = configuredDisplayName
+      deckDisplayName = focusedDisplayName
   }
-  onDisplayModeChanged: { if (toasts.count > 0) deckDisplayName = configuredDisplayName }
-  onDisplayNameChanged: { if (displayMode === "specific" && toasts.count > 0) deckDisplayName = configuredDisplayName }
   function pinDeckDisplay() {
-    if (toasts.count === 0) deckDisplayName = routeAround(configuredDisplayName)
+    if (toasts.count === 0) deckDisplayName = focusedDisplayName
   }
 
   function showsOn(name) {
-    return (displayMode === "all" && !awayFrom(name)) || name === targetDisplayName
+    return name === targetDisplayName
   }
 
   // ------------------------------------------------------------- quiet
   //
-  // A verification code was asked for a moment ago and expires in minutes, so
-  // by default it gets through quiet. The panel's key button closes that hole.
-  property bool codesBypassQuiet: true
-  function setCodesBypassQuiet(value) {
-    if (!!value === codesBypassQuiet) return
-    codesBypassQuiet = !!value
-    saveQuiet()
-  }
-
   property bool doNotDisturb: false
-  property double silencedSince: 0
   function setDoNotDisturb(value) {
     var on = !!value
     if (on === doNotDisturb) return
-    if (on) silencedSince = Date.now() / 1000
     doNotDisturb = on
     saveQuiet()
   }
 
-  // Undoes both silencing and snoozing everything.
-  function letEverythingThrough() {
-    setDoNotDisturb(false)
-    unsnooze(globalKey)
-  }
-
-  readonly property bool quiet: doNotDisturb || globalSnoozeUntil > 0
-
-  // ---------------------------------------------------- screen sharing
-  //
-  // Watch the portal's PipeWire stream lifetime rather than frame activity,
-  // which screenshots and VNC also produce. Sharing only offers a timed snooze.
-  readonly property var sharingCandidates: {
-    var nodes = Pipewire.nodes.values, out = []
-    for (var i = 0; i < nodes.length && out.length < 64; i++)
-      if (nodes[i].type === PwNodeType.VideoSource) out.push(nodes[i])
-    return out
-  }
-  PwObjectTracker { objects: service.sharingCandidates }
-  readonly property int sharingStreams: {
-    if (!Pipewire.ready) return 0
-    var count = 0
-    for (var i = 0; i < sharingCandidates.length; i++) {
-      var node = sharingCandidates[i]
-      if (!node.ready) continue
-      var props = node.properties
-      if (props["media.class"] === "Video/Source"
-          && String(props["media.name"] || "").indexOf("xdph-streaming-") === 0) count++
-    }
-    return count
-  }
-  readonly property bool sharingActive: sharingStreams > 0
-  readonly property bool sharingDetectionAvailable: Pipewire.ready
-  property bool sharingOfferHandled: false
-  readonly property bool sharingOfferPending: offerSnoozeWhenSharing && sharingActive
-    && !sharingOfferHandled && !doNotDisturb && !globalSnoozeUntil
-  onSharingActiveChanged: {
-    sharingOfferHandled = sharingActive && (doNotDisturb || globalSnoozeUntil > 0)
-  }
-  onDoNotDisturbChanged: { if (doNotDisturb && sharingActive) sharingOfferHandled = true }
-  onGlobalSnoozeUntilChanged: { if (globalSnoozeUntil > 0 && sharingActive) sharingOfferHandled = true }
-  function dismissSharingOffer() { if (sharingActive) sharingOfferHandled = true }
-  function snoozeSharingOffer(seconds) {
-    if (!sharingOfferPending || [1800, 3600, 14400].indexOf(seconds) < 0) return
-    sharingOfferHandled = true
-    snoozeSource(globalKey, "", seconds, true)
-  }
+  // Persisted: nothing on screen says the desktop is quiet, so a reload must not lift it.
+  function saveQuiet() { saveSoon("quiet") }
 
   readonly property int gap: Style.space(6)
 
@@ -194,7 +72,7 @@ Item {
   readonly property bool barVertical: barPosition === "left" || barPosition === "right"
   readonly property int defaultBarSize: barVertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
   function marginsFor(screenName) {
-    return Delivery.deckMargins(barPosition, Delivery.barThickness(barRef, screenName, defaultBarSize), edgeSpacing)
+    return Delivery.deckMargins(barPosition, Delivery.barThickness(barRef, screenName, defaultBarSize), Style.gapsOut)
   }
   readonly property int notificationWidth: Style.space(380)
 
@@ -202,11 +80,7 @@ Item {
   //
   // Hyprland refuses direct scanout while any overlay-layer surface exists on
   // a monitor, so an idle canvas makes fullscreen games composite each frame.
-  // "all"/"steam" step aside under fullscreen (Steam) windows until a card
-  // arrives; the "-away" variants send cards to another display instead.
-  readonly property string fullscreenScope: fullscreenOverlay.indexOf("steam") === 0 ? "steam"
-    : fullscreenOverlay.indexOf("all") === 0 ? "all" : ""
-  readonly property bool fullscreenAway: fullscreenScope !== "" && /-away$/.test(fullscreenOverlay)
+  // It steps aside under a fullscreen window until a card arrives.
   // Bumped after Hyprland's window snapshot refreshes, so fullscreenOn() re-evaluates.
   property int hyprRevision: 0
 
@@ -217,15 +91,14 @@ Item {
     for (var i = 0; i < list.length; i++) {
       var s = list[i]
       out.push({ display: s.modelData ? String(s.modelData.name) : "", mapped: s.visible === true,
-                 stepAside: s.stepAside === true, showing: s.showingNotifications === true,
-                 lingering: s.lingering === true })
+                 stepAside: s.stepAside === true, showing: s.showingNotifications === true })
     }
     return out
   }
 
   function fullscreenOn(name) {
     var revision = hyprRevision
-    if (fullscreenScope === "" || !name) return false
+    if (!name) return false
     var screen = null
     for (var s = 0; s < Quickshell.screens.length; s++)
       if (String(Quickshell.screens[s].name) === name) screen = Quickshell.screens[s]
@@ -237,28 +110,14 @@ Item {
       var ipc = windows[i].lastIpcObject || {}
       // A workspace also reports maximized windows as fullscreen. Only a real
       // fullscreen (mode bit 2) can be scanned out.
-      if ((Number(ipc.fullscreen) & 2) === 0) continue
-      if (fullscreenScope === "all") return true
-      var appClass = String(ipc["class"] || "")
-      if (appClass === "" && windows[i].wayland) appClass = String(windows[i].wayland.appId || "")
-      if (/^steam_app_\d+$/.test(appClass)) return true
+      if ((Number(ipc.fullscreen) & 2) !== 0) return true
     }
     return false
-  }
-
-  function awayFrom(name) { return fullscreenAway && fullscreenOn(name) }
-  function routeAround(name) {
-    if (!awayFrom(name)) return name
-    if (focusedDisplayName !== name && !awayFrom(focusedDisplayName)) return focusedDisplayName
-    for (var i = 0; i < displayNames.length; i++)
-      if (!awayFrom(displayNames[i])) return displayNames[i]
-    return ""
   }
 
   Connections {
     target: Hyprland
     function onRawEvent(event) {
-      if (service.fullscreenOverlay === "off") return
       switch (event.name) {
       case "fullscreen": case "openwindow": case "closewindow": case "movewindowv2":
       case "activewindowv2": case "workspacev2": case "focusedmonv2": case "changefloatingmode":
@@ -291,260 +150,6 @@ Item {
     return Math.min(maxDuration, Math.max(base, requested > 0 ? requested : 0))
   }
 
-  // ------------------------------------------------------------- snooze
-  //
-  // Keyed by the row's group key: per site for browser notifications
-  // ("web:app.slack.com"), per app otherwise. Snoozed notifications are still recorded.
-  property var snoozes: ({})        // groupKey -> { until: epoch seconds, label, since }
-  property int snoozeRevision: 0
-
-  // Snoozing everything is the same mechanism under a key no source can have.
-  readonly property string globalKey: "*"
-  readonly property double globalSnoozeUntil: { snoozeRevision; return snoozedUntil(globalKey) }
-
-  function durationWords(minutes) {
-    if (minutes < 60) return I18n.tn("notifications.minutes", minutes).arg(I18n.formatNumber(minutes))
-    var hours = Math.round(minutes / 60)
-    if (hours === 1) return I18n.t("notifications.anHour")
-    return I18n.tn("notifications.hours", hours).arg(I18n.formatNumber(hours))
-  }
-
-  function shortWords(minutes) {
-    if (minutes < 60) return I18n.t("notifications.minutesShort").arg(I18n.formatNumber(minutes))
-    var hours = Math.round(minutes / 6) / 10
-    return I18n.t("notifications.hoursShort").arg(I18n.formatNumber(hours, hours % 1 ? 1 : 0))
-  }
-
-  // One choice, worked out against the clock as it is now: "tomorrow" is a
-  // different number of seconds at every hour of the day.
-  function snoozeOption(choice) {
-    var value = String(choice || "")
-    var seconds = Settings.snoozeSeconds(value, preferences.wakeHour, Date.now())
-    if (!(seconds > 0)) return null
-    if (value === "tomorrow")
-      return { short: I18n.t("notifications.tomorrow"), menuLabel: I18n.t("notifications.snoozeUntilTomorrow"), seconds: seconds }
-    var minutes = Number(value)
-    return { short: shortWords(minutes), menuLabel: I18n.t("notifications.snoozeFor").arg(durationWords(minutes)),
-             seconds: seconds }
-  }
-
-  readonly property var snoozeOptions: {
-    var choices = preferences.snoozeDurations, out = []
-    for (var i = 0; i < choices.length; i++) {
-      var option = snoozeOption(choices[i])
-      if (option) out.push(option)
-    }
-    return out
-  }
-
-  function snoozedUntil(groupKey) {
-    var entry = snoozes[String(groupKey || "")]
-    var until = entry ? Number(entry.until || 0) : 0
-    return until > Date.now() / 1000 ? until : 0
-  }
-
-  // Soonest to wake first, which is the order the panel lists them in.
-  function liveSnoozes() {
-    snoozeRevision
-    var now = Date.now() / 1000, out = []
-    for (var key in snoozes) {
-      if (key === globalKey) continue
-      var entry = snoozes[key]
-      if (!entry || Number(entry.until || 0) <= now) continue
-      out.push({ key: key, label: String(entry.label || key), until: Number(entry.until) })
-    }
-    out.sort(function(a, b) { return a.until - b.until })
-    return out
-  }
-
-  readonly property int snoozeCount: { snoozeRevision; return liveSnoozes().length }
-  readonly property bool anySnooze: snoozeCount > 0 || globalSnoozeUntil > 0
-
-  // Past a year is a mistake, and an infinite snooze would persist as null.
-  readonly property int maxSnoozeSeconds: 366 * 86400
-
-  // Minutes from IPC: a finite positive number, capped, else the default.
-  function snoozeMinutes(value, fallback) {
-    var minutes = Number(value)
-    if (!isFinite(minutes) || minutes <= 0) return fallback
-    return Math.min(minutes, maxSnoozeSeconds / 60)
-  }
-
-  // `fromNow` re-snoozes rather than extending what was already left.
-  function snoozeSource(groupKey, label, seconds, fromNow) {
-    var key = String(groupKey || "")
-    seconds = Number(seconds)
-    if (!key || !isFinite(seconds) || seconds <= 0) return 0
-    seconds = Math.min(seconds, maxSnoozeSeconds)
-    // Snoozing everything supersedes silencing: the same quiet, with an end.
-    if (key === globalKey) setDoNotDisturb(false)
-    var from = fromNow ? Date.now() / 1000
-                       : Math.max(Date.now() / 1000, snoozedUntil(key))
-    var next = {}
-    for (var k in snoozes) next[k] = snoozes[k]
-    // When this quiet period began, so the panel lists only what it held.
-    var since = (next[key] && snoozedUntil(key)) ? Number(next[key].since || 0)
-                                                 : Date.now() / 1000
-    next[key] = { until: from + seconds, label: String(label || key), since: since }
-    snoozes = next
-    snoozeRevision += 1
-    saveQuiet()
-    // Anything from that source already on screen goes now.
-    var keys = []
-    for (var i = 0; i < toasts.count; i++) {
-      var row = toasts.get(i)
-      if (key === globalKey ? !Delivery.bypassesQuiet(row) : String(row.groupKey || "") === key) keys.push(row.key)
-    }
-    for (var j = 0; j < keys.length; j++) closeToast(keys[j], "snoozed")
-    return next[key].until
-  }
-
-  function unsnooze(groupKey) {
-    var next = {}
-    for (var k in snoozes) if (k !== String(groupKey)) next[k] = snoozes[k]
-    snoozes = next
-    snoozeRevision += 1
-    saveQuiet()
-  }
-
-  function unsnoozeAll() {
-    snoozes = ({})
-    snoozeRevision += 1
-    saveQuiet()
-  }
-
-  // Persisted: nothing on screen says the desktop is quiet, so a reload must not lift it.
-  function saveQuiet() { saveSoon("quiet") }
-
-  // Wakes the bindings so a snooze that has run out stops being counted, and
-  // drops it from the map. Only runs while something is actually snoozed.
-  Timer {
-    interval: 20000
-    repeat: true
-    running: service.anySnooze
-    onTriggered: {
-      var now = Date.now() / 1000, next = {}, dropped = false
-      for (var k in service.snoozes) {
-        if (Number(service.snoozes[k].until || 0) > now) next[k] = service.snoozes[k]
-        else dropped = true
-      }
-      if (dropped) { service.snoozes = next; service.saveQuiet() }
-      service.snoozeRevision += 1
-    }
-  }
-
-  // ------------------------------------------------------------- recent
-  //
-  // Session-only text snapshots of what reached the screen, never live objects.
-  property var recentRows: []
-  readonly property int recentLimit: 20
-
-  function rememberRecent(row) {
-    var key = String(row.key), rows = []
-    if (!doNotDisturb && !globalSnoozeUntil && !snoozedUntil(row.groupKey)) {
-      // A digest keeps source matching apart from the redacted display text.
-      var sourceKey = Qt.md5(String(row.groupKey || ""))
-      row = Store.sanitiseForPersistence(row)
-      rows.push({
-        key: key, sourceKey: sourceKey,
-        source: String(row.source || row.app || "").slice(0, 120),
-        summary: String(row.summary || "").slice(0, 240),
-        bodyLine: String(row.bodyLine || "").slice(0, 1000),
-        ts: Number(row.ts)
-      })
-    }
-    // A replacement may move to a snoozed source: drop its old entry even when
-    // the new version belongs only in Held Back.
-    for (var i = 0; i < recentRows.length && rows.length < recentLimit; i++) {
-      if (recentRows[i].key !== key) rows.push(recentRows[i])
-    }
-    recentRows = rows
-  }
-
-  function recentForPanel(limit) {
-    snoozeRevision
-    if (doNotDisturb || globalSnoozeUntil) return []
-    var excluded = Object.create(null), snoozed = liveSnoozes()
-    for (var i = 0; i < snoozed.length; i++) excluded[Qt.md5(snoozed[i].key)] = true
-    var rows = []
-    for (var j = 0; j < recentRows.length && rows.length < limit; j++) {
-      if (!excluded[recentRows[j].sourceKey]) rows.push(recentRows[j])
-    }
-    return rows
-  }
-
-  // ------------------------------------------------------- what was held
-  //
-  // Drawn from history when the panel opens: what quiet kept off the screen.
-  property var heldRows: []
-  property int heldRevision: 0
-  readonly property int heldLimit: 80
-
-  function refreshHeld() {
-    heldRows = Store.displayRows(Store.held(currentHistory(), heldLimit))
-    heldRevision += 1
-  }
-
-  // ---------------------------------------------------- notification history
-  //
-  // The redacted log (see store below), newest first, read when the panel opens.
-  property var historyRows: []
-  property int historyRevision: 0
-
-  function refreshHistory() {
-    historyRows = Store.displayRows(currentHistory())
-    historyRevision += 1
-  }
-
-  // When the quiet holding this source began: the earliest of the reasons
-  // currently in force.
-  function quietSince(groupKey) {
-    var entry = snoozes[String(groupKey || "")]
-    var mine = entry && snoozedUntil(groupKey) ? Number(entry.since || 0) : 0
-    var global = globalSnoozeUntil ? Number((snoozes[globalKey] || {}).since || 0) : 0
-    var silence = doNotDisturb ? silencedSince : 0
-    var starts = [mine, global, silence].filter(function(t) { return t > 0 })
-    return starts.length ? Math.min.apply(null, starts) : 0
-  }
-
-  function heldFor(groupKey, limit) {
-    heldRevision
-    var since = quietSince(groupKey)
-    var out = []
-    for (var i = 0; i < heldRows.length && out.length < limit; i++) {
-      var row = heldRows[i]
-      if (String(row.groupKey || "") !== String(groupKey)) continue
-      if (since && Number(row.ts || 0) < since) continue
-      out.push(row)
-    }
-    return out
-  }
-
-  // Sources snoozed by name first, then (while everything is quiet) any other
-  // source that held something.
-  function quietSources(limit) {
-    snoozeRevision; heldRevision
-    var rows = [], seen = {}
-    var snoozed = liveSnoozes()
-    var i, key
-    for (i = 0; i < snoozed.length && rows.length < limit; i++) {
-      seen[snoozed[i].key] = true
-      rows.push({ key: snoozed[i].key, label: snoozed[i].label, until: snoozed[i].until,
-                  held: heldFor(snoozed[i].key, heldPerSource) })
-    }
-    if (!doNotDisturb && !globalSnoozeUntil) return rows
-    for (i = 0; i < heldRows.length && rows.length < limit; i++) {
-      key = String(heldRows[i].groupKey || "")
-      if (!key || seen[key]) continue
-      var held = heldFor(key, heldPerSource)
-      if (!held.length) continue
-      seen[key] = true
-      rows.push({ key: key, label: String(heldRows[i].source || heldRows[i].app || key),
-                  until: 0, held: held })
-    }
-    return rows
-  }
-
   // ------------------------------------------------------------- state
   //
   // Live Notification objects stay in a JS map, never the model: a QObject in a
@@ -555,7 +160,10 @@ Item {
 
   ListModel {
     id: toasts
-    onCountChanged: { if (count === 0) service.deckDisplayName = "" }
+    onCountChanged: {
+      if (count === 0) service.deckDisplayName = ""
+      if (service.keyboardMode) Qt.callLater(function() { service.keepSelection(0) })
+    }
   }
 
   // ------------------------------------------------------ live capacity
@@ -581,14 +189,14 @@ Item {
     held = held.filter(function(heldKey) { return heldKey !== key })
   }
 
-  // Installed and sender-provided icons remain; no personal override directory.
-  readonly property var iconOverrides: ({})
-
   // One clock the cards' relative times hang off, rather than a timer per card.
+  // It stops with no cards on screen, so it catches up as soon as one shows:
+  // replayed history would otherwise read against the hour it last ticked.
   property double nowTick: Date.now()
   Timer {
     interval: 20000
     repeat: true
+    triggeredOnStart: true
     running: toasts.count > 0
     onTriggered: service.nowTick = Date.now()
   }
@@ -599,18 +207,54 @@ Item {
   property bool pointerIn: false
   property bool expanded: false
   property string openDeck: ""
-  property string hoverKey: ""     // the card under the pointer, when open
+  property string hoverKey: ""     // the card under the pointer
+  readonly property string actionKey: keyboardMode ? keyboardKey : hoverKey
+  // Paint the outgoing bar until folding starts, without retaining input focus.
+  property string exitActionKey: ""
+  // Front ownership comes from row order, not the layout that consumes card heights.
+  readonly property var actionFronts: {
+    var fronts = Object.create(null)
+    for (var i = 0; i < toasts.count; i++) {
+      var row = toasts.get(i)
+      if (leaving[row.key]) continue
+      var group = Layout.groupKeyFor(row)
+      if (fronts[group] === undefined) fronts[group] = row.key
+    }
+    return fronts
+  }
+
+  function actionsActiveFor(row, interactive) {
+    if (leaving[row.key]) return false
+    var group = Layout.groupKeyFor(row)
+    if (!expanded || openDeck !== group) return actionFronts[group] === row.key
+    return actionKey === row.key
+        || (!interactive && !keyboardMode && !hoverKey && exitActionKey === row.key)
+  }
+
   property real hoverX: -1         // where it is, in the deck's coordinates
   property real hoverY: -1
 
   property var heights: ({})       // key -> measured card height
   property int layoutRevision: 0
+  // Cards that arrived since the deck last opened or closed. Once still, they
+  // settle into their measured height at once (a late icon, a re-wrap) instead
+  // of growing; while they are still dropping in, the move takes it up.
+  property var fresh: ({})
+  onExpandedChanged: fresh = ({})
+  property string arriving: ""
 
   Timer {
     id: collapseGrace
     interval: 120
     onTriggered: {
-      service.commit(function() { service.expanded = false; service.openDeck = "" })
+      // The keyboard holds the deck open while the pointer passes through.
+      if (service.keyboardMode) return
+      service.commit(function() {
+        service.expanded = false
+        service.openDeck = ""
+        service.hoverKey = ""
+        service.exitActionKey = ""
+      })
       service.releaseHeld()
     }
   }
@@ -618,7 +262,7 @@ Item {
   // New cards wait while the deck is held open, so nothing moves mid-read.
   property var held: []
 
-  function holding() { return pointerIn && expanded }
+  function holding() { return (pointerIn || keyboardMode) && expanded }
 
   function releaseHeld() {
     if (!held.length) return
@@ -647,34 +291,219 @@ Item {
     commit(function() {
       service.expanded = true
       if (deckKey !== undefined) service.openDeck = deckKey
+      service.exitActionKey = ""
     })
   }
-  function pointerLeft() { collapseGrace.restart() }
+
+  function pointerLeft() {
+    if (expanded && !keyboardMode && hoverKey) exitActionKey = hoverKey
+    hoverKey = ""
+    if (expanded && !keyboardMode && !collapseGrace.running) collapseGrace.start()
+  }
+
+  function openHoveredDeck() {
+    if (keyboardMode) return
+    var index = rowIndexFor(hoverKey)
+    if (index >= 0) pointerEntered(Layout.groupKeyFor(toasts.get(index)))
+  }
+
+  // ------------------------------------------------------------- keyboard
+  //
+  // Notifications never take the keyboard on their own: a card grabbing focus
+  // as it arrived would swallow whatever you were typing. A keybinding starts
+  // this instead. The newest card is selected and its deck opened; arrows move
+  // between cards, number keys press a button, Enter clicks the card, Delete
+  // dismisses it, and Escape, any choice, or a few idle seconds give the
+  // keyboard back.
+  property bool keyboardMode: false
+  property string keyboardKey: ""
+  // Cards that fit only until selection showed their buttons, skipped for the
+  // rest of this session so Down does not keep landing on them.
+  property var keyboardRejected: ({})
+
+  Timer { id: keyboardIdle; interval: 10000; onTriggered: service.stopKeyboard() }
+
+  // Cards in the order they stand: deck by deck, front to back.
+  function keyboardOrder() {
+    var out = [], decks = layout.decks
+    for (var i = 0; i < decks.length; i++)
+      for (var j = 0; j < decks[i].rows.length; j++) out.push(String(decks[i].rows[j].key))
+    return out
+  }
+
+  function selectCard(key) {
+    var at = rowIndexFor(key)
+    if (at < 0) return false
+    keyboardKey = key
+    pointerEntered(Layout.groupKeyFor(toasts.get(at)))
+    return true
+  }
+
+  function startKeyboard(key) {
+    var order = keyboardOrder()
+    if (!order.length) return false
+    keyboardMode = true
+    exitActionKey = ""
+    keyboardRejected = ({})
+    selectCard(order.indexOf(key) >= 0 ? key : order[0])
+    keyboardIdle.restart()
+    return true
+  }
+
+  function stopKeyboard() {
+    if (!keyboardMode) return
+    keyboardIdle.stop()
+    keyboardMode = false
+    keyboardKey = ""
+    // With the pointer over the deck, hover stays where the pointer put it.
+    if (!pointerIn) {
+      hoverKey = ""
+      collapseGrace.restart()
+    } else if (hoverKey) {
+      openHoveredDeck()
+    } else {
+      collapseGrace.restart()
+    }
+  }
+
+  // The selected card went away: select the one that took its place, or the
+  // nearest one above it on screen, or stop.
+  function keepSelection(fromIndex) {
+    if (!keyboardMode || rowIndexFor(keyboardKey) >= 0 && !leaving[keyboardKey]) return
+    var order = keyboardOrder()
+    for (var i = Math.min(Math.max(0, fromIndex), order.length - 1); i >= 0; i--) {
+      if (!keyboardRejected[order[i]] && reachable(order[i])) { selectCard(order[i]); return }
+    }
+    stopKeyboard()
+  }
+
+  // The deck does not scroll, so a card that would open below the bottom of
+  // the screen is out of reach, for the keyboard as for the pointer.
+  function reachable(key) {
+    var at = rowIndexFor(key)
+    if (at < 0) return false
+    var place = layoutWith(true, Layout.groupKeyFor(toasts.get(at))).placements[key]
+    if (!place || place.hidden) return false
+    var screen = null
+    for (var s = 0; s < Quickshell.screens.length; s++)
+      if (String(Quickshell.screens[s].name) === targetDisplayName) screen = Quickshell.screens[s]
+    if (!screen) return true
+    var room = screen.height - marginsFor(targetDisplayName).top - gap
+    return place.y + (place.height || Style.space(58)) <= room
+  }
+
+  // Past cards that do not fit: the rest of a long deck can be out of reach
+  // while the next deck, opened in its place, is not.
+  function moveSelection(step) {
+    var order = keyboardOrder()
+    for (var next = order.indexOf(keyboardKey) + step; next >= 0 && next < order.length; next += step) {
+      if (!keyboardRejected[order[next]] && reachable(order[next])) { selectCard(order[next]); return }
+    }
+  }
+
+  // Selecting a card shows its buttons and opening its deck can open its body,
+  // so it grows after reachable() said yes. Once it has, step back if it no
+  // longer fits.
+  function keepSelectionInReach() {
+    if (!keyboardMode || reachable(keyboardKey)) return
+    keyboardRejected[keyboardKey] = true
+    var order = keyboardOrder()
+    for (var i = order.indexOf(keyboardKey) - 1; i >= 0; i--) {
+      if (!keyboardRejected[order[i]] && reachable(order[i])) { selectCard(order[i]); return }
+    }
+  }
+
+  // The card's buttons in Delivery.deeds' order, which the card draws and
+  // numbers in the same order.
+  function deedsFor(key) {
+    var at = rowIndexFor(key)
+    return at < 0 ? [] : Delivery.deeds(toasts.get(at), actionsOf(key, refsRevision))
+  }
+
+  function runDeed(key, index) {
+    var deed = deedsFor(key)[index]
+    if (!deed) return false
+    if (deed.kind === "code") copyCode(deed.value, key)
+    else invokeAction(key, String(deed.value))
+    return true
+  }
+
+  // True when the key was ours.
+  function keyboardPressed(key, text) {
+    if (!keyboardMode) return false
+    keyboardIdle.restart()
+    var selected = keyboardKey
+    if (key === Qt.Key_Escape) {
+      stopKeyboard()
+    } else if (key === Qt.Key_Down || key === Qt.Key_J || key === Qt.Key_Tab) {
+      moveSelection(1)
+    } else if (key === Qt.Key_Up || key === Qt.Key_K || key === Qt.Key_Backtab) {
+      moveSelection(-1)
+    } else if (key === Qt.Key_Return || key === Qt.Key_Enter) {
+      stopKeyboard()
+      activate(selected)
+    } else if (key === Qt.Key_Delete || key === Qt.Key_Backspace) {
+      var at = keyboardOrder().indexOf(selected)
+      closeToast(selected, "dismissed")
+      keepSelection(at)
+    } else if (/^[1-9]$/.test(text)) {
+      if (Number(text) <= deedsFor(selected).length) {
+        stopKeyboard()
+        runDeed(selected, Number(text) - 1)
+      }
+    } else {
+      return false
+    }
+    return true
+  }
 
   // Fed target heights, never mid-animation ones, so layout moves on events.
   function noteHeight(key, h) {
     if (Math.abs((heights[key] || 0) - h) < 0.5) return
-    commit(function() { service.heights[key] = h })
+    // Measured while it is being inserted: the arrival's own move follows.
+    if (key === arriving) {
+      heights[key] = h
+      return
+    }
+    if (fresh[key] && !expanded && !sceneRun.running) {
+      heights[key] = h
+      land()
+    } else {
+      commit(function() { service.heights[key] = h })
+    }
+    if (key === keyboardKey) keepSelectionInReach()
   }
 
   // ------------------------------------------------------- the scene clock
   //
   // One clock for the whole deck: each card interpolates from `was` to its
   // placement by t. A Behavior per card would restart on every retarget.
-  readonly property var sceneCurve: [0.21, 1.02, 0.73, 1.0, 1.0, 1.0]
-  readonly property int sceneDuration: Style.duration(320)
+  // Style's strong ease-out, with no overshoot: the cards answer at once and settle
+  // without a bounce. Whatever leaves (a card, an open deck) goes quicker than
+  // it came, since nobody is waiting on it.
+  readonly property var sceneCurve: Style.easeOut
+  readonly property int arriveDuration: 250
+  readonly property int leaveDuration: 200
+  property int sceneDuration: arriveDuration
+  // How far a card drops in from, and rises by on its way out.
+  readonly property real travel: Style.space(24)
 
   property real t: 1                 // 0..1, eased, shared by every card
   property var was: ({})             // where each card was when the target moved
   property real deckWas: 0
+  // Set while a change lands without the clock, so the cards' text jumps too.
+  property bool jumping: false
 
   NumberAnimation {
     id: sceneRun
     target: service; property: "t"; from: 0; to: 1
-    duration: Math.max(1, service.sceneDuration)
+    duration: Math.max(1, Style.duration(service.sceneDuration))
     easing.type: Easing.Bezier
     easing.bezierCurve: service.sceneCurve
-    onFinished: service.sceneSettled()
+    onFinished: {
+      service.finishLeaving()
+      service.settled()
+    }
   }
 
   function at(key, what) {
@@ -704,63 +533,63 @@ Item {
   function commit(change) {
     var snap = snapshot(), deckNow = deckHeight
     change()
-    retarget(undefined, undefined, snap, deckNow)
+    retarget(snap, deckNow, expanded ? arriveDuration : leaveDuration)
   }
 
-  function retarget(seedKey, seed, snap, deckNow) {
+  function retarget(snap, deckNow, duration) {
     if (!snap) { snap = snapshot(); deckNow = deckHeight }
-    // A new card has no previous place, so the caller seeds one.
-    if (seedKey) snap[seedKey] = seed
     deckWas = deckNow
     was = snap
+    sceneDuration = duration || arriveDuration
     layoutRevision += 1
     t = 0
     sceneRun.restart()
   }
 
-  // A leaving card fades exactly where it was while the others close over it.
-  function restingPlace(key) {
-    var prev = was[key]
-    // front: true keeps its text on the way out instead of blanking a frame.
-    return { y: prev ? prev.y : 0, scale: prev ? prev.scale : 1, opacity: 0,
-             height: prev ? prev.height : 0, z: 2000, front: true,
-             hidden: false, count: 1 }
-  }
-
-  // Leaving rows stay in the model until the gap has closed.
-  function sceneSettled() {
-    var keys = []
-    for (var key in leaving) keys.push(key)
-    if (!keys.length) return
-    for (var i = 0; i < keys.length; i++) finishClose(keys[i], leaving[keys[i]])
+  // Keyboard dismissals skip the clock: everything jumps to its place.
+  function land() {
+    sceneRun.stop()
+    jumping = true
+    layoutRevision += 1
     t = 1
-    was = snapshot()
+    jumping = false
+    Qt.callLater(landed)
   }
 
-  readonly property var layout: {
-    layoutRevision
+  // Cards come to rest when the clock finishes or a jump has been drawn.
+  signal settled()
+  // A move started after the jump settles on its own finish instead.
+  function landed() { if (t >= 1) settled() }
+
+  readonly property var layout: { layoutRevision; return layoutWith(expanded, openDeck) }
+
+  // The deck as it would stand with this deck open; the keyboard asks before
+  // it moves.
+  function layoutWith(isExpanded, deckKey) {
     var rows = []
     for (var i = 0; i < toasts.count; i++) {
       var row = toasts.get(i)
       if (!leaving[row.key]) rows.push(row)   // a card on its way out takes no space
     }
     return Layout.compute(rows, {
-      stacking: stacking,
-      expanded: expanded,
-      openDeck: stacking === "source" ? openDeck : undefined,
+      expanded: isExpanded,
+      openDeck: deckKey,
       gap: gap,
       deckGap: Style.space(11),
       heightOf: function(key) { return service.heights[key] || Style.space(58) }
     })
   }
 
-  // Copied, not borrowed: writing the leaving cards into layout.placements
-  // would mutate this binding's own input while reading it.
+  // A leaving card takes no room in the layout but keeps a placement of its
+  // own, rising out of where it was while the others close over it.
+  // Copied, not borrowed: writing it into layout.placements would mutate this
+  // binding's own input while reading it.
+  property var departures: ({})
   readonly property var placements: {
     var out = {}
     var base = layout.placements
     for (var k in base) out[k] = base[k]
-    for (var key in leaving) out[key] = restingPlace(key)
+    for (var key in leaving) if (departures[key]) out[key] = departures[key]
     return out
   }
 
@@ -788,11 +617,31 @@ Item {
     return ""
   }
 
+  // The card a new notification repeats word for word (Store.isDuplicate),
+  // shown or still waiting to be, offering the same buttons: Reply and Join
+  // under the same words are two cards. One on its way out is left to go.
+  function keyForDuplicate(row, notification) {
+    var buttons = JSON.stringify(senderActions(notification))
+    for (var key in liveKeys) {
+      if (leaving[key]) continue
+      var at = rowIndexFor(key)
+      var shown = liveKeys[key].row || (at >= 0 ? toasts.get(at) : null)
+      if (Store.isDuplicate(row, shown) && JSON.stringify(actionsOf(key)) === buttons) return key
+    }
+    return ""
+  }
+
   // ------------------------------------------------------------- arrival
   function handleNotification(notification) {
     // Replacements reuse the same slot, including before its first insertion.
-    var replacing = !!keyForOriginal(notification.id)
-    var key = keyForOriginal(notification.id) || nextKey()
+    var known = keyForOriginal(notification.id)
+    var row = Store.snapshot(notification, known, NotificationUrgency)
+    // So does an identical copy under a new id: it takes over the card it
+    // repeats, and the copy it supersedes is closed at its sender.
+    var key = known || keyForDuplicate(row, notification) || nextKey()
+    row.key = key
+    // An unnamed sender's toast is grouped by its own key, known only now.
+    row.groupKey = Markup.regroup(row)
 
     if (!reserveLive(key)) {
       notification.tracked = false
@@ -802,10 +651,7 @@ Item {
     // Otherwise the object is destroyed when this handler returns.
     notification.tracked = true
 
-    var row = Store.snapshot(notification, key, NotificationUrgency)
     row.duration = durationFor(notification.urgency, row.expireTimeout)
-    rememberRecent(row)
-    if (!replacing && !Delivery.isEphemeral(row)) noteAwayArrival()
 
     var previous = refs[key]
     refs[key] = notification
@@ -816,12 +662,7 @@ Item {
     }
 
     // Quiet still records it (unless ephemeral), straight to history.
-    var muted = Delivery.quietReason(row, {
-      doNotDisturb: doNotDisturb,
-      globalSnoozed: globalSnoozeUntil > 0,
-      sourceSnoozed: snoozedUntil(row.groupKey) > 0,
-      codesBypassQuiet: codesBypassQuiet
-    })
+    var muted = Delivery.quietReason(row, doNotDisturb)
     if (muted) {
       if (!Delivery.isEphemeral(row)) storeRecord(row, muted)
       release(key)
@@ -831,6 +672,7 @@ Item {
         releaseLive(key)
         storeDrop(key)
       } else {
+        if (row.transient) storeDrop(key)
         liveKeys[key].row = null
       }
       return
@@ -913,19 +755,25 @@ Item {
       var at = service.rowIndexFor(key)
       var snap = service.snapshot(), deckNow = service.deckHeight
       if (at >= 0) {
+        // A sender replacing a card on its way out gives it a fresh life:
+        // it comes back, rather than leaving with the new words on it.
+        if (service.leaving[key]) service.unmarkLeaving(key)
         Store.applyTo(toasts, at, row)      // an update, in place
-        service.retarget(undefined, undefined, snap, deckNow)
+        service.retarget(snap, deckNow)
       } else {
         service.pinDeckDisplay()
+        // Before the insert: the delegate measures itself while it is built.
+        service.fresh[key] = true
+        service.arriving = key
         toasts.insert(0, row)
-        // Where it comes from: under the bar, transparent.
+        service.arriving = ""
+        // It drops in from just above where it lands, from under the bar for
+        // the top card, and fades in on the way.
         var landing = service.layout.placements[key]
-        service.retarget(key, {
-          y: (landing ? landing.y : 0) - Style.space(30),
-          scale: landing ? landing.scale : 1,
-          opacity: 0,
-          height: landing ? landing.height : 0
-        }, snap, deckNow)
+        snap[key] = { y: (landing ? landing.y : 0) - service.travel,
+                      scale: landing ? landing.scale : 1, opacity: 0,
+                      height: landing ? landing.height : 0 }
+        service.retarget(snap, deckNow, service.arriveDuration)
       }
     })
   }
@@ -948,33 +796,98 @@ Item {
 
   // ------------------------------------------------------------- departure
   //
-  // A leaving row keeps its model slot but no layout room, so the gap closes as it fades.
+  // A leaving row loses its layout room at once but keeps its model slot until
+  // it has risen out of sight. Dismissed from the keyboard, it vanishes and
+  // goes on the next tick instead: removing it from inside the delegate
+  // handler that dismissed it would destroy that delegate mid-call.
   property var leaving: ({})
 
-  function closeToast(key, reason) {
-    if (leaving[key]) return
-    if (rowIndexFor(key) < 0) {
-      finishClose(key, reason || "dismissed")
+  function closeToast(key, reason, instant) { closeToasts([key], reason, instant) }
+
+  // One move, or one jump, for the lot, however many cards leave together.
+  function closeToasts(keys, reason, instant) {
+    var next = {}, marked = false
+    for (var k in leaving) next[k] = leaving[k]
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i]
+      if (next[key]) continue
+      if (rowIndexFor(key) < 0) {
+        finishClose(key, reason || "dismissed")
+        continue
+      }
+      next[key] = reason || "dismissed"
+      marked = true
+    }
+    if (!marked) return
+    if (instant) {
+      jumping = true
+      leaving = next
+      jumping = false
+      land()
+      Qt.callLater(finishLeaving)
       return
     }
     var snap = snapshot(), deckNow = deckHeight
-    var next = {}
-    for (var k in leaving) next[k] = leaving[k]
-    next[key] = reason || "dismissed"
+    var staying = 0
+    for (var r = 0; r < toasts.count; r++) if (!next[toasts.get(r).key]) staying++
+    var gone = {}
+    for (var d in departures) gone[d] = departures[d]
+    for (var j = 0; j < keys.length; j++) {
+      var from = snap[keys[j]], place = placements[keys[j]]
+      if (!next[keys[j]] || gone[keys[j]] || !from) continue
+      // Under the cards closing in, so the one taking its place covers it on
+      // the way up. Its text goes first, or it would read through them; the
+      // last card keeps its words, with nothing to cover it.
+      gone[keys[j]] = { y: from.y - travel, scale: from.scale, opacity: 0, height: from.height,
+                        z: 0, front: staying === 0, hidden: place ? place.hidden === true : true,
+                        leaving: true, until: Date.now() + Style.duration(leaveDuration) }
+    }
+    departures = gone
     leaving = next
-    retarget(key, snap[key], snap, deckNow)
+    retarget(snap, deckNow, leaveDuration)
+    if (!departureDeadline.running) departureDeadline.start()
+  }
+
+  // A departure ends on its own clock, not the scene's: arrivals and updates
+  // restart that, and a card updating every tick would otherwise keep every
+  // closed card on screen, and counted against the limit, for good.
+  Timer {
+    id: departureDeadline
+    interval: Math.max(1, Style.duration(service.leaveDuration))
+    onTriggered: service.finishDeparted(Date.now())
+  }
+
+  function finishDeparted(now) {
+    var keys = Object.keys(departures), waiting = false
+    for (var i = 0; i < keys.length; i++) {
+      if (departures[keys[i]].until <= now) finishClose(keys[i], leaving[keys[i]])
+      else waiting = true
+    }
+    if (waiting) departureDeadline.restart()
+  }
+
+  function finishLeaving() {
+    var keys = Object.keys(leaving)
+    for (var i = 0; i < keys.length; i++) finishClose(keys[i], leaving[keys[i]])
+  }
+
+  function unmarkLeaving(key) {
+    var rest = {}, stay = {}
+    for (var k in leaving) if (k !== key) rest[k] = leaving[k]
+    for (var g in departures) if (g !== key) stay[g] = departures[g]
+    leaving = rest
+    departures = stay
   }
 
   function finishClose(key, reason) {
-    var rest = {}
-    for (var k in leaving) if (k !== key) rest[k] = leaving[k]
-    leaving = rest
+    unmarkLeaving(key)
     var at = rowIndexFor(key)
     if (!liveKeys[key]) return
     releaseLive(key)
     release(key, reason)
     if (at >= 0) toasts.remove(at)
     delete heights[key]
+    delete fresh[key]
     // A placeholder (the empty-history notice) was never recorded.
     if (key.indexOf("placeholder") !== 0) storeClose(key, reason)
     layoutRevision += 1
@@ -982,52 +895,69 @@ Item {
 
   // Over a snapshot of the keys, never over the model's count: closeToast marks
   // a row leaving rather than removing it, so a count loop never progresses.
-  function clearAll(reason) {
+  function clearAll(reason, instant) {
     var keys = Object.keys(liveKeys)
-    for (var k = 0; k < keys.length; k++) closeToast(keys[k], reason || "dismissed")
+    closeToasts(keys, reason, instant)
     return keys.length
   }
 
-  // The deck the pointer has open, else the newest card's.
-  function clearDeck(reason) {
-    var decks = layout.decks
-    if (decks.length === 0) return 0
-    var deck = decks[0]
-    if (expanded)
-      for (var i = 0; i < decks.length; i++)
-        if (decks[i].key === openDeck) { deck = decks[i]; break }
-    var keys = deck.rows.map(function(row) { return row.key })
-    for (var k = 0; k < keys.length; k++) closeToast(keys[k], reason || "dismissed")
-    return keys.length
-  }
-
-  function dismissNewest() {
+  // The newest card still on screen, past any on their way out.
+  function newestLive() {
     for (var i = 0; i < toasts.count; i++) {
       var key = String(toasts.get(i).key)
-      if (leaving[key]) continue
-      closeToast(key, "dismissed")
-      return true
+      if (!leaving[key]) return key
     }
+    return ""
+  }
+
+  function dismissNewest(instant) {
+    var key = newestLive()
+    if (!key) return false
+    closeToast(key, "dismissed", instant)
+    return true
+  }
+
+  // The newest card, by what it offers, its click counting as one: with
+  // nothing it is dismissed, with one thing that is done, and with more it
+  // takes the keyboard so you can pick.
+  function actOnNewest() {
+    var key = newestLive()
+    if (!key) return false
+    var deeds = deedsFor(key).length
+    var click = clickable(key)
+    if (deeds + (click ? 1 : 0) > 1) startKeyboard(key)
+    else if (click) activate(key, true)
+    else if (deeds) runDeed(key, 0)
+    else closeToast(key, "dismissed", true)
+    return true
+  }
+
+  // Only a live default action counts as an activation choice.
+  function clickable(key) {
+    var ref = refs[key]
+    var actions = (ref && ref.actions) || []
+    for (var i = 0; i < Math.min(actions.length, Security.MAX_ACTIONS); i++)
+      if (String(actions[i].identifier) === "default") return true
     return false
   }
 
   // What the sender said can be done with this notification. A restored row
   // has no live sender, so it has none of these.
-  function actionsOf(key, revision) {
+  function actionsOf(key, revision) { return senderActions(refs[key]) }
+
+  function senderActions(ref) {
     var out = []
-    var ref = refs[key]
     if (!ref || !ref.actions) return out
     for (var i = 0; i < Math.min(ref.actions.length, Security.MAX_ACTIONS); i++) {
       var a = ref.actions[i]
       var identifier = String(a.identifier || "")
       if (identifier.length > Security.MAX_ACTION_ID || !identifier) continue
       if (identifier === "default") {
-        // The card click already runs it while card clicks may invoke actions.
-        if (!allowDefaultActionOnCardClick) out.push({ id: identifier, text: I18n.t("notifications.openInApp") })
+        // The card click already runs it.
         continue
       }
       var label = Security.bounded(String(a.text || identifier), Security.MAX_ACTION_LABEL)
-      if (hideSettingsAction && (/^settings$/i.test(label) || /^settings$/i.test(identifier)))
+      if (/^settings$/i.test(label) || /^settings$/i.test(identifier))
         continue
       out.push({ id: identifier, text: label })
     }
@@ -1036,8 +966,7 @@ Item {
 
   function invokeAction(key, identifier) {
     if (typeof identifier !== "string" || identifier.length > Security.MAX_ACTION_ID) return
-    invokeSenderAction(key, identifier)
-    closeToast(key, "activated")
+    if (invokeSenderAction(key, identifier)) closeToast(key, "activated")
   }
 
   function invokeSenderAction(key, identifier) {
@@ -1090,7 +1019,7 @@ Item {
   // Every Chrome window title ends "- Google Chrome"; left on, a google.com
   // notification would match every Chrome window.
   readonly property var browserSuffix:
-    /\s*[-–—|]\s*(google chrome|chromium|mozilla firefox|firefox|zen browser|brave|microsoft edge|vivaldi|helium)\s*$/
+    /\s*[-–—|]\s*(google chrome|chromium|mozilla firefox|firefox|zen browser|brave origin|brave|microsoft edge|vivaldi|helium)\s*$/
 
   // Labels that name nobody: common subdomains and public suffixes.
   readonly property var genericLabels: ({ www: 1, app: 1, web: 1, my: 1, m: 1,
@@ -1144,7 +1073,6 @@ Item {
       if (found.length) return mostRecent(found)
 
       // A browser tab, then. Browsers only: "slack" in an editor's title is a filename.
-      if (!smartRaise) return null
       var brands = brandsOf(name)
       for (var b = 0; b < brands.length; b++) {
         found = []
@@ -1162,10 +1090,16 @@ Item {
     // labels and native classes, never shorter than four characters.
     var slug = name.replace(/[^a-z0-9]+/g, "")
     if (slug.length < 4) return null
+    // Several words also match a class ending in them: "Telegram Desktop" is
+    // org.telegram.desktop, "Brave Browser" brave-browser.
+    var words = name.split(/[^a-z0-9]+/).filter(function(w) { return w })
+    var tail = words.length > 1 ? "." + words.join(".") : ""
     found = []
     for (i = 0; i < windows.length; i++) {
       var lower = windows[i].wmClass.toLowerCase()
       if (lower === slug) { found.push(windows[i]); continue }
+      var dotted = "." + lower.replace(/[^a-z0-9]+/g, ".")
+      if (tail && dotted.slice(-tail.length) === tail) { found.push(windows[i]); continue }
       if (lower.indexOf("chrome-") !== 0) continue
       var labels = lower.substring(7).split("__")[0].split(".")
       for (var l = 0; l < labels.length; l++)
@@ -1181,36 +1115,15 @@ Item {
     Hyprland.dispatch('hl.dsp.focus({window = hl.get_window("address:' + win.address + '")})')
   }
 
-  // A click: Omarchy's own --exec command first, then the sender's default
-  // action, then its window, then its site.
-  function activate(key) {
-    var at = rowIndexFor(key)
-    var row = at >= 0 ? toasts.get(at) : null
-    var argv = Security.parseExecArgv(row ? row.execArgv : "")
-    if (argv) {
-      // Detached through bash positional parameters, never a shell string, and
-      // outliving the shell, which installer toasts restart on their first act.
-      Util.execArgv(argv)
-      closeToast(key, "activated")
-      return
-    }
-
-    var handled = allowDefaultActionOnCardClick && invokeSenderAction(key, "default")
-    if (!handled && row) {
-      // Source first, link last: a Slack message quoting a link is still a
-      // Slack notification, and that link has its own button.
-      var win = windowForPid(row.senderPid) || windowForSource(row.source)
-      if (win) focusWindow(win)
-      else if (Markup.hostname(row.source))
-        Security.openExternalUrl("https://" + Markup.hostname(row.source) + "/")
-      else if (String(row.link || "")) Security.openExternalUrl(String(row.link))
-    }
-    closeToast(key, "activated")
+  // Invoke the live default action if present, then close the card.
+  function activate(key, instant) {
+    invokeSenderAction(key, "default")
+    closeToast(key, "activated", instant)
   }
 
-  // ------------------------------------------------------------- offers
+  // -------------------------------------------------------------- codes
   //
-  // Acting on what Detect.js found in a card: copy the code, open the link.
+  // Copying the code Detect.js found in a card.
   Process { id: clipProc; running: false }
 
   function runClip(args) {
@@ -1223,16 +1136,17 @@ Item {
   // while, but only if it is still what is on the clipboard.
   property string secretHeld: ""
 
-  function copyText(text, sensitive) {
+  function copySecret(text) {
     var value = String(text || "")
-    if (!value || value.length > (sensitive ? 64 : 4096)) return
-    runClip(["wl-copy"].concat(sensitive ? ["--sensitive"] : [], ["--", value]))
-    if (sensitive) { secretHeld = value; secretLife.restart() }
+    if (!value || value.length > 64) return
+    runClip(["wl-copy", "--sensitive", "--", value])
+    secretHeld = value
+    secretLife.restart()
   }
 
   Timer {
     id: secretLife
-    interval: service.clipboardTimeout * 1000
+    interval: 60000
     onTriggered: clipReader.running = true
   }
 
@@ -1250,18 +1164,14 @@ Item {
     }
   }
 
-  function takeOffer(kind, value, key) {
-    if (kind === "code") {
-      var at = rowIndexFor(String(key || ""))
-      var codes = at >= 0 ? String(toasts.get(at).codes) : ""
-      if (at < 0 || codes.split(" ").indexOf(String(value)) < 0) return
-      copyText(value, true)
-      // A copied code finishes its card unless it carried several, a moment
-      // after the press so the button's tick is seen.
-      if (codes.indexOf(" ") <= 0) codeTaken.keys = codeTaken.keys.concat([String(key)])
-    }
-    else if (kind === "phone") copyText(value, false)
-    else Security.openExternalUrl(value)
+  function copyCode(value, key) {
+    var at = rowIndexFor(String(key || ""))
+    var codes = at >= 0 ? String(toasts.get(at).codes) : ""
+    if (at < 0 || codes.split(" ").indexOf(String(value)) < 0) return
+    copySecret(value)
+    // A copied code finishes its card unless it carried several, a moment
+    // after the press so the button's tick is seen.
+    if (codes.indexOf(" ") <= 0) codeTaken.keys = codeTaken.keys.concat([String(key)])
   }
 
   Timer {
@@ -1279,12 +1189,23 @@ Item {
 
   // ------------------------------------------------------------- store
   //
-  // State, not cache, in the private shell notifications directory: live.json (on
-  // screen), history.json and quiet.json, formats in Store.js. Each file is
-  // read once at startup and rewritten whole a moment after it changes, so a
-  // burst of arrivals writes it once.
+  // Each state file is read once and rewritten after a short save delay.
   readonly property string stateDir: (Quickshell.env("MIRROROS_SHELL_STATE_DIR")
     || ((Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/mirroros/shell")) + "/notifications"
+
+  // Weather uses the existing hypridle marker, independently of notification history.
+  readonly property string lockMarkerPath: Quickshell.env("MIRROROS_SHELL_LOCK_MARKER")
+    || ((Quickshell.env("XDG_RUNTIME_DIR") || "/nonexistent") + "/mirroros-shell-locked")
+  property bool lockedNow: false
+
+  FileView {
+    id: lockMarker
+    path: service.lockMarkerPath
+    printErrors: false
+    onLoaded: service.lockedNow = true
+    onLoadFailed: service.lockedNow = false
+  }
+
   property bool storeReady: false
   property bool liveLoaded: false
   property bool historyLoaded: false
@@ -1295,6 +1216,14 @@ Item {
   property var unsaved: ({})
 
   function storePut(row) {
+    // The transient hint asks to by-pass persistence: such a card is not
+    // restored after a restart or kept in history, and its sender sends it
+    // again when it still applies. An update that turns a card transient takes
+    // its stored row out.
+    if (row.transient) {
+      storeDrop(row.key)
+      return
+    }
     liveEntries = Store.putLive(liveEntries, Store.persistable(row))
     saveSoon("live")
   }
@@ -1316,13 +1245,13 @@ Item {
   // Straight to history: a row that closed, or one quiet kept off the screen.
   function storeRecord(row, reason) {
     var now = Date.now() / 1000
-    historyEntries = Store.addHistory(historyEntries, Store.closedEntry(row, reason, now), historyHours, now)
+    historyEntries = Store.addHistory(historyEntries, Store.closedEntry(row, reason, now), now)
     saveSoon("history")
   }
 
   // History as of now: rows past their retention go, from disk too.
   function currentHistory() {
-    var kept = Store.retain(historyEntries, historyHours, Date.now() / 1000)
+    var kept = Store.retain(historyEntries, Date.now() / 1000)
     if (kept.length !== historyEntries.length) {
       historyEntries = kept
       saveSoon("history")
@@ -1355,12 +1284,7 @@ Item {
     }
     if (unsaved.quiet && quietLoaded) {
       delete unsaved.quiet
-      quietFile.setText(Store.serialiseQuiet({ snoozes: snoozes, dnd: doNotDisturb, silencedSince: silencedSince,
-                                               codesBypassQuiet: codesBypassQuiet }))
-    }
-    if (unsaved.away && awayLoaded) {
-      delete unsaved.away
-      awayFile.setText(WhileAway.serialize(awayState))
+      quietFile.setText(Store.serialiseQuiet({ dnd: doNotDisturb }))
     }
   }
 
@@ -1377,27 +1301,22 @@ Item {
 
   function loadHistory(text) {
     if (historyLoaded) return
-    historyEntries = Store.retain(historyEntries.concat(Store.parseHistory(text)), historyHours, Date.now() / 1000)
+    historyEntries = Store.retain(historyEntries.concat(Store.parseHistory(text)), Date.now() / 1000)
     historyLoaded = true
     if (unsaved.history || Store.serialise(historyEntries) !== String(text)) saveSoon("history")
   }
 
   function loadQuiet(text) {
     if (quietLoaded) return
-    applyQuiet(String(text || "").trim() ? Store.parseQuiet(text) : null)
+    applyQuiet(Store.parseQuiet(text))
   }
 
   function applyQuiet(read) {
     if (quietLoaded) return
     if (read) {
-      snoozes = read.snoozes
       doNotDisturb = read.dnd
-      silencedSince = read.silencedSince
-      if (read.codesBypassQuiet !== null) codesBypassQuiet = read.codesBypassQuiet
     }
-    if (configuredCodesBypassQuiet !== null) codesBypassQuiet = configuredCodesBypassQuiet
     quietLoaded = true
-    snoozeRevision += 1
     if (unsaved.quiet) saveSoon("quiet")
   }
 
@@ -1430,14 +1349,14 @@ Item {
     onLoadFailed: service.loadQuiet("")
   }
 
-  // Once at startup: prepare only this shell's private directory and files.
+  // Once at startup: prepare the private directory and its active files.
   Process {
     id: storePrepare
     command: ["bash", "-c",
       "umask 077\n" +
       "dir=$1\n" +
       "mkdir -p -- \"$dir\" && chmod 700 -- \"$dir\" || exit 1\n" +
-      "for name in live.json history.json quiet.json while-away.json; do\n" +
+      "for name in live.json history.json quiet.json; do\n" +
       "  file=$dir/$name\n" +
       "  if [[ -L $file ]]; then rm -f -- \"$file\"; fi\n" +
       "  if [[ -f $file ]]; then chmod 600 -- \"$file\"; elif [[ ! -e $file ]]; then : >\"$file\"; fi\n" +
@@ -1461,83 +1380,11 @@ Item {
         // entry deliberately creates a separate card.
         if (!replay) continue
         row.key = nextKey()
+        row.groupKey = Markup.regroup(row)
       }
       if (!reserveLive(row.key)) break
       showRow(row)
     }
-  }
-
-  // ------------------------------------------------------------- while away
-  //
-  // MirrorOS (DEC-021/022): a count of notifications that arrived while the
-  // session was locked, shown by the bar indicator on return and cleared when
-  // the panel's history is opened, not on unlock. The lock state is a marker
-  // that hypridle's compositor-backed on_lock_cmd/on_unlock_cmd create and
-  // remove; they also call lockChanged() so a running shell rereads it. The
-  // marker is read again at startup, which reconciles a restart during the
-  // lock. Only the count and the lock flag are stored, never content.
-  readonly property string lockMarkerPath: Quickshell.env("MIRROROS_SHELL_LOCK_MARKER")
-    || ((Quickshell.env("XDG_RUNTIME_DIR") || "/nonexistent") + "/mirroros-shell-locked")
-  property var awayState: WhileAway.initial()
-  property bool awayLoaded: false
-  property bool lockKnown: false
-  property bool lockedNow: false
-  // Arrivals before both the saved count and the lock state are known.
-  property int awayPending: 0
-  readonly property int whileAwayCount: awayLoaded && lockKnown ? WhileAway.visibleCount(awayState) : 0
-
-  function setAwayState(next) {
-    if (WhileAway.serialize(next) === WhileAway.serialize(awayState)) return
-    awayState = next
-    saveSoon("away")
-  }
-
-  function noteAwayArrival() {
-    if (!awayLoaded || !lockKnown) { awayPending += 1; return }
-    setAwayState(WhileAway.notified(awayState))
-  }
-
-  function noteLockState(locked) {
-    lockedNow = locked
-    lockKnown = true
-    reconcileAway()
-  }
-
-  function reconcileAway() {
-    if (!awayLoaded || !lockKnown) return
-    var next = WhileAway.reconcile(awayState, lockedNow)
-    for (; awayPending > 0; awayPending--) next = WhileAway.notified(next)
-    setAwayState(next)
-  }
-
-  function loadAway(text) {
-    if (awayLoaded) return
-    awayState = WhileAway.parse(text)
-    awayLoaded = true
-    if (WhileAway.serialize(awayState) !== String(text)) saveSoon("away")
-    reconcileAway()
-  }
-
-  function clearAway() {
-    if (awayLoaded) setAwayState(WhileAway.historyOpened(awayState))
-  }
-
-  FileView {
-    id: awayFile
-    path: service.storeReady ? service.stateDir + "/while-away.json" : ""
-    atomicWrites: true
-    printErrors: false
-    onLoaded: service.loadAway(text())
-    onLoadFailed: service.loadAway("")
-  }
-
-  // Present means locked; any read failure, including absence, means unlocked.
-  FileView {
-    id: lockMarker
-    path: service.lockMarkerPath
-    printErrors: false
-    onLoaded: service.noteLockState(true)
-    onLoadFailed: service.noteLockState(false)
   }
 
   // ------------------------------------------------------------- server
@@ -1568,59 +1415,11 @@ Item {
   function showPlaceholder(summary, duration) {
     var key = "placeholder" + nextKey()
     if (!reserveLive(key)) return
-    var row = Store.normalise({ key: key, app: "omarchy-action", summary: summary, glyph: "\u{f009a}",
+    var row = Store.normalise({ key: key, app: "mirroros-action", summary: summary, glyph: "\u{f009a}",
                                 urgency: NotificationUrgency.Low, ts: Date.now() / 1000 })
-    row.duration = duration === undefined ? lowDuration : duration
+    row.duration = duration > 0 ? duration : lowDuration
     row.restored = true
     showRow(row)
-  }
-
-  // ------------------------------------------------------------- the panel
-  //
-  // The panel lives with the bar's indicator (one per monitor); requests go
-  // through here and the focused monitor's indicator answers.
-  signal panelRequested(string action, string screenName)
-  readonly property url panelUrl: Qt.resolvedUrl("NotificationPanel.qml")
-
-  // Tracked here because the indicator moves between separate bar instances
-  // as the quiet state changes.
-  property var openPanel: null
-  function notePanel(panel, opened) {
-    if (opened) {
-      if (openPanel && openPanel !== panel) openPanel.close()
-      openPanel = panel
-    } else if (openPanel === panel) {
-      openPanel = null
-    }
-  }
-
-  function requestPanel(action, screenName) {
-    var what = String(action || "toggle")
-    if (openPanel) {
-      if (what === "close" || what === "toggle") openPanel.close()
-      else if (what === "settings") openPanel.openSettings()
-      return "ok"
-    }
-    if (what !== "close") panelRequested(what, String(screenName || focusedDisplayName))
-    return "ok"
-  }
-
-  // MirrorOS: expanding the history section marks the while-away count seen;
-  // it clears once that panel closes. Clearing at once would deactivate the
-  // indicator that hosts the open panel and destroy it.
-  property bool awayHistorySeen: false
-  Connections {
-    target: service.openPanel
-    ignoreUnknownSignals: true
-    function onHistoryExpandedChanged() {
-      var panel = service.openPanel
-      if (panel && panel.historyExpanded && !panel.settingsView) service.awayHistorySeen = true
-    }
-  }
-  onOpenPanelChanged: {
-    if (openPanel || !awayHistorySeen) return
-    awayHistorySeen = false
-    clearAway()
   }
 
   // ------------------------------------------------------------- IPC
@@ -1637,48 +1436,50 @@ Item {
     target: "notifications"
 
     function ping(): string { return "ok" }
+    // hypridle calls this after changing the marker.
+    function lockChanged(): string { lockMarker.reload(); return "ok" }
 
     function dndState(): string { return service.doNotDisturb ? "on" : "off" }
     function isDnd(): string { return dndState() }
 
     function toggleDnd(): string {
       service.setDoNotDisturb(!service.doNotDisturb)
-      return dndState()
+      return isDnd()
     }
 
     function setDnd(value: string): string {
       var v = String(value || "").toLowerCase()
       service.setDoNotDisturb(v === "true" || v === "1" || v === "on" || v === "yes")
-      return dndState()
+      return isDnd()
     }
 
+    // Dismiss, press the one button on, or focus the newest card on screen.
+    // These are what the keybindings run, and a keypress is answered at once,
+    // without motion.
+    function act(): string { return service.actOnNewest() ? "ok" : "none" }
+
     // Dismiss the newest card on screen.
-    function dismissOne(): string { return service.dismissNewest() ? "ok" : "none" }
+    function dismissOne(): string { return service.dismissNewest(true) ? "ok" : "none" }
 
     // Every card, every stack.
-    function dismissAll(): string { service.clearAll("dismissed"); return "ok" }
-
-    // One stack: the deck the pointer has open, else the newest card's.
-    function dismissStack(): string { service.clearDeck("dismissed"); return "ok" }
+    function dismissAll(): string { service.clearAll("dismissed", true); return "ok" }
 
     // Click the newest card, as the pointer would.
     function invokeLast(): string {
-      if (toasts.count === 0) return "none"
-      service.activate(String(toasts.get(0).key))
+      var key = service.newestLive()
+      if (!key) return "none"
+      service.activate(key, true)
       return "ok"
+    }
+
+    // Hand the keyboard to the notifications until Escape or a choice.
+    function keyboard(): string {
+      if (service.keyboardMode) { service.stopKeyboard(); return "off" }
+      return service.startKeyboard() ? "on" : "none"
     }
 
     // Put the last few back on screen.
     function showHistory(): string { service.replayHistory(); return "ok" }
-
-    // Forget what was recorded. What is on screen stays.
-    function clear(): string {
-      service.historyEntries = []
-      service.saveSoon("history")
-      service.refreshHeld()
-      service.refreshHistory()
-      return "ok"
-    }
 
     // Take cards off the screen by summary substring, used by the first-run
     // notifications once their action has been clicked.
@@ -1700,105 +1501,27 @@ Item {
     function expand(): string {
       if (service.expanded) {
         service.commit(function() {
-          service.expanded = false; service.openDeck = ""; service.hoverKey = ""
+          service.expanded = false; service.openDeck = ""; service.hoverKey = ""; service.exitActionKey = ""
         })
       } else if (toasts.count > 0) {
         var front = toasts.get(0)
-        service.pointerEntered(Layout.deckKeyFor(front, service.stacking))
-        service.hoverKey = String(front.key)
+        service.pointerEntered(Layout.groupKeyFor(front))
       } else {
         service.pointerEntered(undefined)
       }
       return service.expanded ? "expanded" : "collapsed"
     }
 
-    // Snooze the front card's source, in minutes.
-    function snooze(minutes: string): string {
-      if (toasts.count === 0) return "nothing"
-      var row = toasts.get(0)
-      var mins = service.snoozeMinutes(minutes, 60)
-      var until = service.snoozeSource(String(row.groupKey || ""),
-                                       String(row.source || row.app || ""), mins * 60)
-      return until ? String(row.source || row.app) + " until " + new Date(until * 1000).toTimeString().slice(0, 5) : "no source"
-    }
-
-    // Snooze everything, or wake it again when it already is.
-    function snoozeAll(minutes: string): string {
-      if (service.globalSnoozeUntil) {
-        service.unsnooze(service.globalKey)
-        return "awake"
-      }
-      var mins = service.snoozeMinutes(minutes, 60)
-      var until = service.snoozeSource(service.globalKey, "", mins * 60, true)
-      return until ? "everything until " + new Date(until * 1000).toTimeString().slice(0, 5) : "no"
-    }
-
-    // Wake one source by key, or everything with an empty key.
-    function unsnooze(key: string): string {
-      if (!String(key || "")) { service.unsnoozeAll(); return "all" }
-      service.unsnooze(String(key))
-      return String(key)
-    }
-
-    function snoozes(): string { return JSON.stringify(service.liveSnoozes()) }
-
-    // Whether verification codes get through the quiet: on, off, or "" to ask.
-    function codes(state: string): string {
-      var want = String(state || "").toLowerCase()
-      if (want === "on" || want === "off")
-        service.setCodesBypassQuiet(want === "on")
-      return service.codesBypassQuiet ? "on" : "off"
-    }
-
-    // Invoke one of the sender's actions on the front card, by identifier.
-    function act(identifier: string): string {
-      if (toasts.count === 0) return "nothing"
-      var key = String(toasts.get(0).key)
-      var available = service.actionsOf(key, service.refsRevision)
-      var wanted = String(identifier || "")
-      if (!wanted && available.length > 0) wanted = available[0].id
-      if (!wanted) return "no actions"
-      service.invokeAction(key, wanted)
-      return wanted
-    }
-
-    // Take one of the front card's offers: code, link or phone.
-    function offer(kind: string): string {
-      if (toasts.count === 0) return "nothing"
-      var row = toasts.get(0)
-      var want = String(kind || "code")
-      var value = want === "code" ? String(row.code || "")
-                : want === "phone" ? String(row.phone || "")
-                : String(row.link || "")
-      if (!value) return "none"
-      service.takeOffer(want, value, String(row.key))
-      return "performed"
-    }
-
-    function togglePanel(): string { return service.requestPanel("toggle") }
-    function openPanel(): string { return service.requestPanel("open") }
-    function openSettings(): string { return service.requestPanel("settings") }
-    function closePanel(): string { return service.requestPanel("close") }
-
-    // MirrorOS: hypridle's lock hooks call this after changing the lock marker.
-    function lockChanged(): string { lockMarker.reload(); return "ok" }
-    function awayCount(): string { return String(service.whileAwayCount) }
 
     // What the daemon thinks is true, for scripts to check.
     function probe(): string {
-      return JSON.stringify({ toasts: toasts.count, fontScale: service.fontScale,
+      return JSON.stringify({ toasts: toasts.count,
         doNotDisturb: service.doNotDisturb, expanded: service.expanded,
-        allowDefaultActionOnCardClick: service.allowDefaultActionOnCardClick,
-        stacking: service.stacking,
-        sharingActive: service.sharingActive, sharingStreams: service.sharingStreams,
-        sharingOfferPending: service.sharingOfferPending, offerSnoozeWhenSharing: service.offerSnoozeWhenSharing,
-        globalSnoozeUntil: service.globalSnoozeUntil,
-        displayMode: service.displayMode, displayName: service.displayName,
+        keyboardMode: service.keyboardMode, keyboardKey: service.keyboardKey,
         displays: service.displayNames, focusedDisplay: service.focusedDisplayName,
         targetDisplay: service.targetDisplayName,
         notificationDisplays: service.displayNames.filter(function(name) { return service.showsOn(name) }),
-        fullscreenOverlay: service.fullscreenOverlay, surfaces: service.surfaceStates(),
-        avoidedDisplays: service.displayNames.filter(function(n) { return service.awayFrom(n) }) })
+        surfaces: service.surfaceStates() })
     }
   }
 
@@ -1807,7 +1530,7 @@ Item {
   // One fixed-size layer per output, so the compositor never scales a stale
   // buffer; the mask makes everything outside the deck click-through. It stays
   // mapped while idle (remapping re-evaluates focus and drags a scrolling
-  // layout's viewport), except where `fullscreenOverlay` steps aside.
+  // layout's viewport), except where it steps aside for a fullscreen window.
   Variants {
     id: surfaceVariants
     model: Quickshell.screens
@@ -1820,18 +1543,13 @@ Item {
       readonly property var margins: service.marginsFor(String(modelData.name))
       readonly property bool stepAside: service.fullscreenOn(String(modelData.name))
       readonly property bool hasSomethingToShow: showingNotifications && toasts.count > 0
-      // Holds the canvas for the last card's exit animation.
-      property bool lingering: false
-      onHasSomethingToShowChanged: {
-        if (hasSomethingToShow) lingering = false
-        else { lingering = true; lingerTimer.restart() }
-      }
-      Timer { id: lingerTimer; interval: 800; onTriggered: surface.lingering = false }
-      visible: !stepAside || hasSomethingToShow || lingering
+      visible: !stepAside || hasSomethingToShow
       color: "transparent"
 
       WlrLayershell.namespace: "mirroros-notifications"
       WlrLayershell.layer: WlrLayer.Overlay
+      readonly property bool takesKeyboard: service.keyboardMode && service.targetDisplayName === String(modelData.name)
+      WlrLayershell.keyboardFocus: takesKeyboard ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
       exclusionMode: ExclusionMode.Ignore
 
       // Constant width and full height, so the buffer is allocated once.
@@ -1839,6 +1557,13 @@ Item {
       implicitWidth: clipper.width + Style.space(10)
 
       mask: Region { item: surface.showingNotifications ? deck : null }
+
+      Item {
+        focus: surface.takesKeyboard
+        Keys.onPressed: function(event) {
+          event.accepted = service.keyboardPressed(event.key, event.text)
+        }
+      }
 
       Item {
         id: clipper
@@ -1871,24 +1596,54 @@ Item {
 
             // The cards cannot see hover under this region, so they are told.
             function hoverAt(x, y) {
-              service.hoverX = x
-              service.hoverY = y
+              var point = hoverArea.mapToItem(deck, x, y)
+              service.hoverX = point.x
+              service.hoverY = point.y
               var places = service.placements
               var found = ""
               for (var key in places) {
                 var pl = places[key]
-                if (pl.hidden) continue
-                var h = pl.height || Style.space(58)
-                if (y >= pl.y && y <= pl.y + h) { found = key; break }
+                if (pl.hidden || pl.leaving || (!pl.front && pl.scale < 1)) continue
+                var top = service.at(key, "y")
+                var scale = service.at(key, "scale")
+                var inset = deck.width * (1 - scale) / 2
+                var bottom = top + service.at(key, "height") * scale
+                if (point.x >= inset && point.x < deck.width - inset
+                    && point.y >= top && point.y < bottom) { found = key; break }
               }
-              service.hoverKey = found
+              if (found) {
+                service.hoverKey = found
+                service.exitActionKey = ""
+                var index = service.rowIndexFor(found)
+                if (index >= 0 && Layout.groupKeyFor(toasts.get(index)) === service.openDeck)
+                  collapseGrace.stop()
+                return
+              }
+              // An internal gap is not an exit. Test the whole open stack's
+              // rendered span, excluding the outer padding of the hover area.
+              var groups = service.layout.decks
+              for (var i = 0; i < groups.length; i++) {
+                var group = groups[i]
+                if (group.key !== service.openDeck || !group.rows.length) continue
+                var groupTop = service.at(group.rows[0].key, "y")
+                var last = group.rows[group.rows.length - 1].key
+                var groupBottom = service.at(last, "y") + service.at(last, "height")
+                if (point.x >= 0 && point.x < deck.width && point.y >= groupTop && point.y < groupBottom) {
+                  collapseGrace.stop()
+                  service.hoverKey = ""
+                  service.exitActionKey = ""
+                  return
+                }
+                break
+              }
+              service.pointerLeft()
             }
 
             // Cards move under a still pointer after a dismissal: re-hit-test
             // once settled, or a second click invokes a stale card.
             Connections {
-              target: sceneRun
-              function onFinished() {
+              target: service
+              function onSettled() {
                 Qt.callLater(function() {
                   if (hoverArea.containsMouse)
                     hoverArea.hoverAt(hoverArea.mouseX, hoverArea.mouseY)
@@ -1899,30 +1654,15 @@ Item {
             onContainsMouseChanged: {
               service.pointerIn = containsMouse
               if (containsMouse) {
-                service.pointerEntered(undefined)
                 hoverAt(mouseX, mouseY)
+                service.openHoveredDeck()
               } else {
-                service.hoverKey = ""
                 service.pointerLeft()
               }
             }
             onPositionChanged: function(mouse) {
               hoverAt(mouse.x, mouse.y)
-
-              // In source mode, which deck you are over decides which opens.
-              if (service.stacking !== "source") return
-              var decks = service.layout.decks
-              for (var i = 0; i < decks.length; i++) {
-                var first = decks[i].rows[0]
-                var place = service.layout.placements[first.key]
-                if (!place) continue
-                var top = place.y
-                var bottom = top + (service.heights[first.key] || Style.space(58))
-                if (mouse.y >= top - Style.space(6) && mouse.y <= bottom + Style.space(6)) {
-                  service.pointerEntered(decks[i].key)
-                  return
-                }
-              }
+              service.openHoveredDeck()
             }
           }
 
@@ -1937,18 +1677,20 @@ Item {
               place: service.placements[model.key]
                      || ({ y: 0, scale: 1, opacity: 0, z: 1, front: false, hidden: true })
               hovered: service.hoverKey === model.key
+              selected: service.keyboardMode && service.keyboardKey === model.key
+              actionsActive: service.actionsActiveFor(model, false)
+              actionsClickable: service.actionsActiveFor(model, true)
               actions: service.actionsOf(model.key, service.refsRevision)
-              fontScale: service.fontScale
-              showCountdown: service.showCountdown
-              actionsAlign: service.actionsAlign
               hoverX: service.hoverX
               hoverY: service.hoverY
-              onActionInvoked: function(identifier) { service.invokeAction(model.key, identifier) }
-              onOfferTaken: function(kind, value) { service.takeOffer(kind, value, model.key) }
-              iconOverrides: service.iconOverrides
+              // A click is the mouse taking over: it ends keyboard mode, which
+              // would otherwise keep the keyboard from the app it opened.
+              onActionInvoked: function(identifier) { service.stopKeyboard(); service.invokeAction(model.key, identifier) }
+              onCodeCopied: function(code) { service.stopKeyboard(); service.copyCode(code, model.key) }
+              onLinkOpened: service.stopKeyboard()
               now: service.nowTick
               expanded: service.expanded
-                        && (service.stacking !== "source" || service.openDeck === Layout.deckKeyFor(model, service.stacking))
+                        && service.openDeck === Layout.groupKeyFor(model)
               // Hover opens the body only when there is nothing else to open.
               sole: toasts.count === 1
               paused: service.expanded
@@ -1960,14 +1702,8 @@ Item {
               Component.onCompleted: if (surface.showingNotifications) service.noteHeight(model.key, targetHeight)
 
               onExpired: service.closeToast(model.key, "expired")
-              onActivated: service.activate(model.key)
-              onDismissed: service.closeToast(model.key, "dismissed")
-              snoozeOptions: service.snoozeOptions
-              onSnoozeRequested: function(seconds) {
-                service.snoozeSource(String(model.groupKey || ""),
-                                     String(model.source || model.app || ""), seconds)
-              }
-              onSilenceRequested: service.setDoNotDisturb(true)
+              onActivated: { service.stopKeyboard(); service.activate(model.key) }
+              onDismissed: { service.stopKeyboard(); service.closeToast(model.key, "dismissed") }
             }
           }
         }

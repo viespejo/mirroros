@@ -492,7 +492,7 @@ for evidence and limits.
 | Common defaults | `defaults.json` beside `shell.qml` | MirrorOS, versioned |
 | Personal overrides | `$XDG_CONFIG_HOME/mirroros/shell.json` (fallback `~/.config`) | User |
 | Notification state | `$XDG_STATE_HOME/mirroros/shell/notifications/` (fallback `~/.local/state`) | Shell, private |
-| While-away count | `while-away.json` in the notification state directory | Shell, private |
+| Retired while-away state | `while-away.json` in the notification state directory, if present | Left untouched |
 | Wallpaper selection | `$XDG_STATE_HOME/mirroros/current/background` (fallback `~/.local/state`) | Shell-managed symlink; theme configure initializes only if absent |
 | Lock marker | `$XDG_RUNTIME_DIR/mirroros-shell-locked` | hypridle lock hooks |
 
@@ -501,7 +501,7 @@ To keep a device-local exception, set it in the interface or add only that key t
 ```json
 {
   "version": 1,
-  "notifications": { "fontScale": 110 }
+  "bar": { "widgets": { "omarchy.clock": { "format": "HH:mm" } } }
 }
 ```
 
@@ -509,8 +509,11 @@ To return to the common default, delete that key (or the whole file). An invalid
 shell's log (`Preserving unsupported …`), the defaults apply and the file is left untouched until it is
 fixed. To promote a choice for every device, edit `defaults.json` in the repository and review the change.
 
-Notification history keeps 24 hours and at most 100 entries by default and restores active cards (DEC-020).
-Its files are private (directory `0700`, files `0600`); never copy them into evidence.
+Notification history retains only entries closed within the last 24 hours, up to 100, and can replay the
+six most recent cards. Active cards are restored separately. Transient notices do not enter either store.
+Legacy `notifications` preferences are ignored, not removed. Quiet state reads the saved `dnd` flag and
+writes only that flag on a normal save. State files are private (`0700` directory, `0600` files); never copy
+them into evidence.
 
 ## Inline settings
 
@@ -539,26 +542,14 @@ migration: move the setting by hand into `bar.widgets.<id>` and delete the `bar.
 
 - **Selector replacement (DEC-027):** opening another selector or a regular menu completes the pending
   selector request as cancelled: its done file appears and its selection file stays empty.
-- **Notification `omarchy-exec-argv`:** preserved. Argv is validated structurally, executed literally with
-  fixed positional data and only on a user click. Any same-user session-bus sender can set it; a sandboxed
-  application reaching the session bus could therefore have a click run argv outside its sandbox. No sender
-  authorization or sandbox guarantee is claimed.
+- **Notification actions:** only live D-Bus notices have sender actions. Clicking a card body invokes its
+  live `default` action if present, then closes the card. There is no window or URL fallback. A direct click
+  on a validated inline link opens that link. Executable hints and stored command fields are ignored.
 - **Color-only states** follow the Omarchy reference (Story 4.3 criterion aligned under DEC-015/DEC-026).
-- **While-away count (DEC-021/022):** notifications that arrive while the session is locked (new,
-  non-transient ones; replacements excluded) are counted. The bar's notification indicator shows the count
-  on return as a small superscript on the bell (capped at `9+`); unlocking does not clear it. Expanding the panel's history section marks it seen and it clears
-  when that panel closes (clearing at once would remove the indicator hosting the open panel). The lock state is the
-  lock marker, which hypridle's compositor-backed `on_lock_cmd`/`on_unlock_cmd` create and remove before
-  calling the shell's `notifications lockChanged` IPC function; the shell also reads it at startup, so a
-  restart during the lock reconciles. hypridle re-emits the lock on startup and its unit removes a stale
-  marker before starting. Residual risk: if hypridle stays stopped while the session is unlocked, the
-  marker is stale and the count stays hidden until hypridle starts again. The hooks and unit cleanup are
-  delivered with the lock configuration (`capabilities/desktop/lock/`); with a user-owned
-  `hypridle.conf` without them, the marker never appears and no count is shown. No content reaches the lock surface or the stored state.
-- **Known inherited defect, not repaired:** with the notification panel open from the indicator, turning
-  Do Not Disturb off (with nothing else active) removes the indicator from the bar's active block and
-  destroys the panel; turning it on keeps the panel open. The behavior comes from upstream
-  `Indicators.qml`; no data is lost.
+- **Do Not Disturb and Weather:** the bar bell toggles manual DND with left, right or middle click. There is
+  no built-in notification panel, timed snooze, screen-sharing offer or lock-time count. The shell still
+  reads the runtime lock marker at startup and when hypridle calls `notifications lockChanged`; Weather
+  consumes that lock state. This does not modify the lock hooks or `while-away.json`.
 - **Visual observation, inherited:** the bell glyph sits about 1-2 px above the clock's capitals; glyphs
   are centered by their painted bounds and the clock as a text line. Global bar alignment belongs to
   Story 4.8 and is not changed here.
@@ -638,8 +629,7 @@ operations.
 Host, no graphical session:
 
 ```bash
-node --test tests/capabilities/desktop/shell/config-overrides.test.mjs \
-    tests/capabilities/desktop/shell/while-away.test.mjs
+node --test tests/capabilities/desktop/shell/config-overrides.test.mjs
 node --test tests/capabilities/desktop/shell/bar-panels.test.mjs \
     tests/capabilities/desktop/shell/audio-panel-model.test.mjs \
     tests/capabilities/desktop/shell/display-panel-model.test.mjs \
@@ -686,10 +676,10 @@ node tests/capabilities/desktop/shell/qmllint-check.mjs
 tests/capabilities/desktop/shell/check-selector-replacement.sh
 tests/capabilities/desktop/shell/check-dmenu.sh
 tests/capabilities/desktop/shell/check-menu.sh
-tests/capabilities/desktop/shell/check-bar.sh
-tests/capabilities/desktop/shell/check-notifications.sh
+dbus-run-session -- tests/capabilities/desktop/shell/check-bar.sh
+dbus-run-session -- tests/capabilities/desktop/shell/check-notifications.sh
 tests/capabilities/desktop/shell/check-osd.sh
-tests/capabilities/desktop/shell/check-while-away.sh
+dbus-run-session -- tests/capabilities/desktop/shell/check-while-away.sh
 tests/capabilities/desktop/shell/check-panels.sh
 ```
 

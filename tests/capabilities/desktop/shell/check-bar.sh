@@ -41,14 +41,17 @@ cleanup() {
 trap cleanup EXIT
 run_dir="$tmp/shell"
 cp -r "$shell_dir" "$run_dir"
-mkdir -p "$tmp/home" "$tmp/config" "$tmp/data/applications" "$tmp/state"
+mkdir -p "$tmp/home/.local/state/mirroros/current" "$tmp/config" "$tmp/data/applications" "$tmp/state"
+ln -s /usr/share/mirroros/themes/default "$tmp/home/.local/state/mirroros/current/theme"
+ln -s /usr/share/mirroros/themes/default/backgrounds/2-mirroros-jade.png "$tmp/home/.local/state/mirroros/current/background"
 prefs="$tmp/config/mirroros/shell.json"
 # A test-only handler, never installed in the product shell.
 node - "$run_dir/shell.qml" <<'JS'
 const fs = require('node:fs');
 const file = process.argv[2];
-let qml = fs.readFileSync(file, 'utf8').replace('import Quickshell\n', 'import Quickshell\nimport Quickshell.Io\n');
+let qml = fs.readFileSync(file, 'utf8').replace('import Quickshell\n', 'import Quickshell\nimport Quickshell.Io\nimport "bar/indicators" as TestIndicators\n');
 qml = qml.trimEnd().slice(0, -1) + `
+  TestIndicators.Dnd { id: testDnd; bar: desktopShell.bar; visible: false }
   IpcHandler {
     target: "barTest"
     function state(): string {
@@ -80,6 +83,16 @@ qml = qml.trimEnd().slice(0, -1) + `
       return desktopShell.updateEntryInline("omarchy.clock", items[0].settings)
     }
     function toggleMenu(): bool { return desktopShell.toggle("menu") }
+    function dndPresses(): string {
+      var service = desktopShell.notificationService
+      var initial = service.doNotDisturb
+      var toggles = [Qt.LeftButton, Qt.RightButton, Qt.MiddleButton].map(function(button) {
+        testDnd.pressed(button)
+        return service.doNotDisturb
+      })
+      service.setDoNotDisturb(initial)
+      return JSON.stringify({ initial: initial, toggles: toggles })
+    }
   }
 }
 `;
@@ -91,7 +104,8 @@ start() {
     owner=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus NameHasOwner s org.freedesktop.Notifications)
     [[ "$owner" == 'b false' ]] || { printf 'BLOCKED Notifications already owned; no replacement attempted\n'; exit 2; }
     HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_DATA_HOME="$tmp/data" \
-        MIRROROS_SHELL_STATE_DIR="$tmp/state" qs -p "$run_dir" > "$tmp/shell.log" 2>&1 &
+        XDG_STATE_HOME="$tmp/home/.local/state" XDG_CACHE_HOME="$tmp/cache" \
+        MIRROROS_SHELL_STATE_DIR="$tmp/state" MIRROROS_SHELL_LOCK_MARKER="$tmp/locked" qs -p "$run_dir" > "$tmp/shell.log" 2>&1 &
     pid=$!
     local state=""
     for ((i = 0; i < 80; i++)); do
@@ -111,7 +125,7 @@ quiet() {
     # The sole known Brief 1 Qt text-input warning is not shell noise.
     local warnings
     warnings=$(grep -E 'WARN|ERROR|Warning|Error|TypeError|ReferenceError|Binding loop' "$tmp/shell.log" \
-        | grep -v 'qt.qpa.wayland.textinput.*has focus' || true)
+        | grep -vE 'qt.qpa.wayland.textinput.*(has focus|QWaylandTextInputv3::disableSurface.*Trying to disable .* but .* is focused)' || true)
     if [[ -n "$warnings" ]]; then printf 'FAIL shell log is not quiet\n%s\n' "$warnings"; exit 1; fi
 }
 stop() {
@@ -136,6 +150,8 @@ assert.ok(Math.abs(clock.x + clock.width / 2 - clock.screenWidth / 2) <= 1, 'clo
 console.log('PASS default static layout and centered clock');
 JS
 hyprctl layers | grep -q 'mirroros-bar'
+node -e 'const assert=require("node:assert/strict");const {initial,toggles}=JSON.parse(process.argv[1]);assert.deepEqual(toggles,[!initial,initial,!initial]);' "$(ipc dndPresses)"
+printf 'PASS left, right and middle indicator presses toggle manual DND\n'
 [[ ! -e "$prefs" ]] || { printf 'FAIL defaults were unnecessarily persisted\n'; exit 1; }
 [[ "$(ipc cycleClock)" == true ]]
 sleep 0.8

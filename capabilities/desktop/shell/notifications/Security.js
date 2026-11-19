@@ -3,7 +3,7 @@
 .pragma library
 var MAX_APP_NAME=256, MAX_SUMMARY=2048, MAX_BODY=32768
 var MAX_ACTIONS=16, MAX_ACTION_LABEL=256, MAX_ACTION_ID=256, MAX_SOURCE=253
-var MAX_URL=4096, MAX_CODES=8, MAX_PHONE=64
+var MAX_URL=4096, MAX_CODES=8
 function bounded(value, max) { return typeof value === 'string' ? value.slice(0,max) : '' }
 function containsControlChars(s) { return /[\x00-\x20\x7f-\x9f\\]/.test(s) }
 function canonicalHostname(raw) {
@@ -45,28 +45,6 @@ function hostOf(raw) {
 function openExternalUrl(raw) {
   var safe=safeExternalUrl(raw)
   return safe ? Qt.openUrlExternally(safe) : false
-}
-
-// The omarchy-exec-argv hint (omarchy-notification-send --exec). Structural
-// only: fails closed on a malformed or oversized argv or a leading-dash
-// program, but does not judge intent. Any session-bus sender may set it (see
-// docs/notifications.md); Util.execArgv never re-parses it as a shell string.
-function parseExecArgv(value) {
-  if (Array.isArray(value)) {
-    try { value = JSON.stringify(value) } catch (e) { return null }
-  }
-  var text = String(value || "")
-  if (!text || text.length > MAX_BODY) return null
-
-  var parsed
-  try { parsed = JSON.parse(text) } catch (e) { return null }
-  if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 32) return null
-  for (var i = 0; i < parsed.length; i++) {
-    // A NUL cannot travel in an argv: Qt would cut the argument short there.
-    if (typeof parsed[i] !== "string" || parsed[i].length > MAX_URL || parsed[i].indexOf("\u0000") >= 0) return null
-  }
-  if (!parsed[0] || parsed[0].charAt(0) === "-") return null
-  return parsed
 }
 
 // The omarchy-glyph hint: a few code points for the icon slot.

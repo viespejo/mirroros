@@ -1,22 +1,30 @@
-// Adapted from Omarchy shell/plugins/notifications/Delivery.js at
-// 7075b61c6aaa5d8589f6e816867508fc96dc49d9 (MIT, Copyright (c) David Heinemeier
-// Hansson). Only change: bypassesQuiet also passes a Critical notification
-// from the reminder app (a delivered reminder). Everything else is unchanged.
 // Whether a notification reaches the screen, and where the deck sits. Pure
 // functions over a snapshot row (Store.snapshot).
 .pragma library
 
 var CRITICAL = 2
 
-// Omarchy's own action toasts and bare notify-send critical alerts get through
-// Do Not Disturb and every snooze. Critical alone is not enough: chat apps send
+// MirrorOS action toasts and bare notify-send critical alerts get through
+// Do Not Disturb. Critical alone is not enough: chat apps send
 // critical to force visibility, under their own app name.
 function bypassesQuiet(row) {
   var app = String((row && row.app) || "")
-  if (app === "omarchy-action") return true
-  // MirrorOS: a due reminder is Critical; its other notices stay quiet.
-  if (app === "reminder") return Number(row.urgency) === CRITICAL
+  if (app === "mirroros-action") return true
   return app === "notify-send" && Number(row.urgency) === CRITICAL
+}
+
+// The buttons a card offers, in the order it draws them and the number keys
+// count them: copying each code it found, then the sender's live actions.
+// A code's label is left to the card, which translates it.
+function deeds(row, senderActions) {
+  var out = []
+  var codes = String((row && (row.codes || row.code)) || "").split(" ")
+  for (var c = 0; c < codes.length; c++)
+    if (codes[c]) out.push({ kind: "code", value: codes[c], label: "" })
+  var actions = senderActions || []
+  for (var i = 0; i < actions.length; i++)
+    out.push({ kind: "action", value: String(actions[i].id), label: String(actions[i].text || "") })
+  return out
 }
 
 // Nobody looks back at these (the `transient` hint, or an unnamed sender), so
@@ -24,22 +32,28 @@ function bypassesQuiet(row) {
 function isEphemeral(row) {
   if (row && row.transient === true) return true
   var app = String((row && row.app) || "")
-  return app === "notify-send" || app === "omarchy-action"
+  return app === "notify-send" || app === "mirroros-action"
 }
 
-// "silenced", "snoozed", or "" when the row shows. A verification code may
-// pass either: it was asked for a moment ago and expires in minutes.
-function quietReason(row, state) {
-  var reason = state.doNotDisturb ? "silenced"
-             : (state.globalSnoozed || state.sourceSnoozed) ? "snoozed" : ""
-  if (!reason) return ""
+// "silenced", or "" when the row shows. A verification code always passes: it
+// was asked for a moment ago and expires in minutes.
+function quietReason(row, doNotDisturb) {
+  if (!doNotDisturb) return ""
   if (bypassesQuiet(row)) return ""
-  if (state.codesBypassQuiet && String((row && row.code) || "")) return ""
-  return reason
+  if (String((row && row.code) || "")) return ""
+  return "silenced"
 }
 
 // A summary that opens with its own glyph ("󰂚  Silenced": one code point, two
 // spaces) already carries its mark, so the card drops the icon slot.
+// Omarchy's own marks (default/fonts/omarchy) sit at U+E900 and up, where the
+// Nerd Font has devicons, so a glyph there must be drawn in the icon font by
+// name, as the menu does with iconFont, or it renders as a devicon.
+function omarchyGlyph(glyph) {
+  var code = String(glyph || "").codePointAt(0)
+  return code >= 0xe900 && code <= 0xe9ff
+}
+
 function summaryStartsWithGlyph(summary) {
   var text = String(summary || "").replace(/^\s+/, "")
   if (!text) return false
