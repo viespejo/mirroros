@@ -61,6 +61,26 @@ test('screenshot help lists unique capture actions and refuses duplicate chords'
   }
 });
 
+test('notification comma chords match Omarchy v4.5.0 with native IPC and no panel route', () => {
+  const desktop = new URL('../../../../capabilities/desktop/', import.meta.url);
+  const bindings = readFileSync(new URL('compositor/providers/hyprland/shell-bindings.lua', desktop), 'utf8');
+  const shell = readFileSync(new URL('shell/shell.qml', desktop), 'utf8');
+  const service = readFileSync(new URL('shell/notifications/Service.qml', desktop), 'utf8');
+  const expected = [
+    ['SUPER + comma', 'act'],
+    ['SUPER + SHIFT + comma', 'dismissAll'],
+    ['SUPER + CTRL + comma', 'keyboard'],
+    ['SUPER + ALT + comma', 'dismissOne'],
+    ['SUPER + SHIFT + ALT + comma', 'showHistory'],
+    ['SUPER + CTRL + ALT + comma', 'toggleDnd'],
+  ];
+  const registered = [...bindings.matchAll(/MirrorOSKeys\.bind\("[^"]+", "([^"]+comma)", "[^"]+",\s*shell_ipc\("notifications", "(\w+)"\)\)/g)];
+  assert.deepEqual(registered.map(match => match.slice(1)), expected);
+  for (const [, method] of expected) assert.ok(service.includes(`    function ${method}(): string`), method);
+  assert.doesNotMatch(bindings, /notifications\.panel|panel\.notifications/);
+  assert.doesNotMatch(shell, /panel\.notifications/);
+});
+
 test('duplicate keyless matches are not launchable; unique matches remain launchable', () => {
   const rows = build([{ key: '', description: 'Workspace' }, { key: '', description: 'Workspace' }, { key: 'D', description: 'Apps' }]);
   assert.deepEqual(rows.map(row => [row.id, row.launchable]), [['', false], ['', false], ['menu.apps', true]]);

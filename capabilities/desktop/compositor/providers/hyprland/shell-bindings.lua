@@ -140,24 +140,23 @@ MirrorOSKeys.bind("input.layout-next", "SUPER + I", "Switch input language",
 MirrorOSKeys.bind("input.layout-prev", "SUPER + SHIFT + I", "Switch input language back",
   hl.dsp.exec_cmd("hyprctl switchxkblayout all prev"))
 
--- Notifications (Omarchy utilities.lua:24-28; shell notifications IPC).
-MirrorOSKeys.bind("notifications.dismiss-one", "SUPER + comma", "Dismiss last notification",
-  shell_ipc("notifications", "dismissOne"))
+-- Notifications (Omarchy v4.5.0 default/hypr/bindings/utilities.lua:24-29, MIT; shell notifications IPC).
+MirrorOSKeys.bind("notifications.act", "SUPER + comma", "Dismiss, invoke, or focus last notification",
+  shell_ipc("notifications", "act"))
 MirrorOSKeys.bind("notifications.dismiss-all", "SUPER + SHIFT + comma", "Dismiss all notifications",
   shell_ipc("notifications", "dismissAll"))
-MirrorOSKeys.bind("notifications.dnd", "SUPER + CTRL + comma", "Toggle silencing notifications",
-  shell_ipc("notifications", "toggleDnd"))
-MirrorOSKeys.bind("notifications.invoke-last", "SUPER + ALT + comma", "Invoke last notification",
-  shell_ipc("notifications", "invokeLast"))
+MirrorOSKeys.bind("notifications.keyboard", "SUPER + CTRL + comma", "Control notifications with the keyboard",
+  shell_ipc("notifications", "keyboard"))
+MirrorOSKeys.bind("notifications.dismiss-one", "SUPER + ALT + comma", "Dismiss last notification",
+  shell_ipc("notifications", "dismissOne"))
 MirrorOSKeys.bind("notifications.history", "SUPER + SHIFT + ALT + comma", "Open notification history",
   shell_ipc("notifications", "showHistory"))
+MirrorOSKeys.bind("notifications.dnd", "SUPER + CTRL + ALT + comma", "Toggle silencing notifications",
+  shell_ipc("notifications", "toggleDnd"))
 
 -- Shell panels (plan 02-27, DEC-030/DEC-041): the shell registers GlobalShortcut entries with appid "mirroros", and
 -- hl.dsp.global("mirroros:<name>") reaches them without spawning a process (Hyprland v0.56.2
--- src/config/lua/bindings/LuaBindingsDispatchers.cpp, hlGlobal/dsp_global). SUPER+CTRL+ALT+comma diverges from
--- Omarchy 4.5, which uses it for silencing.
-MirrorOSKeys.bind("notifications.panel", "SUPER + CTRL + ALT + comma", "Toggle notification panel",
-  hl.dsp.global("mirroros:panel.notifications"))
+-- src/config/lua/bindings/LuaBindingsDispatchers.cpp, hlGlobal/dsp_global).
 
 -- Panel chords (Omarchy v4.5.0 default/hypr/bindings/utilities.lua:113-131, MIT, adapted to global shortcuts).
 MirrorOSKeys.bind("panel.bluetooth", "SUPER + CTRL + B", "Bluetooth", hl.dsp.global("mirroros:panel.bluetooth"))

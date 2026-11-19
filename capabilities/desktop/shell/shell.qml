@@ -152,11 +152,6 @@ ShellRoot {
     description: "Toggle the world clock panel"
     onPressed: desktopShell.bar.requestPanel("omarchy.elsewhen", "toggle")
   }
-  GlobalShortcut {
-    appid: "mirroros"
-    name: "panel.notifications"
-    description: "Reserved notification shortcut"
-  }
   Variants {
     model: [1, 2, 3, 4, 5, 6, 7, 8, 9]
     GlobalShortcut {

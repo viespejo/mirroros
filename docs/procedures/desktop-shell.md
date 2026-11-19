@@ -78,7 +78,7 @@ qs ipc -p /usr/share/mirroros/shell call audio toggle     # also open, close; ta
 hyprctl dispatch 'hl.dsp.global("mirroros:panel.audio")'  # GlobalShortcut, appid mirroros
 ```
 
-Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.weather`, `panel.worldclock`, `panel.notifications` and
+Global shortcuts are `mirroros:panel.bluetooth`, `panel.network`, `panel.audio`, `panel.display`, `panel.power`, `panel.clock`, `panel.weather`, `panel.worldclock` and
 `panel-at-1` to `panel-at-9` (the Nth panel of the focused monitor's right bar section). The IPC result is
 `opened`, `closed` or `unavailable` (no panel instance, for example the power panel without a battery). Requests
 follow "focused monitor wins": `open` shows the panel on the focused monitor, moving it there if needed; `close`
@@ -542,6 +542,10 @@ migration: move the setting by hand into `bar.widgets.<id>` and delete the `bar.
 
 - **Selector replacement (DEC-027):** opening another selector or a regular menu completes the pending
   selector request as cancelled: its done file appears and its selection file stays empty.
+- **Notification shortcuts:** the Omarchy `v4.5.0` comma chords call MirrorOS shell IPC. Super+, runs
+  the contextual action; Super+Shift+, dismisses all; Super+Ctrl+, enters keyboard navigation;
+  Super+Alt+, dismisses the newest; Super+Shift+Alt+, replays history; Super+Ctrl+Alt+, toggles Do Not
+  Disturb. None opens a notification panel.
 - **Notification actions:** only live D-Bus notices have sender actions. Clicking a card body invokes its
   live `default` action if present, then closes the card. There is no window or URL fallback. A direct click
   on a validated inline link opens that link. Executable hints and stored command fields are ignored.
