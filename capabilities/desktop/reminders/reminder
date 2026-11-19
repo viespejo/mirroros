@@ -7,6 +7,7 @@ set -Eeuo pipefail
 dir="${XDG_RUNTIME_DIR:?}/mirroros/reminders"
 self=/usr/share/mirroros/reminders/reminder
 shell=/usr/share/mirroros/shell
+sender=/usr/share/mirroros/shell/notifications/mirroros-notification-send
 unit_pattern='^mirroros-reminder-([0-9]+)m-[0-9]+-[0-9]+$'
 
 usage() {
@@ -20,7 +21,7 @@ usage() {
 # plural <count> <one> <other>
 plural() { if (( $1 == 1 )); then printf '%s' "$2"; else printf '%s' "$3"; fi; }
 
-notify_transient() { notify-send -a reminder -h boolean:transient:true -- "$@"; }
+notify_reminder() { "$sender" -u low -g '󰢌' -- "$@" > /dev/null 2>&1 || true; }
 
 refresh() { qs ipc -p "$shell" call reminders refresh > /dev/null 2>&1 || true; }
 
@@ -64,9 +65,9 @@ show_list() {
     body+="$message in $(format_remaining $(( next - now ))) ($(date -d "@$next" +%-H:%M))"$'\n'
   done < <(active_timers "$now")
   if [[ -z "$body" ]]; then
-    notify_transient 'Upcoming reminders' 'No outstanding reminders'
+    notify_reminder 'Upcoming reminders' 'No outstanding reminders'
   else
-    notify_transient 'Upcoming reminders' "${body%$'\n'}"
+    notify_reminder 'Upcoming reminders' "${body%$'\n'}"
   fi
 }
 
@@ -93,7 +94,7 @@ clear_reminders() {
   systemctl --user stop -- 'mirroros-reminder-*.timer' 'mirroros-reminder-*.service' > /dev/null 2>&1 || true
   rm -f -- "$dir"/mirroros-reminder-*.message
   refresh
-  notify_transient 'All reminders have been cleared'
+  notify_reminder 'All reminders have been cleared'
 }
 
 set_reminder() {
@@ -114,21 +115,20 @@ set_reminder() {
     exit 1
   fi
   refresh
-  notify_transient "$title" "You'll be reminded at $at"
+  notify_reminder "$title" "You'll be reminded at $at"
 }
 
 # Run by the transient service when the timer elapses; the unit name is the only argument it receives.
 deliver() {
   [[ "$1" =~ $unit_pattern ]] || usage
-  local unit="$1" minutes message status=0
+  local unit="$1" minutes message
   minutes="$(minutes_of "$unit")"
   message="$(message_of "$unit")"
   [[ -n "$message" ]] || message="Your $minutes $(plural "$minutes" 'minute is' 'minutes are') up"
-  notify-send -a reminder -u critical -- 'Reminder' "$message" || status=$?
+  notify_reminder 'Reminder' "$message"
   pw-play /usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga > /dev/null 2>&1 || true
   rm -f -- "$dir/$unit.message"
   refresh
-  return "$status"
 }
 
 case "${1:-}" in

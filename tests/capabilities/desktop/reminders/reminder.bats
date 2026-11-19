@@ -1,10 +1,14 @@
 #!/usr/bin/env bats
-# The owned reminder command with systemd-run, systemctl, notify-send, pw-play, qs and date doubles; nothing is
+# The owned reminder command with systemd-run, systemctl, sender, pw-play, qs and date doubles; nothing is
 # scheduled, notified or played.
 
 setup() {
   TEST_DIR="$(mktemp -d)"
-  SCRIPT="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/reminders/reminder"
+  local source="$BATS_TEST_DIRNAME/../../../../capabilities/desktop/reminders/reminder"
+  SCRIPT="$TEST_DIR/reminder"
+  grep -qx 'sender=/usr/share/mirroros/shell/notifications/mirroros-notification-send' "$source" || return 1
+  sed "s|^sender=/usr/share/mirroros/shell/notifications/mirroros-notification-send$|sender='$TEST_DIR/shell/notifications/mirroros-notification-send'|" "$source" > "$SCRIPT"
+  chmod +x "$SCRIPT"
   export CALLS="$TEST_DIR/calls" XDG_RUNTIME_DIR="$TEST_DIR/run" TZ=UTC NOW=1700000000
   DIR="$XDG_RUNTIME_DIR/mirroros/reminders"
   mkdir -p "$TEST_DIR/bin" "$XDG_RUNTIME_DIR"
@@ -24,7 +28,9 @@ status="${status^^}_STATUS"
 exit "${!status:-0}"
 EOF
   chmod 0755 "$TEST_DIR/bin/record"
-  for double in systemd-run systemctl notify-send pw-play qs date; do
+  mkdir -p "$TEST_DIR/shell/notifications"
+  ln -s "$TEST_DIR/bin/record" "$TEST_DIR/shell/notifications/mirroros-notification-send"
+  for double in systemd-run systemctl pw-play qs date; do
     ln -s record "$TEST_DIR/bin/$double"
   done
   export PATH="$TEST_DIR/bin:$PATH"
@@ -53,10 +59,10 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   [ ! -e "$DIR" ]
 }
 
-@test "a reminder without a message schedules a uniquely named transient timer and a transient confirmation" {
+@test "a reminder without a message schedules a uniquely named transient timer and a history-eligible confirmation" {
   run "$SCRIPT" 5
   [ "$status" -eq 0 ]
-  [ "$(call_names | paste -sd ' ')" = 'systemd-run qs notify-send' ]
+  [ "$(call_names | paste -sd ' ')" = 'systemd-run qs mirroros-notification-send' ]
   local run unit
   run="$(calls_of systemd-run)"
   unit="$(jq -r '.[4] | sub("^--unit="; "")' <<< "$run")"
@@ -64,8 +70,8 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   [ "$run" = "$(jq -cn --arg unit "$unit" '["--user","--quiet","--collect","--on-active=5m","--unit=\($unit)",
     "/usr/share/mirroros/reminders/reminder","deliver",$unit]')" ]
   [ "$(calls_of qs)" = '["ipc","-p","/usr/share/mirroros/shell","call","reminders","refresh"]' ]
-  [ "$(calls_of notify-send)" = \
-    '["-a","reminder","-h","boolean:transient:true","--","Reminder set for 5 minutes","You'\''ll be reminded at 22:18"]' ]
+  [ "$(calls_of mirroros-notification-send)" = \
+    '["-u","low","-g","󰢌","--","Reminder set for 5 minutes","You'\''ll be reminded at 22:18"]' ]
   [ ! -e "$DIR" ]
 }
 
@@ -73,7 +79,7 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   run "$SCRIPT" 01
   [ "$status" -eq 0 ]
   [[ "$(calls_of systemd-run)" == *'"--on-active=1m","--unit=mirroros-reminder-1m-1700000000-'* ]]
-  [ "$(calls_of notify-send | jq -r '.[5]')" = 'Reminder set for 1 minute' ]
+  [ "$(calls_of mirroros-notification-send | jq -r '.[5]')" = 'Reminder set for 1 minute' ]
 }
 
 @test "a message is written verbatim to a private runtime file and never reaches the unit" {
@@ -88,21 +94,21 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   run grep -qE 'hi|pwned|marker|second' <<< "$(calls_of systemd-run)"
   [ "$status" -eq 1 ]
   [ ! -e pwned ] && [ ! -e "$TEST_DIR/pwned" ]
-  [ "$(calls_of notify-send | jq -r '.[5]')" = "$message in 1 minute" ]
+  [ "$(calls_of mirroros-notification-send | jq -r '.[5]')" = "$message in 1 minute" ]
 }
 
 @test "the remaining words form the message" {
   run "$SCRIPT" 2 check the oven
   [ "$status" -eq 0 ]
   [ "$(cat "$DIR"/mirroros-reminder-2m-*.message)" = 'check the oven' ]
-  [ "$(calls_of notify-send | jq -r '.[5]')" = 'check the oven in 2 minutes' ]
+  [ "$(calls_of mirroros-notification-send | jq -r '.[5]')" = 'check the oven in 2 minutes' ]
 }
 
 @test "a failed schedule removes the message file and sends no confirmation" {
   SYSTEMD_RUN_STATUS=1 run "$SCRIPT" 3 tea
   [ "$status" -ne 0 ]
   [ -z "$(find "$DIR" -type f)" ]
-  [ -z "$(calls_of notify-send)" ]
+  [ -z "$(calls_of mirroros-notification-send)" ]
 }
 
 @test "show --json lists only future reminder timers in the upstream shape" {
@@ -139,18 +145,18 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   jq -e '.count == 0' <<< "$output"
 }
 
-@test "show sends one transient listing with a line per reminder or none" {
+@test "show sends one history-eligible listing with a line per reminder or none" {
   mkdir -p "$DIR"
   printf 'Tea' > "$DIR/mirroros-reminder-5m-1699999990-41.message"
   TIMERS_JSON="[$(timer mirroros-reminder-5m-1699999990-41 300),$(timer mirroros-reminder-1m-1699999990-42 45)]" \
     run "$SCRIPT" show
   [ "$status" -eq 0 ]
-  [ "$(calls_of notify-send)" = "$(jq -cn '["-a","reminder","-h","boolean:transient:true","--","Upcoming reminders",
+  [ "$(calls_of mirroros-notification-send)" = "$(jq -cn '["-u","low","-g","󰢌","--","Upcoming reminders",
     "Tea in 5m (22:18)\n1-min reminder in 45s (22:14)"]')" ]
   : > "$CALLS"
   run "$SCRIPT" list
   [ "$status" -eq 0 ]
-  [ "$(calls_of notify-send | jq -r '.[-2:] | join("|")')" = 'Upcoming reminders|No outstanding reminders' ]
+  [ "$(calls_of mirroros-notification-send | jq -r '.[-2:] | join("|")')" = 'Upcoming reminders|No outstanding reminders' ]
 }
 
 @test "clear stops every reminder timer and service, removes their messages and refreshes" {
@@ -162,20 +168,20 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   [ "$status" -eq 0 ]
   [ "$(calls_of systemctl)" = '["--user","stop","--","mirroros-reminder-*.timer","mirroros-reminder-*.service"]' ]
   [ "$(find "$DIR" -type f -printf '%f\n')" = unrelated ]
-  [ "$(call_names | paste -sd ' ')" = 'systemctl qs notify-send' ]
-  [ "$(calls_of notify-send)" = \
-    '["-a","reminder","-h","boolean:transient:true","--","All reminders have been cleared"]' ]
+  [ "$(call_names | paste -sd ' ')" = 'systemctl qs mirroros-notification-send' ]
+  [ "$(calls_of mirroros-notification-send)" = \
+    '["-u","low","-g","󰢌","--","All reminders have been cleared"]' ]
   SYSTEMCTL_STATUS=5 run "$SCRIPT" clear
   [ "$status" -eq 0 ]
 }
 
-@test "deliver sends a Critical persistent notification with its message, plays the sound and cleans up" {
+@test "deliver sends a low history-eligible notification with its message, plays the sound and cleans up" {
   mkdir -p "$DIR"
   printf 'Tea\nnow' > "$DIR/mirroros-reminder-5m-1-1.message"
   run "$SCRIPT" deliver mirroros-reminder-5m-1-1
   [ "$status" -eq 0 ]
-  [ "$(call_names | paste -sd ' ')" = 'notify-send pw-play qs' ]
-  [ "$(calls_of notify-send)" = '["-a","reminder","-u","critical","--","Reminder","Tea\nnow"]' ]
+  [ "$(call_names | paste -sd ' ')" = 'mirroros-notification-send pw-play qs' ]
+  [ "$(calls_of mirroros-notification-send)" = '["-u","low","-g","󰢌","--","Reminder","Tea\nnow"]' ]
   [ "$(calls_of pw-play)" = '["/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"]' ]
   [ "$(calls_of qs)" = '["ipc","-p","/usr/share/mirroros/shell","call","reminders","refresh"]' ]
   [ ! -e "$DIR/mirroros-reminder-5m-1-1.message" ]
@@ -184,10 +190,10 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
 @test "deliver without a message file states the elapsed minutes" {
   run "$SCRIPT" deliver mirroros-reminder-5m-1-1
   [ "$status" -eq 0 ]
-  [ "$(calls_of notify-send | jq -r '.[-1]')" = 'Your 5 minutes are up' ]
+  [ "$(calls_of mirroros-notification-send | jq -r '.[-1]')" = 'Your 5 minutes are up' ]
   : > "$CALLS"
   run "$SCRIPT" deliver mirroros-reminder-1m-1-1
-  [ "$(calls_of notify-send | jq -r '.[-1]')" = 'Your 1 minute is up' ]
+  [ "$(calls_of mirroros-notification-send | jq -r '.[-1]')" = 'Your 1 minute is up' ]
 }
 
 @test "deliver rejects a unit outside the reminder pattern and sends nothing" {
@@ -205,7 +211,7 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
 @test "a sound failure still notifies and succeeds" {
   PW_PLAY_STATUS=1 run "$SCRIPT" deliver mirroros-reminder-5m-1-1
   [ "$status" -eq 0 ]
-  [ -n "$(calls_of notify-send)" ]
+  [ -n "$(calls_of mirroros-notification-send)" ]
   [ -n "$(calls_of qs)" ]
 }
 
@@ -217,7 +223,25 @@ timer() { printf '{"unit":"%s.timer","next":%s000000}' "$1" "$(( NOW + $2 ))"; }
   [ "$status" -eq 0 ]
   run "$SCRIPT" deliver mirroros-reminder-5m-1-1
   [ "$status" -eq 0 ]
-  [ "$(calls_of notify-send | wc -l)" -eq 3 ]
+  [ "$(calls_of mirroros-notification-send | wc -l)" -eq 3 ]
+}
+
+@test "a missing sender does not affect scheduling, listing, clearing or the due alarm" {
+  rm -- "$TEST_DIR/shell/notifications/mirroros-notification-send"
+  run "$SCRIPT" 5 tea
+  [ "$status" -eq 0 ]
+  local unit
+  unit="$(calls_of systemd-run | jq -r '.[-1]')"
+  [ -f "$DIR/$unit.message" ]
+  run "$SCRIPT" show
+  [ "$status" -eq 0 ]
+  run "$SCRIPT" deliver "$unit"
+  [ "$status" -eq 0 ]
+  [ ! -e "$DIR/$unit.message" ]
+  [ -n "$(calls_of pw-play)" ]
+  run "$SCRIPT" clear
+  [ "$status" -eq 0 ]
+  [ -z "$(calls_of mirroros-notification-send)" ]
 }
 
 @test "interactive mode opens the shell prompt" {

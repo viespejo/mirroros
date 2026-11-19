@@ -13,9 +13,8 @@ import "ReminderFlowModel.js" as ReminderFlowModel
 // and dismiss() only closes; the layer namespace is mirroros-reminders;
 // submitting runs MirrorOS's reminder command by absolute path with the
 // argument vector from ReminderFlowModel.reminderArgs, and invalid minutes send
-// a transient notify-send notice from the reminder app instead of
-// omarchy-notification-send. The card, key handling and both steps are
-// unchanged.
+// a low-urgency transient notice through the shared MirrorOS sender. The card,
+// key handling and both steps are unchanged.
 Item {
   id: root
 
@@ -75,7 +74,7 @@ Item {
       }
 
       if (!nextMinutes) {
-        Quickshell.execDetached(["notify-send", "-a", "reminder", "-h", "boolean:transient:true", I18n.t("reminders.invalidTitle"), I18n.t("reminders.invalidBody")])
+        Quickshell.execDetached(["/usr/share/mirroros/shell/notifications/mirroros-notification-send", "-u", "low", "--transient", "--", I18n.t("reminders.invalidTitle"), I18n.t("reminders.invalidBody")])
         return
       }
 
