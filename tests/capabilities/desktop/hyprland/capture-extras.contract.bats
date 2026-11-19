@@ -19,9 +19,11 @@ capture_doubles() {
   printf 'prior clipboard\n' > "$CLIPBOARD"
   printf 'eng+spa\n' > "$work/ocr-languages"
   unset MIRROROS_OCR_LANGS
-  sed "s|language_file=/usr/share/mirroros/compositor/ocr-languages|language_file=$work/ocr-languages|" \
+  local sender_path="s|/usr/share/mirroros/shell/notifications/mirroros-notification-send|$work/bin/notify-send|"
+  sed -e "$sender_path" -e "s|language_file=/usr/share/mirroros/compositor/ocr-languages|language_file=$work/ocr-languages|" \
     "$provider/capture-extras/ocr-backend" > "$work/ocr"
-  qr="$provider/capture-extras/qr-backend"
+  qr="$work/qr"
+  sed -e "$sender_path" "$provider/capture-extras/qr-backend" > "$qr"
   color="$provider/capture-extras/color-backend"
   cat > "$work/bin/double" <<'EOF'
 #!/usr/bin/bash
@@ -104,7 +106,7 @@ capture_diagnostics_are_clean() {
   grep -qxF 'tesseract <stdin stdout --oem 1 --psm 6 -l eng+spa --dpi 300 -c preserve_interword_spaces=1>' "$CALLS"
   grep -qxF 'wl-copy <>' "$CALLS"
   [ "$(< "$CLIPBOARD")" = 'synthetic tesseract payload' ]
-  grep -qxF $'notify-send <--urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:\363\260\264\221 Text copied Paste the recognized text where you need it.>' "$CALLS"
+  grep -qxF $'notify-send <-u low --transient -g \363\260\264\221 -- Text copied Paste the recognized text where you need it.>' "$CALLS"
   freeze_was_cleaned
   : > "$CALLS"
   run env MIRROROS_OCR_LANGS=spa bash "$work/ocr"
@@ -142,7 +144,7 @@ capture_diagnostics_are_clean() {
   grep -qxF 'zbarimg <-q --raw --nodbus -Sdisable -Sqrcode.enable ->' "$CALLS"
   grep -qxF 'wl-copy <--sensitive>' "$CALLS"
   [ "$(< "$CLIPBOARD")" = 'synthetic zbarimg payload' ]
-  grep -qxF $'notify-send <--urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:\363\260\220\262 QR code copied Paste the result where you need it.>' "$CALLS"
+  grep -qxF $'notify-send <-u low --transient -g \363\260\220\262 -- QR code copied Paste the result where you need it.>' "$CALLS"
   freeze_was_cleaned
   capture_diagnostics_are_clean
 }
@@ -165,7 +167,7 @@ capture_diagnostics_are_clean() {
   capture_doubles
   run env LC_ALL=C DECODE_STATUS=4 bash "$qr"
   [ "$status" -eq 1 ]
-  grep -qxF $'notify-send <--urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:\363\260\220\262 No QR code found Try selecting a region that includes the entire code.>' "$CALLS"
+  grep -qxF $'notify-send <-u low --transient -g \363\260\220\262 -- No QR code found Try selecting a region that includes the entire code.>' "$CALLS"
   freeze_was_cleaned
   capture_diagnostics_are_clean
   for setting in 'SELECTION_OUTCOME=failure' 'DECODE_STATUS=2' 'DECODE_EMPTY=1' 'GRIM_STATUS=7 DECODE_STATUS=4'; do
@@ -202,6 +204,21 @@ capture_diagnostics_are_clean() {
     capture_diagnostics_are_clean
   done
   [ "$(< "$CLIPBOARD")" = 'prior clipboard' ]
+}
+
+@test "a missing sender leaves OCR and QR copies successful and QR misses unsuccessful" {
+  capture_doubles
+  rm -- "$work/bin/notify-send"
+  run bash "$work/ocr"
+  [ "$status" -eq 0 ]
+  [ "$(< "$CLIPBOARD")" = 'synthetic tesseract payload' ]
+  run bash "$qr"
+  [ "$status" -eq 0 ]
+  [ "$(< "$CLIPBOARD")" = 'synthetic zbarimg payload' ]
+  run env DECODE_STATUS=4 bash "$qr"
+  [ "$status" -eq 1 ]
+  [ "$(< "$CLIPBOARD")" = 'synthetic zbarimg payload' ]
+  capture_diagnostics_are_clean
 }
 
 @test "Hyprland manages English and Spanish OCR defaults and leaves an unchanged rerun untouched" {

@@ -25,7 +25,7 @@ done
 notify_failure() {
   printf '%s\n' "$1" >&2
   # Notification delivery must not replace the capture status (for example outside a session bus).
-  notify-send --urgency=normal --hint=int:transient:1 'Screenshot failed' "$1" || :
+  /usr/share/mirroros/shell/notifications/mirroros-notification-send -u normal --transient -- 'Screenshot failed' "$1" || :
 }
 
 backend=/usr/share/mirroros/compositor/screenshot-backend

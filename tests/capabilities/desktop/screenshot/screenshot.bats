@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Neutral command tests: only a disposable copy's fixed backend path is substituted.
+# Neutral command tests: fixed backend and sender paths are substituted in a disposable copy.
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/../../../.." && pwd)"
   WORK="$(mktemp -d)"
@@ -10,7 +10,8 @@ setup() {
   export PATH="$WORK/bin:$PATH"
   SCRIPT="$WORK/screenshot"
   BACKEND="$WORK/backend"
-  awk -v backend="$BACKEND" '{ sub("backend=/usr/share/mirroros/compositor/screenshot-backend", "backend=" backend); print }' \
+  sed -e "s|backend=/usr/share/mirroros/compositor/screenshot-backend|backend=$BACKEND|" \
+    -e "s|/usr/share/mirroros/shell/notifications/mirroros-notification-send|$WORK/bin/mirroros-notification-send|" \
     "$ROOT/capabilities/desktop/screenshot/screenshot" > "$SCRIPT"
   cat > "$BACKEND" <<'EOF'
 #!/usr/bin/bash
@@ -26,7 +27,7 @@ printf 'journal %s\n' "$*" >> "$CALLS"
 cat >> "$JOURNAL"
 exit "$LOGGER_STATUS"
 EOF
-  cat > "$WORK/bin/notify-send" <<'EOF'
+  cat > "$WORK/bin/mirroros-notification-send" <<'EOF'
 #!/usr/bin/bash
 printf 'notify %s\n' "$*" >> "$CALLS"
 exit "$NOTIFY_STATUS"
@@ -109,7 +110,7 @@ assert_usage() {
     run bash "$SCRIPT"
     [ "$status" -eq 1 ]
     [[ "$output" == *'journalctl --user -t mirroros-screenshot'* ]]
-    grep -q '^notify .*Screenshot failed.*journalctl --user -t mirroros-screenshot' "$CALLS"
+    grep -q '^notify -u normal --transient -- Screenshot failed.*journalctl --user -t mirroros-screenshot' "$CALLS"
     [ "$(grep -c '^notify ' "$CALLS")" -eq 1 ]
     grep -q 'synthetic stderr diagnostic' "$JOURNAL"
   done

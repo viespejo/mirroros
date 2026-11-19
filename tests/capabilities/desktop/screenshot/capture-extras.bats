@@ -8,7 +8,8 @@ setup() {
   : > "$CALLS"
   export PATH="$work/bin:$PATH"
   for action in color ocr qr; do
-    sed "s|backend=/usr/share/mirroros/compositor/|backend=$work/|" \
+    sed -e "s|backend=/usr/share/mirroros/compositor/|backend=$work/|" \
+      -e "s|/usr/share/mirroros/shell/notifications/mirroros-notification-send|$work/bin/mirroros-notification-send|" \
       "$root/capabilities/desktop/screenshot/$action" > "$work/$action"
     cat > "$work/$action-backend" <<'EOF'
 #!/usr/bin/bash
@@ -19,13 +20,13 @@ exit "$BACKEND_STATUS"
 EOF
     chmod 0755 "$work/$action-backend"
   done
-  cat > "$work/bin/notify-send" <<'EOF'
+  cat > "$work/bin/mirroros-notification-send" <<'EOF'
 #!/usr/bin/bash
 printf 'notify %s\n' "$*" >> "$CALLS"
 printf 'synthetic notification error\n' >&2
 exit 7
 EOF
-  chmod 0755 "$work/bin/notify-send"
+  chmod 0755 "$work/bin/mirroros-notification-send"
 }
 
 @test "capture extras reject argv before dispatch and call only the fixed backend with no arguments" {
@@ -69,6 +70,6 @@ EOF
     if [[ "$action" == color ]]; then
       body='Rerun mirroros-configure to restore the missing backend.'
     fi
-    [ "$(< "$CALLS")" = "notify --urgency=normal --hint=int:transient:1 --hint=string:omarchy-glyph:$glyph $title $body" ]
+    [ "$(< "$CALLS")" = "notify -u normal --transient -g $glyph -- $title $body" ]
   done
 }

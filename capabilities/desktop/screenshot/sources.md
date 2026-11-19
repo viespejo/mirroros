@@ -13,7 +13,7 @@ failure does not replace it. The backend contract is diagnostic text only, never
 No arguments, image data or session environment are added to logs. Troubleshoot with
 `journalctl --user -t mirroros-screenshot`. Journal delivery failures also report on stderr.
 
-Only failures notify through `notify-send`. Missing backends advise rerunning `mirroros-configure`; capture
+Only failures notify through the internal MirrorOS sender. Missing backends advise rerunning `mirroros-configure`; capture
 failures point to the journal. Notification delivery failure cannot mask the capture status. Output location,
 autosave, clipboard export and rendering are provider responsibilities, not implemented here. Configure delivers
 the command as a tracked file: conflicts are preserved and fail rather than overwritten. It starts no capture.
@@ -28,7 +28,7 @@ resolved installed versions in `packages.tsv`.
 |---|---|---|---|
 | `core/bash` | Bash interpreter, arrays and pipeline statuses | `5.3.20-1` | <https://archlinux.org/packages/core/x86_64/bash/json/> |
 | `core/systemd` | `systemd-cat` journal diagnostics | `262.2-1` | <https://archlinux.org/packages/core/x86_64/systemd/json/> |
-| `extra/libnotify` | `notify-send` actionable failure notifications | `0.8.9-1` | <https://archlinux.org/packages/extra/x86_64/libnotify/json/> |
+| `extra/libnotify` | Retained package declaration from plan 02-40; Capture now uses the shell's shared sender | `0.8.9-1` | <https://archlinux.org/packages/extra/x86_64/libnotify/json/> |
 
 Tests in `tests/capabilities/desktop/screenshot/` use a disposable dispatch double and journal/notification doubles;
 they require neither a provider installation nor a graphical session. Live journal delivery remains a laboratory
@@ -41,10 +41,12 @@ backend paths. They return 0 for completion or cancellation, 2 for misuse and 1 
 failure. They do not relay backend output. The Hyprland backends send only controlled diagnostics to
 `mirroros-screenshot`; see the [provider record](../compositor/providers/hyprland/UPSTREAM.md#direct-capture-extras-plan-02-41).
 
-Existing notices pass the glyphs from the [Capture menu](../shell/menu/MirrorMenu.js) through `notify-send`
-using the legacy `omarchy-glyph` string hint: Text `U+F0D11`, QR Code `U+F0432` and Color `U+F00C9`. The
-commands use fixed UTF-8 bytes to send the same glyph regardless of locale, without invoking the desktop shell.
-The notices contain no capture results; Color still only notifies when its backend is missing.
+Plan 02-42 adopts the reviewed Quattro sender contract for Capture. Notices use the internal MirrorOS sender
+and its default `mirroros-action` identity as an approved Do Not Disturb exception for explicit Capture actions.
+Copy confirmations and QR misses are low urgency; failure and missing-backend notices are normal urgency. All
+are transient. The commands pass the [Capture menu](../shell/menu/MirrorMenu.js) glyphs as fixed UTF-8 bytes:
+Text `U+F0D11`, QR Code `U+F0432` and Color `U+F00C9`. Notices contain no capture results; Color still only
+notifies when its backend is missing.
 
 Configure always selects English OCR data and adds Spanish only for `es_ES.UTF-8` in the installed `LANG` or
 an installer-managed format category (`LC_TIME`, `LC_NUMERIC`, `LC_MONETARY`, `LC_MEASUREMENT`). A single
@@ -67,4 +69,4 @@ installed package versions in `packages.tsv`.
 | `extra/wl-clipboard` | Clipboard delivery, including sensitive QR copies | `1:2.3.0-1` | <https://archlinux.org/packages/extra/x86_64/wl-clipboard/json/> |
 | `core/procps-ng` (base) | `pkill` for the Color toggle | `4.0.7-1` | <https://archlinux.org/packages/core/x86_64/procps-ng/json/> |
 
-The commands reuse the existing Bash, systemd and libnotify runtime dependencies.
+The commands reuse the existing Bash and systemd runtime dependencies and the shared sender from `desktop/shell`.

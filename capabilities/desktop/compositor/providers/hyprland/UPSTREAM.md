@@ -21,6 +21,8 @@ They retain separate `hyprpicker -r -z`, startup wait, `slurp` and streamed `gri
 MirrorOS checks tool and copy failures, uses controlled journal messages and notifications, validates the selected
 Tesseract models, and disables zbar D-Bus output. QR decoding is QR-only and never opens the result; the
 clipboard copy remains sensitive. OCR uses the ordinary clipboard and preserves upstream recognition options.
+Plan 02-42 adopts the reviewed Quattro delivery policy: the internal MirrorOS sender emits low-urgency transient
+notices for successful OCR/QR copies and QR misses. The default sender identity bypasses Do Not Disturb.
 
 `capture-extras/color-backend` retains `pkill hyprpicker || hyprpicker -a` from
 `default/hypr/bindings/utilities.lua` (toggle introduced by
