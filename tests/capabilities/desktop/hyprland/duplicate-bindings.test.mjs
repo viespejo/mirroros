@@ -23,6 +23,31 @@ test('screenshot registry rejects duplicate capture chords', () => {
   }
 });
 
+test('browser launch chords are registered and reject duplicates', () => {
+  const provider = new URL('../../../../capabilities/desktop/compositor/providers/hyprland/', import.meta.url).pathname;
+  const result = spawnSync('lua', ['-e', `
+    local function noop() return {} end
+    local dsp = setmetatable({ exec_cmd = function(cmd) return { command = cmd } end }, {
+      __index = function() return setmetatable({}, { __index = function() return noop end, __call = noop }) end
+    })
+    hl = { dsp = dsp, bind = noop, layer_rule = noop }
+    MirrorOSStageBindings = true
+    dofile(arg[1] .. '/shell-bindings.lua')
+    dofile(arg[1] .. '/window-bindings.lua')
+    local launcher = '/usr/share/mirroros/browser/browser-open'
+    for _, binding in ipairs({
+      { 'browser.open', 'SUPER + SHIFT + B', launcher },
+      { 'browser.open-return', 'SUPER + SHIFT + RETURN', launcher },
+      { 'browser.private', 'SUPER + SHIFT + ALT + B', launcher .. ' --private' },
+    }) do
+      local entry = assert(MirrorOSKeys.entries[binding[1]])
+      assert(entry.keys == binding[2] and entry.dispatcher.command == binding[3])
+      assert(not pcall(MirrorOSKeys.bind, 'personal.duplicate', binding[2], 'Duplicate', {}))
+    end
+  `, '-', provider], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test('Hyprland verifier accepts duplicate clipboard chords', { skip: !existsSync(hyprland) }, (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'mirroros-hypr-duplicate-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

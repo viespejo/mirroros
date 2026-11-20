@@ -1,0 +1,18 @@
+#!/usr/bin/bash
+set -eu
+case "$1:${!#}" in
+  -Qi:google-chrome)
+    [[ -e "$CFG_TEST_INSTALLED/google-chrome" ]] || exit 1
+    if [[ -e "$CFG_TEST_INSTALLED/chrome-mirroros" ]]; then
+      printf 'Packager        : MirrorOS Browser\n'
+    else
+      printf 'Packager        : AUR Builder\n'
+    fi
+    exit 0 ;;
+  -U:*/google-chrome-*)
+    printf 'chrome transaction SNAP_PAC_SKIP=%s\n' "${SNAP_PAC_SKIP:-unset}" >> "$CFG_TEST_CALLS"
+    "$CFG_TEST_DIR/bin/pacman-original" "$@"
+    : > "$CFG_TEST_INSTALLED/chrome-mirroros"
+    exit 0 ;;
+esac
+exec "$CFG_TEST_DIR/bin/pacman-original" "$@"

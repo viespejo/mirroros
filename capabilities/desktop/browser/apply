@@ -1,0 +1,156 @@
+#!/usr/bin/bash
+# Installs the verified MirrorOS package only when missing, including replacement of a foreign same-name package.
+# The selected user builds; configure installs. Both user units are enabled without live activation.
+set -Eeuo pipefail
+
+browser=/usr/share/mirroros/browser
+channel=https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable
+service=mirroros-chrome-update-check.service
+timer=mirroros-chrome-update-check.timer
+unit_dir=/etc/systemd/user
+policy_dir=/etc/opt/chrome/policies/managed
+
+mirroros_chrome_present() {
+  local info
+  info=$(cfg_exec env LC_ALL=C pacman -Qi -- google-chrome 2>/dev/null) || return 1
+  grep -Eq '^Packager[[:space:]]*:[[:space:]]*MirrorOS Browser$' <<< "$info"
+}
+
+# cfg_user_unit_enable accepts services only. Apply the same enable-only link convention to the timer.
+# shellcheck disable=SC2016 # HOME is expanded by the selected user's Bash.
+chrome_timer_link() {
+  cfg_exec runuser -u "$TARGET_USER" -- bash -c '
+    set -eu
+    dir="$HOME/.config/systemd/user"
+    link="$dir/graphical-session.target.wants/$2"
+    if [[ ! -e "$dir/$2" && ! -L "$dir/$2" && -L "$link" && "$(readlink -- "$link")" == "$3" ]]; then exit 0; fi
+    [[ "$1" == enable ]] || exit 1
+    if [[ -e "$dir/$2" || -L "$dir/$2" || -e "$link" || -L "$link" ]]; then
+      printf "Chrome timer conflicts with a user-owned unit or link; review it and rerun configure.\n" >&2
+      exit 4
+    fi
+    mkdir -p -- "${link%/*}"
+    ln -s -- "$3" "$link"
+    printf "changed\n"
+  ' bash "$1" "$timer" "$unit_dir/$timer"
+}
+
+install_browser_policy() {
+  local dir dest source level legacy_digest
+  for dir in /etc /etc/opt /etc/opt/chrome /etc/opt/chrome/policies "$policy_dir" /etc/opt/chrome/policies/recommended; do
+    dest=$(cfg_path "$dir")
+    if [[ "$dir" != /etc && ! -e "$dest" && ! -L "$dest" ]]; then
+      cfg_run_host install -d -o "${owner%:*}" -g "${owner#*:}" -m 0755 -- "$dest" || return 5
+      cfg_changed
+    fi
+    if [[ -L "$dest" || ! -d "$dest" || "$(stat -c '%a:%u:%g' -- "$dest")" != "755:$owner" ]]; then
+      printf 'Unexpected Chrome policy directory: %s; review its ownership and permissions and rerun configure.\n' "$dir" >&2
+      return 4
+    fi
+  done
+  for level in managed recommended; do
+    source="$STEP_DIR/policies/mirroros.json"
+    if [[ "$level" == recommended ]]; then source="$STEP_DIR/policies/recommended.json"; fi
+    dest=$(cfg_path "/etc/opt/chrome/policies/$level/mirroros.json")
+    if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) ]]; then
+      printf 'Chrome %s policy conflicts with an existing file; move it aside and rerun configure.\n' "$level" >&2
+      return 4
+    fi
+    if [[ -f "$dest" ]] && ! cmp -s -- "$source" "$dest"; then
+      # Replace only the exact, unmodified policy delivered by the laboratory candidate.
+      legacy_digest=$(sha256sum < "$dest") || return 4
+      if [[ "$level" != managed || "$(stat -c '%a:%u:%g' -- "$dest")" != "644:$owner" ||
+        "${legacy_digest%% *}" != eca79227b63b061ac6f579027fe4c6b9670f1b2fb6b203127ae8b57213c7c367 ]]; then
+        printf 'Chrome %s policy conflicts with an existing file; move it aside and rerun configure.\n' "$level" >&2
+        return 4
+      fi
+    fi
+    if ! cmp -s -- "$source" "$dest" || [[ "$(stat -c '%a:%u:%g' -- "$dest")" != "644:$owner" ]]; then
+      cfg_run_host install -o "${owner%:*}" -g "${owner#*:}" -m 0644 -- "$source" "$dest" || return 5
+      cfg_changed
+    fi
+    cfg_require cmp -s -- "$source" "$dest"
+    cfg_require test "$(stat -c '%a:%u:%g' -- "$dest")" = "644:$owner"
+  done
+}
+
+cfg_packages_ensure "$STEP_DIR/packages"
+for helper in chrome-channel build-chrome chrome-update chrome-update-check browser-open browser-theme-color; do
+  cfg_tracked_file "$STEP_DIR/$helper" "$browser/$helper" 0755
+  cfg_require cfg_tracked_file_present "$browser/$helper"
+done
+for source in PKGBUILD google-chrome-stable.sh; do
+  cfg_tracked_file "$STEP_DIR/google-chrome/$source" "$browser/google-chrome/$source" 0644
+  cfg_require cfg_tracked_file_present "$browser/google-chrome/$source"
+done
+# Keep the vendor EULA byte-identical (it has no MirrorOS managed header).
+eula_source="$STEP_DIR/google-chrome/eula_text.html"
+eula=$(cfg_path "$browser/google-chrome/eula_text.html")
+if [[ -L "$eula" ]] || { [[ -e "$eula" ]] && { [[ ! -f "$eula" ]] || ! cmp -s -- "$eula_source" "$eula"; }; }; then
+  printf 'Chrome EULA differs from the reviewed copy; move it aside and rerun configure.\n' >&2
+  exit 4
+fi
+owner=$(stat -c '%u:%g' -- "$(cfg_path /)")
+if [[ ! -f "$eula" ]] || [[ "$(stat -c '%a:%u:%g' -- "$eula")" != "644:$owner" ]]; then
+  cfg_run_host install -o "${owner%:*}" -g "${owner#*:}" -m 0644 -- "$eula_source" "$eula"
+  cfg_changed
+fi
+cfg_require cmp -s -- "$eula_source" "$eula"
+
+if mirroros_chrome_present; then
+  installed=$(cfg_exec pacman -Q -- google-chrome)
+  version=${installed#* }
+  cfg_log "MirrorOS Google Chrome $version is unchanged."
+else
+  foreign=$(cfg_exec pacman -Q -- google-chrome 2>/dev/null) || foreign=''
+  cfg_user_script "$STEP_DIR/build-chrome" configure || exit "$?"
+  IFS=$'\t' read -r package version hash release_date subkey extra <<< "$CFG_USER_SCRIPT_RESULT"
+  if [[ "$package" != /* || ! "$version" =~ ^[0-9]+(\.[0-9]+){3}-[1-9][0-9]*\.1$ ||
+    ! "$hash" =~ ^[0-9a-f]{64}$ || ! "$release_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ||
+    ! "$subkey" =~ ^[0-9A-F]{40}$ || -n "$extra" ]]; then
+    printf 'Invalid Chrome build result. Review the build output and rerun configure.\n' >&2
+    exit 5
+  fi
+  # Do not use --needed: a foreign package with the same version must also be replaced.
+  transaction=(pacman -U --noconfirm -- "$package")
+  if [[ "$CONFIGURE_CONTEXT" == target ]]; then transaction=(env SNAP_PAC_SKIP=y "${transaction[@]}"); fi
+  cfg_run "${transaction[@]}" || { printf 'Chrome installation failed; review pacman output and rerun configure.\n' >&2; exit 5; }
+  cfg_changed
+  cfg_require mirroros_chrome_present
+  cfg_require test "$(cfg_exec pacman -Q -- google-chrome)" = "google-chrome $version"
+  if [[ "$foreign" == 'google-chrome '* ]]; then
+    cfg_log "Replaced non-MirrorOS Google Chrome (${foreign#* }; for example, from AUR) with $version."
+  fi
+  cfg_source_record google-chrome "$channel/google-chrome-stable_${version%.1}_amd64.deb" \
+    "InRelease=$release_date; signing-subkey=$subkey" "sha256:$hash" "$version"
+fi
+cfg_package_record google-chrome "$version" local
+
+install_browser_policy || exit "$?"
+offline=0
+if [[ "$CONFIGURE_CONTEXT" == target ]]; then offline=1; fi
+policy_result=$(cfg_exec env -u SUDO_USER -u PKEXEC_UID MIRROROS_BROWSER_OFFLINE="$offline" \
+  bash -p "$browser/browser-theme-color" --user "$TARGET_USER") || exit "$?"
+case "$policy_result" in
+  changed) cfg_changed ;;
+  unchanged) ;;
+  *) printf 'Invalid browser theme policy result.\n' >&2; exit 5 ;;
+esac
+handler=$(cfg_exec runuser -u "$TARGET_USER" -- xdg-mime query default x-scheme-handler/https 2>/dev/null) || handler=''
+case "$handler" in
+  google-chrome.desktop) ;;
+  '') cfg_log 'notice: no effective HTTPS handler; review default applications after login.' ;;
+  *) cfg_log 'notice: effective HTTPS handler differs from Google Chrome; left unchanged.' ;;
+esac
+
+for unit in "$service" "$timer"; do
+  cfg_tracked_file "$STEP_DIR/$unit" "$unit_dir/$unit" 0644
+  cfg_require cfg_tracked_file_present "$unit_dir/$unit"
+done
+cfg_user_unit_enable "$service" "$unit_dir/$service" graphical-session.target
+timer_result=$(chrome_timer_link enable) || exit "$?"
+if [[ "$timer_result" == changed ]]; then cfg_changed; fi
+cfg_require cfg_packages_present "$STEP_DIR/packages"
+cfg_require mirroros_chrome_present
+cfg_require cfg_user_unit_enabled "$service" graphical-session.target
+cfg_require chrome_timer_link check

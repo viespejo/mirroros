@@ -3,3 +3,7 @@
 # plans extend this file instead of creating another association file. A user mimeapps.list takes precedence.
 [Default Applications]
 inode/directory=io.github.lgse.Strata.desktop
+x-scheme-handler/http=google-chrome.desktop
+x-scheme-handler/https=google-chrome.desktop
+text/html=google-chrome.desktop
+application/xhtml+xml=google-chrome.desktop

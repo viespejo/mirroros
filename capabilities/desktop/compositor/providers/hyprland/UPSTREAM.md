@@ -247,7 +247,9 @@ only by the separately authorized session test, not by these sources.
 Approved but not bound, because no owner implements the action yet: SUPER+Shift+Space (bar toggle; the shell has no
 bar IPC), SUPER+Ctrl+I (idle-lock toggle; no owned hypridle control), SUPER+Shift+T (TUI system monitor not chosen),
 SUPER+L / SUPER+Alt+L (workspace layout cycling), and the Story 4.5
-browser and editor keys and ALT+PRINT. The file manager keys SUPER+Shift+F and SUPER+Alt+Shift+F are bound
+editor keys and ALT+PRINT. SUPER+Shift+B and SUPER+Shift+Return open the default HTTPS handler;
+SUPER+Shift+Alt+B requests its private window (plan 02-43, DEC-012/DEC-013). These chords use the MirrorOS
+`browser-open` launcher rather than Omarchy's browser launcher. The file manager keys SUPER+Shift+F and SUPER+Alt+Shift+F are bound
 to Strata (plan 02-35, DEC-015). SUPER+Ctrl+B is bound to the Bluetooth panel (plan 02-29,
 last reserved Story 4.4 panel chord). SUPER+Ctrl+N is bound to the network panel (plan 02-28; DEC-038 replaces
 DEC-006's W with N, as in Omarchy 4.5); SUPER+Ctrl+W stays unbound. Hardware exclusions remain unbound:

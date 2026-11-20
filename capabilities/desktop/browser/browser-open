@@ -1,0 +1,48 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+set -Eeuo pipefail
+export LC_ALL=C
+
+notice() {
+  mirroros-notification-send --app-name mirroros-browser -- 'Browser' "$1"
+}
+
+main() {
+  local id data_dirs directory entry
+  local -a dirs
+  if (( $# > 1 )) || [[ $# == 1 && "$1" != --private ]]; then
+    printf 'Usage: browser-open [--private]\n' >&2
+    return 6
+  fi
+  id=$(xdg-mime query default x-scheme-handler/https) || id=''
+  if [[ ! "$id" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.desktop$ ]]; then
+    notice 'No default browser is set. Select a default HTTPS handler and try again.'
+    return
+  fi
+  if (( $# == 0 )); then exec uwsm app -- "$id"; fi
+
+  data_dirs="${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+  IFS=: read -r -a dirs <<< "$data_dirs"
+  for directory in "${dirs[@]}"; do
+    [[ "$directory" == /* ]] || continue
+    entry="$directory/applications/$id"
+    [[ -f "$entry" ]] || continue
+    if awk '
+      { sub(/\r$/, "") }
+      /^\[/ { section = $0 }
+      section == "[Desktop Entry]" && /^Hidden=true$/ { hidden = 1 }
+      section == "[Desktop Entry]" && /^Actions=/ {
+        n = split(substr($0, 9), actions, ";")
+        for (i = 1; i <= n; i++) if (actions[i] == "new-private-window") declared = 1
+      }
+      section == "[Desktop Action new-private-window]" && /^Exec=.+/ { action = 1 }
+      END { exit !(declared && action && !hidden) }
+    ' "$entry"; then
+      exec uwsm app -- "$id:new-private-window"
+    fi
+    break
+  done
+  notice 'The default browser offers no private window'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

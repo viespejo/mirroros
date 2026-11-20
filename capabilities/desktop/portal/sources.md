@@ -41,8 +41,10 @@ the keyring. `gcr-ssh-agent`, KeePassXC and cloud password managers are out of s
 ## Default applications
 
 `/etc/xdg/mimeapps.list` is the single owner of the desktop's system default associations (DEC-014). This plan
-declares only `inode/directory=io.github.lgse.Strata.desktop`; later Story 4.5 plans add their lines to this file
-instead of creating another association file. A user `mimeapps.list` keeps precedence and is a user choice:
+declares `inode/directory=io.github.lgse.Strata.desktop`. Story 4.5's [browser capability](../browser/sources.md)
+adds HTTP, HTTPS, HTML and XHTML defaults for `google-chrome.desktop` here rather than creating another
+association file. The browser step checks the selected user's HTTPS handler and reports other choices as notices.
+A user `mimeapps.list` keeps precedence and is a user choice:
 `portal-check` reports it as a notice and configure never fails on it. In running context configure checks the
 system association with `xdg-mime query default inode/directory` in an environment without user directories, once
 the Strata desktop entry exists.

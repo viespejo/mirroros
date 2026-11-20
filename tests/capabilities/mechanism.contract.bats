@@ -3,11 +3,11 @@ load support
 setup() { cfg_test_setup; }
 teardown() { cfg_test_teardown; }
 
-@test "screenshot follows the provider and clipboard is step 20 of 26 before shell with enable-only watchers" {
-  run bash -c 'source "$1"; printf "%s\n" "${#CFG_STEPS[@]}" "${CFG_STEPS[17]}" "${CFG_STEPS[18]}" "${CFG_STEPS[19]}" "${CFG_STEPS[20]}"' \
+@test "screenshot follows the provider and clipboard is step 21 of 27 before shell with enable-only watchers" {
+  run bash -c 'source "$1"; printf "%s\n" "${#CFG_STEPS[@]}" "${CFG_STEPS[18]}" "${CFG_STEPS[19]}" "${CFG_STEPS[20]}" "${CFG_STEPS[21]}"' \
     bash "$CFG_SOURCE_ROOT/capabilities/configure-steps"
   [ "$status" -eq 0 ]
-  [ "$output" = $'26\ndesktop/compositor/providers/hyprland\ndesktop/screenshot\ndesktop/clipboard\ndesktop/shell' ]
+  [ "$output" = $'27\ndesktop/compositor/providers/hyprland\ndesktop/screenshot\ndesktop/clipboard\ndesktop/shell' ]
   local apply="$CFG_SOURCE_ROOT/capabilities/desktop/clipboard/apply"
   grep -q 'cfg_user_unit_enable.*graphical-session.target' "$apply"
   ! grep -qE 'cfg_exec|cfg_unit_start|cfg_session_agent_unique|systemctl' "$apply"
@@ -501,6 +501,23 @@ cfg_unit_reload systemd-logind /etc/power-key.conf'
       case "$name" in
         visual/branding/apply) [[ "$line" == *'cfg_exec rsvg-convert '* ]] && continue ;;
         desktop/portal/apply) [[ "$line" == 'cfg_run dconf update' || "$line" =~ cfg_exec\ env\  ]] && continue ;;
+        desktop/browser/apply)
+          case "$line" in
+            'info=$(cfg_exec env LC_ALL=C pacman -Qi -- google-chrome 2>/dev/null) || return 1' | \
+            'installed=$(cfg_exec pacman -Q -- google-chrome)' | \
+            "foreign=\$(cfg_exec pacman -Q -- google-chrome 2>/dev/null) || foreign=''" | \
+            'cfg_require test "$(cfg_exec pacman -Q -- google-chrome)" = "google-chrome $version"' | \
+            'cfg_exec runuser -u "$TARGET_USER" -- bash -c '\''' | \
+            'handler=$(cfg_exec runuser -u "$TARGET_USER" -- xdg-mime query default x-scheme-handler/https 2>/dev/null) || handler='\'''\''') continue ;;
+            'policy_result=$(cfg_exec env -u SUDO_USER -u PKEXEC_UID MIRROROS_BROWSER_OFFLINE="$offline" \')
+              grep -A1 -Fx -- "$line" "$script" |
+                grep -Fxq '  bash -p "$browser/browser-theme-color" --user "$TARGET_USER") || exit "$?"' || return 1
+              continue ;;
+            'cfg_run "${transaction[@]}" || { printf '\''Chrome installation failed; review pacman output and rerun configure.\n'\'' >&2; exit 5; }')
+              grep -Fxq '  transaction=(pacman -U --noconfirm -- "$package")' "$script" || return 1
+              grep -Fxq '  if [[ "$CONFIGURE_CONTEXT" == target ]]; then transaction=(env SNAP_PAC_SKIP=y "${transaction[@]}"); fi' "$script" || return 1
+              continue ;;
+          esac ;;
       esac
       printf 'Unexpected native tool execution in %s: %s\n' "$name" "$line" >&2
       return 1

@@ -1,4 +1,5 @@
 load support
+load desktop/browser/fixtures/configure
 
 setup() {
   cfg_test_setup
@@ -217,8 +218,9 @@ NODE
   ln -s "$CFG_TEST_DIR/bin/npx" "$bin/npx"
 }
 
-@test "the twenty-six-step configuration converges in the target and reruns without transactions" {
+@test "the twenty-seven-step configuration converges in the target and reruns without transactions" {
   cp "$CFG_SOURCE_ROOT/capabilities/configure-steps" "$CFG_TEST_DIR/code/capabilities/configure-steps"
+  chrome_configure_fixture
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/share/wayland-sessions" "$CFG_TEST_TARGET_ROOT/usr/lib/systemd/user" \
     "$CFG_TEST_HOME/.local/share/applications"
   mkdir -p "$CFG_TEST_TARGET_ROOT/usr/lib/NetworkManager/VPN"
@@ -239,24 +241,25 @@ NODE
   cfg_test_boot_fixture btrfs-limine
   run target_run
   [ "$status" -eq 0 ]
-  [[ "$output" == *'== 1/26 visual/theme =='* ]]
-  [[ "$output" == *'== 2/26 visual/gtk4 =='* ]]
-  [[ "$output" == *'== 3/26 visual/gtk3 =='* ]]
-  [[ "$output" == *'== 5/26 desktop/portal =='* ]]
-  [[ "$output" == *'== 6/26 desktop/files =='* ]]
-  [[ "$output" == *'== 12/26 system/audio =='* ]]
-  [[ "$output" == *'== 13/26 system/bluetooth =='* ]]
-  [[ "$output" == *'== 14/26 system/power =='* ]]
-  [[ "$output" == *'== 15/26 system/fingerprint =='* ]]
-  [[ "$output" == *'== 16/26 system/network =='* ]]
-  [[ "$output" == *'== 17/26 system/vpn =='* ]]
-  [[ "$output" == *'== 19/26 desktop/screenshot =='* ]]
-  [[ "$output" == *'== 20/26 desktop/clipboard =='* ]]
-  [[ "$output" == *'== 21/26 desktop/shell =='* ]]
-  [[ "$output" == *'== 22/26 desktop/reminders =='* ]]
-  [[ "$output" == *'== 24/26 visual/branding =='* ]]
-  [[ "$output" == *'== 25/26 system/boot-splash =='* ]]
-  [[ "$output" == *'== 26/26 desktop/login =='* ]]
+  [[ "$output" == *'== 1/27 visual/theme =='* ]]
+  [[ "$output" == *'== 2/27 visual/gtk4 =='* ]]
+  [[ "$output" == *'== 3/27 visual/gtk3 =='* ]]
+  [[ "$output" == *'== 5/27 desktop/portal =='* ]]
+  [[ "$output" == *'== 6/27 desktop/files =='* ]]
+  [[ "$output" == *'== 7/27 desktop/browser =='* ]]
+  [[ "$output" == *'== 13/27 system/audio =='* ]]
+  [[ "$output" == *'== 14/27 system/bluetooth =='* ]]
+  [[ "$output" == *'== 15/27 system/power =='* ]]
+  [[ "$output" == *'== 16/27 system/fingerprint =='* ]]
+  [[ "$output" == *'== 17/27 system/network =='* ]]
+  [[ "$output" == *'== 18/27 system/vpn =='* ]]
+  [[ "$output" == *'== 20/27 desktop/screenshot =='* ]]
+  [[ "$output" == *'== 21/27 desktop/clipboard =='* ]]
+  [[ "$output" == *'== 22/27 desktop/shell =='* ]]
+  [[ "$output" == *'== 23/27 desktop/reminders =='* ]]
+  [[ "$output" == *'== 25/27 visual/branding =='* ]]
+  [[ "$output" == *'== 26/27 system/boot-splash =='* ]]
+  [[ "$output" == *'== 27/27 desktop/login =='* ]]
   cmp "$CFG_SOURCE_ROOT/capabilities/system/fingerprint/polkit-1" "$CFG_TEST_TARGET_ROOT/etc/pam.d/polkit-1"
   cmp "$CFG_SOURCE_ROOT/capabilities/visual/gtk3/base.css" \
     "$CFG_TEST_TARGET_ROOT/usr/share/mirroros/gtk3/base.css"

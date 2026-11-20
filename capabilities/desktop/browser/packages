@@ -1,0 +1,16 @@
+alsa-lib extra
+base-devel core
+curl core
+gnome-keyring extra
+gnupg core
+gtk3 extra
+libcups extra
+libnotify extra
+libxss extra
+libxtst extra
+networkmanager extra
+nss core
+pipewire extra
+ttf-liberation extra
+uwsm extra
+xdg-utils extra

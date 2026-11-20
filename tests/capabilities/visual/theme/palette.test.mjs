@@ -44,6 +44,13 @@ test('the lock colors match the palette roles (ADR 0021)', () => {
   assert.deepEqual(lock.get('failure'), palette.get('red'));
 });
 
+test('the Chromium theme color matches the palette background', () => {
+  const palette = readFileSync(resolve(theme, 'default/colors.toml'), 'utf8');
+  const background = /^background = "#([0-9a-fA-F]{6})"$/m.exec(palette)[1];
+  const rgb = background.match(/../g).map(pair => parseInt(pair, 16)).join(',');
+  assert.equal(readFileSync(resolve(theme, 'default/chromium.theme'), 'utf8'), `${rgb}\n`);
+});
+
 test('the Omarchy MIT notice is retained with the palette', () => {
   const notice = readFileSync(resolve(theme, 'default/LICENSE.omarchy'), 'utf8');
   assert.match(notice, /Copyright \(c\) David Heinemeier Hansson/);

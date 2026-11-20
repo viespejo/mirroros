@@ -1,0 +1,8 @@
+{
+  "RestoreOnStartup": 1,
+  "DefaultSearchProviderEnabled": true,
+  "DefaultSearchProviderName": "Google",
+  "DefaultSearchProviderSearchURL": "{google:baseURL}search?q={searchTerms}",
+  "ShowHomeButton": true,
+  "BackgroundModeEnabled": false
+}

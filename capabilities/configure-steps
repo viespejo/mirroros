@@ -6,6 +6,7 @@ CFG_STEPS=(
   desktop/terminal
   desktop/portal
   desktop/files
+  desktop/browser
   workflow/node
   workflow/shell
   workflow/tmux

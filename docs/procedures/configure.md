@@ -162,7 +162,7 @@ sources/logs, metadata, output, failures and attended capture behavior. See [scr
 
 ## Consequential effects
 
-The twenty-six steps run in this order:
+The twenty-seven steps run in this order:
 
 | Step | Applied state |
 |---|---|
@@ -172,6 +172,7 @@ The twenty-six steps run in this order:
 | `desktop/terminal` | Foot, `ttf-jetbrains-mono-nerd`, `noto-fonts-emoji`, approved native terminal-local defaults and Foot as the terminal for `Terminal=true` desktop entries |
 | `desktop/portal` | xdg-desktop-portal, its GTK backend, gnome-keyring and dconf; the system `mimeapps.list`, the compiled dark `color-scheme` and `MirrorOS-default` `gtk-theme` and `icon-theme` dconf defaults and the read-only `portal-check` command; no PAM, user dconf or service activation ([sources](../../capabilities/desktop/portal/sources.md)) |
 | `desktop/files` | Strata built by the user from a reviewed recipe, `xdg-user-dirs`, the `files-cwd` command, the initialize-only theme bridge and first-launch offer suppression; fails while another package also owns `org.freedesktop.FileManager1` ([sources](../../capabilities/desktop/files/sources.md)) |
+| `desktop/browser` | Google Chrome built by the user from verified Google metadata when the MirrorOS package is missing; replaces a foreign same-name package and records provenance. Enables the graphical-login check and daily user timer without starting them. Configure never upgrades the installed MirrorOS package; use `chrome-update` for an authorized update ([ADR 0032](../adr/0032-chrome-supply-chain-and-update-flow.md), [sources](../../capabilities/desktop/browser/sources.md)). |
 | `workflow/node` | `git`, the identified NVM release and declared Node.js version under the user's `~/.nvm`, and a managed environment file |
 | `workflow/shell` | Zsh with managed startup files, Zplug and identified plugin sources, shell tools, Starship, a marked bashrc source block, and Zsh as the login shell when it was Bash |
 | `workflow/tmux` | tmux with managed native files, TPM and identified plugin sources, the compiled tmux-thumbs helper, wl-clipboard, inetutils, Rust, base-devel, and Sesh built by the user from a reviewed recipe; no `/etc/tmux.conf` |

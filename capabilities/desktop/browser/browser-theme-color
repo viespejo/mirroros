@@ -1,0 +1,114 @@
+#!/usr/bin/bash -p
+# managed by MirrorOS configure
+set -Eeuo pipefail
+
+fail() { printf 'Browser theme: %s\n' "$*" >&2; return 4; }
+
+# The CLI fixes the anchor and owner to the running root; isolated tests call this function directly.
+write_color_policy() (
+  local anchor="$1" state="$2" owner="$3" group="$4" theme_dir selected color policy dir tmp hex helper path uid mode
+  local -a rgb lines
+  theme_dir=/usr/share/mirroros/themes
+  policy=/etc/opt/chrome/policies/managed
+  for helper in resolve-current check-trusted-path; do
+    # Check the helpers before executing either of them as root.
+    path="${anchor%/}$theme_dir/$helper"
+    [[ ! -L "$path" && -f "$path" ]] || { fail "missing trusted theme helper: $helper"; exit 4; }
+  done
+  for dir in / /usr /usr/share /usr/share/mirroros "$theme_dir" "$theme_dir/resolve-current" "$theme_dir/check-trusted-path"; do
+    path="${anchor%/}$dir"
+    read -r uid mode < <(stat -c '%u %a' -- "$path") || exit 4
+    if [[ -L "$path" || "$uid" != "$owner" || ! "$mode" =~ ^[0-7]+$ ]] || (( 8#$mode & 8#022 )); then
+      fail "untrusted theme path: $dir"
+      exit 4
+    fi
+  done
+  local checker="${anchor%/}$theme_dir/check-trusted-path"
+  selected=$(bash "${anchor%/}$theme_dir/resolve-current" "$anchor" "$state" "$owner") || exit 4
+  selected=${selected%%$'\n'*}
+  [[ "$selected" =~ ^/usr/share/mirroros/themes/[a-z0-9]+(-[a-z0-9]+)*$ ]] || exit 4
+  bash "$checker" "$anchor" "${selected#/}/chromium.theme" "$owner" file || exit 4
+  color="${anchor%/}$selected/chromium.theme"
+  mapfile -t lines < "$color" || exit 4
+  if (( ${#lines[@]} != 1 )) || [[ ! "${lines[0]}" =~ ^(0|[1-9][0-9]{0,2}),(0|[1-9][0-9]{0,2}),(0|[1-9][0-9]{0,2})$ ]]; then
+    fail 'chromium.theme must contain one R,G,B line'
+    exit 4
+  fi
+  IFS=, read -r -a rgb <<< "${lines[0]}"
+  if (( rgb[0] > 255 || rgb[1] > 255 || rgb[2] > 255 )); then
+    fail 'color components must be between 0 and 255'
+    exit 4
+  fi
+  printf -v hex '%02x%02x%02x' "${rgb[@]}"
+
+  bash "$checker" "$anchor" "${policy#/}" "$owner" directory || exit 4
+  for dir in /etc/opt /etc/opt/chrome /etc/opt/chrome/policies "$policy"; do
+    [[ "$(stat -c '%a:%u:%g' -- "${anchor%/}$dir")" == "755:$owner:$group" ]] || {
+      fail "unexpected policy directory permissions: $dir"; exit 4;
+    }
+  done
+  policy="${anchor%/}$policy/color.json"
+  if [[ -L "$policy" || ( -e "$policy" && ! -f "$policy" ) ]]; then
+    fail 'color.json is not a regular file'
+    exit 4
+  fi
+  local json
+  printf -v json '{"BrowserThemeColor":"#%s"}\n' "$hex"
+  if [[ -f "$policy" && "$(stat -c '%a:%u:%g' -- "$policy")" == "644:$owner:$group" ]] &&
+    cmp -s -- "$policy" <(printf '%s' "$json"); then
+    printf 'unchanged\n'
+    exit 0
+  fi
+  tmp=$(mktemp -- "${policy%/*}/.color.XXXXXXXX") || exit 5
+  trap 'rm -f -- "$tmp"' EXIT
+  printf '%s' "$json" > "$tmp" || exit 5
+  chown -- "$owner:$group" "$tmp" || exit 5
+  chmod 0644 -- "$tmp" || exit 5
+  mv -fT -- "$tmp" "$policy" || exit 5
+  printf 'changed\n'
+)
+
+main() {
+  export PATH=/usr/bin LC_ALL=C
+  unset BASH_ENV ENV
+  local account name uid home state runtime environment line result _ignored
+  if (( EUID != 0 || $# != 2 )) || [[ "$1" != --user || ! "$2" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
+    printf 'Usage (as root): browser-theme-color --user <login>\n' >&2
+    return 6
+  fi
+  account=$(getent passwd "$2") || { fail 'unknown user'; return 4; }
+  IFS=: read -r name _ignored uid _ignored _ignored home _ignored <<< "$account"
+  if [[ "$name" != "$2" || ! "$uid" =~ ^[1-9][0-9]*$ || "$home" != /* ||
+    ( -n "${SUDO_USER:-}" && "$SUDO_USER" != "$name" ) ||
+    ( -n "${PKEXEC_UID:-}" && "$PKEXEC_UID" != "$uid" ) ]]; then
+    fail 'invalid user or caller mismatch'
+    return 4
+  fi
+
+  runtime="/run/user/$uid"
+  state=''
+  if [[ "${MIRROROS_BROWSER_OFFLINE:-0}" != 1 ]] && environment=$(session_command systemctl --user show-environment 2>/dev/null); then
+    while IFS= read -r line; do
+      [[ "$line" == XDG_STATE_HOME=* ]] || continue
+      [[ -z "$state" ]] || { fail 'duplicate session state home'; return 4; }
+      state=${line#XDG_STATE_HOME=}
+    done <<< "$environment"
+  fi
+  state=${state:-$home/.local/state}
+  [[ "$state" == /* ]] || { fail 'session state home must be absolute'; return 4; }
+  result=$(write_color_policy / "$state" 0 0) || return "$?"
+  if [[ "$result" == changed && "${MIRROROS_BROWSER_OFFLINE:-0}" != 1 ]] && pgrep -u "$uid" -x chrome >/dev/null; then
+    session_command systemd-run --user --quiet --collect --no-block -- \
+      /usr/bin/google-chrome-stable --refresh-platform-policy --no-startup-window >&2 ||
+      printf 'Browser theme: policy refresh unavailable; Chrome will read the color when it next starts.\n' >&2
+  fi
+  printf '%s\n' "$result"
+}
+
+# Called only by main with the validated account and its runtime directory.
+session_command() {
+  runuser -u "$name" -- env -i PATH=/usr/bin HOME="$home" USER="$name" LOGNAME="$name" \
+    XDG_RUNTIME_DIR="$runtime" "$@"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

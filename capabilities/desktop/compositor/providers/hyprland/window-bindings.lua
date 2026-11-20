@@ -140,4 +140,12 @@ bind("files.open", "SUPER + SHIFT + F", "File manager", dsp.exec_cmd("uwsm app -
 bind("files.cwd", "SUPER + ALT + SHIFT + F", "File manager (cwd)",
   dsp.exec_cmd("/usr/share/mirroros/files/files-cwd"))
 
+-- Browser (Story 4.5 DEC-012/DEC-013). Both normal chords share the provider-neutral launcher.
+bind("browser.open", "SUPER + SHIFT + B", "Open browser",
+  dsp.exec_cmd("/usr/share/mirroros/browser/browser-open"))
+bind("browser.open-return", "SUPER + SHIFT + RETURN", "Open browser",
+  dsp.exec_cmd("/usr/share/mirroros/browser/browser-open"))
+bind("browser.private", "SUPER + SHIFT + ALT + B", "Open private browser window",
+  dsp.exec_cmd("/usr/share/mirroros/browser/browser-open --private"))
+
 if not MirrorOSKeys.staged then MirrorOSKeys.export() end

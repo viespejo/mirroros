@@ -72,6 +72,15 @@ portal_strata_entry() {
   cfg_test_no_install
 }
 
+@test "all system web associations point to the desktop entry named by the Chrome recipe" {
+  local recipe="$CFG_SOURCE_ROOT/capabilities/desktop/browser/google-chrome/PKGBUILD" entry mime
+  entry=$(grep -oE '/usr/share/applications/[a-zA-Z0-9_.-]+\.desktop' "$recipe" | awk -F/ '{ print $NF }')
+  [ -n "$entry" ]
+  for mime in x-scheme-handler/http x-scheme-handler/https text/html application/xhtml+xml; do
+    [ "$(grep -F "${mime}=" "$PORTAL_CODE/mimeapps.list")" = "$mime=$entry" ]
+  done
+}
+
 @test "dconf update runs again only when a declared dconf file changes or the database is missing" {
   portal_sddm_pam "$MIRROROS_CONFIGURE_ROOT"
   run "$CFG_TEST_ENTRY"

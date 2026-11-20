@@ -1,0 +1,13 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+set -eu
+[[ "$*" == configure ]] || exit 97
+printf 'chrome build\n' >> "$CFG_TEST_CALLS"
+if [[ ${CHROME_CONFIGURE_FAIL:-0} == 1 ]]; then
+  printf 'Chrome build: check the network or resolve the reported channel integrity failure, then rerun configure\n' >&2
+  exit 4
+fi
+printf '%s\t%s\t%s\t%s\t%s\n' \
+  "$HOME/.cache/mirroros/chrome/google-chrome-158.0.8127.36-1.1-x86_64.pkg.tar.zst" \
+  '158.0.8127.36-1.1' '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' \
+  '2024-03-09T16:00:00Z' 'FEDCBA9876543210FEDCBA9876543210FEDCBA98'

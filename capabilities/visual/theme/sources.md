@@ -82,6 +82,13 @@ so it is checked like the rest of the tree. Its first consumer is Strata's theme
 the selected theme; Story 4.8 theme selection changes the theme and its name together. Every future theme must
 publish this file.
 
+## Chromium color
+
+Every future theme must also publish `chromium.theme`: one line of decimal `R,G,B` components (0–255).
+`default/chromium.theme` tracks the palette's background. The [browser capability](../../desktop/browser/sources.md)
+validates the published theme path and converts the color to a Chrome platform policy; the Story 4.8 invocation
+contract is in the [browser procedure](../../../docs/procedures/browser.md#policy-theme-and-password-storage).
+
 ## Shared theme bridge
 
 `omarchy-bridge` is MirrorOS-owned code extracted from `desktop/files/prepare-strata` by screenshot plan 02-40
