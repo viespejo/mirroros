@@ -7,10 +7,9 @@
 
 ## Status
 
-`Proposed`
+`Accepted`
 
-Drafted by plan 02-43. Recipe, configure and laboratory work must wait for explicit maintainer acceptance at the
-plan 02-43 acceptance checkpoint (DEC-001).
+The ADR was accepted on 2026-11-19 at the plan 02-43 acceptance checkpoint (DEC-001).
 
 ## Date
 

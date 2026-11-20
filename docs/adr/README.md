@@ -86,9 +86,9 @@ required before plan 02-39 adoption.
 
 ## Browser supply chain and update flow
 
-[ADR 0032: Chrome Supply Chain and Update Flow](0032-chrome-supply-chain-and-update-flow.md) is Proposed. It
+[ADR 0032: Chrome Supply Chain and Update Flow](0032-chrome-supply-chain-and-update-flow.md) is Accepted. It
 records the verified local Chrome build and user-authorized update flow owned by Story 4.5 and inherited by
-Story 4.7. Plan 02-43 implementation remains blocked until maintainer acceptance.
+Story 4.7.
 
 ## Numbering and filenames
 
