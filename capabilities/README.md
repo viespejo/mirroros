@@ -65,7 +65,7 @@ queries. No `apply` calls `pacman`, `systemctl`, `install`, or `runuser` directl
 that boundary. Steps must not bypass helpers through `cfg_run` or introduce context-specific command execution.
 Three bounded exceptions run a capability's own native tool without branching on context: `visual/branding` renders
 with `rsvg-convert` through `cfg_exec`, `desktop/portal` compiles the system dconf database with `dconf update`
-through `cfg_exec` only when its profile or key file changed or the database is missing, and the capability-local `system/boot-splash/boot-splash.sh`, sourced by its
+through `cfg_run` only when its profile or key file changed or the database is missing, and the capability-local `system/boot-splash/boot-splash.sh`, sourced by its
 `apply`, routes `mkinitcpio`, `limine-update` and `lsinitcpio` through `cfg_run` or `cfg_exec` and writes boot
 configuration on the live side through `cfg_run_host` and `cfg_path`. None adds a shared helper or a chroot branch.
 

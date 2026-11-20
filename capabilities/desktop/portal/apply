@@ -6,7 +6,8 @@
 # the MirrorOS appearance key file exist and the compiled /etc/dconf/db/local answers color-scheme 'prefer-dark'
 # and gtk-theme and icon-theme 'MirrorOS-default' without a bus; portal-check matches its last delivery; the packaged pam_gnome_keyring lines exist once SDDM is
 # installed. In running context, the system inode/directory default resolves to Strata once its desktop entry exists.
-# `dconf update` runs through cfg_exec only when the profile or key file changed, or the database is missing.
+# `dconf update` runs through cfg_run only when the profile or key file changed, or the database is missing.
+# The compiled system database must be readable by the user session (0644).
 # Nothing is started, restarted or reloaded: portal changes take effect at the next login, checked by portal-check.
 set -Eeuo pipefail
 
@@ -41,12 +42,21 @@ cfg_packages_ensure "$STEP_DIR/packages"
 cfg_system_file "$STEP_DIR/mimeapps.list" /etc/xdg/mimeapps.list 0644
 cfg_system_file "$STEP_DIR/dconf-profile-user" /etc/dconf/profile/user 0644
 cfg_system_file "$STEP_DIR/00-mirroros-appearance" /etc/dconf/db/local.d/00-mirroros-appearance 0644
+dconf_db=$(cfg_path /etc/dconf/db/local)
+cfg_require test ! -L "$dconf_db"
 if [[ -n "${CFG_FILES_CHANGED[/etc/dconf/profile/user]:-}${CFG_FILES_CHANGED[/etc/dconf/db/local.d/00-mirroros-appearance]:-}" ||
-  ! -f "$(cfg_path /etc/dconf/db/local)" ]]; then
-  cfg_log 'dconf update'
-  cfg_exec dconf update
+  ! -f "$dconf_db" ]]; then
+  cfg_run dconf update
   cfg_changed
 fi
+cfg_require test -f "$dconf_db"
+cfg_require test ! -L "$dconf_db"
+cfg_require test -O "$dconf_db"
+if [[ $(stat -c %a -- "$dconf_db") != 644 ]]; then
+  cfg_run_host chmod 0644 -- "$dconf_db"
+  cfg_changed
+fi
+cfg_require test "$(stat -c %a -- "$dconf_db")" = 644
 cfg_tracked_file "$STEP_DIR/portal-check" /usr/share/mirroros/portal/portal-check 0755
 cfg_log 'portal changes take effect at the next login; run /usr/share/mirroros/portal/portal-check after it'
 

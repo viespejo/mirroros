@@ -251,8 +251,9 @@ Managed destinations are:
 - `/etc/xdg/mimeapps.list`, `/etc/dconf/profile/user`, `/etc/dconf/db/local.d/00-mirroros-appearance` and
   `/usr/share/mirroros/portal/portal-check`: the single system association file (`inode/directory` to Strata), the
   system dconf default answering dark, and the read-only session verifier. `dconf update` compiles
-  `/etc/dconf/db/local` through `cfg_exec` only when the profile or key file changed or the database is missing; it
-  is a bounded native-tool exception. Configure never starts, restarts or reloads portal or user services: portal
+  `/etc/dconf/db/local` through `cfg_run` only when the profile or key file changed or the database is missing.
+  Configure ensures that the compiled database is readable by the session (`0644`). Configure never starts,
+  restarts or reloads portal or user services: portal
   changes take effect at the next login, then run `portal-check`. See the
   [portals and files procedure](portals-and-files.md).
 - `strata-bin`, `/usr/share/mirroros/files/files-cwd`, `~/.local/state/omarchy/current/{theme,theme.name}` and

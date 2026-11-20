@@ -90,6 +90,21 @@ portal_strata_entry() {
   [ "$(grep -c '^dconf update$' "$CFG_TEST_CALLS")" -eq 1 ]
 }
 
+@test "configure repairs a private compiled database without rebuilding it" {
+  local db="$MIRROROS_CONFIGURE_ROOT/etc/dconf/db/local"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  cp "$db" "$CFG_TEST_DIR/original-db"
+  chmod 0600 "$db"
+  : > "$CFG_TEST_CALLS"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'desktop/portal: changed'* ]]
+  [ "$(stat -c %a "$db")" = 644 ]
+  cmp "$CFG_TEST_DIR/original-db" "$db"
+  refute grep -q '^dconf update$' "$CFG_TEST_CALLS"
+}
+
 @test "the compiled system default must select the MirrorOS-default GTK theme" {
   portal_sddm_pam "$MIRROROS_CONFIGURE_ROOT"
   printf '# managed by MirrorOS configure\n[org/gnome/desktop/interface]\ncolor-scheme='"'prefer-dark'"'\n' \
@@ -150,8 +165,9 @@ portal_strata_entry() {
 @test "target configure installs the portal stack inside the target and compiles dconf through the chroot" {
   cfg_test_target_context
   portal_sddm_pam "$CFG_TEST_TARGET_ROOT"
-  run "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
+  run bash -c 'umask 077; exec "$@"' _ "$CFG_TEST_ENTRY" --target-root "$CFG_TEST_TARGET_ROOT" --user alice
   [ "$status" -eq 0 ]
+  [ "$(stat -c %a "$CFG_TEST_TARGET_ROOT/etc/dconf/db/local")" = 644 ]
   for package in xdg-desktop-portal xdg-desktop-portal-gtk gnome-keyring dconf; do
     grep -qF "arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S --needed --noconfirm -- extra/$package" "$CFG_TEST_CALLS" ||
       grep -qE "^arch-chroot $CFG_TEST_TARGET_ROOT env SNAP_PAC_SKIP=y pacman -S .*extra/$package( |$)" "$CFG_TEST_CALLS"

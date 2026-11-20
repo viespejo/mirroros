@@ -52,9 +52,12 @@ the Strata desktop entry exists.
 `/etc/dconf/profile/user` (`user-db:user`, `system-db:local`) and
 `/etc/dconf/db/local.d/00-mirroros-appearance` (`org/gnome/desktop/interface color-scheme='prefer-dark'`) make the
 GTK backend's Settings portal answer dark (`1`) unless the user sets a value (DEC-010). Configure compiles
-`/etc/dconf/db/local` with `dconf update` through `cfg_exec` only when one of those files changed or the database is
-missing, a bounded native-tool exception documented in [capabilities/README.md](../../README.md). It never writes
-user dconf or GSettings. GTK3 and Qt dark preferences and a theme-derived `color-scheme` belong to Story 4.8.
+`/etc/dconf/db/local` with `dconf update` through `cfg_run` only when one of those files changed or the database is
+missing. `cfg_run` uses umask `022` even during guided installation. Configure checks that the compiled database is
+an owned regular file, not a symlink, and repairs its mode to `0644` when needed without rebuilding it. On
+`mirroros-ref`, the clean guided installation had left this database at `0600`; restoring read access made both
+GTK and icon preferences resolve to `MirrorOS-default` for the session user. Configure never writes user dconf
+or GSettings. GTK3 and Qt dark preferences and a theme-derived `color-scheme` belong to Story 4.8.
 
 The same key file sets `gtk-theme='MirrorOS-default'`, so native GTK3 and GTK4 applications use the MirrorOS theme
 without a global `GTK_THEME` or per-application launcher. The value names the native lookup entry
