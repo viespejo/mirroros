@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+set -eu
+command=${0##*/}
+printf '%s %s\n' "$command" "$*" >> "$CHROME_TEST_DIR/calls"
+case "$command" in
+  pacman) [[ "$*" == '-Q -- google-chrome' ]]; printf 'google-chrome %s\n' "$(< "$CHROME_TEST_DIR/installed")" ;;
+  nm-online) [[ ${CHROME_OFFLINE:-0} == 0 ]] ;;
+  busctl) printf 'b true\n' ;;
+  notify-send) printf '%s\n' "${CHROME_ACTION:-}" ;;
+  mirroros-notification-send|uwsm) ;;
+  chrome-channel)
+    case "${CHROME_CHANNEL_STATUS:-0}" in
+      10|11) printf '%s\n' "${CHROME_CAUSE:-channel unavailable}" >&2; exit "$CHROME_CHANNEL_STATUS" ;;
+    esac
+    printf '%s\t%s\t%s\t%s\n' "$CHROME_VERSION" "$CHROME_HASH" "$CHROME_DATE" "$CHROME_SUBKEY" ;;
+  build-chrome)
+    [[ "$#" == 4 && "$1" == "$CHROME_VERSION" && "$2" == "$CHROME_HASH" && "$3" == "$CHROME_DATE" && "$4" == "$CHROME_SUBKEY" ]] || exit 97
+    if [[ ${CHROME_BUILD_FAIL:-0} == 1 ]]; then printf 'review makepkg output and retry\n' >&2; exit 4; fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$CHROME_TEST_DIR/chrome.pkg.tar.zst" "$1.1" "$2" "$3" "$4" ;;
+  sudo)
+    [[ "$*" == "pacman -U -- $CHROME_TEST_DIR/chrome.pkg.tar.zst" ]] || exit 97
+    [[ ${CHROME_SUDO_FAIL:-0} == 0 ]] || exit 1
+    printf '%s\n' "$CHROME_VERSION.1" > "$CHROME_TEST_DIR/installed" ;;
+  *) exit 97 ;;
+esac

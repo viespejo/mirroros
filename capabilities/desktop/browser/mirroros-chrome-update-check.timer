@@ -1,0 +1,11 @@
+# managed by MirrorOS configure
+[Unit]
+Description=Check for Google Chrome updates daily
+PartOf=graphical-session.target
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=graphical-session.target

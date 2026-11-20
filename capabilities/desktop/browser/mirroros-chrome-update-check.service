@@ -1,0 +1,13 @@
+# managed by MirrorOS configure
+[Unit]
+Description=Offer verified Google Chrome updates
+PartOf=graphical-session.target
+After=graphical-session.target mirroros-shell.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/share/mirroros/browser/chrome-update-check
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=graphical-session.target

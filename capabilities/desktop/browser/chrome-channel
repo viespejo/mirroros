@@ -1,0 +1,86 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Output: Debian version, .deb SHA256, InRelease date (UTC), signing subkey, separated by tabs.
+# Outcomes: 10 = transient fetch failure; 11 = integrity failure (stderr identifies the cause).
+set -Eeuo pipefail
+export LC_ALL=C
+umask 077
+
+primary=EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796
+base=https://dl.google.com/linux/chrome/deb/dists/stable
+index=main/binary-amd64/Packages
+work=$(mktemp -d)
+trap 'rm -rf -- "$work"' EXIT
+mkdir -m 0700 -- "$work/gnupg"
+export GNUPGHOME="$work/gnupg"
+
+integrity() { printf 'Chrome channel: %s\n' "$1" >&2; exit 11; }
+fetch() {
+  if ! curl -q --fail --silent --proto '=https' --connect-timeout 10 --max-time 20 --max-filesize "$3" \
+    --output "$work/$2" -- "$1"; then
+    printf 'Chrome channel: unable to fetch %s\n' "$2" >&2
+    exit 10
+  fi
+}
+
+gpg_command=(gpg --no-options --batch --no-tty --no-auto-key-retrieve)
+fetch https://dl.google.com/linux/linux_signing_key.pub key 262144
+"${gpg_command[@]}" --with-colons --show-keys "$work/key" > "$work/key-info" 2>/dev/null ||
+  integrity 'invalid public key'
+keys=$(awk -F: '$1 == "pub" { primary = 1; next } $1 == "fpr" && primary { print $10; primary = 0 }' "$work/key-info")
+[[ "$keys" == "$primary" ]] || integrity 'primary fingerprint mismatch'
+"${gpg_command[@]}" --import "$work/key" >/dev/null 2>&1 || integrity 'public key import failed'
+
+fetch "$base/InRelease" InRelease 262144
+IFS= read -r header < "$work/InRelease" || integrity 'invalid InRelease envelope'
+[[ "$header" == '-----BEGIN PGP SIGNED MESSAGE-----' ]] || integrity 'invalid InRelease envelope'
+"${gpg_command[@]}" --status-fd 3 --output "$work/Release" --decrypt "$work/InRelease" \
+  3>"$work/status" 2>/dev/null || integrity 'invalid InRelease signature'
+subkey=$(awk -v primary="$primary" '
+  $1 != "[GNUPG:]" { next }
+  # KEYEXPIRED also reports unrelated historical subkeys; EXPKEYSIG is signer-specific.
+  $2 ~ /^(BADSIG|ERRSIG|EXPSIG|EXPKEYSIG|REVKEYSIG|SIGEXPIRED|KEYREVOKED|NO_PUBKEY)$/ { bad = 1 }
+  $2 == "GOODSIG" { good++ }
+  $2 == "VALIDSIG" { count++; if ($12 == primary && $3 != primary) subkey = $3 }
+  END { if (bad || good != 1 || count != 1 || subkey == "") exit 1; print subkey }
+' "$work/status") || integrity 'untrusted or expired InRelease signature'
+[[ "$subkey" =~ ^[0-9A-F]{40}$ ]] || integrity 'invalid InRelease signing fingerprint'
+
+release_date=$(awk '/^Date: / { count++; value = substr($0, 7) } END { if (count != 1) exit 1; print value }' "$work/Release") ||
+  integrity 'missing or duplicate InRelease date'
+release_date=$(date -u -d "$release_date" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) || integrity 'invalid InRelease date'
+expected=$(awk -v index_path="$index" '
+  /^SHA256:$/ { active = 1; next }
+  /^[^[:space:]]/ { active = 0 }
+  active && NF == 3 && $3 == index_path { count++; hash = $1 }
+  END { if (count != 1) exit 1; print hash }
+' "$work/Release") || integrity 'missing or duplicate Packages checksum'
+[[ "$expected" =~ ^[0-9a-f]{64}$ ]] || integrity 'invalid Packages checksum'
+
+fetch "$base/$index" Packages 4194304
+actual=$(sha256sum -- "$work/Packages")
+[[ "${actual%% *}" == "$expected" ]] || integrity 'Packages SHA256 mismatch'
+record=$(awk '
+  BEGIN { RS = ""; FS = "\n" }
+  {
+    delete fields; delete seen
+    for (i = 1; i <= NF; i++) {
+      if ($i !~ /^[[:alnum:]-]+: /) continue
+      colon = index($i, ": ")
+      field = substr($i, 1, colon - 1)
+      fields[field] = substr($i, colon + 2)
+      seen[field]++
+    }
+    if (fields["Package"] != "google-chrome-stable" || fields["Architecture"] != "amd64") next
+    count++
+    if (seen["Package"] != 1 || seen["Architecture"] != 1 || seen["Version"] != 1 ||
+        seen["SHA256"] != 1 || seen["Filename"] != 1) exit 1
+    version = fields["Version"]; hash = fields["SHA256"]; file = fields["Filename"]
+  }
+  END { if (count != 1 || file != "pool/main/g/google-chrome-stable/google-chrome-stable_" version "_amd64.deb") exit 1;
+        printf "%s\t%s\n", version, hash }
+' "$work/Packages") || integrity 'invalid stable amd64 package record'
+IFS=$'\t' read -r version hash <<< "$record"
+[[ "$version" =~ ^[0-9]+(\.[0-9]+){3}-[1-9][0-9]*$ && "$hash" =~ ^[0-9a-f]{64}$ ]] ||
+  integrity 'invalid stable version or package checksum'
+printf '%s\t%s\t%s\t%s\n' "$version" "$hash" "$release_date" "$subkey"

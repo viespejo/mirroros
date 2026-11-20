@@ -1,0 +1,73 @@
+# managed by MirrorOS configure
+# Maintainer: Christian Heusel <christian@heusel.eu>
+# Contributor: Knut Ahlers <knut at ahlers dot me>
+# Contributor: Det <nimetonmaili g-mail>
+# Contributor: t3ddy, Lex Rivera aka x-demon, ruario, Abdullah
+
+# Upstream: https://aur.archlinux.org/google-chrome.git @ 5bc819b6f8c16a9b613fd8b74462c23952191ba2
+# MirrorOS changes: x86_64 only, self-conflict for the AUR name, verified version/release/.deb SHA256 placeholders,
+# .1 release suffix, SHA256 for local sources, and the libsecret launcher. The AUR post-install tips hook is omitted.
+# Keep package(), depends and optdepends aligned with the reviewed upstream revision.
+
+pkgname=google-chrome
+pkgver=@VERSION@
+pkgrel=@RELEASE@.1
+pkgdesc="The popular web browser by Google (Stable Channel)"
+arch=('x86_64')
+url="https://www.google.com/chrome"
+license=('custom:chrome')
+depends=(
+	'alsa-lib'
+	'gtk3'
+	'libcups'
+	'libxss'
+	'libxtst'
+	'nss'
+	'ttf-liberation'
+	'xdg-utils'
+)
+optdepends=(
+	'pipewire: WebRTC desktop sharing under Wayland'
+	'kdialog: for file dialogs in KDE'
+	'gnome-keyring: for storing passwords in GNOME keyring'
+	'kwallet: for storing passwords in KWallet'
+)
+conflicts=('google-chrome')
+options=('!emptydirs' '!strip')
+_channel=stable
+source=('eula_text.html'
+        "google-chrome-$_channel.sh")
+sha256sums=('e93c01576427cad9099f2cf0df0be70d0a2cc0a3a66c743318b2138aa7c4ed93'
+            '851a6907f1e6fbdc690aff95fb08f618bfb3a0931bda9861d48b216496aebae1')
+source_x86_64=("https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-${_channel}/google-chrome-${_channel}_${pkgver}-${pkgrel%.1}_amd64.deb")
+sha256sums_x86_64=('@DEB_SHA256@')
+
+package() {
+	bsdtar -xf data.tar.xz -C "$pkgdir/"
+
+	# Launcher
+	install -m755 google-chrome-$_channel.sh "$pkgdir"/usr/bin/google-chrome-$_channel
+
+	# Icons
+	for i in 16x16 24x24 32x32 48x48 64x64 128x128 256x256; do
+		install -Dm644 "$pkgdir"/opt/google/chrome/product_logo_${i/x*/}.png \
+			"$pkgdir"/usr/share/icons/hicolor/$i/apps/google-chrome.png
+	done
+
+	# License
+	install -Dm644 eula_text.html "$pkgdir"/usr/share/licenses/google-chrome/eula_text.html
+	install -Dm644 "$pkgdir"/opt/google/chrome/WidevineCdm/LICENSE \
+		"$pkgdir"/usr/share/licenses/google-chrome-$_channel/WidevineCdm-LICENSE.txt
+
+	# Fix the Chrome desktop entry
+	sed -i \
+		-e "/Exec=/i\StartupWMClass=Google-chrome" \
+		-e "s/x-scheme-handler\/ftp;\?//g" \
+		"$pkgdir"/usr/share/applications/google-chrome.desktop
+
+	# Remove the Debian Cron job, duplicate product logos and menu directory
+	rm -r \
+		"$pkgdir"/etc/cron.daily/ \
+		"$pkgdir"/opt/google/chrome/cron/ \
+		"$pkgdir"/opt/google/chrome/product_logo_*.png
+}

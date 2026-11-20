@@ -1,0 +1,9 @@
+Package: google-chrome-beta
+Version: 159.1.2.3-1
+Architecture: amd64
+
+Package: google-chrome-stable
+Version: 158.0.8127.36-1
+Architecture: amd64
+Filename: pool/main/g/google-chrome-stable/google-chrome-stable_158.0.8127.36-1_amd64.deb
+SHA256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

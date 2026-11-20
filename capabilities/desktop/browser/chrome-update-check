@@ -1,0 +1,54 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# Graphical-login and daily check. No package build or privileged operation occurs here.
+set -Eeuo pipefail
+umask 077
+here=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+state="${XDG_STATE_HOME:-$HOME/.local/state}/mirroros"
+offered="$state/chrome-update-offered"
+integrity="$state/chrome-update-integrity-notified"
+installed=$(pacman -Q -- google-chrome 2>/dev/null) || exit 0
+[[ "$installed" == 'google-chrome '* ]] || exit 0
+nm-online -q -t 30 >/dev/null 2>&1 || { printf 'Chrome check: network unavailable\n' >&2; exit 0; }
+# shellcheck disable=SC2016 # The bounded child shell performs the bus probe.
+if ! timeout 30 bash -c '
+  until [[ $(busctl --user --timeout=2 call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus \
+    NameHasOwner s org.freedesktop.Notifications 2>/dev/null) == "b true" ]]; do sleep 1; done
+'; then
+  printf 'Chrome check: notification server unavailable\n' >&2
+  exit 0
+fi
+
+mkdir -p -- "$state"
+exec 9>"$state/chrome-update-check.lock"
+flock -n 9 || exit 0
+write_marker() {
+  local marker_tmp
+  marker_tmp=$(mktemp "$state/.chrome-marker.XXXXXXXX")
+  printf '%s\n' "$2" > "$marker_tmp"
+  mv -fT -- "$marker_tmp" "$1"
+}
+if metadata=$("$here/chrome-channel" 2>&1); then
+  [[ ! -e "$integrity" ]] || rm -f -- "$integrity"
+else
+  status=$?
+  printf '%s\n' "$metadata" >&2
+  if [[ "$status" == 10 ]]; then exit 0; fi
+  if [[ "$status" == 11 && ( ! -f "$integrity" || "$(< "$integrity")" != "$metadata" ) ]]; then
+    if mirroros-notification-send -- 'Chrome update verification failed' \
+      'No update was offered. Run journalctl --user -u mirroros-chrome-update-check for details.'; then
+      write_marker "$integrity" "$metadata"
+    fi
+  fi
+  exit "$status"
+fi
+version=${metadata%%$'\t'*}
+comparison=$(vercmp "$version.1" "${installed#* }")
+[[ "$comparison" == 1 ]] || exit 0
+[[ ! -f "$offered" || "$(< "$offered")" != "$version" ]] || exit 0
+write_marker "$offered" "$version"
+action=$(notify-send --wait -u critical -A default=Update "Chrome $version available" \
+  'Open the update command to review and authorize installation.') || exit 0
+[[ "$action" == default ]] || exit 0
+flock -u 9
+exec uwsm app -- foot -e /usr/share/mirroros/browser/chrome-update

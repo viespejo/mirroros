@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+# managed by MirrorOS configure
+# An attended update; only the package transaction needs privileges.
+set -Eeuo pipefail
+umask 077
+trap 'exit 3' INT
+trap 'exit 5' TERM HUP
+
+fail() { printf 'Chrome update: %s\n' "$1" >&2; exit "${2:-4}"; }
+(( EUID != 0 )) || fail 'run chrome-update as your regular user, without sudo'
+here=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+state="${XDG_STATE_HOME:-$HOME/.local/state}/mirroros/chrome-update"
+mkdir -p -- "$state" || fail 'make the update state directory writable and retry'
+exec 9>"$state/lock" || fail 'make the update state directory writable and retry'
+flock -n 9 || fail 'another Chrome update is in progress; wait for it to finish'
+
+installed_version() {
+  local query
+  query=$(pacman -Q -- google-chrome) || return 1
+  [[ "$query" == 'google-chrome '* ]] || return 1
+  printf '%s\n' "${query#* }"
+}
+installed=$(installed_version) || fail 'install the browser through configure first'
+metadata=$("$here/chrome-channel") || fail 'check the network or resolve the reported integrity failure and retry'
+IFS=$'\t' read -r version hash release_date subkey <<< "$metadata"
+comparison=$(vercmp "$version.1" "$installed") || fail 'check the installed Chrome version and retry'
+if [[ "$comparison" != 1 ]]; then
+  printf 'Chrome is up to date (%s).\n' "$installed"
+  exit 0
+fi
+result=$("$here/build-chrome" "$version" "$hash" "$release_date" "$subkey") || exit "$?"
+IFS=$'\t' read -r package built_version built_hash built_date built_subkey <<< "$result"
+[[ "$package" == /* && "$built_version" == "$version.1" && "$built_hash" == "$hash" &&
+  "$built_date" == "$release_date" && "$built_subkey" == "$subkey" ]] || fail 'invalid build result; review the local builder and retry'
+installed_now=$(installed_version) || fail 'Chrome changed during the build; rerun configure before updating'
+[[ "$installed_now" == "$installed" ]] || fail 'Chrome changed during the build; rerun chrome-update'
+exec 8>>"$state/provenance.tsv" || fail 'make the provenance log writable and retry'
+if ! sudo pacman -U -- "$package"; then
+  fail 'installation did not complete; review pacman output, then rerun chrome-update' 5
+fi
+[[ "$(installed_version)" == "$built_version" ]] || fail 'the new version was not confirmed; check pacman output and retry' 5
+printf '%s\t%s\t%s\t%s\n' "$built_version" "$hash" "$release_date" "$subkey" >&8 ||
+  fail 'Chrome was installed, but recording its provenance failed; check the update state directory' 5
+printf 'Updated Chrome to %s.\n' "$built_version"

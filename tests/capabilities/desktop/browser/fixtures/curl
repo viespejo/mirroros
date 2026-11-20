@@ -1,0 +1,15 @@
+#!/usr/bin/bash
+set -eu
+[[ ${CHROME_NETWORK_OFFLINE:-0} != 1 ]] || exit 28
+url=${!#}
+while (( $# > 0 )); do
+  if [[ $1 == --output ]]; then output=$2; break; fi
+  shift
+done
+case "$url" in
+  https://dl.google.com/linux/linux_signing_key.pub) file=key ;;
+  https://dl.google.com/linux/chrome/deb/dists/stable/InRelease) file=InRelease ;;
+  https://dl.google.com/linux/chrome/deb/dists/stable/main/binary-amd64/Packages) file=Packages ;;
+  *) exit 97 ;;
+esac
+cp -- "$CHROME_FIXTURE/$file" "$output"
