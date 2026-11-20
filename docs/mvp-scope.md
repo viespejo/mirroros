@@ -91,7 +91,7 @@ This checkpoint selects no additional providers and does not qualify the complet
 | Interactive shell | configure | Zsh with Starship | Default interactive login shell with Zplug, vi editing, autosuggestions, syntax highlighting, Fzf, Zoxide and local-only Atuin; plugins are provisioned by `configure`, never at shell startup. Bash remains the implementation language of bounded scripts |
 | Terminal multiplexer | configure | tmux | Native configuration with TPM plugins (Resurrect/Continuum, Neovim-aware navigation) and Sesh as the session selector from a reviewed local package recipe; Floax is excluded |
 | File manager | configure | Strata (Story 4.5) | Replaces the earlier Nautilus placeholder (plan 02-35); attested release binary from a reviewed local recipe with its FileManager1 and FileChooser integrations; follows the MirrorOS theme through a minimal `~/.local/state/omarchy/current` bridge; `SUPER+SHIFT+F` and `SUPER+ALT+SHIFT+F` (focused terminal's directory, tmux-aware); Nautilus is removed by the user, never by configure ([sources](../capabilities/desktop/files/sources.md)) |
-| Browser | configure | open — selected by Story 4.5 | |
+| Browser | configure | Google Chrome; Chromium alternative | Story 4.5; [ADR 0032](adr/0032-chrome-supply-chain-and-update-flow.md) and [browser procedure](procedures/browser.md) |
 
 ### Development
 
@@ -142,6 +142,7 @@ Neovim, Pi, and the browser are owned by their own configuration and are not lis
 - Open the application launcher
 - Open a terminal
 - Open the browser
+- Open a private browser window (Story 4.5 scope addition; [browser procedure](procedures/browser.md#installation-and-daily-use))
 - Open the file manager
 
 **Windows and workspaces**

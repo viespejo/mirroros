@@ -60,8 +60,9 @@ chooser, so the GTK chooser appears only as the fallback. Review the transaction
 ## Keyring
 
 The `sddm` package ships optional `pam_gnome_keyring.so` lines in `/etc/pam.d/sddm`; a password login through SDDM
-unlocks the `login` keyring and starts the daemon. MirrorOS never edits PAM. Chromium-family browsers use
-`org.freedesktop.secrets` directly; sandboxed applications use the Secret portal.
+unlocks the `login` keyring and starts the daemon. MirrorOS never edits PAM. See the
+[browser procedure](browser.md#policy-theme-and-password-storage) for Chrome's configured password store and
+its verification status. Sandboxed applications can use the Secret portal.
 
 - The keyring and its contents are runtime state under `~/.local/share/keyrings`. No password or secret is delivered,
   read, logged, stored in the repository or recorded in evidence.
@@ -140,6 +141,11 @@ Reference VM `mirroros-ref`, Hyprland 0.57.1, xdg-desktop-portal 1.22.1, -gtk 1.
 - Amendments made during the campaign: `xdph.conf` with `allow_token_by_default = true` (Chromium otherwise prompted
   twice), `grim` for the Screenshot backend, and the 875×600 GTK chooser size (it otherwise exceeded the
   1536×864 logical screen).
+
+A later Chrome check on `mirroros-ref` confirmed the `gnome-libsecret` launch option and a Chrome Safe Storage
+item in the unlocked `login` collection, without inspecting its secret. A fresh password write was not tested,
+and the old Chromium backend could not be established from its metadata. See the
+[browser procedure](browser.md#reference-vm-results).
 
 Limits and findings:
 
