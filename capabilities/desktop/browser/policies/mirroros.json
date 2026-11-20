@@ -1,4 +1,10 @@
 {
   "DefaultBrowserSettingEnabled": false,
-  "MetricsReportingEnabled": false
+  "MetricsReportingEnabled": false,
+  "SyncTypesListDisabled": [
+    "apps",
+    "extensions",
+    "preferences",
+    "themes"
+  ]
 }

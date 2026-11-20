@@ -35,6 +35,17 @@ teardown() { cfg_test_teardown; }
   grep -Fx '{"BrowserThemeColor":"#111c18"}' "$policy/color.json"
   local recommended="${policy%/*}/recommended"
   cmp "$CFG_SOURCE_ROOT/capabilities/desktop/browser/policies/recommended.json" "$recommended/mirroros.json"
+  python3 - "$policy/mirroros.json" "$recommended/mirroros.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+assert json.loads(Path(sys.argv[1]).read_text())["SyncTypesListDisabled"] == [
+    "apps", "extensions", "preferences", "themes",
+]
+safe_browsing = json.loads(Path(sys.argv[2]).read_text())["SafeBrowsingProtectionLevel"]
+assert type(safe_browsing) is int and safe_browsing == 1
+PY
   [ "$(stat -c '%a:%u:%g' "$recommended")" = "755:$(/usr/bin/id -u):$(/usr/bin/id -g)" ]
   [ "$(stat -c '%a:%u:%g' "$recommended/mirroros.json")" = "644:$(/usr/bin/id -u):$(/usr/bin/id -g)" ]
   [ "$(stat -c '%a:%u:%g' "$policy")" = "755:$(/usr/bin/id -u):$(/usr/bin/id -g)" ]
@@ -64,6 +75,9 @@ teardown() { cfg_test_teardown; }
   grep -F 'Replaced non-MirrorOS Google Chrome' "$CFG_TEST_TARGET_ROOT"/var/log/mirroros/configure/*/configure.log
   grep -Fx 'chrome transaction SNAP_PAC_SKIP=y' "$CFG_TEST_CALLS"
   grep -Fx 'chrome color offline=1' "$CFG_TEST_CALLS"
+  local policies="$CFG_TEST_TARGET_ROOT/etc/opt/chrome/policies"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/browser/policies/mirroros.json" "$policies/managed/mirroros.json"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/browser/policies/recommended.json" "$policies/recommended/mirroros.json"
   ! grep -Eq 'pacman -R|systemctl .*(start|restart|reload)' "$CFG_TEST_CALLS"
   for unit in mirroros-chrome-update-check.service mirroros-chrome-update-check.timer; do
     [ "$(readlink "$CFG_TEST_HOME/.config/systemd/user/graphical-session.target.wants/$unit")" = "/etc/systemd/user/$unit" ]
@@ -81,6 +95,36 @@ teardown() { cfg_test_teardown; }
   run "$CFG_TEST_ENTRY"
   [ "$status" -eq 4 ]
   grep -Fx '{"MetricsReportingEnabled":true}' "$policy"
+}
+
+@test "configure folds unmodified legacy Chrome policies into mirroros.json" {
+  local dir="$MIRROROS_CONFIGURE_ROOT/etc/opt/chrome/policies"
+  mkdir -p "$dir/managed" "$dir/recommended"
+  printf '%s\n' '{' '  "DefaultBrowserSettingEnabled": false,' '  "MetricsReportingEnabled": false' '}' > "$dir/managed/mirroros.json"
+  printf '%s\n' '{' '  "RestoreOnStartup": 1,' '  "DefaultSearchProviderEnabled": true,' \
+    '  "DefaultSearchProviderName": "Google",' '  "DefaultSearchProviderSearchURL": "{google:baseURL}search?q={searchTerms}",' \
+    '  "ShowHomeButton": true,' '  "BackgroundModeEnabled": false' '}' > "$dir/recommended/mirroros.json"
+  printf '%s\n' '{' '  "SyncTypesListDisabled": [' '    "apps",' '    "extensions",' \
+    '    "preferences",' '    "themes"' '  ]' '}' > "$dir/managed/local-sync-types.json"
+  printf '%s\n' '{' '  "SafeBrowsingProtectionLevel": 1' '}' > "$dir/recommended/local-safe-browsing.json"
+  chmod 0755 "$dir" "$dir/managed" "$dir/recommended"
+  chmod 0644 "$dir"/*/*.json
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/browser/policies/mirroros.json" "$dir/managed/mirroros.json"
+  cmp "$CFG_SOURCE_ROOT/capabilities/desktop/browser/policies/recommended.json" "$dir/recommended/mirroros.json"
+  [ ! -e "$dir/managed/local-sync-types.json" ]
+  [ ! -e "$dir/recommended/local-safe-browsing.json" ]
+}
+
+@test "configure preserves a conflicting local sync policy" {
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 0 ]
+  local policy="$MIRROROS_CONFIGURE_ROOT/etc/opt/chrome/policies/managed/local-sync-types.json"
+  printf '%s\n' '{"SyncTypesListDisabled":["extensions"]}' > "$policy"
+  run "$CFG_TEST_ENTRY"
+  [ "$status" -eq 4 ]
+  grep -Fx '{"SyncTypesListDisabled":["extensions"]}' "$policy"
 }
 
 @test "verification failure aborts readiness and leaves a foreign package installed" {

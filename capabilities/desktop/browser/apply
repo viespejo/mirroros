@@ -36,7 +36,8 @@ chrome_timer_link() {
 }
 
 install_browser_policy() {
-  local dir dest source level legacy_digest
+  local dir dest source level legacy_digest policy expected
+  local -a retired_policies=()
   for dir in /etc /etc/opt /etc/opt/chrome /etc/opt/chrome/policies "$policy_dir" /etc/opt/chrome/policies/recommended; do
     dest=$(cfg_path "$dir")
     if [[ "$dir" != /etc && ! -e "$dest" && ! -L "$dest" ]]; then
@@ -48,20 +49,43 @@ install_browser_policy() {
       return 4
     fi
   done
+  # Recognize only the exact standalone policies used in the T14s trial.
+  for policy in managed/local-sync-types.json recommended/local-safe-browsing.json; do
+    dest=$(cfg_path "/etc/opt/chrome/policies/$policy")
+    [[ -e "$dest" || -L "$dest" ]] || continue
+    case "$policy" in
+      managed/*) expected=423a581956cd5045fdcf7b62fde8fd16c80c3dd601368c8ff1dd2948ce7e54cb ;;
+      recommended/*) expected=90d999155b82b5214f6ac086960fac57bff4504f59c9cfe47a3ba8804674e0cc ;;
+    esac
+    if [[ ! -L "$dest" && -f "$dest" && "$(stat -c '%a:%u:%g' -- "$dest")" == "644:$owner" ]] &&
+      legacy_digest=$(sha256sum < "$dest") && [[ "${legacy_digest%% *}" == "$expected" ]]; then
+      retired_policies+=("$dest")
+    else
+      printf 'Chrome policy %s conflicts with an existing file; move it aside and rerun configure.\n' "$policy" >&2
+      return 4
+    fi
+  done
   for level in managed recommended; do
     source="$STEP_DIR/policies/mirroros.json"
     if [[ "$level" == recommended ]]; then source="$STEP_DIR/policies/recommended.json"; fi
-    dest=$(cfg_path "/etc/opt/chrome/policies/$level/mirroros.json")
+    policy="$level/mirroros.json"
+    dest=$(cfg_path "/etc/opt/chrome/policies/$policy")
     if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) ]]; then
-      printf 'Chrome %s policy conflicts with an existing file; move it aside and rerun configure.\n' "$level" >&2
+      printf 'Chrome policy %s conflicts with an existing file; move it aside and rerun configure.\n' "$policy" >&2
       return 4
     fi
     if [[ -f "$dest" ]] && ! cmp -s -- "$source" "$dest"; then
-      # Replace only the exact, unmodified policy delivered by the laboratory candidate.
+      # Replace only exact, unmodified policies from previous releases or the laboratory candidate.
       legacy_digest=$(sha256sum < "$dest") || return 4
-      if [[ "$level" != managed || "$(stat -c '%a:%u:%g' -- "$dest")" != "644:$owner" ||
-        "${legacy_digest%% *}" != eca79227b63b061ac6f579027fe4c6b9670f1b2fb6b203127ae8b57213c7c367 ]]; then
-        printf 'Chrome %s policy conflicts with an existing file; move it aside and rerun configure.\n' "$level" >&2
+      case "$level:${legacy_digest%% *}" in
+        managed:eca79227b63b061ac6f579027fe4c6b9670f1b2fb6b203127ae8b57213c7c367|\
+        managed:aabf881a146214665c63cb57013f9abf490760486ae59afba7561efda6ca281b|\
+        recommended:7b84917dc1dd3e8a4884ea85b615f765cb75713153b62b7fc8bea5a922b51233)
+          expected=yes ;;
+        *) expected=no ;;
+      esac
+      if [[ "$expected" != yes || "$(stat -c '%a:%u:%g' -- "$dest")" != "644:$owner" ]]; then
+        printf 'Chrome policy %s conflicts with an existing file; move it aside and rerun configure.\n' "$policy" >&2
         return 4
       fi
     fi
@@ -71,6 +95,12 @@ install_browser_policy() {
     fi
     cfg_require cmp -s -- "$source" "$dest"
     cfg_require test "$(stat -c '%a:%u:%g' -- "$dest")" = "644:$owner"
+  done
+  for dest in "${retired_policies[@]}"; do
+    cfg_run_host rm -- "$dest" || return 5
+    cfg_changed
+    cfg_require test ! -e "$dest"
+    cfg_require test ! -L "$dest"
   done
 }
 

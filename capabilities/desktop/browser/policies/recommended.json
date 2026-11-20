@@ -4,5 +4,6 @@
   "DefaultSearchProviderName": "Google",
   "DefaultSearchProviderSearchURL": "{google:baseURL}search?q={searchTerms}",
   "ShowHomeButton": true,
-  "BackgroundModeEnabled": false
+  "BackgroundModeEnabled": false,
+  "SafeBrowsingProtectionLevel": 1
 }

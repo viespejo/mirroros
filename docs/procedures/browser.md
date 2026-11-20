@@ -46,6 +46,18 @@ search engine, shows the Home button without setting its destination, and disabl
 last browser window closes. These are defaults, not locks: settings chosen by the user take precedence.
 Restoring the session can affect session-only cookies and clearing data on exit.
 
+`managed/mirroros.json` also blocks Google sync for apps, extensions, browser preferences, and themes
+across all Chrome profiles on the machine, including at first sign-in. It does not remove local data or
+prevent local customization. Bookmarks, history, and the other supported types are not blocked by this
+policy; users can manage them under **Settings → You and Google**.
+`recommended/mirroros.json` also recommends **Standard protection** for Safe Browsing. Users can override
+it under **Settings → Privacy and security → Security**. Use **Reload policies** in `chrome://policy` to check
+that Chrome has picked up the two policies.
+
+Configure migrates the unmodified standalone T14s trial policies (`managed/local-sync-types.json` and
+`recommended/local-safe-browsing.json`) into the corresponding `mirroros.json` files. If a trial file has
+been customized, Configure reports the conflict and leaves that file in place for review.
+
 MirrorOS launch paths use `/usr/bin/google-chrome-stable`, which supplies `--password-store=gnome-libsecret`
 before any flags from `${XDG_CONFIG_HOME:-$HOME/.config}/chrome-flags.conf`. Leave that option unmodified to use
 the `login` keyring unlocked by the [packaged SDDM PAM integration](portals-and-files.md#keyring). Configure manages

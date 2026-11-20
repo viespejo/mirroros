@@ -25,6 +25,11 @@ browser and `extra/chromium` as the alternative provider.
   `BrowserColorScheme` as unknown. [OMARCHY-LICENSE](OMARCHY-LICENSE) retains the MIT notice.
 - MirrorOS-owned `policies/recommended.json` uses [Chrome's recommended policy tier on Linux](https://support.google.com/chrome/a/answer/9027408)
   for editable defaults: session restoration, Google search, the Home button, and disabled background mode.
+  It also recommends Standard protection via
+  [`SafeBrowsingProtectionLevel`](https://chromeenterprise.google/policies/#SafeBrowsingProtectionLevel).
+- MirrorOS adds the mandatory [`SyncTypesListDisabled`](https://chromeenterprise.google/policies/#SyncTypesListDisabled)
+  policy to `policies/mirroros.json` to exclude apps, extensions, preferences, and themes from Google sync
+  without blocking other supported types.
 - The MirrorOS-owned `browser-theme-color` reads the trusted product theme resolved by
   [visual/theme](../../visual/theme/sources.md) and writes a separate device policy. The neutral `browser-open`
   launcher respects the effective HTTPS default; system associations are owned by
