@@ -33,7 +33,12 @@ qml = qml.trimEnd().slice(0, -1) + `
     function state(): string {
       var s = desktopShell.notificationService
       return JSON.stringify({ ready: s.liveLoaded && s.historyLoaded && s.quietLoaded && desktopShell.shellConfigStore.loaded,
-        path: s.stateDir, lock: s.lockMarkerPath, live: s.liveEntries, history: s.currentHistory() })
+        path: s.stateDir, lock: s.lockMarkerPath, live: s.liveEntries, history: s.currentHistory(),
+        actions: s.actionsOf(s.newestLive(), s.refsRevision) })
+    }
+    function invokeButton(identifier: string): void {
+      var s = desktopShell.notificationService
+      s.invokeAction(s.newestLive(), identifier)
     }
   }
 }
@@ -140,11 +145,18 @@ await_count 1
 [[ "$(ipc act)" == ok ]]
 await_count 0
 expect 's.history[0].closed_reason === "dismissed" && !JSON.stringify(s.history[0]).includes("fixture-command")'
-for action in default setup; do
-    send --urgency=critical --wait --action="$action=Test action" "Synthetic $action" 'Live D-Bus action' > "$tmp/action" &
+for route in body button shortcut named; do
+    action=default
+    if [[ "$route" == named ]]; then action=setup; fi
+    send --urgency=critical --wait --action="$action=Test action" "Synthetic $route" 'Live D-Bus action' > "$tmp/action" &
     sender=$!
     await_count 1
-    if [[ "$action" == default ]]; then ipc invokeLast >/dev/null; else ipc act >/dev/null; fi
+    expect "s.actions.length === 1 && s.actions[0].id === '$action' && s.actions[0].text === 'Test action'"
+    case "$route" in
+        body) ipc invokeLast >/dev/null ;;
+        button) qs ipc -p "$run_dir" call notificationTest invokeButton "$action" >/dev/null ;;
+        *) ipc act >/dev/null ;;
+    esac
     await_count 0
     for ((i = 0; i < 50; i++)); do [[ -s "$tmp/action" ]] && break; sleep 0.1; done
     [[ "$(<"$tmp/action")" == "$action" ]]

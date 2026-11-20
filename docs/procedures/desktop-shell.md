@@ -551,9 +551,10 @@ migration: move the setting by hand into `bar.widgets.<id>` and delete the `bar.
   caller's session bus; `mirroros-action` bypasses DND by default, while `--app-name` selects ordinary
   named delivery. Put options before `--` to send literal headline and body text. The sender has no
   executable options or wait mode.
-- **Notification actions:** only live D-Bus notices have sender actions. Clicking a card body invokes its
-  live `default` action if present, then closes the card. There is no window or URL fallback. A direct click
-  on a validated inline link opens that link. Executable hints and stored command fields are ignored.
+- **Notification actions:** only live D-Bus notices have sender actions. A live `default` action appears
+  as a button with the sender's label. Clicking either that button or the card body invokes the same action
+  and closes the card. There is no window or URL fallback. A direct click on a validated inline link opens
+  that link. Executable hints and stored command fields are ignored.
 - **Color-only states** follow the Omarchy reference (Story 4.3 criterion aligned under DEC-015/DEC-026).
 - **Do Not Disturb and Weather:** the bar bell toggles manual DND with left, right or middle click. There is
   no built-in notification panel, timed snooze, screen-sharing offer or lock-time count. The shell still

@@ -923,22 +923,12 @@ Item {
   function actOnNewest() {
     var key = newestLive()
     if (!key) return false
-    var deeds = deedsFor(key).length
-    var click = clickable(key)
-    if (deeds + (click ? 1 : 0) > 1) startKeyboard(key)
-    else if (click) activate(key, true)
-    else if (deeds) runDeed(key, 0)
+    var deeds = deedsFor(key)
+    if (deeds.length > 1) startKeyboard(key)
+    else if (deeds.length && deeds[0].kind === "action" && deeds[0].value === "default") activate(key, true)
+    else if (deeds.length) runDeed(key, 0)
     else closeToast(key, "dismissed", true)
     return true
-  }
-
-  // Only a live default action counts as an activation choice.
-  function clickable(key) {
-    var ref = refs[key]
-    var actions = (ref && ref.actions) || []
-    for (var i = 0; i < Math.min(actions.length, Security.MAX_ACTIONS); i++)
-      if (String(actions[i].identifier) === "default") return true
-    return false
   }
 
   // What the sender said can be done with this notification. A restored row
@@ -952,12 +942,8 @@ Item {
       var a = ref.actions[i]
       var identifier = String(a.identifier || "")
       if (identifier.length > Security.MAX_ACTION_ID || !identifier) continue
-      if (identifier === "default") {
-        // The card click already runs it.
-        continue
-      }
       var label = Security.bounded(String(a.text || identifier), Security.MAX_ACTION_LABEL)
-      if (/^settings$/i.test(label) || /^settings$/i.test(identifier))
+      if (identifier !== "default" && (/^settings$/i.test(label) || /^settings$/i.test(identifier)))
         continue
       out.push({ id: identifier, text: label })
     }
